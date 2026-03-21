@@ -1,6 +1,0 @@
-dist/** linguist-generated=true
-*.ts text eol=lf
-*.yml text eol=lf
-*.yaml text eol=lf
-*.md text eol=lf
-*.json text eol=lf

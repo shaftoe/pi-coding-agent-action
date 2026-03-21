@@ -1,23 +1,24 @@
 # Pi Coding Agent GitHub Action
 
-This is a GitHub action that uses the [pi coding agent](https://pi.dev) to integrate with GitHub usual workflows (issues, pull requests, etc.).
+This is a GitHub action that uses the [pi coding agent](https://pi.dev) to integrate with GitHub workflows (issues, pull requests, etc.).
 
 ## Features
 
 - **Issue assistance**: Type `/pi` in an issue comment to have the agent analyze the issue and create a fix
 - **PR assistance**: Type `/pi` in a PR comment to have the agent review and improve the pull request
-- **Customizable**: Configure LLM provider, model, trigger phrases, and custom prompts
+- **Customizable**: Configure LLM provider, model, trigger phrases, custom prompts, and environment variables
 - **Automated commits**: The agent can make changes, commit them, and create PRs automatically
 - **Hybrid architecture**: Uses `isomorphic-git` for local git operations and `gh` CLI for GitHub API
+- **Flexible LLM support**: Support for various providers via custom environment variable injection
 
 ## Usage
 
-### Basic Setup
+### Quick Start
 
-1. Create a workflow file in `.github/workflows/pi-agent.yml`:
+Create a workflow file in `.github/workflows/pi-agent.yml`:
 
 ```yaml
-name: Pi Agent
+name: Pi AI Agent
 
 on:
   issue_comment:
@@ -34,53 +35,130 @@ permissions:
 
 jobs:
   pi-agent:
+    # Only run when the comment contains /pi (or custom trigger)
     if: |
       github.event_name == 'issue_comment' &&
       contains(github.event.comment.body, '/pi')
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Fetch full history for better context
 
       - name: Run pi agent
-        uses: ./ # or your-org/pi-coding-agent-action@v1
+        uses: ./your-org/pi-coding-agent-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           provider: anthropic
           model: claude-sonnet-4-5
 ```
 
-### Required Secrets
-
-The action requires API keys for your chosen LLM provider. Set these in your repository secrets:
-
-- `ANTHROPIC_API_KEY` (if using Anthropic)
-- `OPENAI_API_KEY` (if using OpenAI)
-- `GOOGLE_API_KEY` (if using Google)
-
-### Inputs
+## Inputs
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
 | `github_token` | GitHub token for API access | Yes | `${{ github.token }}` |
-| `provider` | LLM provider (anthropic, openai, google) | No | `anthropic` |
-| `model` | Model to use | No | `claude-sonnet-4-5` |
-| `mentions` | Comma-separated trigger phrases | No | `/pi` |
-| `prompt` | Custom system prompt | No | - |
-| `extra_tools` | Extra pi tools to enable | No | - |
+| `provider` | LLM provider (anthropic, openai, google, etc.) | No | `anthropic` |
+| `model` | Model to use (e.g., claude-sonnet-4-5, gpt-4o, gemini-2.5-pro) | No | `claude-sonnet-4-5` |
+| `mentions` | Comma-separated trigger phrases (case-insensitive) | No | `/pi` |
+| `prompt` | Custom system prompt for the AI | No | - |
+| `extra_tools` | Extra pi tools to enable (on top of read,write,edit,bash) | No | - |
 | `env_vars` | Custom environment variables (one KEY=VALUE per line) | No | - |
 
-### Example Workflows
+## Environment Variables
 
-#### Issue Flow
+### Required Secrets
+
+You must set API keys for your chosen LLM provider as repository secrets:
+
+| Provider | Secret Name | Environment Variable |
+|----------|---------------|---------------------|
+| Anthropic | `ANTHROPIC_API_KEY` | Set automatically via `env_vars` |
+| OpenAI | `OPENAI_API_KEY` | Set automatically via `env_vars` |
+| Google AI | `GOOGLE_API_KEY` | Set automatically via `env_vars` |
+| Z.ai | `ZAI_API_KEY` | Set automatically via `env_vars` |
+
+### Custom Environment Variables
+
+The `env_vars` input allows injecting custom environment variables into the `pi` agent. Format is one `KEY=VALUE` pair per line:
 
 ```yaml
+env_vars: |
+  ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+  ZAI_API_KEY=${{ secrets.ZAI_API_KEY }}
+  OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+```
+
+**Common Pi Environment Variables:**
+- `ZAI_API_KEY` - Z.ai
+- `ANTHROPIC_API_KEY` / `ANTHROPIC_KEY` - Anthropic
+- `OPENAI_API_KEY` - OpenAI
+- `GOOGLE_API_KEY` - Google AI
+- `DEEPSEEK_API_KEY` - DeepSeek
+- `GROQ_API_KEY` - Groq
+- `MISTRAL_API_KEY` - Mistral
+- `OPENROUTER_API_KEY` - OpenRouter
+
+See [ENV_VARS_FEATURE.md](ENV_VARS_FEATURE.md) for more details.
+
+## Example Workflows
+
+### Complete Production Workflow
+
+```yaml
+name: Pi AI Agent
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened, edited]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  pi-agent:
+    # Only run when comment contains trigger
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/pi')) ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@pi-bot'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run pi agent
+        uses: shaftoe/pi-coding-agent-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          provider: anthropic
+          model: claude-sonnet-4-5
+          env_vars: |
+            ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+### Workflow with Multiple Providers
+
+```yaml
+name: Pi AI Agent
+
 on:
   issue_comment:
     types: [created]
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
 jobs:
   pi-agent:
     if: contains(github.event.comment.body, '/pi')
@@ -89,41 +167,59 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: ./your-org/pi-coding-agent-action@v1
+
+      - uses: your-org/pi-coding-agent-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          provider: zai
+          model: zai-pro-05b
+          env_vars: |
+            ZAI_API_KEY=${{ secrets.ZAI_API_KEY }}
 ```
 
-When you comment `/pi fix the login bug`, the agent:
-1. Reads the issue context
-2. Creates a new branch
-3. Makes code changes
-4. Creates a PR with the fix
-
-#### Using Custom Environment Variables
-
-Some LLM providers require specific environment variable names. Use the `env_vars` input to inject them:
+### Workflow for PR Reviews
 
 ```yaml
-- name: Run pi agent
-  uses: ./your-org/pi-coding-agent-action@v1
-  with:
-    github_token: ${{ secrets.GITHUB_TOKEN }}
-    provider: anthropic
-    env_vars: |
-      ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
-      ZAI_API_KEY=${{ secrets.ZAI_API_KEY }}
-```
+name: PR Review Assistant
 
-See [ENV_VARS_FEATURE.md](ENV_VARS_FEATURE.md) for more details and supported providers.
-
-#### PR Flow
-
-```yaml
 on:
   pull_request:
     types: [opened, synchronize]
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  pi-review:
+    if: contains(github.event.comment.body, '/pi review')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: your-org/pi-coding-agent-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          provider: anthropic
+          model: claude-sonnet-4-5
+```
+
+### Workflow with Custom Model and Tools
+
+```yaml
+name: Pi Agent with Custom Configuration
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+
 jobs:
   pi-agent:
     if: contains(github.event.comment.body, '/pi')
@@ -132,15 +228,43 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: shaftoe/pi-coding-agent-action@v1
+
+      - uses: your-org/pi-coding-agent-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          provider: openai
+          model: gpt-4-turbo
+          extra_tools: "git,docker"
+          prompt: |
+            You are a helpful code reviewer. Focus on finding bugs and suggesting improvements.
 ```
 
-When you comment `/pi review this PR`, the agent:
-1. Reads the PR context including files, comments, reviews
-2. Makes improvements to the code
-3. Commits and pushes to the PR branch
+## How It Works
+
+### Issue Flow
+
+1. User comments `/pi [instructions]` in an issue
+2. Action fetches issue context via GitHub CLI
+3. Creates a new branch: `pi/issue{number}-{timestamp}`
+4. Runs `pi` agent with the issue context
+5. If changes are made:
+   - Stages all modified files
+   - Commits with AI-generated summary
+   - Pushes to remote
+   - Creates a new PR
+6. Posts result as a comment
+
+### PR Flow
+
+1. User comments `/pi [instructions]` in a PR
+2. Action fetches PR context via GitHub CLI
+3. Checks out the PR branch (or fork branch)
+4. Runs `pi` agent with the PR context
+5. If changes are made:
+   - Stages all modified files
+   - Commits with AI-generated summary
+   - Pushes to the PR branch
+6. Posts result as a comment
 
 ## Architecture
 
@@ -155,8 +279,9 @@ The action uses a hybrid architecture:
 | Stage files | isomorphic-git |
 | Commit changes | isomorphic-git |
 | Push to remote | isomorphic-git |
+| Check dirty status | isomorphic-git |
 
-### Why Hybrid?
+### Why This Hybrid Approach?
 
 - **`gh` CLI**: Pre-installed, simple, official GitHub tool for API calls
 - **`isomorphic-git`**: Pure JavaScript, async, type-safe for local git operations
@@ -167,16 +292,13 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 
 ### Prerequisites
 
-- Bun
+- Bun package manager
 
 ### Build
 
 ```bash
 # Install dependencies
 bun install
-
-# Compile TypeScript
-bun run build
 
 # Bundle with esbuild
 bun run package
@@ -201,6 +323,33 @@ bun run package
 ├── tsconfig.json         # TypeScript configuration
 └── README.md             # This file
 ```
+
+## Troubleshooting
+
+### Action Not Running
+
+- Ensure `github.event_name` matches your workflow triggers
+- Verify the comment contains your trigger phrase (`/pi` by default)
+- Check that the `permissions` section includes necessary scopes
+
+### Pi Agent Errors
+
+- Verify API keys are set as repository secrets
+- Check the `provider` and `model` inputs are valid
+- Ensure the `env_vars` input is formatted correctly
+
+### Git Issues
+
+- Ensure `contents: write` permission is granted
+- Check that the repository is not empty
+- Verify the default branch exists
+
+## Documentation
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Detailed architecture documentation
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Contributor guidelines
+- [ENV_VARS_FEATURE.md](ENV_VARS_FEATURE.md) - Environment variables documentation
+- [FILE_OVERVIEW.md](FILE_OVERVIEW.md) - Module overview and usage
 
 ## License
 
