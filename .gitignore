@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Intermediate TypeScript artifacts
+src/*.js
+src/*.d.ts
+src/*.d.ts.map
+src/*.js.map
+
+# Intermediate dist artifacts (maps and declarations)
+dist/*.d.ts
+dist/*.d.ts.map
+dist/*.js.map
+dist/*.map
+
+# Logs and temp files
+*.log
+.DS_Store
+.env
+.env.*
+*.tgz
+*.tmp

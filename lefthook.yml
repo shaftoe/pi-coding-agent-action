@@ -1,0 +1,5 @@
+pre-push:
+  jobs:
+    - name: Build
+      run: bun run package
+      stage_fixed: true
