@@ -132,7 +132,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: ./your-org/pi-coding-agent-action@v1
+      - uses: shaftoe/pi-coding-agent-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
