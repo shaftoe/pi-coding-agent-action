@@ -35,23 +35,9 @@ export function getPRData(prNumber: number): PRNode {
 }
 
 export function createPR(base: string, branch: string, title: string, body: string): number {
-  const output = gh(
-    [
-      'pr',
-      'create',
-      '--base',
-      base,
-      '--head',
-      branch,
-      '--title',
-      title,
-      '--body',
-      body,
-      '--json',
-      'number',
-    ],
-    { input: body }
-  );
+  gh(['pr', 'create', '--base', base, '--head', branch, '--title', title, '--body', body]);
+  // Get the PR number from the created PR using the head branch
+  const output = gh(['pr', 'view', '--json', 'number', '--head', branch]);
   const result = JSON.parse(output);
   return result.number;
 }
