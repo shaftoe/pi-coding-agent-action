@@ -8,6 +8,8 @@ pre-commit:
       run: bun run lint
     type-check:
       run: bun run type-check
+    test:
+      run: bun test
     build:
       run: bun run package && git add dist/
       stage_fixed: true

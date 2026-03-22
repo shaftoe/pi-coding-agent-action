@@ -6,7 +6,9 @@
   "scripts": {
     "package": "esbuild src/index.ts --bundle --platform=node --target=node24 --outfile=dist/index.js --format=cjs --minify",
     "prepare": "bun run package",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "bun test",
+    "test:coverage": "bun test --coverage",
+    "test:watch": "bun test --watch",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "type-check": "tsc --noEmit",

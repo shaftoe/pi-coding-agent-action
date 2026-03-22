@@ -66,6 +66,38 @@ env_vars: |
   OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
 ```
 
+## Development
+
+### Running Tests
+
+This project uses Bun's built-in test runner. See [TESTING.md](./TESTING.md) for detailed testing documentation.
+
+```bash
+# Run all tests
+bun test
+
+# Run tests with coverage
+bun test --coverage
+
+# Run tests in watch mode
+bun test --watch
+```
+
+### Validation
+
+Before committing, the following checks run automatically (via Lefthook):
+- Code formatting (Prettier)
+- Linting (ESLint)
+- Type checking (TypeScript)
+- Tests
+- Building
+
+To run all validations manually:
+
+```bash
+bun run validate
+```
+
 ## How It Works
 
 ### Issue Flow
