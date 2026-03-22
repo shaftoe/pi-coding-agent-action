@@ -4,6 +4,7 @@ import http from 'isomorphic-git/http/node';
 import * as fs from 'fs';
 import * as github from '@actions/github';
 import { generateBranchName } from './utils.js';
+import { DEFAULT_FETCH_DEPTH } from './constants.js';
 import type { GitAuthor, PRNode } from './types.js';
 
 // ── Configuration ─────────────────────────────────────────────
@@ -169,7 +170,7 @@ export async function checkoutPRBranch(
   const isLocalPR = pr.headRepository.nameWithOwner === pr.baseRepository.nameWithOwner;
   core.info(`Processing PR #${issueNumber} (local: ${isLocalPR})`);
 
-  const depth = Math.max(pr.commits.totalCount, 20);
+  const depth = Math.max(pr.commits.totalCount, DEFAULT_FETCH_DEPTH);
 
   if (isLocalPR) {
     const originUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}.git`;

@@ -1,5 +1,6 @@
 import * as core from '@actions/core';
 import * as os from 'os';
+import * as path from 'path';
 import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import { parseEnvVars } from './utils.js';
@@ -21,7 +22,7 @@ export function runPi(prompt: string): string {
   const envVars = parseEnvVars(envVarsString);
 
   // Write prompt to a temp file to avoid shell escaping issues
-  const promptFile = os.tmpdir() + '/pi_prompt.md';
+  const promptFile = path.join(os.tmpdir(), 'pi_prompt.md');
   fs.writeFileSync(promptFile, prompt, 'utf8');
 
   const args = [

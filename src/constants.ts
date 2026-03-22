@@ -1,16 +1,12 @@
 // ── Constants ─────────────────────────────────────────────────────
 
 /**
- * Default fetch depth for git operations
+ * Default fetch depth for git operations.
+ * Ensures we have enough history for PR operations.
  */
 export const DEFAULT_FETCH_DEPTH = 20;
 
 /**
- * Timeout for pi agent execution (10 minutes in milliseconds)
+ * Timeout for pi agent execution in milliseconds (10 minutes).
  */
 export const PI_TIMEOUT_MS = 10 * 60 * 1000;
-
-/**
- * Path for temporary prompt file
- */
-export const TEMP_PROMPT_PATH = '/tmp/pi_prompt.md';
