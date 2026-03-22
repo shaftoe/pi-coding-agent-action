@@ -14,7 +14,7 @@ export function buildIssuePrompt(
   commentId: number
 ): string {
   const comments = (issue.comments ?? [])
-    .filter(c => String(c.databaseId) !== String(commentId))
+    .filter(c => c.databaseId !== commentId)
     .map(c => `  - ${c.author.login} at ${c.createdAt}: ${c.body}`)
     .join('\n');
 
@@ -45,7 +45,7 @@ export function buildIssuePrompt(
  */
 export function buildPRPrompt(pr: PRNode, userPrompt: string | null, commentId: number): string {
   const comments = (pr.comments ?? [])
-    .filter(c => String(c.databaseId) !== String(commentId))
+    .filter(c => c.databaseId !== commentId)
     .map(c => `- ${c.author.login} at ${c.createdAt}: ${c.body}`)
     .join('\n');
 

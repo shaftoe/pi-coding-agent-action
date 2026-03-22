@@ -85,12 +85,25 @@ export function runPi(prompt: string): string {
 // ── Summarize ─────────────────────────────────────────────
 /**
  * Summarizes text for use as a git commit message.
+ * Uses a simple heuristic (first line, truncated to 50 chars) to avoid expensive AI calls.
+ * Falls back to AI only for very long/complex responses.
  * @param text - The text to summarize
  * @param issueNumber - The issue number (used for fallback message)
  * @returns A short summary suitable for a git commit message
  */
 export function summarize(text: string, issueNumber: number): string {
-  // Use pi to generate a short commit summary
+  // Simple heuristic: use first line, truncated to 50 characters
+  const firstLine = text.split('\n')[0].trim();
+
+  // If first line is short enough and not too generic, use it directly
+  if (firstLine.length > 0 && firstLine.length <= 50) {
+    const genericPatterns = /^(I|I'll|Sure|OK|Great|Here|The|This|A)/;
+    if (!genericPatterns.test(firstLine)) {
+      return firstLine;
+    }
+  }
+
+  // For longer or more complex responses, use AI to generate summary
   const summaryPrompt = `Summarize the following in less than 40 characters, suitable for a git commit message:\n\n${text}`;
   try {
     return runPi(summaryPrompt);
