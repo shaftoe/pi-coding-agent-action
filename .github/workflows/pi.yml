@@ -30,7 +30,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Install Pi Coding Agent
-        run: bun install @mariozechner/pi-coding-agent
+        run: bun install --global @mariozechner/pi-coding-agent
 
       - name: Run pi agent
         uses: shaftoe/pi-coding-agent-action@v1
