@@ -256,17 +256,56 @@ export class GitService {
   private async pushBranch(remote: string, branch: string, force = false): Promise<void> {
     core.info(`Pushing ${branch} to ${remote}${force ? ' (force)' : ''}`);
 
-    await git.push({
-      fs,
-      http,
-      dir: this.dir,
-      remote,
-      ref: `refs/heads/${branch}:refs/heads/${branch}`,
-      force,
-      onAuth: this.createOnAuth(),
-    });
+    // Ensure the remote exists with a proper URL
+    const remotes = await git.listRemotes({ fs, dir: this.dir });
+    const remoteEntry = remotes.find(r => r.remote === remote);
 
-    core.info(`Pushed ${branch} to ${remote}`);
+    if (!remoteEntry) {
+      // If the remote doesn't exist in isomorphic-git's config, add it
+      // using the default GitHub repository URL
+      const remoteUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}.git`;
+      core.info(`Remote '${remote}' not found in git config, adding: ${remoteUrl}`);
+      await this.addRemote(remote, remoteUrl);
+    }
+
+    // Try to push using the branch name refspec first
+    const refspec = `refs/heads/${branch}:refs/heads/${branch}`;
+    core.debug(`Attempting push with refspec: ${refspec}`);
+
+    try {
+      await git.push({
+        fs,
+        http,
+        dir: this.dir,
+        remote,
+        ref: refspec,
+        force,
+        onAuth: this.createOnAuth(),
+      });
+      core.info(`Pushed ${branch} to ${remote}`);
+    } catch (err) {
+      // If the branch refspec fails, try pushing using the HEAD commit SHA
+      core.warning(`Push with branch refspec failed, trying with HEAD commit SHA: ${err}`);
+      const headCommit = await this.getHeadCommit();
+      if (!headCommit) {
+        throw new Error('Cannot push: no HEAD commit found');
+      }
+
+      const shaRefspec = `${headCommit}:refs/heads/${branch}`;
+      core.debug(`Attempting push with SHA refspec: ${shaRefspec}`);
+
+      await git.push({
+        fs,
+        http,
+        dir: this.dir,
+        remote,
+        ref: shaRefspec,
+        force,
+        onAuth: this.createOnAuth(),
+      });
+
+      core.info(`Pushed ${branch} to ${remote} using HEAD commit`);
+    }
   }
 
   /**
