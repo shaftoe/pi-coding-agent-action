@@ -3,13 +3,15 @@ import * as github from '@actions/github';
 import { runCommand } from './utils.js';
 import type { IssueNode, PRNode } from './types.js';
 
+// Get GitHub token from action input
+const GITHUB_TOKEN = core.getInput('github_token');
+
 // ── GitHub API Client (Octokit) ───────────────────────────────
 /**
  * Gets the Octokit client for GitHub API operations.
  */
 function getOctokit() {
-  const token = core.getInput('github_token');
-  return github.getOctokit(token);
+  return github.getOctokit(GITHUB_TOKEN);
 }
 
 // ── GitHub CLI Wrapper ───────────────────────────────────────
@@ -20,7 +22,12 @@ function getOctokit() {
  * @returns The stdout output from the command
  */
 export function gh(command: string[], options?: { input?: string }): string {
-  return runCommand(['gh', ...command], options);
+  // Set GH_TOKEN environment variable for GitHub CLI authentication
+  const env = { ...process.env };
+  if (GITHUB_TOKEN) {
+    env.GH_TOKEN = GITHUB_TOKEN;
+  }
+  return runCommand(['gh', ...command], options, env);
 }
 
 // ── Issue Operations ───────────────────────────────────────
