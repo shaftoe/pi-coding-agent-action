@@ -10,12 +10,12 @@ inputs:
     required: true
 
   provider:
-    description: "LLM provider (e.g. anthropic, openai, google, ...)"
+    description: "LLM provider (e.g. anthropic, openai, google, zai, etc.)"
     required: false
     default: "anthropic"
 
   model:
-    description: "Model to use (e.g. claude-sonnet-4-5, gpt-4o, gemini-2.5-pro, ...)"
+    description: "Model to use (e.g. claude-sonnet-4-5, gpt-4o, gemini-2.5-pro, glm-4.7)"
     required: false
     default: "claude-sonnet-4-5"
 
@@ -25,7 +25,7 @@ inputs:
     default: "/pi"
 
   prompt:
-    description: "Custom system prompt override (optional)"
+    description: "Custom system prompt for the AI agent (optional)"
     required: false
 
   extra_tools:
@@ -33,29 +33,9 @@ inputs:
     required: false
 
   env_vars:
-    description: "Custom environment variables to inject (one KEY=VALUE per line, e.g., 'ZAI_API_KEY=xxx\\nANTHROPIC_KEY=yyy')"
+    description: "Custom environment variables to inject (one KEY=VALUE per line, e.g. 'ZAI_API_KEY=xxx')"
     required: false
 
 runs:
-  using: "composite"
-  steps:
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
-
-    - name: Install pi coding agent
-      shell: bash
-      run: bun install -g @mariozechner/pi-coding-agent
-
-    - name: Run pi action
-      shell: bash
-      env:
-        GITHUB_TOKEN: ${{ inputs.github_token }}
-        PROVIDER: ${{ inputs.provider }}
-        MODEL: ${{ inputs.model }}
-        MENTIONS: ${{ inputs.mentions }}
-        CUSTOM_PROMPT: ${{ inputs.prompt }}
-        EXTRA_TOOLS: ${{ inputs.extra_tools }}
-        PI_ENV_VARS: ${{ inputs.env_vars }}
-      run: |
-        cd ${{ github.action_path }}
-        bun dist/index.js
+  using: "node20"
+  main: "dist/index.js"

@@ -28,7 +28,7 @@ import { runPi, summarize } from "./pi.js";
 import type { IssueNode, PRNode } from "./types.js";
 
 // ── Configuration ─────────────────────────────────────────────
-const GITHUB_TOKEN = core.getInput("github_token", { required: true });
+const GITHUB_TOKEN = core.getInput("github_token") || process.env.GITHUB_TOKEN || "";
 const ACTOR = github.context.actor;
 
 // ── Main Workflow ───────────────────────────────────────────
