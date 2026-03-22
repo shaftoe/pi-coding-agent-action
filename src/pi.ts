@@ -10,12 +10,14 @@ import { PI_TIMEOUT_MS } from './constants.js';
 /**
  * Runs the pi agent with the given prompt.
  * @param prompt - The prompt to send to pi
+ * @param overrideProvider - Optional provider override (for internal calls)
+ * @param overrideModel - Optional model override (for internal calls)
  * @returns The response from pi
  * @throws Error if pi exits with non-zero status
  */
-export function runPi(prompt: string): string {
-  const provider = core.getInput('provider') || 'anthropic';
-  const model = core.getInput('model') || 'claude-sonnet-4-5';
+export function runPi(prompt: string, overrideProvider?: string, overrideModel?: string): string {
+  const provider = (overrideProvider ?? core.getInput('provider')) || 'anthropic';
+  const model = (overrideModel ?? core.getInput('model')) || 'claude-sonnet-4-5';
   const extraTools = core.getInput('extra_tools') || '';
   const customSystemPrompt = core.getInput('prompt') || '';
   const envVarsString = core.getInput('env_vars') || '';
@@ -85,8 +87,7 @@ export function runPi(prompt: string): string {
 // ── Summarize ─────────────────────────────────────────────
 /**
  * Summarizes text for use as a git commit message.
- * Uses a simple heuristic (first line, truncated to 50 chars) to avoid expensive AI calls.
- * Falls back to AI only for very long/complex responses.
+ * Uses a simple heuristic to avoid expensive AI calls.
  * @param text - The text to summarize
  * @param issueNumber - The issue number (used for fallback message)
  * @returns A short summary suitable for a git commit message
@@ -97,17 +98,24 @@ export function summarize(text: string, issueNumber: number): string {
 
   // If first line is short enough and not too generic, use it directly
   if (firstLine.length > 0 && firstLine.length <= 50) {
-    const genericPatterns = /^(I|I'll|Sure|OK|Great|Here|The|This|A)/;
+    const genericPatterns = /^(I|I'll|Sure|OK|Great|Here|The|This|A)/i;
     if (!genericPatterns.test(firstLine)) {
       return firstLine;
     }
   }
 
-  // For longer or more complex responses, use AI to generate summary
-  const summaryPrompt = `Summarize the following in less than 40 characters, suitable for a git commit message:\n\n${text}`;
-  try {
-    return runPi(summaryPrompt);
-  } catch {
-    return `Fix issue #${issueNumber}`;
+  // For longer or more complex responses, use the first sentence or phrase
+  const firstSentence = text
+    .split(/[.!?\n]/)[0]
+    .trim()
+    .replace(/^(I|I'll|Sure|OK|Great|Here|The|This|A)\s+/i, '')
+    .substring(0, 50)
+    .trim();
+
+  if (firstSentence.length > 5) {
+    return firstSentence;
   }
+
+  // Fallback to generic message
+  return `Fix issue #${issueNumber}`;
 }
