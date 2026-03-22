@@ -56,8 +56,7 @@ async function run(): Promise<void> {
     await configureGit(GITHUB_TOKEN);
 
     const isPR = Boolean(payload.issue?.pull_request);
-    const defaultBranch = runCommand(["git", "rev-parse", "--abbrev-ref", "origin/HEAD"])
-      .replace("origin/", "");
+    const defaultBranch = await git.currentBranch({ fs, dir: GIT_DIR });
 
     if (isPR) {
       const prNumber = issueNumber;
