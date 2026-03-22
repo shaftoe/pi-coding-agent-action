@@ -22,9 +22,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Pi Coding Agent
+        run: bun install @mariozechner/pi-coding-agent
 
       - name: Run pi agent
         uses: shaftoe/pi-coding-agent-action@v1
