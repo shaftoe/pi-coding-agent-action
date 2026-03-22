@@ -35,10 +35,23 @@ function createOnAuth() {
  * Gets the current HEAD commit SHA.
  * @returns The HEAD commit SHA, or null if not available
  */
-export async function getHeadCommit(): Promise<string | null> {
+async function getHeadCommit(): Promise<string | null> {
   try {
     const HEAD = await git.resolveRef({ fs, dir: GIT_DIR, ref: 'HEAD' });
     return HEAD;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Gets the current branch name.
+ * @returns The current branch name, or null if not available
+ */
+export async function getCurrentBranch(): Promise<string | null> {
+  try {
+    const branch = await git.currentBranch({ fs, dir: GIT_DIR });
+    return branch ?? null;
   } catch {
     return null;
   }
@@ -63,7 +76,7 @@ export async function branchIsDirty(): Promise<boolean> {
  * @param name - The remote name
  * @param url - The remote URL
  */
-export async function addRemote(name: string, url: string): Promise<void> {
+async function addRemote(name: string, url: string): Promise<void> {
   const remotes = await git.listRemotes({ fs, dir: GIT_DIR });
   const remoteExists = remotes.some(r => r.remote === name);
 
@@ -145,7 +158,7 @@ export async function checkoutBranch(branch: string, createNew = false): Promise
 /**
  * Stages all changes in the working directory.
  */
-export async function stageAll(): Promise<void> {
+async function stageAll(): Promise<void> {
   core.info('Staging all changes');
   const status = await git.statusMatrix({ fs, dir: GIT_DIR, ref: 'HEAD' });
 
@@ -178,7 +191,7 @@ export async function stageAll(): Promise<void> {
  * @param author - The author information
  * @returns The commit SHA
  */
-export async function commitChanges(
+async function commitChanges(
   message: string,
   author: { name: string; email: string }
 ): Promise<string> {
@@ -203,7 +216,7 @@ export async function commitChanges(
  * @param branch - The branch name
  * @param force - Whether to force push (default: false)
  */
-export async function pushBranch(remote: string, branch: string, force = false): Promise<void> {
+async function pushBranch(remote: string, branch: string, force = false): Promise<void> {
   core.info(`Pushing ${branch} to ${remote}${force ? ' (force)' : ''}`);
 
   await git.push({
@@ -217,4 +230,22 @@ export async function pushBranch(remote: string, branch: string, force = false):
   });
 
   core.info(`Pushed ${branch} to ${remote}`);
+}
+
+/**
+ * Commits all changes with a summary and pushes to a remote.
+ * @param summary - The commit message
+ * @param author - The author information
+ * @param remote - The remote name
+ * @param branch - The branch name
+ */
+export async function commitAndPush(
+  summary: string,
+  author: { name: string; email: string },
+  remote: string,
+  branch: string
+): Promise<void> {
+  await stageAll();
+  await commitChanges(summary, author);
+  await pushBranch(remote, branch);
 }

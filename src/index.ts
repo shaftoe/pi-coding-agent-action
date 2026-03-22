@@ -1,5 +1,3 @@
-import git from 'isomorphic-git';
-import * as fs from 'fs';
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import { assertKeyword, extractUserPrompt, generateBranchName } from './utils.js';
@@ -9,9 +7,8 @@ import {
   branchIsDirty,
   fetchBranch,
   checkoutBranch,
-  stageAll,
-  commitChanges,
-  pushBranch,
+  commitAndPush,
+  getCurrentBranch,
 } from './git.js';
 import { buildIssuePrompt, buildPRPrompt } from './prompts.js';
 import { runPi, summarize } from './pi.js';
@@ -33,7 +30,6 @@ interface GitHubPayload {
 }
 
 // ── Configuration ─────────────────────────────────────────────
-const GIT_DIR = process.cwd();
 const GITHUB_TOKEN = core.getInput('github_token');
 const ACTOR = github.context.actor;
 
@@ -76,21 +72,6 @@ async function checkoutPRBranch(pr: PRNode, issueNumber: number) {
   }
 }
 
-async function commitAndPush(
-  response: string,
-  issueNumber: number,
-  remote: string,
-  branchName: string
-): Promise<void> {
-  const summary = summarize(response, issueNumber);
-  await stageAll();
-  await commitChanges(summary, {
-    name: ACTOR,
-    email: `${ACTOR}@users.noreply.github.com`,
-  });
-  await pushBranch(remote, branchName);
-}
-
 /**
  * Handles the workflow for PR-related comments.
  * @param issueNumber - The PR number
@@ -111,7 +92,16 @@ async function handlePRWorkflow(
   const response = runPi(fullPrompt);
 
   if (await branchIsDirty()) {
-    await commitAndPush(response, issueNumber, remote, branchName);
+    const summary = summarize(response, issueNumber);
+    await commitAndPush(
+      summary,
+      {
+        name: ACTOR,
+        email: `${ACTOR}@users.noreply.github.com`,
+      },
+      remote,
+      branchName
+    );
   }
 
   const finalBody = `${response}\n\n[View run](${runUrl})`;
@@ -132,7 +122,7 @@ async function handleIssueWorkflow(
   runUrl: string,
   commentId: number
 ): Promise<void> {
-  const defaultBranch = (await git.currentBranch({ fs, dir: GIT_DIR })) ?? 'main';
+  const defaultBranch = (await getCurrentBranch()) ?? 'main';
   const branch = generateBranchName('issue', issueNumber);
   await checkoutBranch(branch, true);
 
@@ -142,12 +132,15 @@ async function handleIssueWorkflow(
 
   if (await branchIsDirty()) {
     const summary = summarize(response, issueNumber);
-    await stageAll();
-    await commitChanges(summary, {
-      name: ACTOR,
-      email: `${ACTOR}@users.noreply.github.com`,
-    });
-    await pushBranch('origin', branch);
+    await commitAndPush(
+      summary,
+      {
+        name: ACTOR,
+        email: `${ACTOR}@users.noreply.github.com`,
+      },
+      'origin',
+      branch
+    );
 
     const prBody = `${response}\n\nCloses #${issueNumber}\n\n[View run](${runUrl})`;
     const prNumber = await createPR(defaultBranch, branch, summary, prBody);
