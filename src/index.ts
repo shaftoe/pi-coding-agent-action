@@ -190,7 +190,6 @@ async function run(): Promise<void> {
     // Post initial "working" comment
     await createComment(issueNumber, `[pi agent working...](${runUrl})`);
 
-    // Configure git
     await configureGit(GITHUB_TOKEN);
 
     const isPR = Boolean(payload.issue?.pull_request);
