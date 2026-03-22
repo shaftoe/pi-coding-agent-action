@@ -1,24 +1,3 @@
-// ── Suppress isomorphic-git url.parse deprecation warning (DEP0169) ────────
-// Must be done before any imports to catch warnings from isomorphic-git
-const originalEmitWarning: typeof process.emitWarning = process.emitWarning.bind(process);
-process.emitWarning = function (warning, type, code, ctor) {
-  const warningCode =
-    code ?? (warning instanceof Error ? (warning as { code?: string }).code : undefined);
-  const warningType = type ?? (warning instanceof Error ? warning.name : undefined);
-
-  if (
-    (warningType === 'DeprecationWarning' && warningCode === 'DEP0169') ||
-    (warning instanceof Error &&
-      warning.name === 'DeprecationWarning' &&
-      (warning as { code?: string }).code === 'DEP0169')
-  ) {
-    // Suppress url.parse() deprecation warning from isomorphic-git
-    return;
-  }
-  // Call original with only the supported arguments based on the overload used
-  return originalEmitWarning(warning, type, code, ctor);
-} as typeof process.emitWarning;
-
 import git from 'isomorphic-git';
 import fs from 'fs';
 import * as core from '@actions/core';
@@ -39,8 +18,7 @@ import { runPi, summarize } from './pi.js';
 
 // ── Configuration ─────────────────────────────────────────────
 const GIT_DIR = process.cwd();
-// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-const GITHUB_TOKEN = core.getInput('github_token') || process.env.GITHUB_TOKEN || '';
+const GITHUB_TOKEN = core.getInput('github_token');
 const ACTOR = github.context.actor;
 
 // ── Main Workflow ───────────────────────────────────────────
@@ -62,7 +40,7 @@ async function run(): Promise<void> {
     workingComment = `[pi agent working...](${runUrl})`;
 
     // Post initial "working" comment
-    createComment(issueNumber, workingComment);
+    await createComment(issueNumber, workingComment);
 
     // Configure git
     await configureGit(GITHUB_TOKEN);
@@ -112,7 +90,7 @@ async function run(): Promise<void> {
       // Update comment with final response
       const finalBody = `${response}\n\n[View run](${runUrl})`;
       // We need to find and update the working comment - for now, create a new one
-      createComment(issueNumber, finalBody);
+      await createComment(issueNumber, finalBody);
     } else {
       // Issue flow — create new branch, run agent, open PR
       const branch = generateBranchName('issue', issueNumber);
@@ -132,11 +110,11 @@ async function run(): Promise<void> {
         await pushBranch('origin', branch);
 
         const prBody = `${response}\n\nCloses #${issueNumber}\n\n[View run](${runUrl})`;
-        const prNumber = createPR(defaultBranch, branch, summary, prBody);
+        const prNumber = await createPR(defaultBranch, branch, summary, prBody);
 
-        createComment(issueNumber, `Created PR #${prNumber}\n\n[View run](${runUrl})`);
+        await createComment(issueNumber, `Created PR #${prNumber}\n\n[View run](${runUrl})`);
       } else {
-        createComment(issueNumber, `${response}\n\n[View run](${runUrl})`);
+        await createComment(issueNumber, `${response}\n\n[View run](${runUrl})`);
       }
     }
   } catch (err) {
@@ -145,7 +123,7 @@ async function run(): Promise<void> {
     const runUrl = `${github.context.serverUrl}/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
     const issueNumber = github.context.payload.issue!.number;
 
-    createComment(
+    await createComment(
       issueNumber,
       `❌ pi agent error:\n\n\`\`\`\n${msg}\n\`\`\`\n\n[View run](${runUrl})`
     );

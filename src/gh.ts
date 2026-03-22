@@ -18,8 +18,19 @@ export function getIssueData(issueNumber: number): IssueNode {
   return JSON.parse(output);
 }
 
-export function createComment(issueNumber: number, body: string): void {
-  gh(['issue', 'comment', `${issueNumber}`, '--body', body]);
+export async function createComment(issueNumber: number, body: string): Promise<void> {
+  // Write body to a temporary file to avoid parsing issues with special characters
+  const fs = await import('fs');
+  const os = await import('os');
+  const path = await import('path');
+  const tmpFile = path.join(os.tmpdir(), `gh-comment-body-${Date.now()}.txt`);
+  fs.writeFileSync(tmpFile, body, 'utf8');
+
+  try {
+    gh(['issue', 'comment', `${issueNumber}`, '--body-file', tmpFile]);
+  } finally {
+    fs.unlinkSync(tmpFile);
+  }
 }
 
 // ── PR Operations ─────────────────────────────────────────
@@ -34,10 +45,45 @@ export function getPRData(prNumber: number): PRNode {
   return JSON.parse(output);
 }
 
-export function createPR(base: string, branch: string, title: string, body: string): number {
-  gh(['pr', 'create', '--base', base, '--head', branch, '--title', title, '--body', body]);
+function getPRByHead(branch: string): number {
+  const output = gh(['pr', 'list', '--head', branch, '--json', 'number', '--limit', '1']);
+  const results = JSON.parse(output);
+  if (!results || results.length === 0) {
+    throw new Error(`No PR found with head branch: ${branch}`);
+  }
+  return results[0].number;
+}
+
+export async function createPR(
+  base: string,
+  branch: string,
+  title: string,
+  body: string
+): Promise<number> {
+  // Write body to a temporary file to avoid parsing issues with special characters
+  const fs = await import('fs');
+  const os = await import('os');
+  const path = await import('path');
+  const tmpFile = path.join(os.tmpdir(), `gh-pr-body-${Date.now()}.txt`);
+  fs.writeFileSync(tmpFile, body, 'utf8');
+
+  try {
+    gh([
+      'pr',
+      'create',
+      '--base',
+      base,
+      '--head',
+      branch,
+      '--title',
+      title,
+      '--body-file',
+      tmpFile,
+    ]);
+  } finally {
+    fs.unlinkSync(tmpFile);
+  }
+
   // Get the PR number from the created PR using the head branch
-  const output = gh(['pr', 'view', '--json', 'number', '--head', branch]);
-  const result = JSON.parse(output);
-  return result.number;
+  return getPRByHead(branch);
 }
