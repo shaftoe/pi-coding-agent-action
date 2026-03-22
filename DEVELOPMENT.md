@@ -153,6 +153,18 @@ async function pushBranch(remote: string, branch: string, setUpstream?: boolean,
 # Install dependencies
 bun install
 
+# Type-check TypeScript
+bun run type-check
+
+# Run linter
+bun run lint
+
+# Check code formatting
+bun run format
+
+# Run all validations
+bun run validate
+
 # Compile TypeScript
 bun run build
 
@@ -161,6 +173,24 @@ bun run package
 ```
 
 The `dist/` folder is committed to the repository because the action runs directly from these bundled files.
+
+### Linting and Type Checking
+
+The project uses ESLint, Prettier, and TypeScript strict mode for code quality:
+
+- **ESLint**: Catches code quality issues and potential bugs
+- **Prettier**: Ensures consistent code formatting
+- **TypeScript**: Strict type checking enabled
+
+Pre-commit hooks (via lefthook) automatically run:
+- Type checking
+- Linting
+- Formatting validation
+
+To skip pre-commit hooks temporarily:
+```bash
+git commit --no-verify
+```
 
 ### Dependencies
 
@@ -172,6 +202,10 @@ The `dist/` folder is committed to the repository because the action runs direct
   - `esbuild` - Fast bundler
   - `typescript` - TypeScript compiler
   - `@types/node` - Node.js type definitions
+  - `eslint` - JavaScript/TypeScript linter
+  - `@typescript-eslint/eslint-plugin` - TypeScript ESLint rules
+  - `@typescript-eslint/parser` - TypeScript parser for ESLint
+  - `prettier` - Code formatter
 - **External**:
   - `gh` CLI (pre-installed)
   - `pi` agent (installed at runtime)

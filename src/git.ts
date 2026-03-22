@@ -1,26 +1,26 @@
-import * as core from "@actions/core";
-import * as git from "isomorphic-git";
-import http from "isomorphic-git/http/node";
-import fs from "fs";
-import type { GitAuthor } from "./types.js";
+import * as core from '@actions/core';
+import * as git from 'isomorphic-git';
+import http from 'isomorphic-git/http/node';
+import fs from 'fs';
+import type { GitAuthor } from './types.js';
 
 // ── Configuration ─────────────────────────────────────────────
 const GIT_DIR = process.cwd();
 const GIT_AUTHOR: GitAuthor = {
-  name: "pi-agent[bot]",
-  email: "pi-agent[bot]@users.noreply.github.com",
+  name: 'pi-agent[bot]',
+  email: 'pi-agent[bot]@users.noreply.github.com',
 };
 
 export async function configureGit(token: string): Promise<void> {
   // isomorphic-git uses GITHUB_TOKEN env var for auth
   process.env.GITHUB_TOKEN = token;
-  core.info("Git configured");
+  core.info('Git configured');
 }
 
 // ── Status Operations ─────────────────────────────────────────
 export async function getHeadCommit(): Promise<string | null> {
   try {
-    const HEAD = await git.resolveRef({ fs, dir: GIT_DIR, ref: "HEAD" });
+    const HEAD = await git.resolveRef({ fs, dir: GIT_DIR, ref: 'HEAD' });
     return HEAD;
   } catch {
     return null;
@@ -29,11 +29,8 @@ export async function getHeadCommit(): Promise<string | null> {
 
 export async function branchIsDirty(): Promise<boolean> {
   try {
-    const status = await git.statusMatrix({ fs, dir: GIT_DIR, ref: "HEAD" });
-    return status.some(
-      ([, head, worktree, stage]) =>
-        head !== worktree || worktree !== stage,
-    );
+    const status = await git.statusMatrix({ fs, dir: GIT_DIR, ref: 'HEAD' });
+    return status.some(([, head, worktree, stage]) => head !== worktree || worktree !== stage);
   } catch {
     return false;
   }
@@ -42,7 +39,7 @@ export async function branchIsDirty(): Promise<boolean> {
 // ── Remote Operations ───────────────────────────────────────
 export async function addRemote(name: string, url: string): Promise<void> {
   const remotes = await git.listRemotes({ fs, dir: GIT_DIR });
-  const remoteExists = remotes.some((r) => r.remote === name);
+  const remoteExists = remotes.some(r => r.remote === name);
 
   if (!remoteExists) {
     await git.addRemote({ fs, dir: GIT_DIR, remote: name, url });
@@ -54,7 +51,7 @@ export async function fetchBranch(
   remoteUrl: string,
   remote: string,
   branch: string,
-  depth?: number,
+  depth?: number
 ): Promise<void> {
   core.info(`Fetching ${remote}/${branch} from ${remoteUrl}`);
 
@@ -68,7 +65,7 @@ export async function fetchBranch(
     ref: branch,
     depth,
     singleBranch: true,
-    onProgress: (progress) => {
+    onProgress: progress => {
       if (progress.phase && progress.loaded) {
         core.debug(`${progress.phase}: ${progress.loaded}/${progress.total}`);
       }
@@ -79,16 +76,13 @@ export async function fetchBranch(
 }
 
 // ── Checkout Operations ─────────────────────────────────────
-export async function checkoutBranch(
-  branch: string,
-  createNew = false,
-): Promise<void> {
-  core.info(`Checking out ${branch}${createNew ? " (new branch)" : ""}`);
+export async function checkoutBranch(branch: string, createNew = false): Promise<void> {
+  core.info(`Checking out ${branch}${createNew ? ' (new branch)' : ''}`);
 
   if (createNew) {
     const currentHead = await getHeadCommit();
     if (!currentHead) {
-      throw new Error("Cannot create branch: no HEAD commit found");
+      throw new Error('Cannot create branch: no HEAD commit found');
     }
     await git.branch({
       fs,
@@ -110,10 +104,10 @@ export async function checkoutBranch(
 
 // ── Stage and Commit ─────────────────────────────────────
 export async function stageAll(): Promise<void> {
-  core.info("Staging all changes");
-  const status = await git.statusMatrix({ fs, dir: GIT_DIR, ref: "HEAD" });
+  core.info('Staging all changes');
+  const status = await git.statusMatrix({ fs, dir: GIT_DIR, ref: 'HEAD' });
 
-  for (const [filepath, head, workdir, stage] of status) {
+  for (const [filepath, head, workdir, _stage] of status) {
     // File is modified
     if (head !== workdir) {
       const workdirNum = workdir as number;
@@ -122,14 +116,14 @@ export async function stageAll(): Promise<void> {
         await git.remove({
           fs,
           dir: GIT_DIR,
-          filepath: filepath as string,
+          filepath: filepath,
         });
       } else if (workdirNum === 1 || workdirNum === 3) {
         // Modified or added
         await git.add({
           fs,
           dir: GIT_DIR,
-          filepath: filepath as string,
+          filepath: filepath,
         });
       }
     }
@@ -138,7 +132,7 @@ export async function stageAll(): Promise<void> {
 
 export async function commitChanges(
   message: string,
-  author: { name: string; email: string },
+  author: { name: string; email: string }
 ): Promise<string> {
   core.info(`Committing: ${message}`);
 
@@ -155,14 +149,8 @@ export async function commitChanges(
 }
 
 // ── Push Operations ───────────────────────────────────────
-export async function pushBranch(
-  remote: string,
-  branch: string,
-  force = false,
-): Promise<void> {
-  core.info(
-    `Pushing ${branch} to ${remote}${force ? " (force)" : ""}`,
-  );
+export async function pushBranch(remote: string, branch: string, force = false): Promise<void> {
+  core.info(`Pushing ${branch} to ${remote}${force ? ' (force)' : ''}`);
 
   await git.push({
     fs,

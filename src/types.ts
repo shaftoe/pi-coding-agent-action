@@ -31,23 +31,23 @@ export interface PRNode {
   commits: {
     totalCount: number;
   };
-  files?: Array<{
+  files?: {
     path: string;
     additions: number;
     deletions: number;
     changeType: string;
-  }>;
+  }[];
   comments?: IssueComment[];
-  reviews?: Array<{
+  reviews?: {
     author: { login: string };
     body: string;
     submittedAt: string;
-    comments?: Array<{
+    comments?: {
       path?: string;
       line?: number;
       body: string;
-    }>;
-  }>;
+    }[];
+  }[];
 }
 
 // ── Git Types ─────────────────────────────────────────────────────

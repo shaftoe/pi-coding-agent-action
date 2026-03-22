@@ -1,36 +1,29 @@
-import git from "isomorphic-git";
-import * as core from "@actions/core";
-import * as github from "@actions/github";
-import { runCommand } from "./utils.js";
-import {
-  getMentions,
-  assertKeyword,
-  extractUserPrompt,
-  generateBranchName,
-} from "./utils.js";
-import { getIssueData, getPRData, createComment, createPR } from "./gh.js";
+import git from 'isomorphic-git';
+import fs from 'fs';
+import * as core from '@actions/core';
+import * as github from '@actions/github';
+import { assertKeyword, extractUserPrompt, generateBranchName } from './utils.js';
+import { getIssueData, getPRData, createComment, createPR } from './gh.js';
 import {
   configureGit,
-  getHeadCommit,
   branchIsDirty,
   fetchBranch,
   checkoutBranch,
   stageAll,
   commitChanges,
   pushBranch,
-} from "./git.js";
-import { buildIssuePrompt, buildPRPrompt } from "./prompts.js";
-import { runPi, summarize } from "./pi.js";
-import type { IssueNode, PRNode } from "./types.js";
+} from './git.js';
+import { buildIssuePrompt, buildPRPrompt } from './prompts.js';
+import { runPi, summarize } from './pi.js';
 
 // ── Configuration ─────────────────────────────────────────────
-const GITHUB_TOKEN =
-  core.getInput("github_token") || process.env.GITHUB_TOKEN || "";
+const GIT_DIR = process.cwd();
+const GITHUB_TOKEN = core.getInput('github_token') || process.env.GITHUB_TOKEN || '';
 const ACTOR = github.context.actor;
 
 // ── Main Workflow ───────────────────────────────────────────
 async function run(): Promise<void> {
-  let workingComment = "";
+  let workingComment = '';
 
   // Set GH_TOKEN for gh CLI
   process.env.GH_TOKEN = GITHUB_TOKEN;
@@ -38,7 +31,7 @@ async function run(): Promise<void> {
   try {
     const payload = github.context.payload;
     const issueNumber = payload.issue!.number;
-    const commentBody = payload.comment?.body || "";
+    const commentBody = payload.comment?.body || '';
 
     assertKeyword(commentBody);
     const userPrompt = extractUserPrompt(commentBody);
@@ -53,13 +46,12 @@ async function run(): Promise<void> {
     await configureGit(GITHUB_TOKEN);
 
     const isPR = Boolean(payload.issue?.pull_request);
-    const defaultBranch = await git.currentBranch({ fs, dir: GIT_DIR });
+    const defaultBranch = (await git.currentBranch({ fs, dir: GIT_DIR })) || 'main';
 
     if (isPR) {
       const prNumber = issueNumber;
       const pr = getPRData(prNumber);
-      const isLocalPR =
-        pr.headRepository.nameWithOwner === pr.baseRepository.nameWithOwner;
+      const isLocalPR = pr.headRepository.nameWithOwner === pr.baseRepository.nameWithOwner;
 
       core.info(`Processing PR #${prNumber} (local: ${isLocalPR})`);
 
@@ -67,21 +59,17 @@ async function run(): Promise<void> {
       if (isLocalPR) {
         const depth = Math.max(pr.commits.totalCount, 20);
         const originUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}.git`;
-        await fetchBranch(originUrl, "origin", pr.headRefName, depth);
+        await fetchBranch(originUrl, 'origin', pr.headRefName, depth);
         await checkoutBranch(pr.headRefName);
       } else {
         const depth = Math.max(pr.commits.totalCount, 20);
-        const localBranch = generateBranchName("pr", issueNumber);
+        const localBranch = generateBranchName('pr', issueNumber);
         const forkUrl = `https://github.com/${pr.headRepository.nameWithOwner}.git`;
-        await fetchBranch(forkUrl, "fork", pr.headRefName, depth);
+        await fetchBranch(forkUrl, 'fork', pr.headRefName, depth);
         await checkoutBranch(localBranch, true);
       }
 
-      const fullPrompt = buildPRPrompt(
-        pr,
-        userPrompt,
-        Number(payload.comment?.id),
-      );
+      const fullPrompt = buildPRPrompt(pr, userPrompt, payload.comment?.id ?? 0);
       const response = runPi(fullPrompt);
 
       if (await branchIsDirty()) {
@@ -93,9 +81,9 @@ async function run(): Promise<void> {
         });
 
         if (isLocalPR) {
-          await pushBranch("origin", pr.headRefName);
+          await pushBranch('origin', pr.headRefName);
         } else {
-          await pushBranch("fork", pr.headRefName);
+          await pushBranch('fork', pr.headRefName);
         }
       }
 
@@ -105,15 +93,11 @@ async function run(): Promise<void> {
       createComment(issueNumber, finalBody);
     } else {
       // Issue flow — create new branch, run agent, open PR
-      const branch = generateBranchName("issue", issueNumber);
+      const branch = generateBranchName('issue', issueNumber);
       await checkoutBranch(branch, true);
 
       const issue = getIssueData(issueNumber);
-      const fullPrompt = buildIssuePrompt(
-        issue,
-        userPrompt,
-        Number(payload.comment?.id),
-      );
+      const fullPrompt = buildIssuePrompt(issue, userPrompt, payload.comment?.id ?? 0);
       const response = runPi(fullPrompt);
 
       if (await branchIsDirty()) {
@@ -123,15 +107,12 @@ async function run(): Promise<void> {
           name: ACTOR,
           email: `${ACTOR}@users.noreply.github.com`,
         });
-        await pushBranch("origin", branch);
+        await pushBranch('origin', branch);
 
         const prBody = `${response}\n\nCloses #${issueNumber}\n\n[View run](${runUrl})`;
         const prNumber = createPR(defaultBranch, branch, summary, prBody);
 
-        createComment(
-          issueNumber,
-          `Created PR #${prNumber}\n\n[View run](${runUrl})`,
-        );
+        createComment(issueNumber, `Created PR #${prNumber}\n\n[View run](${runUrl})`);
       } else {
         createComment(issueNumber, `${response}\n\n[View run](${runUrl})`);
       }
@@ -144,7 +125,7 @@ async function run(): Promise<void> {
 
     createComment(
       issueNumber,
-      `❌ pi agent error:\n\n\`\`\`\n${msg}\n\`\`\`\n\n[View run](${runUrl})`,
+      `❌ pi agent error:\n\n\`\`\`\n${msg}\n\`\`\`\n\n[View run](${runUrl})`
     );
     core.setFailed(msg);
   }
@@ -152,7 +133,7 @@ async function run(): Promise<void> {
 
 // Only run if this is the main module (not during imports)
 if (require.main === module) {
-  run().catch((err) => {
+  run().catch(err => {
     core.setFailed(err instanceof Error ? err.message : String(err));
     process.exit(1);
   });

@@ -24,14 +24,31 @@ Edit files in the `src/` directory. The main source file is `src/index.ts`.
 ### 4. Build and Test
 
 ```bash
-# Compile TypeScript
-bun run build
+# Type-check TypeScript code
+bun run type-check
+
+# Run linter
+bun run lint
+
+# Check code formatting
+bun run format
+
+# Auto-fix linting issues
+bun run lint:fix
+
+# Auto-fix formatting issues
+bun run format:fix
+
+# Run all validations (type-check, lint, format)
+bun run validate
 
 # Bundle with esbuild (creates single file distribution)
 bun run package
 ```
 
-**Important**: Before committing, always run `bun run package` to ensure the `dist/` folder is up-to-date. The action runs from the bundled files in `dist/`, not from the `src/` directory.
+**Important**: Before committing, always run `bun run validate` and `bun run package` to ensure the `dist/` folder is up-to-date and the code passes all checks. The action runs from the bundled files in `dist/`, not from the `src/` directory.
+
+**Note**: Lefthook is configured to automatically run type-check, lint, and format checks on pre-commit. If you prefer to skip them temporarily, use `git commit --no-verify`.
 
 ### 5. Commit and Push
 
@@ -74,6 +91,14 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 
 ## Code Style
 
+This project uses ESLint, Prettier, and TypeScript for code quality and consistency:
+
+- **ESLint**: Enforces code quality and catches potential bugs
+- **Prettier**: Ensures consistent code formatting
+- **TypeScript**: Provides type safety with strict mode enabled
+
+### Linting Rules
+
 - Use TypeScript for all new code
 - Follow existing code patterns
 - Keep functions focused and modular
@@ -81,6 +106,13 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 - Use `runCommand()` helper for shell operations
 - Use `gh()` helper for GitHub CLI calls
 - Use isomorphic-git for local git operations
+
+### Type Safety
+
+- TypeScript strict mode is enabled
+- All code must pass `bun run type-check` before committing
+- Explicit type annotations are encouraged over `any`
+- Use `??` instead of `||` for nullish coalescing when appropriate
 
 ## Testing
 

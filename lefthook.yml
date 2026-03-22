@@ -1,5 +1,15 @@
 pre-commit:
-  jobs:
-    - name: Build
-      run: bun run package
+  parallel: false
+  commands:
+    format:
+      run: bun run format
       stage_fixed: true
+    lint:
+      run: bun run lint
+    type-check:
+      run: bun run type-check
+
+pre-push:
+  commands:
+    validate:
+      run: bun run validate

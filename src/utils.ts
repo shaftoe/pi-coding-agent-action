@@ -1,46 +1,46 @@
-import * as core from "@actions/core";
-import { spawnSync } from "child_process";
+import * as core from '@actions/core';
+import { spawnSync } from 'child_process';
 
 // ── CLI Helper ───────────────────────────────────────────────────
 export function runCommand(cmd: string[], options?: { input?: string }): string {
-  core.info(`Running: ${cmd.join(" ")}`);
+  core.info(`Running: ${cmd.join(' ')}`);
 
   const result = spawnSync(cmd[0], cmd.slice(1), {
-    stdio: ["pipe", "pipe", "pipe"],
-    encoding: "utf8",
+    stdio: ['pipe', 'pipe', 'pipe'],
+    encoding: 'utf8',
     input: options?.input,
   });
 
   if (result.status !== 0) {
-    const stderr = result.stderr || "";
-    const stdout = result.stdout || "";
+    const stderr = result.stderr || '';
+    const stdout = result.stdout || '';
     throw new Error(
-      `Command failed: ${cmd.join(" ")}\n\nExit code: ${result.status}\n\nStdout:\n${stdout}\n\nStderr:\n${stderr}`,
+      `Command failed: ${cmd.join(' ')}\n\nExit code: ${result.status}\n\nStdout:\n${stdout}\n\nStderr:\n${stderr}`
     );
   }
 
-  return (result.stdout || "").trim();
+  return (result.stdout || '').trim();
 }
 
 // ── Mention Helpers ───────────────────────────────────────────────
 export function getMentions(): string[] {
-  const raw = core.getInput("mentions") || "/pi";
-  return raw.split(",").map((m) => m.trim().toLowerCase());
+  const raw = core.getInput('mentions') || '/pi';
+  return raw.split(',').map(m => m.trim().toLowerCase());
 }
 
 export function assertKeyword(body: string): void {
   const lower = body.toLowerCase().trim();
   const mentions = getMentions();
   const matched = mentions.some(
-    (m) =>
+    m =>
       lower === m ||
-      lower.startsWith(m + " ") ||
-      lower.includes(" " + m + " ") ||
-      lower.endsWith(" " + m),
+      lower.startsWith(m + ' ') ||
+      lower.includes(' ' + m + ' ') ||
+      lower.endsWith(' ' + m)
   );
   if (!matched) {
-    core.setFailed(`Comment must contain one of: ${mentions.join(", ")}`);
-    throw new Error(`Comment must contain one of: ${mentions.join(", ")}`);
+    core.setFailed(`Comment must contain one of: ${mentions.join(', ')}`);
+    throw new Error(`Comment must contain one of: ${mentions.join(', ')}`);
   }
 }
 
@@ -60,9 +60,9 @@ export function extractUserPrompt(body: string): string | null {
 export function generateBranchName(type: string, issueNumber: number): string {
   const ts = new Date()
     .toISOString()
-    .replace(/[:-]/g, "")
-    .replace(/\.\d{3}Z/, "")
-    .replace("T", "");
+    .replace(/[:-]/g, '')
+    .replace(/\.\d{3}Z/, '')
+    .replace('T', '');
   return `pi/${type}${issueNumber}-${ts}`;
 }
 
@@ -73,16 +73,16 @@ export interface EnvVar {
 }
 
 export function parseEnvVars(envVarsString: string): EnvVar[] {
-  if (!envVarsString || envVarsString.trim() === "") {
+  if (!envVarsString || envVarsString.trim() === '') {
     return [];
   }
 
   return envVarsString
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && line.includes("="))
-    .map((line) => {
-      const equalIndex = line.indexOf("=");
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0 && line.includes('='))
+    .map(line => {
+      const equalIndex = line.indexOf('=');
       const key = line.slice(0, equalIndex).trim();
       const value = line.slice(equalIndex + 1).trim();
       return { key, value };

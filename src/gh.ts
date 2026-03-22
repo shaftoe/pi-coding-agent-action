@@ -1,61 +1,56 @@
-import { runCommand } from "./utils.js";
-import type { IssueNode, PRNode } from "./types.js";
+import { runCommand } from './utils.js';
+import type { IssueNode, PRNode } from './types.js';
 
 // ── GitHub CLI Wrapper ───────────────────────────────────────
 export function gh(command: string[], options?: { input?: string }): string {
-  return runCommand(["gh", ...command], options);
+  return runCommand(['gh', ...command], options);
 }
 
 // ── Issue Operations ───────────────────────────────────────
 export function getIssueData(issueNumber: number): IssueNode {
   const output = gh([
-    "issue",
-    "view",
+    'issue',
+    'view',
     `${issueNumber}`,
-    "--json",
-    "title,body,state,author,createdAt,comments",
+    '--json',
+    'title,body,state,author,createdAt,comments',
   ]);
   return JSON.parse(output);
 }
 
 export function createComment(issueNumber: number, body: string): void {
-  gh(["issue", "comment", `${issueNumber}`, "--body", body]);
+  gh(['issue', 'comment', `${issueNumber}`, '--body', body]);
 }
 
 // ── PR Operations ─────────────────────────────────────────
 export function getPRData(prNumber: number): PRNode {
   const output = gh([
-    "pr",
-    "view",
+    'pr',
+    'view',
     `${prNumber}`,
-    "--json",
-    "title,body,state,author,baseRefName,headRefName,headRepository,baseRepository,additions,deletions,commits,files,reviews,comments",
+    '--json',
+    'title,body,state,author,baseRefName,headRefName,headRepository,baseRepository,additions,deletions,commits,files,reviews,comments',
   ]);
   return JSON.parse(output);
 }
 
-export function createPR(
-  base: string,
-  branch: string,
-  title: string,
-  body: string,
-): number {
+export function createPR(base: string, branch: string, title: string, body: string): number {
   const output = gh(
     [
-      "pr",
-      "create",
-      "--base",
+      'pr',
+      'create',
+      '--base',
       base,
-      "--head",
+      '--head',
       branch,
-      "--title",
+      '--title',
       title,
-      "--body",
+      '--body',
       body,
-      "--json",
-      "number",
+      '--json',
+      'number',
     ],
-    { input: body },
+    { input: body }
   );
   const result = JSON.parse(output);
   return result.number;
