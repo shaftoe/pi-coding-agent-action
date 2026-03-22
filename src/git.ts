@@ -2,7 +2,9 @@ import * as core from '@actions/core';
 import * as git from 'isomorphic-git';
 import http from 'isomorphic-git/http/node';
 import * as fs from 'fs';
-import type { GitAuthor } from './types.js';
+import * as github from '@actions/github';
+import { generateBranchName } from './utils.js';
+import type { GitAuthor, PRNode } from './types.js';
 
 // ── Configuration ─────────────────────────────────────────────
 const GIT_DIR = process.cwd();
@@ -152,6 +154,35 @@ export async function checkoutBranch(branch: string, createNew = false): Promise
   }
 
   core.info(`Checked out ${branch}`);
+}
+
+/**
+ * Checks out a PR branch, handling both local PRs and fork PRs.
+ * @param pr - The PR data
+ * @param issueNumber - The PR number
+ * @returns The remote and branch name
+ */
+export async function checkoutPRBranch(
+  pr: PRNode,
+  issueNumber: number
+): Promise<{ remote: 'origin' | 'fork'; branchName: string }> {
+  const isLocalPR = pr.headRepository.nameWithOwner === pr.baseRepository.nameWithOwner;
+  core.info(`Processing PR #${issueNumber} (local: ${isLocalPR})`);
+
+  const depth = Math.max(pr.commits.totalCount, 20);
+
+  if (isLocalPR) {
+    const originUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}.git`;
+    await fetchBranch(originUrl, 'origin', pr.headRefName, depth);
+    await checkoutBranch(pr.headRefName);
+    return { remote: 'origin', branchName: pr.headRefName };
+  } else {
+    const localBranch = generateBranchName('pr', issueNumber);
+    const forkUrl = `https://github.com/${pr.headRepository.nameWithOwner}.git`;
+    await fetchBranch(forkUrl, 'fork', pr.headRefName, depth);
+    await checkoutBranch(localBranch, true);
+    return { remote: 'fork', branchName: pr.headRefName };
+  }
 }
 
 // ── Stage and Commit ─────────────────────────────────────

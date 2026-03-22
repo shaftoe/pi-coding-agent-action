@@ -5,14 +5,13 @@ import { getIssueData, getPRData, createComment, createPR } from './gh.js';
 import {
   configureGit,
   branchIsDirty,
-  fetchBranch,
   checkoutBranch,
+  checkoutPRBranch,
   commitAndPush,
   getCurrentBranch,
 } from './git.js';
 import { buildIssuePrompt, buildPRPrompt } from './prompts.js';
 import { runPi, summarize } from './pi.js';
-import type { PRNode } from './types.js';
 
 interface IssueCommentPayload {
   id: number;
@@ -50,26 +49,6 @@ function extractContext(payload: GitHubPayload) {
   const runUrl = `${github.context.serverUrl}/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID ?? 'unknown'}`;
 
   return { issueNumber, userPrompt, runUrl, commentId };
-}
-
-async function checkoutPRBranch(pr: PRNode, issueNumber: number) {
-  const isLocalPR = pr.headRepository.nameWithOwner === pr.baseRepository.nameWithOwner;
-  core.info(`Processing PR #${issueNumber} (local: ${isLocalPR})`);
-
-  const depth = Math.max(pr.commits.totalCount, 20);
-
-  if (isLocalPR) {
-    const originUrl = `https://github.com/${github.context.repo.owner}/${github.context.repo.repo}.git`;
-    await fetchBranch(originUrl, 'origin', pr.headRefName, depth);
-    await checkoutBranch(pr.headRefName);
-    return { remote: 'origin' as const, branchName: pr.headRefName };
-  } else {
-    const localBranch = generateBranchName('pr', issueNumber);
-    const forkUrl = `https://github.com/${pr.headRepository.nameWithOwner}.git`;
-    await fetchBranch(forkUrl, 'fork', pr.headRefName, depth);
-    await checkoutBranch(localBranch, true);
-    return { remote: 'fork' as const, branchName: pr.headRefName };
-  }
 }
 
 /**
