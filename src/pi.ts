@@ -1,85 +1,139 @@
 import * as core from '@actions/core';
-import * as os from 'os';
-import * as path from 'path';
-import { spawnSync } from 'child_process';
-import * as fs from 'fs';
+import {
+  AuthStorage,
+  createAgentSession,
+  DefaultResourceLoader,
+  ModelRegistry,
+  SessionManager,
+  SettingsManager,
+  type CreateAgentSessionOptions,
+} from '@mariozechner/pi-coding-agent';
 import { parseEnvVars } from './utils.js';
 import { PI_TIMEOUT_MS } from './constants.js';
 
 // ── Run Pi Agent ───────────────────────────────────────────
 /**
- * Runs the pi agent with the given prompt.
+ * Runs the pi agent with the given prompt using the SDK.
  * @param prompt - The prompt to send to pi
  * @returns The response from pi
  * @throws Error if pi exits with non-zero status
  */
-export function runPi(prompt: string): string {
+export async function runPi(prompt: string): Promise<string> {
   const provider = core.getInput('provider') || 'anthropic';
-  const model = core.getInput('model') || 'claude-sonnet-4-5';
-  const extraTools = core.getInput('extra_tools') || '';
+  const modelInput = core.getInput('model') || 'claude-sonnet-4-5';
   const customSystemPrompt = core.getInput('prompt') || '';
   const envVarsString = core.getInput('env_vars') || '';
   const envVars = parseEnvVars(envVarsString);
 
-  // Write prompt to a temp file to avoid shell escaping issues
-  const promptFile = path.join(os.tmpdir(), 'pi_prompt.md');
-  fs.writeFileSync(promptFile, prompt, 'utf8');
+  core.info(`Using provider: ${provider}, model: ${modelInput}`);
 
-  const args = [
-    '--provider',
-    provider,
-    '--model',
-    model,
-    '-p', // print / non-interactive mode
-    `@${promptFile}`,
-  ];
-
-  if (extraTools) {
-    args.push('--tools', extraTools);
-  }
-
-  if (customSystemPrompt) {
-    // Write SYSTEM.md to current directory so pi picks it up
-    fs.writeFileSync('SYSTEM.md', customSystemPrompt, 'utf8');
-  }
-
-  core.info(`Running: pi ${args.join(' ')}`);
+  // Set up auth storage and model registry
+  const authStorage = AuthStorage.create();
 
   // Inject custom environment variables
-  const env: NodeJS.ProcessEnv = { ...process.env };
   for (const { key, value } of envVars) {
     core.info(`Setting env var: ${key}=***`);
-    env[key] = value;
+    process.env[key] = value;
   }
 
-  const result = spawnSync('pi', args, {
-    stdio: ['pipe', 'pipe', 'pipe'],
-    encoding: 'utf8',
-    timeout: PI_TIMEOUT_MS,
-    env,
-  });
-
-  // Clean up
-  try {
-    fs.unlinkSync(promptFile);
-  } catch (e) {
-    core.debug(`Failed to clean up prompt temp file: ${e}`);
-  }
-  if (customSystemPrompt) {
-    try {
-      fs.unlinkSync('SYSTEM.md');
-    } catch (e) {
-      core.debug(`Failed to clean up SYSTEM.md: ${e}`);
+  // Apply runtime API key override if available in environment
+  for (const providerName of ['anthropic', 'openai', 'google']) {
+    const envKey = `${providerName.toUpperCase()}_API_KEY`;
+    if (process.env[envKey]) {
+      authStorage.setRuntimeApiKey(providerName, process.env[envKey]);
     }
   }
 
-  if (result.status !== 0) {
-    const errMsg =
-      result.stderr || (result.error as Error)?.message || 'pi exited with non-zero status';
-    throw new Error(`pi agent failed:\n${errMsg}`);
+  const modelRegistry = new ModelRegistry(authStorage);
+
+  // Get available models
+  const availableModels = modelRegistry.getAvailable();
+  core.info(`Available models: ${availableModels.length}`);
+
+  // Find the requested model or use the first available
+  let model = availableModels.find(m => m.id === modelInput);
+  if (!model) {
+    core.warning(
+      `Model ${modelInput} not found or no API key configured. Using first available model.`
+    );
+    model = availableModels[0];
+    if (!model) {
+      throw new Error('No models available. Please configure an API key.');
+    }
+  }
+  core.info(`Using model: ${model.id}`);
+
+  // Set up in-memory settings
+  const settingsManager = SettingsManager.inMemory({
+    compaction: { enabled: false },
+    retry: { enabled: true, maxRetries: 2 },
+  });
+
+  // Build system prompt
+  let systemPrompt = 'You are a helpful coding assistant.';
+  if (customSystemPrompt) {
+    systemPrompt = customSystemPrompt;
   }
 
-  return (result.stdout || '').trim();
+  // Create resource loader with custom system prompt
+  const resourceLoader = new DefaultResourceLoader({
+    settingsManager,
+    systemPromptOverride: () => systemPrompt,
+  });
+  await resourceLoader.reload();
+
+  // Create the agent session
+  const options: CreateAgentSessionOptions = {
+    sessionManager: SessionManager.inMemory(),
+    authStorage,
+    modelRegistry,
+    model,
+    settingsManager,
+    resourceLoader,
+  };
+
+  const { session } = await createAgentSession(options);
+
+  // Collect the response
+  let response = '';
+  let isComplete = false;
+
+  // Subscribe to events to collect the output
+  const unsubscribe = session.subscribe(event => {
+    if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
+      response += event.assistantMessageEvent.delta;
+    } else if (event.type === 'agent_end') {
+      isComplete = true;
+    }
+  });
+
+  // Send the prompt with timeout
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      unsubscribe();
+      void session.abort();
+      reject(new Error(`pi agent timed out after ${PI_TIMEOUT_MS}ms`));
+    }, PI_TIMEOUT_MS);
+  });
+
+  try {
+    await Promise.race([session.prompt(prompt), timeoutPromise]);
+
+    // Wait a bit for the final events to be processed
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Make sure we have the complete response
+    if (!isComplete) {
+      core.warning('Agent may not have finished processing');
+    }
+
+    unsubscribe();
+  } catch (err) {
+    unsubscribe();
+    throw err;
+  }
+
+  return response.trim();
 }
 
 // ── Summarize ─────────────────────────────────────────────
@@ -91,7 +145,7 @@ export function runPi(prompt: string): string {
  * @param issueNumber - The issue number (used for fallback message)
  * @returns A short summary suitable for a git commit message
  */
-export function summarize(text: string, issueNumber: number): string {
+export async function summarize(text: string, issueNumber: number): Promise<string> {
   // Simple heuristic: use first line, truncated to 50 characters
   const firstLine = text.split('\n')[0].trim();
 
@@ -106,7 +160,7 @@ export function summarize(text: string, issueNumber: number): string {
   // For longer or more complex responses, use AI to generate summary
   const summaryPrompt = `Summarize the following in less than 40 characters, suitable for a git commit message:\n\n${text}`;
   try {
-    return runPi(summaryPrompt);
+    return await runPi(summaryPrompt);
   } catch {
     return `Fix issue #${issueNumber}`;
   }

@@ -4,7 +4,7 @@
   "description": "GitHub Action that runs the pi coding agent on issues and pull requests",
   "main": "dist/index.js",
   "scripts": {
-    "package": "esbuild src/index.ts --bundle --platform=node --target=node24 --outfile=dist/index.js --format=cjs --minify",
+    "package": "esbuild src/index.ts --bundle --platform=node --target=node24 --outfile=dist/index.js --format=cjs --minify --external:@mariozechner/pi-coding-agent --external:@mariozechner/pi-agent-core --external:@mariozechner/pi-ai --external:@mariozechner/pi-tui",
     "prepare": "bun run package",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint src --ext .ts",
@@ -25,6 +25,7 @@
   "dependencies": {
     "@actions/core": "^3.0.0",
     "@actions/github": "^9.0.0",
+    "@mariozechner/pi-coding-agent": "^0.61.1",
     "isomorphic-git": "^1.37.4"
   },
   "devDependencies": {

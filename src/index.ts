@@ -62,10 +62,10 @@ async function handlePRWorkflow(
   const { remote, branchName } = await gitService.checkoutPRBranch(pr, issueNumber);
 
   const fullPrompt = buildPRPrompt(pr, userPrompt, commentId);
-  const response = runPi(fullPrompt);
+  const response = await runPi(fullPrompt);
 
   if (await gitService.branchIsDirty()) {
-    const summary = summarize(response, issueNumber);
+    const summary = await summarize(response, issueNumber);
     await gitService.commitAndPush(
       summary,
       {
@@ -103,10 +103,10 @@ async function handleIssueWorkflow(
 
   const issue = getIssueData(issueNumber);
   const fullPrompt = buildIssuePrompt(issue, userPrompt, commentId);
-  const response = runPi(fullPrompt);
+  const response = await runPi(fullPrompt);
 
   if (await gitService.branchIsDirty()) {
-    const summary = summarize(response, issueNumber);
+    const summary = await summarize(response, issueNumber);
     await gitService.commitAndPush(
       summary,
       {
