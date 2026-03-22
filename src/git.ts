@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import * as git from 'isomorphic-git';
 import http from 'isomorphic-git/http/node';
-import fs from 'fs';
+import * as fs from 'fs';
 import type { GitAuthor } from './types.js';
 
 // ── Configuration ─────────────────────────────────────────────

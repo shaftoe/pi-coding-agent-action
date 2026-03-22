@@ -1,6 +1,6 @@
 import * as core from '@actions/core';
 import { spawnSync } from 'child_process';
-import fs from 'fs';
+import * as fs from 'fs';
 import { parseEnvVars } from './utils.js';
 
 // ── Run Pi Agent ───────────────────────────────────────────
