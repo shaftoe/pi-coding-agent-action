@@ -31,11 +31,20 @@ export function runCommand(cmd: string[], options?: { input?: string }): string 
 }
 
 // ── Mention Helpers ───────────────────────────────────────────────
+/**
+ * Gets the list of configured mentions from action inputs.
+ * @returns Array of mention strings (e.g., ['/pi', '@bot'])
+ */
 export function getMentions(): string[] {
   const raw = core.getInput('mentions') || '/pi';
   return raw.split(',').map(m => m.trim().toLowerCase());
 }
 
+/**
+ * Asserts that the comment body contains one of the required mentions.
+ * @param body - The comment body text
+ * @throws Error if no matching mention is found
+ */
 export function assertKeyword(body: string): void {
   const lower = body.toLowerCase().trim();
   const mentions = getMentions();
@@ -52,6 +61,11 @@ export function assertKeyword(body: string): void {
   }
 }
 
+/**
+ * Extracts the user prompt from a comment body by removing the mention prefix.
+ * @param body - The comment body text
+ * @returns The extracted prompt, or null if the comment only contains a mention
+ */
 export function extractUserPrompt(body: string): string | null {
   const lower = body.toLowerCase().trim();
   const mentions = getMentions();
@@ -65,6 +79,12 @@ export function extractUserPrompt(body: string): string | null {
   return null;
 }
 
+/**
+ * Generates a unique branch name for pi agent operations.
+ * @param type - The type of operation (e.g., 'issue', 'pr')
+ * @param issueNumber - The issue or PR number
+ * @returns A unique branch name (e.g., 'pi/issue123-20260322123456')
+ */
 export function generateBranchName(type: string, issueNumber: number): string {
   const ts = new Date()
     .toISOString()
@@ -80,6 +100,11 @@ export interface EnvVar {
   value: string;
 }
 
+/**
+ * Parses environment variables from a multi-line string.
+ * @param envVarsString - Multi-line string with KEY=VALUE pairs
+ * @returns Array of parsed environment variable key-value pairs
+ */
 export function parseEnvVars(envVarsString: string): EnvVar[] {
   if (!envVarsString || envVarsString.trim() === '') {
     return [];

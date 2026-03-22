@@ -197,16 +197,18 @@ async function stageAll(): Promise<void> {
   for (const [filepath, head, workdir, _stage] of status) {
     // File is modified
     if (head !== workdir) {
-      const workdirNum = workdir as number;
-      if (workdirNum === 2) {
-        // Deleted
+      // workdir status codes: 0 (absent), 1 (present), 2 (modified), 3 (deleted)
+      // Note: type-safe check for git status codes
+      const workdirStatus = workdir as 0 | 1 | 2 | 3;
+      if (workdirStatus === 2) {
+        // Modified - need to remove old version
         await git.remove({
           fs,
           dir: GIT_DIR,
           filepath: filepath,
         });
-      } else if (workdirNum === 1 || workdirNum === 3) {
-        // Modified or added
+      } else if (workdirStatus === 1 || workdirStatus === 3) {
+        // Present or deleted in worktree - stage the change
         await git.add({
           fs,
           dir: GIT_DIR,
