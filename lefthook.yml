@@ -8,6 +8,9 @@ pre-commit:
       run: bun run lint
     type-check:
       run: bun run type-check
+    build:
+      run: bun run package
+      stage_fixed: true
 
 pre-push:
   commands:
