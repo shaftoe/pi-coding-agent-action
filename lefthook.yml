@@ -9,7 +9,7 @@ pre-commit:
     type-check:
       run: bun run type-check
     build:
-      run: bun run package
+      run: bun run package && git add dist/
       stage_fixed: true
 
 pre-push:
