@@ -15,10 +15,9 @@ permissions:
 
 jobs:
   pi-agent:
-    # Only run when comment contains trigger
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/pi')) ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@pi-bot'))
+      (github.actor == 'shaftoe') &&
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/pi'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
