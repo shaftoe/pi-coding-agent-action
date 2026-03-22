@@ -1,13 +1,16 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
 import { runCommand } from './utils.js';
 import type { IssueNode, PRNode } from './types.js';
 
-// Get GitHub token from action input
-const GITHUB_TOKEN = core.getInput('github_token');
+// ── GitHub API Client (Octokit) ───────────────────────────────
+/**
+ * Gets the Octokit client for GitHub API operations.
+ */
+function getOctokit() {
+  const token = core.getInput('github_token');
+  return github.getOctokit(token);
+}
 
 // ── GitHub CLI Wrapper ───────────────────────────────────────
 /**
@@ -17,12 +20,7 @@ const GITHUB_TOKEN = core.getInput('github_token');
  * @returns The stdout output from the command
  */
 export function gh(command: string[], options?: { input?: string }): string {
-  // Set GH_TOKEN environment variable for GitHub CLI authentication
-  const env = { ...process.env };
-  if (GITHUB_TOKEN) {
-    env.GH_TOKEN = GITHUB_TOKEN;
-  }
-  return runCommand(['gh', ...command], options, env);
+  return runCommand(['gh', ...command], options);
 }
 
 // ── Issue Operations ───────────────────────────────────────
@@ -48,42 +46,37 @@ export function getIssueData(issueNumber: number): IssueNode {
 }
 
 /**
- * Creates a comment on an issue or PR.
+ * Creates a comment on an issue or PR using Octokit.
  * @param issueNumber - The issue/PR number
  * @param body - The comment body
  */
 export async function createComment(issueNumber: number, body: string): Promise<void> {
-  // Write body to a temporary file to avoid parsing issues with special characters
-  const tmpFile = path.join(os.tmpdir(), `gh-comment-body-${Date.now()}.txt`);
-  fs.writeFileSync(tmpFile, body, 'utf8');
+  const octokit = getOctokit();
+  const { owner, repo } = github.context.repo;
 
-  try {
-    gh(['issue', 'comment', `${issueNumber}`, '--body-file', tmpFile]);
-  } finally {
-    try {
-      fs.unlinkSync(tmpFile);
-    } catch (e) {
-      core.debug(`Failed to clean up temp file: ${e}`);
-    }
-  }
+  await octokit.rest.issues.createComment({
+    owner,
+    repo,
+    issue_number: issueNumber,
+    body,
+  });
 }
 
 /**
- * Adds a reaction to a comment.
+ * Adds a reaction to a comment using Octokit.
  * @param commentId - The comment ID to react to
  * @param content - The reaction content (e.g., 'eyes', 'rocket', '+1')
  */
 export async function addReaction(commentId: number, content: string): Promise<void> {
-  const owner = github.context.repo.owner;
-  const repo = github.context.repo.repo;
-  gh([
-    'api',
-    `repos/${owner}/${repo}/issues/comments/${commentId}/reactions`,
-    '--method',
-    'POST',
-    '-f',
-    `content=${content}`,
-  ]);
+  const octokit = getOctokit();
+  const { owner, repo } = github.context.repo;
+
+  await octokit.rest.reactions.createForIssueComment({
+    owner,
+    repo,
+    comment_id: commentId,
+    content: content as '+1' | '-1' | 'laugh' | 'hooray' | 'confused' | 'heart' | 'rocket' | 'eyes',
+  });
 }
 
 // ── PR Operations ─────────────────────────────────────────
@@ -108,61 +101,31 @@ export function getPRData(prNumber: number): PRNode {
   }
 }
 
-function getPRByHead(branch: string): number {
-  const output = gh(['pr', 'list', '--head', branch, '--json', 'number', '--limit', '1']);
-  try {
-    const results = JSON.parse(output);
-    if (!results || results.length === 0) {
-      throw new Error(`No PR found with head branch: ${branch}`);
-    }
-    return results[0].number;
-  } catch (e) {
-    if (e instanceof Error && e.message.includes('No PR found')) {
-      throw e;
-    }
-    throw new Error(`Failed to parse PR list data: ${e}`);
-  }
-}
-
 /**
- * Creates a new pull request.
+ * Creates a new pull request using Octokit.
  * @param base - The base branch name
- * @param branch - The head branch name
+ * @param head - The head branch name
  * @param title - The PR title
  * @param body - The PR body
  * @returns The PR number
  */
 export async function createPR(
   base: string,
-  branch: string,
+  head: string,
   title: string,
   body: string
 ): Promise<number> {
-  // Write body to a temporary file to avoid parsing issues with special characters
-  const tmpFile = path.join(os.tmpdir(), `gh-pr-body-${Date.now()}.txt`);
-  fs.writeFileSync(tmpFile, body, 'utf8');
+  const octokit = getOctokit();
+  const { owner, repo } = github.context.repo;
 
-  try {
-    gh([
-      'pr',
-      'create',
-      '--base',
-      base,
-      '--head',
-      branch,
-      '--title',
-      title,
-      '--body-file',
-      tmpFile,
-    ]);
-  } finally {
-    try {
-      fs.unlinkSync(tmpFile);
-    } catch (e) {
-      core.debug(`Failed to clean up temp file: ${e}`);
-    }
-  }
+  const result = await octokit.rest.pulls.create({
+    owner,
+    repo,
+    base,
+    head,
+    title,
+    body,
+  });
 
-  // Get the PR number from the created PR using the head branch
-  return getPRByHead(branch);
+  return result.data.number;
 }

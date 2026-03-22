@@ -59,22 +59,41 @@ async function handlePRWorkflow(
   commentId: number
 ): Promise<void> {
   const pr = getPRData(issueNumber);
-  const { remote, branchName } = await gitService.checkoutPRBranch(pr, issueNumber);
+  const { remote, branchName, headRefName, isLocalPR } = await gitService.checkoutPRBranch(
+    pr,
+    issueNumber
+  );
 
   const fullPrompt = buildPRPrompt(pr, userPrompt, commentId);
   const response = runPi(fullPrompt);
 
-  if (await gitService.branchIsDirty()) {
+  if (gitService.branchIsDirty()) {
     const summary = summarize(response, issueNumber);
-    await gitService.commitAndPush(
-      summary,
-      {
-        name: ACTOR,
-        email: `${ACTOR}@users.noreply.github.com`,
-      },
-      remote,
-      branchName
-    );
+
+    if (isLocalPR) {
+      // Local PR: push back to the same branch on the origin
+      await gitService.commitAndPush(
+        summary,
+        {
+          name: ACTOR,
+          email: `${ACTOR}@users.noreply.github.com`,
+        },
+        remote,
+        headRefName
+      );
+    } else {
+      // Fork PR: push the modified branch to origin with a descriptive name
+      // This allows contributors to create a new PR with the fixes
+      await gitService.commitAndPush(
+        summary,
+        {
+          name: ACTOR,
+          email: `${ACTOR}@users.noreply.github.com`,
+        },
+        'origin',
+        branchName
+      );
+    }
   }
 
   const finalBody = `${response}\n\n[View run](${runUrl})`;
@@ -97,15 +116,15 @@ async function handleIssueWorkflow(
   runUrl: string,
   commentId: number
 ): Promise<void> {
-  const defaultBranch = (await gitService.getCurrentBranch()) ?? 'main';
+  const defaultBranch = gitService.getCurrentBranch() ?? 'main';
   const branch = generateBranchName('issue', issueNumber);
-  await gitService.checkoutBranch(branch, true);
+  gitService.checkoutBranch(branch, true);
 
   const issue = getIssueData(issueNumber);
   const fullPrompt = buildIssuePrompt(issue, userPrompt, commentId);
   const response = runPi(fullPrompt);
 
-  if (await gitService.branchIsDirty()) {
+  if (gitService.branchIsDirty()) {
     const summary = summarize(response, issueNumber);
     await gitService.commitAndPush(
       summary,

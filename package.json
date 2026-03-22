@@ -24,8 +24,7 @@
   "license": "MIT",
   "dependencies": {
     "@actions/core": "^3.0.0",
-    "@actions/github": "^9.0.0",
-    "isomorphic-git": "^1.37.4"
+    "@actions/github": "^9.0.0"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
