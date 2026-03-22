@@ -2,6 +2,13 @@ import * as core from '@actions/core';
 import { spawnSync } from 'child_process';
 
 // ── CLI Helper ───────────────────────────────────────────────────
+/**
+ * Runs a shell command and returns its output.
+ * @param cmd - The command and arguments to run
+ * @param options - Optional input to provide to stdin
+ * @returns The stdout output from the command
+ * @throws Error if the command exits with a non-zero status
+ */
 export function runCommand(cmd: string[], options?: { input?: string }): string {
   core.info(`Running: ${cmd.join(' ')}`);
 

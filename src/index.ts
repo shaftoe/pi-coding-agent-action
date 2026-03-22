@@ -33,8 +33,6 @@ interface GitHubPayload {
 }
 
 // ── Configuration ─────────────────────────────────────────────
-
-// ── Configuration ─────────────────────────────────────────────
 const GIT_DIR = process.cwd();
 const GITHUB_TOKEN = core.getInput('github_token');
 const ACTOR = github.context.actor;
@@ -93,6 +91,13 @@ async function commitAndPush(
   await pushBranch(remote, branchName);
 }
 
+/**
+ * Handles the workflow for PR-related comments.
+ * @param issueNumber - The PR number
+ * @param userPrompt - The user's prompt
+ * @param runUrl - The URL to view the GitHub Actions run
+ * @param commentId - The comment ID to filter out from context
+ */
 async function handlePRWorkflow(
   issueNumber: number,
   userPrompt: string,
@@ -113,6 +118,14 @@ async function handlePRWorkflow(
   await createComment(issueNumber, finalBody);
 }
 
+/**
+ * Handles the workflow for issue-related comments.
+ * Creates a new branch, runs pi, and optionally creates a PR.
+ * @param issueNumber - The issue number
+ * @param userPrompt - The user's prompt
+ * @param runUrl - The URL to view the GitHub Actions run
+ * @param commentId - The comment ID to filter out from context
+ */
 async function handleIssueWorkflow(
   issueNumber: number,
   userPrompt: string,
@@ -163,6 +176,10 @@ async function handleError(err: unknown): Promise<void> {
 }
 
 // ── Main Workflow ───────────────────────────────────────────
+/**
+ * Main entry point for the action.
+ * Handles both issue and PR workflows.
+ */
 async function run(): Promise<void> {
   setupEnvironment();
 

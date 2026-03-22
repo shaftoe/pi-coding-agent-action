@@ -1,6 +1,13 @@
 import type { IssueNode, PRNode } from './types.js';
 
 // ── Issue Prompt Builder ───────────────────────────────────
+/**
+ * Builds a prompt for the pi agent based on issue data.
+ * @param issue - The issue data
+ * @param userPrompt - Optional user prompt
+ * @param commentId - The comment ID to filter out from context
+ * @returns The formatted prompt string
+ */
 export function buildIssuePrompt(
   issue: IssueNode,
   userPrompt: string | null,
@@ -29,6 +36,13 @@ export function buildIssuePrompt(
 }
 
 // ── PR Prompt Builder ───────────────────────────────────────
+/**
+ * Builds a prompt for the pi agent based on PR data.
+ * @param pr - The PR data
+ * @param userPrompt - Optional user prompt
+ * @param commentId - The comment ID to filter out from context
+ * @returns The formatted prompt string
+ */
 export function buildPRPrompt(pr: PRNode, userPrompt: string | null, commentId: number): string {
   const comments = (pr.comments ?? [])
     .filter(c => String(c.databaseId) !== String(commentId))

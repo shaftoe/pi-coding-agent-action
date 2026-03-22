@@ -12,6 +12,10 @@ const GIT_AUTHOR: GitAuthor = {
 };
 let authToken = '';
 
+/**
+ * Configures git with the GitHub token for authentication.
+ * @param token - The GitHub personal access token
+ */
 export async function configureGit(token: string): Promise<void> {
   authToken = token;
   process.env.GITHUB_TOKEN = token;
@@ -27,6 +31,10 @@ function createOnAuth() {
 }
 
 // ── Status Operations ─────────────────────────────────────────
+/**
+ * Gets the current HEAD commit SHA.
+ * @returns The HEAD commit SHA, or null if not available
+ */
 export async function getHeadCommit(): Promise<string | null> {
   try {
     const HEAD = await git.resolveRef({ fs, dir: GIT_DIR, ref: 'HEAD' });
@@ -36,6 +44,10 @@ export async function getHeadCommit(): Promise<string | null> {
   }
 }
 
+/**
+ * Checks if the current branch has uncommitted changes.
+ * @returns True if the branch is dirty, false otherwise
+ */
 export async function branchIsDirty(): Promise<boolean> {
   try {
     const status = await git.statusMatrix({ fs, dir: GIT_DIR, ref: 'HEAD' });
@@ -46,6 +58,11 @@ export async function branchIsDirty(): Promise<boolean> {
 }
 
 // ── Remote Operations ───────────────────────────────────────
+/**
+ * Adds a git remote if it doesn't already exist.
+ * @param name - The remote name
+ * @param url - The remote URL
+ */
 export async function addRemote(name: string, url: string): Promise<void> {
   const remotes = await git.listRemotes({ fs, dir: GIT_DIR });
   const remoteExists = remotes.some(r => r.remote === name);
@@ -56,6 +73,13 @@ export async function addRemote(name: string, url: string): Promise<void> {
   }
 }
 
+/**
+ * Fetches a branch from a remote repository.
+ * @param remoteUrl - The URL of the remote repository
+ * @param remote - The remote name
+ * @param branch - The branch name to fetch
+ * @param depth - Optional fetch depth (default: all history)
+ */
 export async function fetchBranch(
   remoteUrl: string,
   remote: string,
@@ -86,6 +110,11 @@ export async function fetchBranch(
 }
 
 // ── Checkout Operations ─────────────────────────────────────
+/**
+ * Checks out a branch, optionally creating it.
+ * @param branch - The branch name
+ * @param createNew - Whether to create a new branch (default: false)
+ */
 export async function checkoutBranch(branch: string, createNew = false): Promise<void> {
   core.info(`Checking out ${branch}${createNew ? ' (new branch)' : ''}`);
 
@@ -113,6 +142,9 @@ export async function checkoutBranch(branch: string, createNew = false): Promise
 }
 
 // ── Stage and Commit ─────────────────────────────────────
+/**
+ * Stages all changes in the working directory.
+ */
 export async function stageAll(): Promise<void> {
   core.info('Staging all changes');
   const status = await git.statusMatrix({ fs, dir: GIT_DIR, ref: 'HEAD' });
@@ -140,6 +172,12 @@ export async function stageAll(): Promise<void> {
   }
 }
 
+/**
+ * Commits staged changes with the given message.
+ * @param message - The commit message
+ * @param author - The author information
+ * @returns The commit SHA
+ */
 export async function commitChanges(
   message: string,
   author: { name: string; email: string }
@@ -159,6 +197,12 @@ export async function commitChanges(
 }
 
 // ── Push Operations ───────────────────────────────────────
+/**
+ * Pushes a branch to a remote.
+ * @param remote - The remote name
+ * @param branch - The branch name
+ * @param force - Whether to force push (default: false)
+ */
 export async function pushBranch(remote: string, branch: string, force = false): Promise<void> {
   core.info(`Pushing ${branch} to ${remote}${force ? ' (force)' : ''}`);
 
