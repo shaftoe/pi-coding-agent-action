@@ -18,6 +18,7 @@ import { runPi, summarize } from './pi.js';
 
 // ── Configuration ─────────────────────────────────────────────
 const GIT_DIR = process.cwd();
+// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
 const GITHUB_TOKEN = core.getInput('github_token') || process.env.GITHUB_TOKEN || '';
 const ACTOR = github.context.actor;
 
@@ -31,7 +32,7 @@ async function run(): Promise<void> {
   try {
     const payload = github.context.payload;
     const issueNumber = payload.issue!.number;
-    const commentBody = payload.comment?.body || '';
+    const commentBody = payload.comment?.body ?? '';
 
     assertKeyword(commentBody);
     const userPrompt = extractUserPrompt(commentBody);
@@ -46,7 +47,7 @@ async function run(): Promise<void> {
     await configureGit(GITHUB_TOKEN);
 
     const isPR = Boolean(payload.issue?.pull_request);
-    const defaultBranch = (await git.currentBranch({ fs, dir: GIT_DIR })) || 'main';
+    const defaultBranch = (await git.currentBranch({ fs, dir: GIT_DIR })) ?? 'main';
 
     if (isPR) {
       const prNumber = issueNumber;
