@@ -10,11 +10,20 @@ const GIT_AUTHOR: GitAuthor = {
   name: 'pi-agent[bot]',
   email: 'pi-agent[bot]@users.noreply.github.com',
 };
+let authToken = '';
 
 export async function configureGit(token: string): Promise<void> {
-  // isomorphic-git uses GITHUB_TOKEN env var for auth
+  authToken = token;
   process.env.GITHUB_TOKEN = token;
   core.info('Git configured');
+}
+
+// ── Auth Helper ───────────────────────────────────────────────
+function createOnAuth() {
+  return async () => ({
+    username: 'oauth2',
+    password: authToken,
+  });
 }
 
 // ── Status Operations ─────────────────────────────────────────
@@ -65,6 +74,7 @@ export async function fetchBranch(
     ref: branch,
     depth,
     singleBranch: true,
+    onAuth: createOnAuth(),
     onProgress: progress => {
       if (progress.phase && progress.loaded) {
         core.debug(`${progress.phase}: ${progress.loaded}/${progress.total}`);
@@ -159,6 +169,7 @@ export async function pushBranch(remote: string, branch: string, force = false):
     remote,
     ref: branch,
     force,
+    onAuth: createOnAuth(),
   });
 
   core.info(`Pushed ${branch} to ${remote}`);

@@ -9,6 +9,7 @@ export function runCommand(cmd: string[], options?: { input?: string }): string 
     stdio: ['pipe', 'pipe', 'pipe'],
     encoding: 'utf8',
     input: options?.input,
+    env: { ...process.env },
   });
 
   if (result.status !== 0) {

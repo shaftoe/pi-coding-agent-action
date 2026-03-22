@@ -1,3 +1,24 @@
+// ── Suppress isomorphic-git url.parse deprecation warning (DEP0169) ────────
+// Must be done before any imports to catch warnings from isomorphic-git
+const originalEmitWarning: typeof process.emitWarning = process.emitWarning.bind(process);
+process.emitWarning = function (warning, type, code, ctor) {
+  const warningCode =
+    code ?? (warning instanceof Error ? (warning as { code?: string }).code : undefined);
+  const warningType = type ?? (warning instanceof Error ? warning.name : undefined);
+
+  if (
+    (warningType === 'DeprecationWarning' && warningCode === 'DEP0169') ||
+    (warning instanceof Error &&
+      warning.name === 'DeprecationWarning' &&
+      (warning as { code?: string }).code === 'DEP0169')
+  ) {
+    // Suppress url.parse() deprecation warning from isomorphic-git
+    return;
+  }
+  // Call original with only the supported arguments based on the overload used
+  return originalEmitWarning(warning, type, code, ctor);
+} as typeof process.emitWarning;
+
 import git from 'isomorphic-git';
 import fs from 'fs';
 import * as core from '@actions/core';
