@@ -1,3 +1,4 @@
+import git from "isomorphic-git";
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { runCommand } from "./utils.js";
@@ -7,12 +8,7 @@ import {
   extractUserPrompt,
   generateBranchName,
 } from "./utils.js";
-import {
-  getIssueData,
-  getPRData,
-  createComment,
-  createPR,
-} from "./gh.js";
+import { getIssueData, getPRData, createComment, createPR } from "./gh.js";
 import {
   configureGit,
   getHeadCommit,
@@ -28,7 +24,8 @@ import { runPi, summarize } from "./pi.js";
 import type { IssueNode, PRNode } from "./types.js";
 
 // ── Configuration ─────────────────────────────────────────────
-const GITHUB_TOKEN = core.getInput("github_token") || process.env.GITHUB_TOKEN || "";
+const GITHUB_TOKEN =
+  core.getInput("github_token") || process.env.GITHUB_TOKEN || "";
 const ACTOR = github.context.actor;
 
 // ── Main Workflow ───────────────────────────────────────────
@@ -80,7 +77,11 @@ async function run(): Promise<void> {
         await checkoutBranch(localBranch, true);
       }
 
-      const fullPrompt = buildPRPrompt(pr, userPrompt, Number(payload.comment?.id));
+      const fullPrompt = buildPRPrompt(
+        pr,
+        userPrompt,
+        Number(payload.comment?.id),
+      );
       const response = runPi(fullPrompt);
 
       if (await branchIsDirty()) {
@@ -108,7 +109,11 @@ async function run(): Promise<void> {
       await checkoutBranch(branch, true);
 
       const issue = getIssueData(issueNumber);
-      const fullPrompt = buildIssuePrompt(issue, userPrompt, Number(payload.comment?.id));
+      const fullPrompt = buildIssuePrompt(
+        issue,
+        userPrompt,
+        Number(payload.comment?.id),
+      );
       const response = runPi(fullPrompt);
 
       if (await branchIsDirty()) {

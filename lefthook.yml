@@ -1,4 +1,4 @@
-pre-push:
+pre-commit:
   jobs:
     - name: Build
       run: bun run package
