@@ -6,17 +6,22 @@ import { spawnSync } from 'child_process';
  * Runs a shell command and returns its output.
  * @param cmd - The command and arguments to run
  * @param options - Optional input to provide to stdin
+ * @param env - Optional environment variables to override
  * @returns The stdout output from the command
  * @throws Error if the command exits with a non-zero status
  */
-export function runCommand(cmd: string[], options?: { input?: string }): string {
+export function runCommand(
+  cmd: string[],
+  options?: { input?: string },
+  env?: NodeJS.ProcessEnv
+): string {
   core.info(`Running: ${cmd.join(' ')}`);
 
   const result = spawnSync(cmd[0], cmd.slice(1), {
     stdio: ['pipe', 'pipe', 'pipe'],
     encoding: 'utf8',
     input: options?.input,
-    env: { ...process.env },
+    env: env ? { ...process.env, ...env } : { ...process.env },
   });
 
   if (result.status !== 0) {

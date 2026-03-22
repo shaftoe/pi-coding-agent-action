@@ -1,19 +1,28 @@
 import * as core from '@actions/core';
+import * as github from '@actions/github';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { runCommand } from './utils.js';
 import type { IssueNode, PRNode } from './types.js';
 
+// Get GitHub token from action input
+const GITHUB_TOKEN = core.getInput('github_token');
+
 // ── GitHub CLI Wrapper ───────────────────────────────────────
 /**
- * Runs a GitHub CLI command.
+ * Runs a GitHub CLI command with authentication.
  * @param command - The command arguments (without 'gh' prefix)
  * @param options - Optional input to provide to stdin
  * @returns The stdout output from the command
  */
 export function gh(command: string[], options?: { input?: string }): string {
-  return runCommand(['gh', ...command], options);
+  // Set GH_TOKEN environment variable for GitHub CLI authentication
+  const env = { ...process.env };
+  if (GITHUB_TOKEN) {
+    env.GH_TOKEN = GITHUB_TOKEN;
+  }
+  return runCommand(['gh', ...command], options, env);
 }
 
 // ── Issue Operations ───────────────────────────────────────
@@ -57,6 +66,24 @@ export async function createComment(issueNumber: number, body: string): Promise<
       core.debug(`Failed to clean up temp file: ${e}`);
     }
   }
+}
+
+/**
+ * Adds a reaction to a comment.
+ * @param commentId - The comment ID to react to
+ * @param content - The reaction content (e.g., 'eyes', 'rocket', '+1')
+ */
+export async function addReaction(commentId: number, content: string): Promise<void> {
+  const owner = github.context.repo.owner;
+  const repo = github.context.repo.repo;
+  gh([
+    'api',
+    `repos/${owner}/${repo}/issues/comments/${commentId}/reactions`,
+    '--method',
+    'POST',
+    '-f',
+    `content=${content}`,
+  ]);
 }
 
 // ── PR Operations ─────────────────────────────────────────

@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import { assertKeyword, extractUserPrompt, generateBranchName } from './utils.js';
-import { getIssueData, getPRData, createComment, createPR } from './gh.js';
+import { getIssueData, getPRData, createComment, createPR, addReaction } from './gh.js';
 import { GitService } from './git.js';
 import { buildIssuePrompt, buildPRPrompt } from './prompts.js';
 import { runPi, summarize } from './pi.js';
@@ -153,8 +153,8 @@ async function run(): Promise<void> {
     const payload = github.context.payload;
     const { issueNumber, userPrompt, runUrl, commentId } = extractContext(payload);
 
-    // Post initial "working" comment
-    await createComment(issueNumber, `[pi agent working...](${runUrl})`);
+    // Add "eyes" reaction to indicate work has started
+    await addReaction(commentId, 'eyes');
 
     const gitService = setupGitService();
 
