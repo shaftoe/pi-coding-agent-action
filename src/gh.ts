@@ -3,140 +3,192 @@ import * as github from '@actions/github';
 import { runCommand } from './utils.js';
 import type { IssueNode, PRNode } from './types.js';
 
-// Get GitHub token from action input
-const GITHUB_TOKEN = core.getInput('github_token');
-
-// ── GitHub API Client (Octokit) ───────────────────────────────
+// ── GitHubClient ─────────────────────────────────────────────
 /**
- * Gets the Octokit client for GitHub API operations.
- * Cached to avoid creating multiple instances.
+ * A client for interacting with GitHub features via both the GitHub CLI and Octokit API.
+ * Provides methods for issue/PR data retrieval, comments, reactions, and PR creation.
  */
-let octokitInstance: ReturnType<typeof github.getOctokit> | undefined;
+class GitHubClient {
+  private readonly token: string;
+  private octokitInstance: ReturnType<typeof github.getOctokit> | undefined;
 
-function getOctokit() {
-  octokitInstance ??= github.getOctokit(GITHUB_TOKEN);
-  return octokitInstance;
-}
-
-// ── GitHub CLI Wrapper ───────────────────────────────────────
-/**
- * Runs a GitHub CLI command with authentication.
- * @param command - The command arguments (without 'gh' prefix)
- * @param options - Optional input to provide to stdin
- * @returns The stdout output from the command
- */
-export function gh(command: string[], options?: { input?: string }): string {
-  // Set GH_TOKEN environment variable for GitHub CLI authentication
-  const env = { ...process.env };
-  if (GITHUB_TOKEN) {
-    env.GH_TOKEN = GITHUB_TOKEN;
+  constructor(token?: string) {
+    this.token = token ?? core.getInput('github_token');
   }
-  return runCommand(['gh', ...command], options, env);
-}
 
-// ── Issue Operations ───────────────────────────────────────
-/**
- * Gets issue data from GitHub.
- * @param issueNumber - The issue number
- * @returns The issue data including title, body, author, and comments
- * @throws Error if the issue cannot be found or parsed
- */
-export function getIssueData(issueNumber: number): IssueNode {
-  const output = gh([
-    'issue',
-    'view',
-    `${issueNumber}`,
-    '--json',
-    'title,body,state,author,createdAt,comments',
-  ]);
-  try {
-    return JSON.parse(output);
-  } catch (e) {
-    throw new Error(`Failed to parse issue data: ${e}`);
+  /**
+   * Gets the Octokit client for GitHub API operations.
+   * Cached to avoid creating multiple instances.
+   */
+  private getOctokit() {
+    this.octokitInstance ??= github.getOctokit(this.token);
+    return this.octokitInstance;
+  }
+
+  /**
+   * Gets the repository context (owner, repo).
+   */
+  private getRepoContext() {
+    return github.context.repo;
+  }
+
+  /**
+   * Runs a GitHub CLI command with authentication.
+   * @param command - The command arguments (without 'gh' prefix)
+   * @param options - Optional input to provide to stdin
+   * @returns The stdout output from the command
+   */
+  cli(command: string[], options?: { input?: string }): string {
+    const env = { ...process.env };
+    if (this.token) {
+      env.GH_TOKEN = this.token;
+    }
+    return runCommand(['gh', ...command], options, env);
+  }
+
+  /**
+   * Gets issue data from GitHub.
+   * @param issueNumber - The issue number
+   * @returns The issue data including title, body, author, and comments
+   * @throws Error if the issue cannot be found or parsed
+   */
+  getIssueData(issueNumber: number): IssueNode {
+    const output = this.cli([
+      'issue',
+      'view',
+      `${issueNumber}`,
+      '--json',
+      'title,body,state,author,createdAt,comments',
+    ]);
+    try {
+      return JSON.parse(output);
+    } catch (e) {
+      throw new Error(`Failed to parse issue data: ${e}`);
+    }
+  }
+
+  /**
+   * Gets PR data from GitHub.
+   * @param prNumber - The PR number
+   * @returns The PR data including title, body, files, and reviews
+   * @throws Error if the PR cannot be found or parsed
+   */
+  getPRData(prNumber: number): PRNode {
+    const output = this.cli([
+      'pr',
+      'view',
+      `${prNumber}`,
+      '--json',
+      'title,body,state,author,baseRefName,headRefName,headRepository,baseRepository,additions,deletions,commits,files,reviews,comments',
+    ]);
+    try {
+      return JSON.parse(output);
+    } catch (e) {
+      throw new Error(`Failed to parse PR data: ${e}`);
+    }
+  }
+
+  /**
+   * Creates a comment on an issue or PR using Octokit.
+   * @param issueNumber - The issue/PR number
+   * @param body - The comment body
+   */
+  async createComment(issueNumber: number, body: string): Promise<void> {
+    const octokit = this.getOctokit();
+    const { owner, repo } = this.getRepoContext();
+
+    await octokit.rest.issues.createComment({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      body,
+    });
+  }
+
+  /**
+   * Adds a reaction to a comment using Octokit.
+   * @param commentId - The comment ID to react to
+   * @param content - The reaction content (e.g., 'eyes', 'rocket', '+1')
+   */
+  async addReaction(commentId: number, content: string): Promise<void> {
+    const octokit = this.getOctokit();
+    const { owner, repo } = this.getRepoContext();
+
+    await octokit.rest.reactions.createForIssueComment({
+      owner,
+      repo,
+      comment_id: commentId,
+      content: content as '+1' | '-1' | 'laugh' | 'hooray' | 'confused' | 'heart' | 'rocket' | 'eyes',
+    });
+  }
+
+  /**
+   * Creates a new pull request using Octokit.
+   * @param base - The base branch name
+   * @param head - The head branch name
+   * @param title - The PR title
+   * @param body - The PR body
+   * @returns The PR number
+   */
+  async createPR(base: string, head: string, title: string, body: string): Promise<number> {
+    const octokit = this.getOctokit();
+    const { owner, repo } = this.getRepoContext();
+
+    const result = await octokit.rest.pulls.create({
+      owner,
+      repo,
+      base,
+      head,
+      title,
+      body,
+    });
+
+    return result.data.number;
   }
 }
 
+// ── Singleton Instance ───────────────────────────────────────
 /**
- * Creates a comment on an issue or PR using Octokit.
- * @param issueNumber - The issue/PR number
- * @param body - The comment body
+ * The default GitHub client instance for use throughout the application.
+ * Uses the GITHUB_TOKEN from action inputs.
  */
-export async function createComment(issueNumber: number, body: string): Promise<void> {
-  const octokit = getOctokit();
-  const { owner, repo } = github.context.repo;
+export const gh = new GitHubClient();
 
-  await octokit.rest.issues.createComment({
-    owner,
-    repo,
-    issue_number: issueNumber,
-    body,
-  });
+// ── Backward Compatibility Exports ───────────────────────────
+/**
+ * @deprecated Use gh.cli() instead.
+ */
+export function ghCLI(command: string[], options?: { input?: string }): string {
+  return gh.cli(command, options);
 }
 
 /**
- * Adds a reaction to a comment using Octokit.
- * @param commentId - The comment ID to react to
- * @param content - The reaction content (e.g., 'eyes', 'rocket', '+1')
+ * @deprecated Use gh.getIssueData() instead.
  */
-export async function addReaction(commentId: number, content: string): Promise<void> {
-  const octokit = getOctokit();
-  const { owner, repo } = github.context.repo;
-
-  await octokit.rest.reactions.createForIssueComment({
-    owner,
-    repo,
-    comment_id: commentId,
-    content: content as '+1' | '-1' | 'laugh' | 'hooray' | 'confused' | 'heart' | 'rocket' | 'eyes',
-  });
-}
-
-// ── PR Operations ─────────────────────────────────────────
-/**
- * Gets PR data from GitHub.
- * @param prNumber - The PR number
- * @returns The PR data including title, body, files, and reviews
- * @throws Error if the PR cannot be found or parsed
- */
-export function getPRData(prNumber: number): PRNode {
-  const output = gh([
-    'pr',
-    'view',
-    `${prNumber}`,
-    '--json',
-    'title,body,state,author,baseRefName,headRefName,headRepository,baseRepository,additions,deletions,commits,files,reviews,comments',
-  ]);
-  try {
-    return JSON.parse(output);
-  } catch (e) {
-    throw new Error(`Failed to parse PR data: ${e}`);
-  }
-}
+export const getIssueData = (issueNumber: number) => gh.getIssueData(issueNumber);
 
 /**
- * Creates a new pull request using Octokit.
- * @param base - The base branch name
- * @param head - The head branch name
- * @param title - The PR title
- * @param body - The PR body
- * @returns The PR number
+ * @deprecated Use gh.getPRData() instead.
  */
-export async function createPR(
-  base: string,
-  head: string,
-  title: string,
-  body: string
-): Promise<number> {
-  const octokit = getOctokit();
-  const { owner, repo } = github.context.repo;
+export const getPRData = (prNumber: number) => gh.getPRData(prNumber);
 
-  const result = await octokit.rest.pulls.create({
-    owner,
-    repo,
-    base,
-    head,
-    title,
-    body,
-  });
+/**
+ * @deprecated Use gh.createComment() instead.
+ */
+export const createComment = (issueNumber: number, body: string) =>
+  gh.createComment(issueNumber, body);
 
-  return result.data.number;
-}
+/**
+ * @deprecated Use gh.addReaction() instead.
+ */
+export const addReaction = (commentId: number, content: string) =>
+  gh.addReaction(commentId, content);
+
+/**
+ * @deprecated Use gh.createPR() instead.
+ */
+export const createPR = (base: string, head: string, title: string, body: string) =>
+  gh.createPR(base, head, title, body);
+
+// ── Exports ─────────────────────────────────────────────────
+export { GitHubClient };

@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import { assertKeyword, extractUserPrompt, generateBranchName } from './utils.js';
-import { getIssueData, getPRData, createComment, createPR, addReaction } from './gh.js';
+import { gh } from './gh.js';
 import { GitService } from './git.js';
 import { buildIssuePrompt, buildPRPrompt } from './prompts.js';
 import { runPi, summarize } from './pi.js';
@@ -59,7 +59,7 @@ async function handlePRWorkflow(
   runUrl: string,
   commentId: number
 ): Promise<void> {
-  const pr = getPRData(issueNumber);
+  const pr = gh.getPRData(issueNumber);
   const fullPrompt = buildPRPrompt(pr, userPrompt, commentId);
   const response = runPi(fullPrompt);
 
@@ -76,7 +76,7 @@ async function handlePRWorkflow(
   }
 
   const finalBody = `${response}\n\n[View run](${runUrl})`;
-  await createComment(issueNumber, finalBody);
+  await gh.createComment(issueNumber, finalBody);
 }
 
 /**
@@ -100,7 +100,7 @@ async function handleIssueWorkflow(
   const branch = generateBranchName('issue', issueNumber);
   gitService.checkoutBranch(branch);
 
-  const issue = getIssueData(issueNumber);
+  const issue = gh.getIssueData(issueNumber);
   const fullPrompt = buildIssuePrompt(issue, userPrompt, commentId);
   const response = runPi(fullPrompt);
 
@@ -116,11 +116,11 @@ async function handleIssueWorkflow(
     );
 
     const prBody = `${response}\n\nCloses #${issueNumber}\n\n[View run](${runUrl})`;
-    const prNumber = await createPR(defaultBranch, branch, summary, prBody);
+    const prNumber = await gh.createPR(defaultBranch, branch, summary, prBody);
 
-    await createComment(issueNumber, `Created PR #${prNumber}\n\n[View run](${runUrl})`);
+    await gh.createComment(issueNumber, `Created PR #${prNumber}\n\n[View run](${runUrl})`);
   } else {
-    await createComment(issueNumber, `${response}\n\n[View run](${runUrl})`);
+    await gh.createComment(issueNumber, `${response}\n\n[View run](${runUrl})`);
   }
 }
 
@@ -134,7 +134,7 @@ async function handleError(err: unknown): Promise<void> {
   const runUrl = `${serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
   const issueNumber = github.context.payload.issue!.number;
 
-  await createComment(
+  await gh.createComment(
     issueNumber,
     `❌ pi agent error:\n\n\`\`\`\n${msg}\n\`\`\`\n\n[View run](${runUrl})`
   );
@@ -151,7 +151,7 @@ async function run(): Promise<void> {
   const { issueNumber, userPrompt, runUrl, commentId } = extractContext(payload);
 
   // Add "eyes" reaction to indicate work has started
-  await addReaction(commentId, 'eyes');
+  await gh.addReaction(commentId, 'eyes');
 
   const gitService = setupGitService();
 

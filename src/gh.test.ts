@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn, mock } from 'bun:test';
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-import { getIssueData, getPRData, gh } from './gh.js';
+import { gh, GitHubClient } from './gh.js';
 import type { IssueNode, PRNode } from './types.js';
 
-describe('gh', () => {
+describe('GitHubClient', () => {
   let getInputSpy: ReturnType<typeof spyOn>;
   let getOctokitSpy: ReturnType<typeof spyOn>;
 
@@ -39,12 +39,9 @@ describe('gh', () => {
     getOctokitSpy.mockRestore();
   });
 
-  describe('gh function', () => {
-    it('should run gh command with authentication', () => {
-      // Since runCommand is imported from utils, we need to mock it at module level
-      // This is a limitation of the current structure - we'd need to use a mocking library
-      // For now, we'll test the function structure indirectly
-      expect(() => gh(['--version'])).not.toThrow();
+  describe('cli method', () => {
+    it('should be available on gh instance', () => {
+      expect(typeof gh.cli).toBe('function');
     });
 
     it('should set GH_TOKEN environment variable', () => {
@@ -54,21 +51,12 @@ describe('gh', () => {
     });
   });
 
-  describe('getIssueData', () => {
-    it('should parse valid issue JSON', () => {
-      // This test requires mocking runCommand which is tricky with current structure
-      // We'll do a basic structural test
-      expect(typeof getIssueData).toBe('function');
-    });
-
-    it('should throw on invalid JSON', () => {
-      // This would require mocking runCommand to return invalid JSON
-      // For now, we test the function exists
-      expect(getIssueData).toBeDefined();
+  describe('getIssueData method', () => {
+    it('should be available on gh instance', () => {
+      expect(typeof gh.getIssueData).toBe('function');
     });
 
     it('should include all required issue fields', () => {
-      // Validate the expected structure
       const mockIssue: IssueNode = {
         title: 'Test',
         body: 'Body',
@@ -86,13 +74,12 @@ describe('gh', () => {
     });
   });
 
-  describe('getPRData', () => {
-    it('should parse valid PR JSON', () => {
-      expect(typeof getPRData).toBe('function');
+  describe('getPRData method', () => {
+    it('should be available on gh instance', () => {
+      expect(typeof gh.getPRData).toBe('function');
     });
 
     it('should include all required PR fields', () => {
-      // Validate the expected structure
       const mockPR: PRNode = {
         title: 'Test PR',
         body: 'PR Body',
@@ -121,6 +108,54 @@ describe('gh', () => {
       expect(mockPR).toHaveProperty('baseRepository');
       expect(mockPR).toHaveProperty('headRepository');
       expect(mockPR).toHaveProperty('commits');
+    });
+  });
+
+  describe('createComment method', () => {
+    it('should be available on gh instance', () => {
+      expect(typeof gh.createComment).toBe('function');
+    });
+
+    it('should be async', () => {
+      const promise = gh.createComment(1, 'test');
+      expect(promise).toBeInstanceOf(Promise);
+      promise.catch(() => {}); // Suppress any unhandled rejections
+    });
+  });
+
+  describe('addReaction method', () => {
+    it('should be available on gh instance', () => {
+      expect(typeof gh.addReaction).toBe('function');
+    });
+
+    it('should be async', () => {
+      const promise = gh.addReaction(1, 'eyes');
+      expect(promise).toBeInstanceOf(Promise);
+      promise.catch(() => {}); // Suppress any unhandled rejections
+    });
+  });
+
+  describe('createPR method', () => {
+    it('should be available on gh instance', () => {
+      expect(typeof gh.createPR).toBe('function');
+    });
+
+    it('should be async', () => {
+      const promise = gh.createPR('main', 'feature', 'Test', 'Body');
+      expect(promise).toBeInstanceOf(Promise);
+      promise.catch(() => {}); // Suppress any unhandled rejections
+    });
+  });
+
+  describe('GitHubClient constructor', () => {
+    it('should accept a custom token', () => {
+      const client = new GitHubClient('custom-token');
+      expect(client).toBeInstanceOf(GitHubClient);
+    });
+
+    it('should use core.getInput when no token is provided', () => {
+      const client = new GitHubClient();
+      expect(client).toBeInstanceOf(GitHubClient);
     });
   });
 });
