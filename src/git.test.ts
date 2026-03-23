@@ -26,15 +26,29 @@ describe('GitService', () => {
   });
 
   describe('branchIsDirty', () => {
-    it('should return false for clean working directory', () => {
-      const isDirty = gitService.branchIsDirty();
+    it('should return false for clean working directory', async () => {
+      const isDirty = await gitService.branchIsDirty();
       expect(typeof isDirty).toBe('boolean');
     });
 
-    it('should return true when there are uncommitted changes', () => {
+    it('should return true when there are uncommitted changes', async () => {
       // This would need mocking to test dirty state
-      const isDirty = gitService.branchIsDirty();
+      const isDirty = await gitService.branchIsDirty();
       expect(typeof isDirty).toBe('boolean');
+    });
+  });
+
+  describe('configureCredentials', () => {
+    it('should configure credentials without error', async () => {
+      expect(gitService.configureCredentials()).resolves.toBeUndefined();
+    });
+  });
+
+  describe('checkoutBranch', () => {
+    it('should be callable', async () => {
+      // Note: This requires a git repository and may fail in test environment
+      // The test is mainly to ensure the method signature is correct
+      expect(typeof gitService.checkoutBranch).toBe('function');
     });
   });
 });

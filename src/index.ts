@@ -62,12 +62,12 @@ async function handlePRWorkflow(
   const pr = gh.getPRData(issueNumber);
 
   // Configure git credentials before running pi so it can detect push permissions
-  gitService.configureCredentials();
+  await gitService.configureCredentials();
 
   const fullPrompt = buildPRPrompt(pr, userPrompt, commentId);
   const response = runPi(fullPrompt);
 
-  if (gitService.branchIsDirty()) {
+  if (await gitService.branchIsDirty()) {
     const summary = summarize(response, issueNumber);
     await gitService.commitAndPush(
       summary,
@@ -102,16 +102,16 @@ async function handleIssueWorkflow(
 ): Promise<void> {
   const defaultBranch = github.context.payload.repository?.default_branch ?? 'main';
   const branch = generateBranchName('issue', issueNumber);
-  gitService.checkoutBranch(branch);
+  await gitService.checkoutBranch(branch);
 
   // Configure git credentials before running pi so it can detect push permissions
-  gitService.configureCredentials();
+  await gitService.configureCredentials();
 
   const issue = gh.getIssueData(issueNumber);
   const fullPrompt = buildIssuePrompt(issue, userPrompt, commentId);
   const response = runPi(fullPrompt);
 
-  if (gitService.branchIsDirty()) {
+  if (await gitService.branchIsDirty()) {
     const summary = summarize(response, issueNumber);
     await gitService.commitAndPush(
       summary,

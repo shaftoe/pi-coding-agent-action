@@ -26,7 +26,11 @@
   "license": "MIT",
   "dependencies": {
     "@actions/core": "^3.0.0",
-    "@actions/github": "^9.0.0"
+    "@actions/github": "^9.0.0",
+    "@actions/http-client": "^4.0.0",
+    "@types/node-fetch": "^2.6.13",
+    "isomorphic-git": "^1.37.4",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
