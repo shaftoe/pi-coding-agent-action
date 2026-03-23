@@ -169,9 +169,7 @@ export class GitService {
       }),
       onProgress: progress => {
         if (progress.phase) {
-          core.debug(
-            `Git push: ${progress.phase} ${progress.loaded || 0}/${progress.total || 0}`
-          );
+          core.debug(`Git push: ${progress.phase} ${progress.loaded || 0}/${progress.total || 0}`);
         }
       },
     });
@@ -216,9 +214,7 @@ export class GitService {
 
         // Check for HTTP errors
         if (statusCode >= 400) {
-          throw new Error(
-            `HTTP ${statusCode} ${statusMessage}: Failed to fetch ${options.url}`
-          );
+          throw new Error(`HTTP ${statusCode} ${statusMessage}: Failed to fetch ${options.url}`);
         }
 
         return {
