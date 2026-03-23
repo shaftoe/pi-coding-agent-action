@@ -3,6 +3,12 @@ import * as github from '@actions/github';
 import { runCommand } from './utils.js';
 import type { IssueNode, PRNode } from './types.js';
 
+// ── Constants ─────────────────────────────────────────────
+/**
+ * Valid GitHub reaction content types.
+ */
+type GitHubReaction = '+1' | '-1' | 'laugh' | 'hooray' | 'confused' | 'heart' | 'rocket' | 'eyes';
+
 // ── GitHubClient ─────────────────────────────────────────────
 /**
  * A client for interacting with GitHub features via both the GitHub CLI and Octokit API.
@@ -115,7 +121,7 @@ class GitHubClient {
    * @param content - The reaction content (e.g., 'eyes', 'rocket', '+1')
    * @returns The reaction ID, which can be used to remove the reaction later
    */
-  async addReaction(commentId: number, content: string): Promise<number> {
+  async addReaction(commentId: number, content: GitHubReaction): Promise<number> {
     const octokit = this.getOctokit();
     const { owner, repo } = this.getRepoContext();
 
@@ -123,15 +129,7 @@ class GitHubClient {
       owner,
       repo,
       comment_id: commentId,
-      content: content as
-        | '+1'
-        | '-1'
-        | 'laugh'
-        | 'hooray'
-        | 'confused'
-        | 'heart'
-        | 'rocket'
-        | 'eyes',
+      content,
     });
 
     return result.data.id;

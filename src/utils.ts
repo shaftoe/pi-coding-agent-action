@@ -94,13 +94,9 @@ export function extractUserPrompt(body: string): string | null {
  */
 export function generateBranchName(type: string, issueNumber: number): string {
   const now = Temporal.Now.plainDateTimeISO();
-  const year = now.year;
-  const month = String(now.month).padStart(2, '0');
-  const day = String(now.day).padStart(2, '0');
-  const hours = String(now.hour).padStart(2, '0');
-  const minutes = String(now.minute).padStart(2, '0');
-  const seconds = String(now.second).padStart(2, '0');
-  return `pi/${type}${issueNumber}-${year}${month}${day}${hours}${minutes}${seconds}`;
+  // Format: YYYYMMDDHHmmss
+  const timestamp = `${now.year}${String(now.month).padStart(2, '0')}${String(now.day).padStart(2, '0')}${String(now.hour).padStart(2, '0')}${String(now.minute).padStart(2, '0')}${String(now.second).padStart(2, '0')}`;
+  return `pi/${type}${issueNumber}-${timestamp}`;
 }
 
 // ── Environment Variables ───────────────────────────────────────

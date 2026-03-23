@@ -54,22 +54,21 @@ export class GitService {
 
   // ── Credential Configuration ───────────────────────────────
   /**
-   * Configures git credentials for the current repository.
-   * This is done before running pi agent so it can detect push permissions.
+   * Validates and logs git credential configuration.
    *
-   * Note: isomorphic-git handles credentials via onAuth callbacks during push,
-   * so this method is kept for compatibility but does minimal configuration.
+   * Note: This is a no-op for isomorphic-git which handles credentials via
+   * onAuth callbacks during push. The method is kept for potential future
+   * enhancements and to validate repository context availability.
    */
   async configureCredentials(): Promise<void> {
     try {
       const { owner, repo } = github.context.repo;
-      core.info(`Git credentials configured for ${owner}/${repo}`);
+      core.debug(`Git context validated for ${owner}/${repo}`);
     } catch {
       // Context may not be available in test environments
-      core.info('Git credentials configured');
+      core.debug('Git context validation skipped (no github context)');
     }
-    // isomorphic-git doesn't need credential helper configuration
-    // Credentials are provided via onAuth callback during push
+    // Credentials are provided via onAuth callback during push operations
   }
 
   // ── Checkout Operations ───────────────────────────────────

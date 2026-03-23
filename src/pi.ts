@@ -54,9 +54,11 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
   }
 
   const hasCustomSystemPrompt = Boolean(customSystemPrompt);
+  let systemPromptFile = '';
   if (hasCustomSystemPrompt) {
-    // Write SYSTEM.md to current directory so pi picks it up
-    fs.writeFileSync('SYSTEM.md', customSystemPrompt, 'utf8');
+    // Write SYSTEM.md to a temp file to avoid conflicts
+    systemPromptFile = path.join(os.tmpdir(), `pi_system_${Date.now()}.md`);
+    fs.writeFileSync(systemPromptFile, customSystemPrompt, 'utf8');
   }
 
   core.info(`Running: pi ${args.join(' ')}`);
@@ -77,8 +79,8 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
 
   // Clean up temp files
   safeRemoveFile(promptFile);
-  if (hasCustomSystemPrompt) {
-    safeRemoveFile('SYSTEM.md');
+  if (hasCustomSystemPrompt && systemPromptFile) {
+    safeRemoveFile(systemPromptFile);
   }
 
   if (result.status !== 0) {
@@ -101,6 +103,30 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
   return filteredOutput;
 }
 
+// ── Constants ─────────────────────────────────────────────
+/**
+ * Patterns that indicate interim or progress messages to be filtered from pi output.
+ */
+const INTERIM_PATTERNS: RegExp[] = [
+  // "I've started" or similar patterns
+  /^(I've|I have|I'm|I am) (started|begun)/i,
+  // "Now implementing", "Next working", etc.
+  /^(Now|Next|Then|After|Before|While|During|Following|Proceeding|Continuing) (working|processing|implementing)/i,
+  // Single word status messages
+  /^(Done|Finished|Completed|Ready)\.$/i,
+  // Progress indicators like [1/3]
+  /^\[\d+\/\d+\]$/i,
+  // Status indicators like [DONE], [TODO]
+  /^\[[A-Z]+\]$/i,
+  // Short lines that look like status updates (no punctuation, very short)
+  /^(Fixing|Done|OK|Ready|Working|Processing|Starting|Stopping)(\.*)$/i,
+];
+
+/**
+ * Generic prefix patterns for commit message summarization.
+ */
+const GENERIC_PREFIX_PATTERN = /^(I|I'll|Sure|OK|Great|Here|The|This|A)/i;
+
 // ── Filter Pi Output ───────────────────────────────────────
 /**
  * Filters pi agent output to extract only the final meaningful response.
@@ -120,26 +146,9 @@ export function filterPiOutput(output: string): string {
     return '';
   }
 
-  // Patterns that indicate interim or progress messages
-  // These are specific patterns that suggest progress updates, not final content
-  const interimPatterns = [
-    // "I've started" or similar patterns
-    /^(I've|I have|I'm|I am) (started|begun)/i,
-    // "Now implementing", "Next working", etc.
-    /^(Now|Next|Then|After|Before|While|During|Following|Proceeding|Continuing) (working|processing|implementing)/i,
-    // Single word status messages
-    /^(Done|Finished|Completed|Ready)\.$/i,
-    // Progress indicators like [1/3]
-    /^\[\d+\/\d+\]$/i,
-    // Status indicators like [DONE], [TODO]
-    /^\[[A-Z]+\]$/i,
-    // Short lines that look like status updates (no punctuation, very short)
-    /^(Fixing|Done|OK|Ready|Working|Processing|Starting|Stopping)(\.*)$/i,
-  ];
-
   // Filter out interim messages
   const filteredLines = trimmedLines.filter(line => {
-    return !interimPatterns.some(pattern => pattern.test(line));
+    return !INTERIM_PATTERNS.some(pattern => pattern.test(line));
   });
 
   // If filtering removed everything, return original
@@ -160,10 +169,9 @@ export function filterPiOutput(output: string): string {
  */
 export function summarize(text: string, issueNumber: number): string {
   const firstLine = text.split('\n')[0].trim();
-  const genericPattern = /^(I|I'll|Sure|OK|Great|Here|The|This|A)/i;
 
   // Use first line if it's short enough and not generic
-  if (firstLine.length > 0 && firstLine.length <= 50 && !genericPattern.test(firstLine)) {
+  if (firstLine.length > 0 && firstLine.length <= 50 && !GENERIC_PREFIX_PATTERN.test(firstLine)) {
     return firstLine;
   }
 
@@ -171,7 +179,7 @@ export function summarize(text: string, issueNumber: number): string {
   const firstSentence = text
     .split(/[.!?\n]/)[0]
     .trim()
-    .replace(genericPattern, '')
+    .replace(GENERIC_PREFIX_PATTERN, '')
     .substring(0, 50)
     .trim();
 

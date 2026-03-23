@@ -18,7 +18,7 @@ interface IssueWithPR {
 
 interface GitHubPayload {
   issue?: IssueWithPR;
-  comment?: IssueCommentPayload;
+  comment?: IssueCommentPayload | undefined;
 }
 
 // ── Configuration ─────────────────────────────────────────────
@@ -38,7 +38,11 @@ function buildRunUrl(): string {
 }
 
 function extractContext(payload: GitHubPayload) {
-  const issueNumber = payload.issue!.number;
+  if (!payload.issue) {
+    throw new Error('GitHub payload is missing issue data');
+  }
+
+  const issueNumber = payload.issue.number;
   const commentBody = payload.comment?.body ?? '';
   const commentId = payload.comment?.id ?? 0;
 
@@ -141,12 +145,16 @@ async function handleError(err: unknown): Promise<void> {
   const msg = err instanceof Error ? err.message : String(err);
   core.error(msg);
   const runUrl = buildRunUrl();
-  const issueNumber = github.context.payload.issue!.number;
+  const issueNumber = github.context.payload.issue?.number;
 
-  await gh.createComment(
-    issueNumber,
-    `❌ pi agent error:\n\n\`\`\`\n${msg}\n\`\`\`\n\n[View run](${runUrl})`
-  );
+  if (issueNumber !== undefined) {
+    await gh.createComment(
+      issueNumber,
+      `❌ pi agent error:\n\n\`\`\`\n${msg}\n\`\`\`\n\n[View run](${runUrl})`
+    );
+  } else {
+    core.error(`[View run](${runUrl})`);
+  }
   core.setFailed(msg);
 }
 
