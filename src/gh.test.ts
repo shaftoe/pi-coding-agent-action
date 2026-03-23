@@ -25,7 +25,8 @@ describe('GitHubClient', () => {
           updateComment: mock(() => Promise.resolve({ data: {} })),
         },
         reactions: {
-          createForIssueComment: mock(() => Promise.resolve({ data: {} })),
+          createForIssueComment: mock(() => Promise.resolve({ data: { id: 123 } })),
+          deleteForIssueComment: mock(() => Promise.resolve({ data: {} })),
         },
         pulls: {
           create: mock(() => Promise.resolve({ data: { number: 42 } })),
@@ -136,6 +137,30 @@ describe('GitHubClient', () => {
       promise.catch(() => {
         // Suppress any unhandled rejections
       });
+    });
+
+    it('should return the reaction ID', async () => {
+      const reactionId = await gh.addReaction(1, 'eyes');
+      expect(typeof reactionId).toBe('number');
+      expect(reactionId).toBe(123);
+    });
+  });
+
+  describe('removeReaction method', () => {
+    it('should be available on gh instance', () => {
+      expect(typeof gh.removeReaction).toBe('function');
+    });
+
+    it('should be async', () => {
+      const promise = gh.removeReaction(1, 123);
+      expect(promise).toBeInstanceOf(Promise);
+      promise.catch(() => {
+        // Suppress any unhandled rejections
+      });
+    });
+
+    it('should complete without throwing', async () => {
+      await expect(gh.removeReaction(1, 123)).resolves.toBeUndefined();
     });
   });
 

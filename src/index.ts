@@ -157,17 +157,31 @@ async function run(): Promise<void> {
   const payload = github.context.payload;
   const { issueNumber, userPrompt, runUrl, commentId } = extractContext(payload);
 
-  // Add "eyes" reaction to indicate work has started
-  await gh.addReaction(commentId, 'eyes');
+  let reactionId: number | undefined;
 
-  const gitService = setupGitService();
+  try {
+    // Add "eyes" reaction to indicate work has started
+    reactionId = await gh.addReaction(commentId, 'eyes');
 
-  const isPR = Boolean(payload.issue?.pull_request);
+    const gitService = setupGitService();
 
-  if (isPR) {
-    await handlePRWorkflow(gitService, issueNumber, userPrompt, runUrl, commentId);
-  } else {
-    await handleIssueWorkflow(gitService, issueNumber, userPrompt, runUrl, commentId);
+    const isPR = Boolean(payload.issue?.pull_request);
+
+    if (isPR) {
+      await handlePRWorkflow(gitService, issueNumber, userPrompt, runUrl, commentId);
+    } else {
+      await handleIssueWorkflow(gitService, issueNumber, userPrompt, runUrl, commentId);
+    }
+  } finally {
+    // Remove the "eyes" reaction before exit, even on error
+    if (reactionId !== undefined) {
+      await gh
+        .removeReaction(commentId, reactionId)
+        .catch((err) => {
+          // Silently ignore errors when removing the reaction
+          core.debug(`Failed to remove reaction: ${err instanceof Error ? err.message : String(err)}`);
+        });
+    }
   }
 }
 

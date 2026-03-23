@@ -109,12 +109,13 @@ class GitHubClient {
    * Adds a reaction to a comment using Octokit.
    * @param commentId - The comment ID to react to
    * @param content - The reaction content (e.g., 'eyes', 'rocket', '+1')
+   * @returns The reaction ID, which can be used to remove the reaction later
    */
-  async addReaction(commentId: number, content: string): Promise<void> {
+  async addReaction(commentId: number, content: string): Promise<number> {
     const octokit = this.getOctokit();
     const { owner, repo } = this.getRepoContext();
 
-    await octokit.rest.reactions.createForIssueComment({
+    const result = await octokit.rest.reactions.createForIssueComment({
       owner,
       repo,
       comment_id: commentId,
@@ -127,6 +128,25 @@ class GitHubClient {
         | 'heart'
         | 'rocket'
         | 'eyes',
+    });
+
+    return result.data.id;
+  }
+
+  /**
+   * Removes a reaction from a comment using Octokit.
+   * @param commentId - The comment ID the reaction belongs to
+   * @param reactionId - The reaction ID to remove
+   */
+  async removeReaction(commentId: number, reactionId: number): Promise<void> {
+    const octokit = this.getOctokit();
+    const { owner, repo } = this.getRepoContext();
+
+    await octokit.rest.reactions.deleteForIssueComment({
+      owner,
+      repo,
+      comment_id: commentId,
+      reaction_id: reactionId,
     });
   }
 
