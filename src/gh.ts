@@ -63,7 +63,9 @@ class GitHubClient {
     try {
       return JSON.parse(output);
     } catch (e) {
-      throw new Error(`Failed to parse issue data: ${e}`);
+      throw new Error(
+        `Failed to parse issue data for #${issueNumber}: ${e instanceof Error ? e.message : String(e)}`
+      );
     }
   }
 
@@ -84,7 +86,9 @@ class GitHubClient {
     try {
       return JSON.parse(output);
     } catch (e) {
-      throw new Error(`Failed to parse PR data: ${e}`);
+      throw new Error(
+        `Failed to parse PR data for #${prNumber}: ${e instanceof Error ? e.message : String(e)}`
+      );
     }
   }
 

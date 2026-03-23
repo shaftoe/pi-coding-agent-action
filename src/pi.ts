@@ -6,6 +6,19 @@ import * as fs from 'fs';
 import { parseEnvVars } from './utils.js';
 import { PI_TIMEOUT_MS } from './constants.js';
 
+// ── Helpers ──────────────────────────────────────────────────
+/**
+ * Safely removes a file if it exists, logging any errors as debug messages.
+ * @param filePath - The path to the file to remove
+ */
+function safeRemoveFile(filePath: string): void {
+  try {
+    fs.unlinkSync(filePath);
+  } catch (e) {
+    core.debug(`Failed to clean up file ${filePath}: ${e}`);
+  }
+}
+
 // ── Run Pi Agent ───────────────────────────────────────────
 /**
  * Runs the pi agent with the given prompt.
@@ -40,7 +53,8 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
     args.push('--tools', extraTools);
   }
 
-  if (customSystemPrompt) {
+  const hasCustomSystemPrompt = Boolean(customSystemPrompt);
+  if (hasCustomSystemPrompt) {
     // Write SYSTEM.md to current directory so pi picks it up
     fs.writeFileSync('SYSTEM.md', customSystemPrompt, 'utf8');
   }
@@ -61,18 +75,10 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
     env,
   });
 
-  // Clean up
-  try {
-    fs.unlinkSync(promptFile);
-  } catch (e) {
-    core.debug(`Failed to clean up prompt temp file: ${e}`);
-  }
-  if (customSystemPrompt) {
-    try {
-      fs.unlinkSync('SYSTEM.md');
-    } catch (e) {
-      core.debug(`Failed to clean up SYSTEM.md: ${e}`);
-    }
+  // Clean up temp files
+  safeRemoveFile(promptFile);
+  if (hasCustomSystemPrompt) {
+    safeRemoveFile('SYSTEM.md');
   }
 
   if (result.status !== 0) {
@@ -98,29 +104,21 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
  * @returns A short summary suitable for a git commit message
  */
 export function summarize(text: string, issueNumber: number): string {
-  // Simple heuristic: use first line, truncated to 50 characters
   const firstLine = text.split('\n')[0].trim();
+  const genericPattern = /^(I|I'll|Sure|OK|Great|Here|The|This|A)/i;
 
-  // If first line is short enough and not too generic, use it directly
-  if (firstLine.length > 0 && firstLine.length <= 50) {
-    const genericPatterns = /^(I|I'll|Sure|OK|Great|Here|The|This|A)/i;
-    if (!genericPatterns.test(firstLine)) {
-      return firstLine;
-    }
+  // Use first line if it's short enough and not generic
+  if (firstLine.length > 0 && firstLine.length <= 50 && !genericPattern.test(firstLine)) {
+    return firstLine;
   }
 
-  // For longer or more complex responses, use the first sentence or phrase
+  // For longer or generic first lines, use the first sentence or phrase
   const firstSentence = text
     .split(/[.!?\n]/)[0]
     .trim()
-    .replace(/^(I|I'll|Sure|OK|Great|Here|The|This|A)\s+/i, '')
+    .replace(genericPattern, '')
     .substring(0, 50)
     .trim();
 
-  if (firstSentence.length > 5) {
-    return firstSentence;
-  }
-
-  // Fallback to generic message
-  return `Fix issue #${issueNumber}`;
+  return firstSentence.length > 5 ? firstSentence : `Fix issue #${issueNumber}`;
 }
