@@ -1,5 +1,6 @@
 import * as core from '@actions/core';
 import { spawnSync } from 'child_process';
+import { Temporal } from '@js-temporal/polyfill';
 
 // ── CLI Helper ───────────────────────────────────────────────────
 /**
@@ -61,8 +62,9 @@ export function assertKeyword(body: string): void {
       lower.endsWith(' ' + m)
   );
   if (!matched) {
-    core.setFailed(`Comment must contain one of: ${mentions.join(', ')}`);
-    throw new Error(`Comment must contain one of: ${mentions.join(', ')}`);
+    const message = `Comment must contain one of: ${mentions.join(', ')}`;
+    core.setFailed(message);
+    throw new Error(message);
   }
 }
 
@@ -91,12 +93,14 @@ export function extractUserPrompt(body: string): string | null {
  * @returns A unique branch name (e.g., 'pi/issue123-20260322123456')
  */
 export function generateBranchName(type: string, issueNumber: number): string {
-  const ts = new Date()
-    .toISOString()
-    .replace(/[:-]/g, '')
-    .replace(/\.\d{3}Z/, '')
-    .replace('T', '');
-  return `pi/${type}${issueNumber}-${ts}`;
+  const now = Temporal.Now.plainDateTimeISO();
+  const year = now.year;
+  const month = String(now.month).padStart(2, '0');
+  const day = String(now.day).padStart(2, '0');
+  const hours = String(now.hour).padStart(2, '0');
+  const minutes = String(now.minute).padStart(2, '0');
+  const seconds = String(now.second).padStart(2, '0');
+  return `pi/${type}${issueNumber}-${year}${month}${day}${hours}${minutes}${seconds}`;
 }
 
 // ── Environment Variables ───────────────────────────────────────

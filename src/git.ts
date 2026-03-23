@@ -5,6 +5,15 @@ import * as isoGit from 'isomorphic-git';
 import fs from 'node:fs';
 import type { GitAuthor } from './types.js';
 
+// ── Constants ────────────────────────────────────────────────
+/**
+ * Default committer for git commits made by the pi agent.
+ */
+const DEFAULT_COMMITTER: GitAuthor = {
+  name: 'pi-agent[bot]',
+  email: 'pi-agent[bot]@users.noreply.github.com',
+};
+
 // ── GitService Class ─────────────────────────────────────────
 /**
  * Simplified Git operations service using isomorphic-git.
@@ -12,45 +21,35 @@ import type { GitAuthor } from './types.js';
  */
 export class GitService {
   private readonly dir: string;
-  private readonly committer: GitAuthor;
   private readonly token: string;
-  private readonly fs: typeof fs;
 
   constructor(token: string, dir: string = process.cwd()) {
     this.token = token;
     this.dir = dir;
-    this.committer = {
-      name: 'pi-agent[bot]',
-      email: 'pi-agent[bot]@users.noreply.github.com',
-    };
-    this.fs = fs;
     core.info('Git service initialized');
   }
 
   // ── Status Operations ─────────────────────────────────────
   /**
    * Checks if the working directory has uncommitted changes.
+   * @returns true if there are uncommitted changes, false otherwise
+   * @throws Error if unable to check git status
    */
   async branchIsDirty(): Promise<boolean> {
-    try {
-      const statusMatrix = await isoGit.statusMatrix({
-        fs: this.fs,
-        dir: this.dir,
-      });
+    const statusMatrix = await isoGit.statusMatrix({
+      fs,
+      dir: this.dir,
+    });
 
-      // Check if any file has uncommitted changes
-      for (const row of statusMatrix) {
-        // statusMatrix returns [filepath, head, workdir, stage]
-        // If workdir (index 2) differs from head (index 1), there are uncommitted changes
-        if (row[1] !== row[2] || row[2] !== row[3]) {
-          return true;
-        }
+    // Check if any file has uncommitted changes
+    // statusMatrix returns [filepath, head, workdir, stage]
+    // If workdir (index 2) differs from head (index 1), or stage (index 3) differs, there are changes
+    for (const row of statusMatrix) {
+      if (row[1] !== row[2] || row[2] !== row[3]) {
+        return true;
       }
-      return false;
-    } catch (error) {
-      core.warning(`Failed to check git status: ${error}`);
-      return false;
     }
+    return false;
   }
 
   // ── Credential Configuration ───────────────────────────────
@@ -80,34 +79,29 @@ export class GitService {
   async checkoutBranch(branch: string): Promise<void> {
     core.info(`Creating and checking out branch ${branch}`);
 
-    try {
-      // Get current HEAD
-      const currentHead = await isoGit.resolveRef({
-        fs: this.fs,
-        dir: this.dir,
-        ref: 'HEAD',
-      });
+    // Get current HEAD
+    const currentHead = await isoGit.resolveRef({
+      fs,
+      dir: this.dir,
+      ref: 'HEAD',
+    });
 
-      // Create new branch at current HEAD
-      await isoGit.branch({
-        fs: this.fs,
-        dir: this.dir,
-        ref: branch,
-        object: currentHead,
-      });
+    // Create new branch at current HEAD
+    await isoGit.branch({
+      fs,
+      dir: this.dir,
+      ref: branch,
+      object: currentHead,
+    });
 
-      // Check out the new branch
-      await isoGit.checkout({
-        fs: this.fs,
-        dir: this.dir,
-        ref: branch,
-      });
+    // Check out the new branch
+    await isoGit.checkout({
+      fs,
+      dir: this.dir,
+      ref: branch,
+    });
 
-      core.info(`Checked out ${branch}`);
-    } catch (error) {
-      core.error(`Failed to checkout branch ${branch}: ${error}`);
-      throw error;
-    }
+    core.info(`Checked out ${branch}`);
   }
 
   // ── Commit and Push ───────────────────────────────────────
@@ -126,7 +120,7 @@ export class GitService {
 
     // Get status matrix to find all files
     const statusMatrix = await isoGit.statusMatrix({
-      fs: this.fs,
+      fs,
       dir: this.dir,
     });
 
@@ -137,14 +131,14 @@ export class GitService {
       if (workdir === 2) {
         // File deleted
         await isoGit.remove({
-          fs: this.fs,
+          fs,
           dir: this.dir,
           filepath,
         });
       } else {
         // File added or modified
         await isoGit.add({
-          fs: this.fs,
+          fs,
           dir: this.dir,
           filepath,
         });
@@ -153,39 +147,32 @@ export class GitService {
 
     core.info(`Committing: ${summary}`);
     await isoGit.commit({
-      fs: this.fs,
+      fs,
       dir: this.dir,
       message: summary,
       author,
-      committer: this.committer,
+      committer: DEFAULT_COMMITTER,
     });
 
     core.info(`Pushing ${branch} to origin`);
 
     // Push with embedded auth token
-    await isoGit
-      .push({
-        fs: this.fs,
-        http: await this.getHttpClient(),
-        dir: this.dir,
-        url: authUrl,
-        ref: `refs/heads/${branch}`,
-        onAuth: () => ({
-          username: this.token,
-          password: 'x-oauth-basic',
-        }),
-        onProgress: progress => {
-          if (progress.phase) {
-            core.debug(
-              `Git push: ${progress.phase} ${progress.loaded || 0}/${progress.total || 0}`
-            );
-          }
-        },
-      })
-      .catch((err: Error) => {
-        core.error(`Push failed: ${err.message}`);
-        throw err;
-      });
+    await isoGit.push({
+      fs,
+      http: await this.getHttpClient(),
+      dir: this.dir,
+      url: authUrl,
+      ref: `refs/heads/${branch}`,
+      onAuth: () => ({
+        username: this.token,
+        password: 'x-oauth-basic',
+      }),
+      onProgress: progress => {
+        if (progress.phase) {
+          core.debug(`Git push: ${progress.phase} ${progress.loaded || 0}/${progress.total || 0}`);
+        }
+      },
+    });
 
     core.info('Push complete');
   }
@@ -222,13 +209,21 @@ export class GitService {
           options.headers
         );
 
+        const statusCode = response.message.statusCode ?? 0;
+        const statusMessage = response.message.statusMessage ?? '';
+
+        // Check for HTTP errors
+        if (statusCode >= 400) {
+          throw new Error(`HTTP ${statusCode} ${statusMessage}: Failed to fetch ${options.url}`);
+        }
+
         return {
           url: options.url,
           method: options.method ?? 'GET',
           headers: response.message.headers as Record<string, string>,
           body: response.message as unknown as AsyncIterableIterator<Uint8Array>,
-          statusCode: response.message.statusCode ?? 0,
-          statusMessage: response.message.statusMessage ?? '',
+          statusCode,
+          statusMessage,
         };
       },
     };

@@ -25,9 +25,16 @@ interface GitHubPayload {
 const GITHUB_TOKEN = core.getInput('github_token');
 const ACTOR = github.context.actor;
 
-function setupGitService(): GitService {
-  const gitService = new GitService(GITHUB_TOKEN);
-  return gitService;
+/**
+ * Builds the GitHub Actions run URL for logging.
+ * @returns The URL to view the current workflow run
+ */
+function buildRunUrl(): string {
+  const serverUrl = github.context.serverUrl || 'https://github.com';
+  const owner = github.context.repo.owner || 'unknown';
+  const repo = github.context.repo.repo || 'unknown';
+  const runId = process.env.GITHUB_RUN_ID ?? 'unknown';
+  return `${serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
 }
 
 function extractContext(payload: GitHubPayload) {
@@ -37,8 +44,7 @@ function extractContext(payload: GitHubPayload) {
 
   assertKeyword(commentBody);
   const userPrompt = extractUserPrompt(commentBody) ?? '';
-
-  const runUrl = `${github.context.serverUrl}/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID ?? 'unknown'}`;
+  const runUrl = buildRunUrl();
 
   return { issueNumber, userPrompt, runUrl, commentId };
 }
@@ -132,13 +138,9 @@ async function handleIssueWorkflow(
 }
 
 async function handleError(err: unknown): Promise<void> {
-  core.error(err instanceof Error ? err.message : String(err));
   const msg = err instanceof Error ? err.message : String(err);
-  const serverUrl = github.context.serverUrl || 'https://github.com';
-  const owner = github.context.repo.owner || 'unknown';
-  const repo = github.context.repo.repo || 'unknown';
-  const runId = process.env.GITHUB_RUN_ID ?? 'unknown';
-  const runUrl = `${serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
+  core.error(msg);
+  const runUrl = buildRunUrl();
   const issueNumber = github.context.payload.issue!.number;
 
   await gh.createComment(
@@ -163,7 +165,7 @@ async function run(): Promise<void> {
     // Add "eyes" reaction to indicate work has started
     reactionId = await gh.addReaction(commentId, 'eyes');
 
-    const gitService = setupGitService();
+    const gitService = new GitService(GITHUB_TOKEN);
 
     const isPR = Boolean(payload.issue?.pull_request);
 
@@ -185,7 +187,7 @@ async function run(): Promise<void> {
   }
 }
 
-// Only run if this is the main module (not during imports)
+// Only run if this file is being executed directly (not imported)
 if (require.main === module) {
   run().catch(handleError);
 }
