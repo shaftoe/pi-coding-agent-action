@@ -19,7 +19,7 @@ export async function getResourceLoader(): Promise<DefaultResourceLoader> {
   return loader;
 }
 
-export class PiClient {
+export class Client {
   private model: Model<Api>;
   private authStorage: AuthStorage = AuthStorage.create();
   private modelRegistry: ModelRegistry;
@@ -30,12 +30,14 @@ export class PiClient {
   private thinkingLevel: ThinkingLevel;
   private outputChunks: string[] = [];
 
-  constructor(modelStr: string, provider: string, token: string, level: ThinkingLevel = 'off') {
+  constructor(modelStr: string, provider: string, token: string, level = 'off') {
     this.modelStr = modelStr;
     this.provider = provider;
     this.token = token;
-    this.thinkingLevel = level;
+    this.thinkingLevel = level as ThinkingLevel;
     this.modelRegistry = new ModelRegistry(this.authStorage);
+
+    core.info('[thinking level] ' + level);
 
     if (this.token) {
       core.info(`Setting api_key auth token for provider: ${this.provider}`);
@@ -55,7 +57,7 @@ export class PiClient {
     }
   }
 
-  async ready(): Promise<PiClient> {
+  async ready(): Promise<Client> {
     const { session } = await createAgentSession({
       model: this.model,
       thinkingLevel: this.thinkingLevel,
@@ -89,7 +91,9 @@ export class PiClient {
       throw new Error('no text, skipping prompt');
     }
 
-    core.info('thinking...\n' + text);
+    core.info('[prompt] ' + text);
+    core.info('thinking...\n\n' + text);
+
     await this.session.prompt(text);
     process.stdout.write('\n'); // ensure new line after prompt, usually missing from agent
 

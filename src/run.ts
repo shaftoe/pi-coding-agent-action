@@ -1,13 +1,12 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-import { PiClient } from './pi';
-import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
+import { Client } from './pi';
 
 const provider = core.getInput('provider');
-const modInput = core.getInput('model');
+const model = core.getInput('model');
 const token = core.getInput('token');
 const githubToken = core.getInput('github_token');
-const thinkingInput = core.getInput('thinking_level');
+const thinkingInput = core.getInput('thinking_level') ?? 'off';
 const trigger = core.getInput('trigger') || '/pi';
 
 export async function run() {
@@ -16,14 +15,8 @@ export async function run() {
     core.notice('no comment found in context, skipping prompt');
     return;
   }
-  core.info('[prompt] ' + comment.body.replace(trigger, '').trim());
-
-  const pi = await new PiClient(
-    modInput,
-    provider,
-    token,
-    (thinkingInput ?? 'off') as ThinkingLevel
-  ).ready();
+  const prompt = comment.body.replace(trigger, '').trim();
+  const pi = await new Client(model, provider, token, thinkingInput).ready();
 
   const octokit = github.getOctokit(githubToken);
   const reaction = await octokit.rest.reactions.createForIssueComment({
@@ -33,7 +26,7 @@ export async function run() {
     content: 'eyes',
   });
 
-  const result = await pi.prompt(comment.body);
+  const result = await pi.prompt(prompt);
 
   await octokit.rest.reactions.deleteForIssueComment({
     owner: github.context.repo.owner,
