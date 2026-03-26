@@ -12,6 +12,8 @@ type createCommentType =
 const trigger = core.getInput('trigger') || '/pi';
 const octokit = github.getOctokit(core.getInput('github_token'));
 
+export const isPR = github.context.payload.pull_request !== undefined;
+
 export async function addReaction(
   comment: typeof github.context.payload.comment
 ): Promise<createReactionType | undefined> {
