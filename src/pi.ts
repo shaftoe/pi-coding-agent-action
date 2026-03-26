@@ -28,6 +28,7 @@ export class PiClient {
   private provider: string;
   private token: string;
   private thinkingLevel: ThinkingLevel;
+  private outputChunks: string[] = [];
 
   constructor(modelStr: string, provider: string, token: string, level: ThinkingLevel = 'off') {
     this.modelStr = modelStr;
@@ -70,6 +71,8 @@ export class PiClient {
       }
       switch (event.assistantMessageEvent.type) {
         case 'text_delta':
+          this.outputChunks.push(event.assistantMessageEvent.delta);
+          break;
         case 'thinking_delta':
           process.stdout.write(event.assistantMessageEvent.delta);
           break;
@@ -81,12 +84,13 @@ export class PiClient {
     return this;
   }
 
-  async prompt(text: string | undefined): Promise<void> {
+  async prompt(text: string | undefined): Promise<string> {
     if (!text) {
       throw new Error('no text, skipping prompt');
     }
 
     await this.session.prompt(text);
-    core.debug('prompt processing completed');
+
+    return this.outputChunks.join('');
   }
 }

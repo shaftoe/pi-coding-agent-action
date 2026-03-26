@@ -21,7 +21,14 @@ export async function run() {
     token,
     (thinkingInput ?? 'off') as ThinkingLevel
   ).ready();
-  await pi.prompt(body);
+  const result = await pi.prompt(body);
 
-  core.debug('agent session completed');
+  core.setOutput('result', result);
+  const octokit = github.getOctokit(token);
+  await octokit.rest.issues.createComment({
+    owner: github.context.repo.owner,
+    repo: github.context.repo.repo,
+    issue_number: github.context.issue.number,
+    body: result,
+  });
 }
