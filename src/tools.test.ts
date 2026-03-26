@@ -6,16 +6,17 @@ import * as os from 'node:os';
 // Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core
 // so they don't appear as CI annotations in test output.
 const realStdoutWrite = process.stdout.write.bind(process.stdout);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- stdout.write accepts variable args
 const _mockedWrite = mock((...args: any[]) => {
   const msg = String(args[0] ?? '');
   if (msg.startsWith('::')) {
     return true; // swallow annotations
   }
+  // @ts-expect-error -- spread parameter type limitation
   return realStdoutWrite(...args);
 });
-// @ts-expect-error -- stdout.write is readonly, we override for tests
-process.stdout.write = _mockedWrite;
+// stdout.write is readonly, we override for tests
+process.stdout.write = _mockedWrite as unknown;
 
 // Set env vars BEFORE importing tools (which transitively imports github.ts,
 // which runs module-level code calling getOctokit at load time).
@@ -27,7 +28,7 @@ fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 
 // We still mock @actions/core to suppress log output in tests
 const noop = (): void => {};
-mock('@actions/core', () => ({
+mock.module('@actions/core', () => ({
   getInput: mock(() => '/pi'),
   notice: mock(noop),
   info: mock(noop),
@@ -39,20 +40,45 @@ mock('@actions/core', () => ({
 const { extFactory } = await import('./tools');
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 
+// Minimal type for tool in tests - we only test specific properties
+interface TestTool {
+  name: string;
+  description: string;
+  label: string;
+  promptGuidelines: string[];
+  promptSnippet: string;
+  parameters: {
+    properties: {
+      title: { type: string };
+      body?: { type: string };
+      base?: { type: string };
+      dryRun?: { type: string };
+    };
+    required: string[];
+  };
+  execute: (
+    id: string,
+    params: { title: string; body?: string; base?: string; dryRun?: boolean },
+    signal: AbortSignal,
+    context: unknown,
+    sendResponse: (chunk: string) => void
+  ) => Promise<{ content: { text: string }[] }>;
+}
+
 function captureRegisteredTool() {
-  let registered: any;
+  let registered: unknown;
   const api = {
-    registerTool: mock((tool: any) => {
+    registerTool: mock((tool: unknown) => {
       registered = tool;
     }),
   } as unknown as ExtensionAPI;
 
   extFactory(api);
-  return registered!;
+  return registered as TestTool;
 }
 
 describe('extFactory', () => {
-  let tool: any;
+  let tool: TestTool;
 
   beforeEach(() => {
     tool = captureRegisteredTool();

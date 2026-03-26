@@ -6,20 +6,21 @@ import * as os from 'node:os';
 // Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core
 // so they don't appear as CI annotations in test output.
 const realStdoutWrite = process.stdout.write.bind(process.stdout);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- stdout.write accepts variable args
 const _mockedWrite = mock((...args: any[]) => {
   const msg = String(args[0] ?? '');
   if (msg.startsWith('::')) {
     return true; // swallow annotations
   }
+  // @ts-expect-error -- spread parameter type limitation
   return realStdoutWrite(...args);
 });
-// @ts-expect-error -- stdout.write is readonly, we override for tests
-process.stdout.write = _mockedWrite;
+// stdout.write is readonly, we override for tests
+process.stdout.write = _mockedWrite as unknown;
 
 // Mock @actions/core to suppress info/debug/notice/warning logging
 const noop = (): void => {};
-mock('@actions/core', () => ({
+mock.module('@actions/core', () => ({
   getInput: mock(() => '/pi'),
   notice: mock(noop),
   info: mock(noop),
@@ -35,68 +36,98 @@ process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
 process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-${Date.now()}.json`);
 fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 
-const { getComment, createFinalComment } = await import('./github');
+const { getPrompt, createFinalComment, getIssueOrPullRequestContext } = await import('./github');
 import * as github from '@actions/github';
 
-describe('getComment', () => {
+describe('getPrompt', () => {
   beforeEach(() => {
     github.context.payload = {};
+    github.context.eventName = 'issue_comment';
   });
 
   test('returns undefined when no comment in payload', async () => {
-    const result = await getComment();
+    const result = await getPrompt();
     expect(result).toBeUndefined();
   });
 
-  test('strips trigger from comment body and trims', async () => {
-    const originalBody = 'Please review this PR';
+  test('returns enriched prompt with issue context', async () => {
     github.context.payload = {
-      comment: { id: 1, body: `/pi ${originalBody}` },
+      comment: { id: 1, body: '/pi Review this' },
+      issue: {
+        number: 42,
+        title: 'Test Issue',
+        body: 'Test description',
+      },
     };
 
-    const result = await getComment();
+    const result = await getPrompt();
     expect(result).toBeDefined();
-    expect(result!.body).toBe(originalBody);
+    expect(result).toContain('Issue/PR #42: Test Issue');
+    expect(result).toContain('Description:');
+    expect(result).toContain('Test description');
+    expect(result).toContain('Comment/Instruction:');
+    expect(result).toContain('Review this');
   });
 
-  test('strips trigger without trailing space', async () => {
+  test('returns only comment body when no issue context', async () => {
     github.context.payload = {
-      comment: { id: 2, body: '/piFix this bug' },
+      comment: { id: 1, body: '/pi Just comment' },
     };
 
-    const result = await getComment();
-    expect(result).toBeDefined();
-    expect(result!.body).toBe('Fix this bug');
+    const result = await getPrompt();
+    expect(result).toBe('Just comment');
   });
 
-  test('trims whitespace from result', async () => {
+  test('returns enriched prompt with PR context', async () => {
+    github.context.eventName = 'pull_request';
     github.context.payload = {
-      comment: { id: 3, body: '/pi   lots of spaces   ' },
+      comment: { id: 1, body: '/pi Review this PR' },
+      pull_request: {
+        number: 123,
+        title: 'Fix bug',
+        body: 'This PR fixes the bug',
+      },
     };
 
-    const result = await getComment();
+    const result = await getPrompt();
     expect(result).toBeDefined();
-    expect(result!.body).toBe('lots of spaces');
+    expect(result).toContain('Issue/PR #123: Fix bug');
+    expect(result).toContain('Description:');
+    expect(result).toContain('This PR fixes the bug');
   });
 
-  test('returns empty string when trigger is entire comment body', async () => {
+  test('returns undefined when comment is empty', async () => {
     github.context.payload = {
-      comment: { id: 5, body: '/pi' },
+      comment: { id: 1, body: '/pi' },
     };
 
-    const result = await getComment();
-    expect(result).toBeDefined();
-    expect(result!.body).toBe('');
+    const result = await getPrompt();
+    expect(result).toBeUndefined();
   });
 
-  test('returns body with default trigger when INPUT_TRIGGER is /pi', async () => {
+  test('strips trigger from comment body', async () => {
     github.context.payload = {
-      comment: { id: 6, body: '/pi hello world' },
+      comment: { id: 1, body: '/pi Review this' },
     };
 
-    const result = await getComment();
+    const result = await getPrompt();
+    expect(result).not.toContain('/pi');
+    expect(result).toContain('Review this');
+  });
+
+  test('handles issue with title but no body', async () => {
+    github.context.payload = {
+      comment: { id: 1, body: '/pi Fix this' },
+      issue: {
+        number: 456,
+        title: 'Title only issue',
+      },
+    };
+
+    const result = await getPrompt();
     expect(result).toBeDefined();
-    expect(result!.body).toBe('hello world');
+    expect(result).toContain('Issue/PR #456: Title only issue');
+    expect(result).not.toContain('Description:');
   });
 });
 
@@ -108,5 +139,128 @@ describe('createFinalComment', () => {
   test('returns undefined for empty body', async () => {
     const result = await createFinalComment('');
     expect(result).toBeUndefined();
+  });
+});
+
+describe('getIssueOrPullRequestContext', () => {
+  beforeEach(() => {
+    github.context.payload = {};
+    github.context.eventName = 'issue_comment';
+  });
+
+  test('returns undefined when no issue or pull_request in payload', () => {
+    github.context.payload = { comment: { id: 1 } };
+    const result = getIssueOrPullRequestContext();
+    expect(result).toBeUndefined();
+  });
+
+  test('returns issue context for issue_comment event', () => {
+    github.context.eventName = 'issue_comment';
+    github.context.payload = {
+      comment: { id: 1 },
+      issue: {
+        number: 42,
+        title: 'Bug report',
+        body: 'Something is broken',
+      },
+    };
+    const result = getIssueOrPullRequestContext();
+    expect(result).toEqual({
+      number: 42,
+      title: 'Bug report',
+      body: 'Something is broken',
+    });
+  });
+
+  test('returns issue context for issues event', () => {
+    github.context.eventName = 'issues';
+    github.context.payload = {
+      issue: {
+        number: 123,
+        title: 'Feature request',
+        body: 'Please add a feature',
+      },
+    };
+    const result = getIssueOrPullRequestContext();
+    expect(result).toEqual({
+      number: 123,
+      title: 'Feature request',
+      body: 'Please add a feature',
+    });
+  });
+
+  test('returns pull request context for pull_request event', () => {
+    github.context.eventName = 'pull_request';
+    github.context.payload = {
+      pull_request: {
+        number: 456,
+        title: 'Fix for bug',
+        body: 'This PR fixes the issue',
+      },
+    };
+    const result = getIssueOrPullRequestContext();
+    expect(result).toEqual({
+      number: 456,
+      title: 'Fix for bug',
+      body: 'This PR fixes the issue',
+    });
+  });
+
+  test('returns undefined when issue has no title', () => {
+    github.context.eventName = 'issue_comment';
+    github.context.payload = {
+      comment: { id: 1 },
+      issue: {
+        number: 789,
+        body: 'No title',
+      },
+    };
+    const result = getIssueOrPullRequestContext();
+    expect(result).toBeUndefined();
+  });
+
+  test('returns context when issue has title but no body', () => {
+    github.context.eventName = 'issue_comment';
+    github.context.payload = {
+      comment: { id: 1 },
+      issue: {
+        number: 999,
+        title: 'Title only',
+      },
+    };
+    const result = getIssueOrPullRequestContext();
+    expect(result).toEqual({
+      number: 999,
+      title: 'Title only',
+      body: undefined,
+    });
+  });
+
+  test('returns undefined for unknown event type', () => {
+    github.context.eventName = 'push';
+    github.context.payload = {
+      issue: {
+        number: 111,
+        title: 'Should not be returned',
+      },
+    };
+    const result = getIssueOrPullRequestContext();
+    expect(result).toBeUndefined();
+  });
+
+  test('returns context when pull_request has title but no body', () => {
+    github.context.eventName = 'pull_request';
+    github.context.payload = {
+      pull_request: {
+        number: 888,
+        title: 'PR title only',
+      },
+    };
+    const result = getIssueOrPullRequestContext();
+    expect(result).toEqual({
+      number: 888,
+      title: 'PR title only',
+      body: undefined,
+    });
   });
 });

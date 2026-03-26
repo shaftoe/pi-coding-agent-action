@@ -1,6 +1,6 @@
 import * as core from '@actions/core';
 import { Client } from './pi';
-import { getComment, addReaction, deleteReaction, createFinalComment } from './github';
+import { addReaction, deleteReaction, createFinalComment, getPrompt } from './github';
 import type { createReactionType } from './github';
 
 export async function run() {
@@ -8,15 +8,9 @@ export async function run() {
   const model = core.getInput('model');
   const token = core.getInput('token');
   const thinkingInput = core.getInput('thinking_level') ?? 'off';
-  const comment = await getComment();
-  if (!comment) {
-    core.notice('no comment found in context, skipping prompt');
-    return;
-  }
 
-  const prompt = comment.body;
+  const prompt = await getPrompt();
   if (!prompt) {
-    core.notice('no prompt found in comment, skipping prompt');
     return;
   }
 
@@ -25,21 +19,21 @@ export async function run() {
   let result: string;
 
   try {
-    reaction = await addReaction(comment);
+    reaction = await addReaction();
 
     // Pi session execution
     const pi = await new Client(model, provider, token, thinkingInput).ready();
     result = await pi.prompt(prompt);
   } catch (e) {
     if (reaction) {
-      await deleteReaction(reaction, comment);
+      await deleteReaction(reaction);
     }
     await createFinalComment(e instanceof Error ? e.message : String(e));
     throw e;
   }
 
   if (reaction) {
-    await deleteReaction(reaction, comment);
+    await deleteReaction(reaction);
   }
   await createFinalComment(result);
 }

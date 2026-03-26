@@ -12,12 +12,80 @@ type deleteReactionType =
 type createCommentType =
   RestEndpointMethodTypes.RestEndpointMethodTypes['issues']['createComment']['response'];
 
+export interface IssueOrPullRequestContext {
+  title: string;
+  body?: string;
+  number: number;
+}
+
+export function getIssueOrPullRequestContext(): IssueOrPullRequestContext | undefined {
+  const eventType = github.context.eventName;
+  const payload = github.context.payload;
+
+  if (eventType === 'issue_comment' || eventType === 'issues') {
+    const issue = payload.issue;
+    if (issue?.title) {
+      const result: IssueOrPullRequestContext = {
+        title: issue.title,
+        number: issue.number,
+      };
+      if (issue.body !== undefined) {
+        result.body = issue.body;
+      }
+      return result;
+    }
+  } else if (eventType === 'pull_request') {
+    const pullRequest = payload.pull_request;
+    if (pullRequest?.title) {
+      const result: IssueOrPullRequestContext = {
+        title: pullRequest.title,
+        number: pullRequest.number,
+      };
+      if (pullRequest.body !== undefined) {
+        result.body = pullRequest.body;
+      }
+      return result;
+    }
+  }
+
+  return undefined;
+}
+
+export async function getPrompt(): Promise<string | undefined> {
+  const comment = await getComment();
+  if (!comment) {
+    return undefined;
+  }
+
+  const prompt = comment.body;
+  if (!prompt) {
+    core.notice('no prompt found in comment, skipping prompt');
+    return undefined;
+  }
+
+  // Fetch additional context from issue/PR
+  const issueOrPrContext = getIssueOrPullRequestContext();
+  if (issueOrPrContext) {
+    const { title, body, number } = issueOrPrContext;
+    const contextParts: string[] = [`Issue/PR #${number}: ${title}`];
+
+    if (body) {
+      contextParts.push(`\nDescription:\n${body}`);
+    }
+
+    contextParts.push(`\n\nComment/Instruction:\n${prompt}`);
+    return contextParts.join('');
+  }
+
+  // Return just the comment body if no context available
+  return prompt;
+}
+
 const trigger = core.getInput('trigger') || '/pi';
 const octokit = github.getOctokit(core.getInput('github_token'));
 
-export async function addReaction(
-  comment: typeof github.context.payload.comment
-): Promise<createReactionType | undefined> {
+export async function addReaction(): Promise<createReactionType | undefined> {
+  const comment = github.context.payload.comment;
   if (!comment) {
     core.notice('no comment found, skipping reaction');
     return;
@@ -31,7 +99,7 @@ export async function addReaction(
   });
 }
 
-export async function getComment(): Promise<typeof github.context.payload.comment | undefined> {
+async function getComment(): Promise<typeof github.context.payload.comment | undefined> {
   const comment = github.context.payload.comment;
   if (!comment) {
     core.notice('no comment found in context, skipping prompt');
@@ -44,10 +112,14 @@ export async function getComment(): Promise<typeof github.context.payload.commen
 }
 
 export async function deleteReaction(
-  reaction: createReactionType | undefined,
-  comment: typeof github.context.payload.comment
+  reaction: createReactionType | undefined
 ): Promise<deleteReactionType | undefined> {
-  if (!reaction || !comment) {
+  if (!reaction) {
+    return;
+  }
+
+  const comment = github.context.payload.comment;
+  if (!comment) {
     return;
   }
 
