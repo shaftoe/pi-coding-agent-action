@@ -2,12 +2,11 @@ import * as core from '@actions/core';
 import { Client } from './pi';
 import { getComment, addReaction, deleteReaction, createComment } from './github';
 
-const provider = core.getInput('provider');
-const model = core.getInput('model');
-const token = core.getInput('token');
-const thinkingInput = core.getInput('thinking_level') ?? 'off';
-
 export async function run() {
+  const provider = core.getInput('provider');
+  const model = core.getInput('model');
+  const token = core.getInput('token');
+  const thinkingInput = core.getInput('thinking_level') ?? 'off';
   const comment = await getComment();
   if (!comment) {
     core.notice('no comment found in context, skipping prompt');

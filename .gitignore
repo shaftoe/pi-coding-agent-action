@@ -7,6 +7,9 @@ src/*.d.ts
 src/*.d.ts.map
 src/*.js.map
 
+# Shim import
+!src/import-meta-url.js
+
 # Intermediate dist artifacts (maps and declarations)
 dist/*.d.ts
 dist/*.d.ts.map
