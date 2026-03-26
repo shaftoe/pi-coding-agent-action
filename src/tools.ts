@@ -1,8 +1,8 @@
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { Type } from '@mariozechner/pi-ai';
-import { octokit } from './github';
 import * as github from '@actions/github';
 import * as core from '@actions/core';
+import { octokit } from './github';
 
 interface CreatePullRequestDetails {
   pullRequestNumber: number;
@@ -127,8 +127,6 @@ export const extFactory = (pi: ExtensionAPI): void => {
           baseBranch: result.data.base.ref,
           dryRun: false,
         };
-
-        core.info(`Created PR #${result.data.number}: ${result.data.html_url}`);
 
         return {
           content: [

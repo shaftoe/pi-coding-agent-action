@@ -2,7 +2,7 @@ import * as core from '@actions/core';
 import * as github from '@actions/github';
 import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
 
-type createReactionType =
+export type createReactionType =
   RestEndpointMethodTypes.RestEndpointMethodTypes['reactions']['createForIssueComment']['response'];
 type deleteReactionType =
   RestEndpointMethodTypes.RestEndpointMethodTypes['reactions']['deleteForIssueComment']['response'];

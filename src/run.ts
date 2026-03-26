@@ -1,6 +1,7 @@
 import * as core from '@actions/core';
 import { Client } from './pi';
 import { getComment, addReaction, deleteReaction, createComment } from './github';
+import type { createReactionType } from './github';
 
 export async function run() {
   const provider = core.getInput('provider');
@@ -20,18 +21,25 @@ export async function run() {
   }
 
   // add eyes reaction to the comment, will be removed before final comment
-  const reaction = await addReaction(comment);
+  let reaction: createReactionType | undefined;
   let result: string;
 
   try {
+    reaction = await addReaction(comment);
+
+    // Pi session execution
     const pi = await new Client(model, provider, token, thinkingInput).ready();
     result = await pi.prompt(prompt);
   } catch (e) {
-    await deleteReaction(reaction, comment);
+    if (reaction) {
+      await deleteReaction(reaction, comment);
+    }
     await createComment(e instanceof Error ? e.message : String(e));
     throw e;
   }
 
-  await deleteReaction(reaction, comment);
+  if (reaction) {
+    await deleteReaction(reaction, comment);
+  }
   await createComment(result);
 }
