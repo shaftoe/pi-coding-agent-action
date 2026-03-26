@@ -56,18 +56,15 @@ export async function deleteReaction(
   });
 }
 
-export async function createComment(
-  comment: typeof github.context.payload.comment,
-  body: string
-): Promise<createCommentType | undefined> {
-  if (!comment || !body) {
+export async function createComment(body: string): Promise<createCommentType | undefined> {
+  if (!body) {
     return;
   }
 
   return octokit.rest.issues.createComment({
     owner: github.context.repo.owner,
     repo: github.context.repo.repo,
-    issue_number: comment.issue_number,
+    issue_number: github.context.issue.number,
     body,
   });
 }

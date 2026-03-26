@@ -29,10 +29,10 @@ export async function run() {
     result = await pi.prompt(prompt);
   } catch (e) {
     await deleteReaction(reaction, comment);
-    await createComment(comment, e instanceof Error ? e.message : String(e));
+    await createComment(e instanceof Error ? e.message : String(e));
     throw e;
   }
 
   await deleteReaction(reaction, comment);
-  await createComment(comment, result);
+  await createComment(result);
 }
