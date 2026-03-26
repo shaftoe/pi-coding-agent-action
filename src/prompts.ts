@@ -92,8 +92,6 @@ export function buildIssuePrompt(
 ): string {
   const safeTitle = formatField(issue.title, '(no title)');
   const safeBody = formatField(issue.body, '(no body)');
-  const comments = formatComments(issue.comments ?? [], commentId);
-
   const comments = formatComments(issue.comments ?? [], commentId, ISSUE_COMMENT_INDENT);
 
   return [

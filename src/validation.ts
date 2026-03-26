@@ -6,6 +6,7 @@
  * injection attacks, malformed data, and other security issues.
  */
 
+import path from 'node:path';
 import { ValidationError } from './errors.js';
 
 // ── GitHub Validation ─────────────────────────────────────────────────────
@@ -111,9 +112,27 @@ export function validateBranchName(branch: string): void {
   // - Cannot end with a dot
   // - Cannot contain .lock
   // - Cannot contain @\ anywhere
-  const invalidPattern = /(^\.|^\.\.|^/$|^/|\.\.|@\{|\\)|[ \t~^:?*[\]]|\/$|\.$|\.lock|^@|\.$/;
 
-  if (invalidPattern.test(branch)) {
+  // Check for invalid characters (space, ~, ^, :, ?, *, [, ])
+  const invalidChars = /[ ~:^?*\[\]]/;
+  if (invalidChars.test(branch)) {
+    throw new ValidationError('Branch name contains invalid characters', 'branch', branch);
+  }
+
+  // Check for invalid patterns
+  if (
+    branch.startsWith('.') ||
+    branch.startsWith('..') ||
+    branch.startsWith('/') ||
+    branch.endsWith('/') ||
+    branch.endsWith('.') ||
+    branch.includes('..') ||
+    branch.includes('@{') ||
+    branch.includes('\\') ||
+    branch.includes('$') ||
+    branch.endsWith('.lock') ||
+    branch.startsWith('@')
+  ) {
     throw new ValidationError('Branch name contains invalid characters or patterns', 'branch', branch);
   }
 }
@@ -314,9 +333,8 @@ export function validateSafePath(filepath: string, basePath?: string): void {
 
   // If basePath is provided, resolve and validate the full path
   if (basePath) {
-    const { resolve } = await import('path');
-    const fullPath = resolve(basePath, normalized);
-    const normalizedBase = resolve(basePath);
+    const fullPath = path.resolve(basePath, normalized);
+    const normalizedBase = path.resolve(basePath);
 
     if (!fullPath.startsWith(normalizedBase)) {
       throw new ValidationError('Resolved file path escapes base directory', 'filepath', filepath);

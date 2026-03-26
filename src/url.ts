@@ -51,7 +51,7 @@ export class GitHubUrlBuilder {
    * @returns The branch URL (e.g., "https://github.com/owner/repo/tree/branch")
    */
   branch(branch: string): string {
-    return `${this.repo()}/tree/${this encodeURIComponent(branch)}`;
+    return `${this.repo()}/tree/${this.encodeURIComponent(branch)}`;
   }
 
   /**
@@ -60,7 +60,7 @@ export class GitHubUrlBuilder {
    * @returns The commit URL (e.g., "https://github.com/owner/repo/commit/abc123")
    */
   commit(sha: string): string {
-    return `${this.repo()}/commit/${this encodeURIComponent(sha)}`;
+    return `${this.repo()}/commit/${this.encodeURIComponent(sha)}`;
   }
 
   /**
@@ -88,7 +88,7 @@ export class GitHubUrlBuilder {
    * @returns The file URL (e.g., "https://github.com/owner/repo/blob/main/src/index.ts")
    */
   file(path: string, ref: string): string {
-    return `${this.repo()}/blob/${this encodeURIComponent(ref)}/${this encodeURIComponent(path)}`;
+    return `${this.repo()}/blob/${this.encodeURIComponent(ref)}/${this.encodeURIComponent(path)}`;
   }
 
   /**
@@ -131,7 +131,7 @@ export class GitHubUrlBuilder {
    * @returns The diff URL
    */
   diff(base: string, head: string): string {
-    return `${this.repo()}/compare/${this encodeURIComponent(base)}...${this encodeURIComponent(head)}`;
+    return `${this.repo()}/compare/${this.encodeURIComponent(base)}...${this.encodeURIComponent(head)}`;
   }
 
   /**
