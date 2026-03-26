@@ -1,5 +1,11 @@
 import * as core from '@actions/core';
-import { AuthStorage, createAgentSession, ModelRegistry } from '@mariozechner/pi-coding-agent';
+import * as github from '@actions/github';
+import {
+  AuthStorage,
+  createAgentSession,
+  DefaultResourceLoader,
+  ModelRegistry,
+} from '@mariozechner/pi-coding-agent';
 
 const provider = core.getInput('provider');
 const modInput = core.getInput('model');
@@ -21,6 +27,7 @@ export async function run() {
 
   const { session } = await createAgentSession({
     model,
+    resourceLoader: await getResourceLoader(),
     thinkingLevel: 'medium', // off, low, medium, high
     authStorage,
     modelRegistry,
@@ -32,6 +39,22 @@ export async function run() {
     }
   });
 
-  await session.prompt('Say hello in one sentence.');
+  const payload = github.context.payload;
+  const body = payload.issue?.body ?? payload.pull_request?.body ?? undefined;
+
+  if (!body) {
+    throw new Error('no body, skipping prompt');
+  }
+
+  await session.prompt(body);
   core.info('done');
+}
+
+async function getResourceLoader(): Promise<DefaultResourceLoader> {
+  const loader1 = new DefaultResourceLoader({
+    systemPromptOverride: () => `You are a helpful non-interactive assistant
+running in a CI/CD environment.`,
+  });
+  await loader1.reload();
+  return loader1;
 }
