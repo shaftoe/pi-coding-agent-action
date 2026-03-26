@@ -10,7 +10,7 @@ type createCommentType =
   RestEndpointMethodTypes.RestEndpointMethodTypes['issues']['createComment']['response'];
 
 const trigger = core.getInput('trigger') || '/pi';
-const octokit = github.getOctokit(core.getInput('github_token'));
+export const octokit = github.getOctokit(core.getInput('github_token'));
 
 export const isPR = github.context.payload.pull_request !== undefined;
 
