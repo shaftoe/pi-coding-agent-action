@@ -1,58 +1,56 @@
 import { Type } from '@mariozechner/pi-ai';
 import * as core from '@actions/core';
 import { createPullRequest } from './github';
+import {
+  PULL_REQUEST_TOOL,
+  TOOL_EXECUTION,
+  TOOL_REGISTRATION,
+} from './prompt';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import type { CreatePullRequestParams } from './github';
 
 export const extFactory = (pi: ExtensionAPI): void => {
   pi.registerTool({
-    name: 'create_pull_request',
-    label: 'Create Pull Request',
-    description:
-      'Create a new pull request on GitHub. This tool handles everything: automatically determines the default base branch, creates a new branch, pushes changes, and creates the PR. The branch name is auto-generated following the pi/issue{number}-{timestamp} pattern.',
-    promptSnippet:
-      'Create a pull request with title and description. The tool will automatically determine the default base branch, create a new branch, push changes, and create the PR.',
-    promptGuidelines: [
-      'Always use the create_pull_request tool to create pull requests - do not use git commands or gh CLI directly.',
-      'Make sure your changes are made (modified files exist) before calling this tool. The tool will detect changes, create branch, and create PR automatically. Do NOT use unless you have already applied changes and/or added new files.',
-      'The tool will automatically generate a branch name in the format: pi/issue{number}-{timestamp}.',
-      'Do NOT provide the "base" parameter unless the user explicitly requests a different target branch than the repository default. The tool will automatically detect the correct default branch.',
-      'Use dryRun=true first to verify the PR configuration, then dryRun=false to create it.',
-    ],
+    name: PULL_REQUEST_TOOL.name,
+    label: PULL_REQUEST_TOOL.label,
+    description: PULL_REQUEST_TOOL.description,
+    promptSnippet: PULL_REQUEST_TOOL.promptSnippet,
+    promptGuidelines: PULL_REQUEST_TOOL.guidelines,
     parameters: Type.Object({
       title: Type.String({
-        description:
-          'Pull request title (should be descriptive and follow conventional commit format)',
+        description: PULL_REQUEST_TOOL.parameters.title.description,
       }),
       body: Type.Optional(
         Type.String({
-          description:
-            'Detailed description of changes in markdown format. If not provided, will auto-generate from issue context (e.g., "Fixes #27")',
+          description: PULL_REQUEST_TOOL.parameters.body.description,
         })
       ),
       base: Type.Optional(
         Type.String({
-          description:
-            'EXPERT: Override the default target branch. Only use this if the user explicitly requests a different branch than the repository default. Do NOT guess or assume a branch name - leave this empty unless specifically instructed.',
+          description: PULL_REQUEST_TOOL.parameters.base.description,
         })
       ),
       dryRun: Type.Optional(
         Type.Boolean({
-          description:
-            'Set to true to simulate PR creation without actually creating it (for testing). Set to false to create the actual PR.',
+          description: PULL_REQUEST_TOOL.parameters.dryRun.description,
         })
       ),
     }),
 
     async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
-      core.debug('\n=== create_pull_request tool called ===');
+      core.debug(TOOL_EXECUTION.createPullRequest.called);
 
       // Check for cancellation
       if (signal?.aborted) {
         core.warning('[create_pull_request] Tool execution cancelled');
 
         return {
-          content: [{ type: 'text' as const, text: 'Pull request creation was cancelled' }],
+          content: [
+            {
+              type: 'text' as const,
+              text: TOOL_EXECUTION.createPullRequest.cancelled,
+            },
+          ],
           details: {},
         };
       }
@@ -75,5 +73,5 @@ export const extFactory = (pi: ExtensionAPI): void => {
     },
   });
 
-  core.info('[create_pull_request] Tool registered successfully');
+  core.info(TOOL_REGISTRATION.createPullRequest);
 };
