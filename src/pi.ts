@@ -90,6 +90,7 @@ export class PiClient {
     }
 
     await this.session.prompt(text);
+    process.stdout.write('\n'); // ensure new line after prompt, usually missing from agent
 
     return this.outputChunks.join('');
   }

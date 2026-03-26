@@ -6,6 +6,7 @@ import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
 const provider = core.getInput('provider');
 const modInput = core.getInput('model');
 const token = core.getInput('token');
+const githubToken = core.getInput('github_token');
 const thinkingInput = core.getInput('thinking_level');
 
 export async function run() {
@@ -23,8 +24,7 @@ export async function run() {
   ).ready();
   const result = await pi.prompt(body);
 
-  core.setOutput('result', result);
-  const octokit = github.getOctokit(token);
+  const octokit = github.getOctokit(githubToken);
   await octokit.rest.issues.createComment({
     owner: github.context.repo.owner,
     repo: github.context.repo.repo,
