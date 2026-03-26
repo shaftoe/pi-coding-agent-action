@@ -4,18 +4,19 @@ import {
   createAgentSession,
   ModelRegistry,
   DefaultResourceLoader,
-  type AgentSession,
 } from '@mariozechner/pi-coding-agent';
+import { SYSTEM_PROMPT } from './prompt';
+
+import type { AgentSession } from '@mariozechner/pi-coding-agent';
 import type { Api, Model } from '@mariozechner/pi-ai';
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
 
 export async function getResourceLoader(): Promise<DefaultResourceLoader> {
-  const loader1 = new DefaultResourceLoader({
-    systemPromptOverride: () => `You are a helpful non-interactive assistant
-running in a CI/CD environment.`,
+  const loader = new DefaultResourceLoader({
+    systemPromptOverride: () => SYSTEM_PROMPT,
   });
-  await loader1.reload();
-  return loader1;
+  await loader.reload();
+  return loader;
 }
 
 export class PiClient {
@@ -26,7 +27,7 @@ export class PiClient {
   private modelStr: string;
   private provider: string;
   private token: string;
-  private thinkingLevel: ThinkingLevel = 'off';
+  private thinkingLevel: ThinkingLevel;
 
   constructor(modelStr: string, provider: string, token: string, level: ThinkingLevel = 'off') {
     this.modelStr = modelStr;
@@ -36,7 +37,7 @@ export class PiClient {
     this.modelRegistry = new ModelRegistry(this.authStorage);
 
     if (this.token) {
-      core.debug(`Setting api_key auth token for provider: ${this.provider}`);
+      core.notice(`Setting api_key auth token for provider: ${this.provider}`);
       this.authStorage.set(this.provider, {
         type: 'api_key',
         key: this.token,
@@ -70,7 +71,7 @@ export class PiClient {
       switch (event.assistantMessageEvent.type) {
         case 'text_delta':
         case 'thinking_delta':
-          core.info(event.assistantMessageEvent.delta);
+          process.stdout.write(event.assistantMessageEvent.delta);
           break;
         default:
           break;
