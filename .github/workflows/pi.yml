@@ -31,17 +31,10 @@ jobs:
         with:
           node-version: latest
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install Pi Coding Agent
-        run: bun install --global @mariozechner/pi-coding-agent
-
       - name: Run pi agent
-        uses: shaftoe/pi-coding-agent-action@v1
+        uses: shaftoe/pi-coding-agent-action@v2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           provider: zai
           model: glm-4.7
-          env_vars: |
-            ZAI_API_KEY=${{ secrets.ZAI_API_KEY }}
+          token: ${{ secrets.ZAI_API_KEY }}

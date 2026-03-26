@@ -11,30 +11,15 @@ inputs:
 
   provider:
     description: 'LLM provider (e.g. anthropic, openai, google, zai, etc.)'
-    required: false
-    default: 'anthropic'
+    required: true
 
   model:
     description: 'Model to use (e.g. claude-sonnet-4-5, gpt-4o, gemini-2.5-pro, glm-4.7)'
-    required: false
-    default: 'claude-sonnet-4-5'
+    required: true
 
-  mentions:
-    description: "Comma-separated list of trigger phrases (case-insensitive). Defaults to '/pi'"
-    required: false
-    default: '/pi'
-
-  prompt:
-    description: 'Custom system prompt for the AI agent (optional)'
-    required: false
-
-  extra_tools:
-    description: 'Comma-separated list of extra pi tools to enable (on top of read,write,edit,bash)'
-    required: false
-
-  env_vars:
-    description: "Custom environment variables to inject (one KEY=VALUE per line, e.g. 'ZAI_API_KEY=xxx')"
-    required: false
+  token:
+    description: 'API token for the LLM provider'
+    required: true
 
 runs:
   using: 'node24'

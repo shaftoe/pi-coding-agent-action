@@ -4,7 +4,7 @@
   "description": "GitHub Action that runs the pi coding agent on issues and pull requests",
   "main": "dist/index.js",
   "scripts": {
-    "package": "esbuild src/index.ts --bundle --platform=node --target=node24 --outfile=dist/index.js --format=cjs --minify",
+    "package": "esbuild src/index.ts --bundle --platform=node --target=node24 --outfile=dist/index.js --format=cjs --minify --define:import.meta.url=importMetaUrl --inject:src/import-meta-url.js",
     "prepare": "bun run package",
     "test": "bun test",
     "test:coverage": "bun test --coverage",
@@ -26,10 +26,7 @@
   "license": "MIT",
   "dependencies": {
     "@actions/core": "^3.0.0",
-    "@actions/github": "^9.0.0",
-    "@actions/http-client": "^4.0.0",
-    "@js-temporal/polyfill": "^0.5.1",
-    "isomorphic-git": "^1.37.4"
+    "@mariozechner/pi-coding-agent": "^0.62.0"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
