@@ -21,6 +21,11 @@ inputs:
     description: 'API token for the LLM provider'
     required: true
 
+  thinking_level:
+    description: 'Thinking level (e.g. off, low, medium, high)'
+    required: false
+    default: 'off'
+
 runs:
   using: 'node24'
   main: 'dist/index.js'
