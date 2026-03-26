@@ -11,20 +11,18 @@ interface CreatePullRequestDetails {
   dryRun: boolean;
 }
 
-const BRANCH_NAME_PATTERN = /^pi\/issue\d+-\d+$/;
-
 export const extFactory = (pi: ExtensionAPI): void => {
   pi.registerTool({
     name: 'create_pull_request',
     label: 'Create Pull Request',
     description:
-      'Create a new pull request on GitHub. This is the RECOMMENDED way to create PRs - it handles all the GitHub API calls and ensures proper branch naming format. Use this tool instead of manual git commands.',
+      'Create a new pull request on GitHub. This tool handles everything: creates a new branch, pushes changes, and creates the PR. The branch name is auto-generated following the pi/issue{number}-{timestamp} pattern.',
     promptSnippet:
-      'Create a pull request with title, description, base branch, and head branch (must follow pi/issue{number}-{timestamp} pattern)',
+      'Create a pull request with title, description, and optionally base branch. The tool will handle branch creation, pushing changes, and PR creation automatically.',
     promptGuidelines: [
       'Always use the create_pull_request tool to create pull requests - do not use git commands or gh CLI directly.',
-      'The head branch MUST follow the pattern: pi/issue{number}-{timestamp} (e.g., pi/issue27-1744533000000).',
-      'Get the current issue number from github.context.issue.number if available.',
+      'The tool will automatically generate a branch name in the format: pi/issue{number}-{timestamp}.',
+      'Make sure your changes are committed before calling this tool (the tool only handles branch creation and PR creation).',
       'Use dryRun=true first to verify the PR configuration, then dryRun=false to create it.',
     ],
     parameters: Type.Object({
@@ -44,10 +42,6 @@ export const extFactory = (pi: ExtensionAPI): void => {
             'Target branch to merge into. If not provided, uses repository default branch (e.g., "main", "master", or "v1")',
         })
       ),
-      head: Type.String({
-        description:
-          'Source branch containing the changes. MUST follow pattern: pi/issue{number}-{timestamp} where issue number is the GitHub issue number',
-      }),
       dryRun: Type.Optional(
         Type.Boolean({
           description:
@@ -68,28 +62,22 @@ export const extFactory = (pi: ExtensionAPI): void => {
         };
       }
 
-      const { title, body, base, head, dryRun } = params as {
+      const { title, body, base, dryRun } = params as {
         title: string;
         body?: string;
         base?: string;
-        head: string;
         dryRun?: boolean;
       };
 
+      // Auto-generate branch name
+      const issueNumber = github.context.issue?.number ?? 'unknown';
+      const timestamp = Date.now();
+      const head = `pi/issue${issueNumber}-${timestamp}`;
+
       console.info(`[create_pull_request] Title: ${title}`);
-      console.info(`[create_pull_request] Head: ${head}`);
+      console.info(`[create_pull_request] Auto-generated branch: ${head}`);
       console.info(`[create_pull_request] Base: ${base ?? 'default'}`);
       console.info(`[create_pull_request] DryRun: ${dryRun ?? false}`);
-
-      // Validate branch name format
-      if (!BRANCH_NAME_PATTERN.test(head)) {
-        const issueNumber = github.context.issue?.number ?? 'unknown';
-        const timestamp = Date.now();
-        const correctFormat = `pi/issue${issueNumber}-${timestamp}`;
-        const errorMsg = `Invalid branch name: "${head}". Pattern must be pi/issue{number}-{timestamp}. Correct format: ${correctFormat}`;
-        console.info(`[create_pull_request] ERROR: ${errorMsg}`);
-        throw new Error(errorMsg);
-      }
 
       // Determine base branch
       const baseBranch = base ?? github.context.payload.repository?.default_branch ?? 'main';
@@ -100,13 +88,13 @@ export const extFactory = (pi: ExtensionAPI): void => {
       let bodyText = body ?? '';
       if (!bodyText && github.context.issue?.number) {
         const eventType = github.context.eventName;
-        const issueNumber = github.context.issue.number;
+        const issueNum = github.context.issue.number;
         if (eventType === 'issue_comment' || eventType === 'issues') {
-          bodyText = `Fixes #${issueNumber}\n\nCreated by pi coding agent.`;
+          bodyText = `Fixes #${issueNum}\n\nCreated by pi coding agent.`;
         } else if (eventType === 'pull_request') {
-          bodyText = `Related to #${issueNumber}\n\nCreated by pi coding agent.`;
+          bodyText = `Related to #${issueNum}\n\nCreated by pi coding agent.`;
         }
-        console.info(`[create_pull_request] Auto-generated body from issue #${issueNumber}`);
+        console.info(`[create_pull_request] Auto-generated body from issue #${issueNum}`);
       }
 
       console.info(`[create_pull_request] Body: ${bodyText || '(empty)'}`);
@@ -128,10 +116,22 @@ export const extFactory = (pi: ExtensionAPI): void => {
         };
       }
 
-      // Create the actual pull request
-      console.info(`[create_pull_request] Calling GitHub API to create PR...`);
+      // Create and push the new branch, then create the PR
+      console.info(`[create_pull_request] Creating and pushing branch ${head}...`);
 
       try {
+        // Create new branch from base
+        const { execSync } = await import('child_process');
+        execSync(`git checkout -b ${head}`, { encoding: 'utf-8' });
+        console.info(`[create_pull_request] Created branch: ${head}`);
+
+        // Push the branch to remote
+        execSync(`git push -u origin ${head}`, { encoding: 'utf-8' });
+        console.info(`[create_pull_request] Pushed branch: ${head}`);
+
+        // Create the pull request
+        console.info(`[create_pull_request] Calling GitHub API to create PR...`);
+
         const result = await octokit.rest.pulls.create({
           owner: github.context.repo.owner,
           repo: github.context.repo.repo,
