@@ -26,6 +26,11 @@ inputs:
     required: false
     default: 'off'
 
+  trigger:
+    description: 'Trigger phrase for the pi agent (e.g. /pi)'
+    required: false
+    default: '/pi'
+
 runs:
   using: 'node24'
   main: 'dist/index.js'

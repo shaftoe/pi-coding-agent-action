@@ -89,7 +89,7 @@ export class PiClient {
       throw new Error('no text, skipping prompt');
     }
 
-    core.info('Pi is thinking...' + text);
+    core.info('thinking...\n' + text);
     await this.session.prompt(text);
     process.stdout.write('\n'); // ensure new line after prompt, usually missing from agent
 
