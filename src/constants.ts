@@ -38,6 +38,16 @@ export const DEFAULT_MENTION = '/pi';
 export const PI_BRANCH_PREFIX = 'pi';
 
 /**
+ * Branch prefix for PR operations.
+ */
+export const PR_BRANCH_PREFIX = 'pi-pr';
+
+/**
+ * Branch prefix for issue operations.
+ */
+export const ISSUE_BRANCH_PREFIX = 'pi-issue';
+
+/**
  * Default committer name for git commits made by the pi agent.
  */
 export const DEFAULT_COMMITTER_NAME = 'pi-agent[bot]';

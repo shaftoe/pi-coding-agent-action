@@ -119,3 +119,17 @@ export interface GitAuthor {
   /** The author's email address */
   email: string;
 }
+
+// ── Re-exports for API Convenience ──────────────────────────────────────
+/**
+ * Re-exports commonly used GitHub types for API convenience.
+ */
+export type {
+  IssueComment,
+  IssueNode,
+  PRFileChange,
+  PRReviewComment,
+  PRReview,
+  PRNode,
+  GitAuthor,
+};

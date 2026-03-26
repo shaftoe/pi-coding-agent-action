@@ -33,6 +33,77 @@ function safeRemoveFile(filePath: string): void {
 
 // ── Run Pi Agent ───────────────────────────────────────────
 /**
+ * Extracts Pi agent configuration from GitHub Actions inputs.
+ * @returns Configuration object with provider, model, tools, and prompt settings
+ */
+function getPiConfig() {
+  return {
+    provider: core.getInput('provider') ?? DEFAULT_PI_PROVIDER,
+    model: core.getInput('model') ?? DEFAULT_PI_MODEL,
+    extraTools: core.getInput('extra_tools') ?? '',
+    customSystemPrompt: core.getInput('prompt') ?? '',
+    envVarsString: core.getInput('env_vars') ?? '',
+  };
+}
+
+/**
+ * Builds command line arguments for the pi agent.
+ * @param config - The pi agent configuration
+ * @param promptFile - Path to the temp prompt file
+ * @returns Array of command line arguments
+ */
+function buildPiArgs(config: ReturnType<typeof getPiConfig>, promptFile: string): string[] {
+  const args = [
+    '--provider',
+    config.provider,
+    '--model',
+    config.model,
+    '-p', // print / non-interactive mode
+    `@${promptFile}`,
+  ];
+
+  if (config.extraTools) {
+    args.push('--tools', config.extraTools);
+  }
+
+  return args;
+}
+
+/**
+ * Writes the custom system prompt to a temp file.
+ * @param customSystemPrompt - The custom system prompt content
+ * @returns Path to the temp file, or empty string if no custom prompt
+ */
+function prepareSystemPromptFile(customSystemPrompt: string): string {
+  if (!customSystemPrompt) {
+    return '';
+  }
+
+  // Write SYSTEM.md to a temp file to avoid conflicts
+  // Use UUID for better uniqueness than Date.now()
+  const systemPromptFile = path.join(
+    os.tmpdir(),
+    `${SYSTEM_PROMPT_TEMP_FILE_PREFIX}_${crypto.randomUUID()}.md`
+  );
+  fs.writeFileSync(systemPromptFile, customSystemPrompt, 'utf8');
+  return systemPromptFile;
+}
+
+/**
+ * Builds the environment variables for running pi.
+ * @param envVars - Array of environment variable key-value pairs
+ * @returns Environment object for the command
+ */
+function buildPiEnv(envVars: Array<{ key: string; value: string }>): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const { key, value } of envVars) {
+    core.info(`Setting env var: ${key}=***`);
+    env[key] = value;
+  }
+  return env;
+}
+
+/**
  * Runs the pi agent with the given prompt.
  * @param prompt - The prompt to send to pi
  * @param overrideProvider - Optional provider override (for internal calls)
@@ -41,51 +112,22 @@ function safeRemoveFile(filePath: string): void {
  * @throws Error if pi exits with non-zero status
  */
 export function runPi(prompt: string, overrideProvider?: string, overrideModel?: string): string {
-  const provider = overrideProvider ?? core.getInput('provider') ?? DEFAULT_PI_PROVIDER;
-  const model = overrideModel ?? core.getInput('model') ?? DEFAULT_PI_MODEL;
-  const extraTools = core.getInput('extra_tools') ?? '';
-  const customSystemPrompt = core.getInput('prompt') ?? '';
-  const envVarsString = core.getInput('env_vars') ?? '';
-  const envVars = parseEnvVars(envVarsString);
+  const config = getPiConfig();
+  const provider = overrideProvider ?? config.provider;
+  const model = overrideModel ?? config.model;
+  const envVars = parseEnvVars(config.envVarsString);
 
   // Write prompt to a temp file to avoid shell escaping issues
   const promptFile = path.join(os.tmpdir(), PROMPT_TEMP_FILE);
   fs.writeFileSync(promptFile, prompt, 'utf8');
 
-  const args = [
-    '--provider',
-    provider,
-    '--model',
-    model,
-    '-p', // print / non-interactive mode
-    `@${promptFile}`,
-  ];
-
-  if (extraTools) {
-    args.push('--tools', extraTools);
-  }
-
-  const hasCustomSystemPrompt = Boolean(customSystemPrompt);
-  let systemPromptFile = '';
-  if (hasCustomSystemPrompt) {
-    // Write SYSTEM.md to a temp file to avoid conflicts
-    // Use UUID for better uniqueness than Date.now()
-    systemPromptFile = path.join(
-      os.tmpdir(),
-      `${SYSTEM_PROMPT_TEMP_FILE_PREFIX}_${crypto.randomUUID()}.md`
-    );
-    fs.writeFileSync(systemPromptFile, customSystemPrompt, 'utf8');
-  }
+  const args = buildPiArgs({ ...config, provider, model }, promptFile);
+  const systemPromptFile = prepareSystemPromptFile(config.customSystemPrompt);
 
   try {
     core.info(`Running: pi ${args.join(' ')}`);
 
-    // Inject custom environment variables
-    const env: NodeJS.ProcessEnv = { ...process.env };
-    for (const { key, value } of envVars) {
-      core.info(`Setting env var: ${key}=***`);
-      env[key] = value;
-    }
+    const env = buildPiEnv(envVars);
 
     const rawOutput = runCommand(
       ['pi', ...args],
@@ -100,7 +142,7 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
   } finally {
     // Clean up temp files even if an error occurs
     safeRemoveFile(promptFile);
-    if (hasCustomSystemPrompt && systemPromptFile) {
+    if (systemPromptFile) {
       safeRemoveFile(systemPromptFile);
     }
   }

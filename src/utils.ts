@@ -1,6 +1,7 @@
 import { spawnSync } from 'child_process';
 import { Temporal } from '@js-temporal/polyfill';
 import { DEFAULT_MENTION, PI_BRANCH_PREFIX } from './constants.js';
+import { validateEnvVarKey } from './validation.js';
 
 // ── CLI Helper ───────────────────────────────────────────────────
 /**
@@ -78,18 +79,6 @@ export interface EnvVar {
 }
 
 /**
- * Validates an environment variable key.
- * @param key - The key to validate
- * @returns true if valid, false otherwise
- */
-function isValidEnvVarKey(key: string): boolean {
-  // Env var keys must be non-empty, contain only alphanumeric chars and underscores,
-  // and must not start with a number (POSIX convention)
-  const envVarKeyPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-  return envVarKeyPattern.test(key);
-}
-
-/**
  * Parses environment variables from a multi-line string.
  * @param envVarsString - Multi-line string with KEY=VALUE pairs
  * @returns Array of parsed environment variable key-value pairs
@@ -109,7 +98,9 @@ export function parseEnvVars(envVarsString: string): EnvVar[] {
       const key = line.slice(0, equalIndex).trim();
       const value = line.slice(equalIndex + 1).trim();
 
-      if (!isValidEnvVarKey(key)) {
+      try {
+        validateEnvVarKey(key);
+      } catch (error) {
         throw new Error(
           `Invalid environment variable key '${key}': must start with a letter or underscore and contain only letters, numbers, and underscores`
         );

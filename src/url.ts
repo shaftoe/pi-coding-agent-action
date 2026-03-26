@@ -198,6 +198,7 @@ export const githubUrlBuilder = new GitHubUrlBuilder();
 // ── Helper Functions ───────────────────────────────────────────────────────
 /**
  * Builds the GitHub Actions run URL for logging.
+ * @internal This is for internal use, prefer using githubUrlBuilder.currentRun() directly
  * @returns The URL to view the current workflow run, or null if not available
  */
 export function buildRunUrl(): string | null {
@@ -206,6 +207,7 @@ export function buildRunUrl(): string | null {
 
 /**
  * Builds a repository URL for a given owner and repo.
+ * @internal This is for internal use, prefer using githubUrlBuilder.repo() directly
  * @param owner - The repository owner
  * @param repo - The repository name
  * @returns The repository URL
@@ -217,6 +219,7 @@ export function buildRepoUrl(owner: string, repo: string): string {
 
 /**
  * Formats a markdown link to a GitHub resource.
+ * @internal This is for internal use
  * @param text - The link text
  * @param url - The URL to link to
  * @returns A markdown link string
@@ -227,6 +230,7 @@ export function markdownLink(text: string, url: string): string {
 
 /**
  * Formats a markdown link to a GitHub PR.
+ * @internal This is for internal use, prefer using githubUrlBuilder.pr() directly
  * @param prNumber - The PR number
  * @param text - Optional link text (defaults to "PR #<number>")
  * @returns A markdown link string
@@ -237,6 +241,7 @@ export function prMarkdownLink(prNumber: number, text?: string): string {
 
 /**
  * Formats a markdown link to a GitHub issue.
+ * @internal This is for internal use, prefer using githubUrlBuilder.issue() directly
  * @param issueNumber - The issue number
  * @param text - Optional link text (defaults to "issue #<number>")
  * @returns A markdown link string
@@ -247,6 +252,7 @@ export function issueMarkdownLink(issueNumber: number, text?: string): string {
 
 /**
  * Formats a markdown link to a commit.
+ * @internal This is for internal use, prefer using githubUrlBuilder.commit() directly
  * @param sha - The commit SHA
  * @param text - Optional link text (defaults to the short SHA)
  * @returns A markdown link string
@@ -258,6 +264,7 @@ export function commitMarkdownLink(sha: string, text?: string): string {
 
 /**
  * Formats a markdown link to a file.
+ * @internal This is for internal use, prefer using githubUrlBuilder.file() directly
  * @param path - The file path
  * @param ref - The git ref
  * @param text - Optional link text (defaults to the file path)

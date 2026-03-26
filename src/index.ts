@@ -5,7 +5,7 @@ import { gh } from './gh.js';
 import { GitService } from './git.js';
 import { buildIssuePrompt, buildPRPrompt } from './prompts.js';
 import { runPi, summarize } from './pi.js';
-import { DEFAULT_GITHUB_BRANCH } from './constants.js';
+import { DEFAULT_GITHUB_BRANCH, PR_BRANCH_PREFIX } from './constants.js';
 
 interface IssueCommentPayload {
   id: number;
@@ -87,7 +87,7 @@ async function handlePRWorkflow(
 
     // Create a new branch from the current state instead of pushing to the PR's head branch
     // This is necessary because PRs are checked out in detached HEAD mode in GitHub Actions
-    const newBranch = `pi-pr-${issueNumber}-${Date.now()}`;
+    const newBranch = `${PR_BRANCH_PREFIX}-${issueNumber}-${Date.now()}`;
     await gitService.checkoutBranch(newBranch);
 
     await gitService.commitAndPush(

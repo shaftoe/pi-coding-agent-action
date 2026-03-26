@@ -5,6 +5,7 @@ import http from 'isomorphic-git/http/node';
 import fs from 'node:fs';
 import type { GitAuthor } from './types.js';
 import { DEFAULT_COMMITTER_NAME, DEFAULT_COMMITTER_EMAIL } from './constants.js';
+import { GitError } from './errors.js';
 
 // ── Constants ────────────────────────────────────────────────
 /**
@@ -127,8 +128,9 @@ export class GitService {
     core.info(`GitHub context: owner="${owner}", repo="${repo}"`);
 
     if (!owner || !repo) {
-      throw new Error(
-        `Invalid repository context: owner="${owner}", repo="${repo}". Cannot construct push URL.`
+      throw new GitError(
+        `Invalid repository context: owner="${owner}", repo="${repo}". Cannot construct push URL.`,
+        'commitAndPush'
       );
     }
 

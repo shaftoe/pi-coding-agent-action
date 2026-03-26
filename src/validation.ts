@@ -6,6 +6,7 @@
  * injection attacks, malformed data, and other security issues.
  */
 
+import { resolve } from 'path';
 import { ValidationError } from './errors.js';
 
 // ── GitHub Validation ─────────────────────────────────────────────────────
@@ -314,7 +315,6 @@ export function validateSafePath(filepath: string, basePath?: string): void {
 
   // If basePath is provided, resolve and validate the full path
   if (basePath) {
-    const { resolve } = await import('path');
     const fullPath = resolve(basePath, normalized);
     const normalizedBase = resolve(basePath);
 
