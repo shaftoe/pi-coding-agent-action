@@ -38,3 +38,4 @@ jobs:
           provider: zai
           model: glm-4.7
           token: ${{ secrets.ZAI_API_KEY }}
+          thinking_level: high
