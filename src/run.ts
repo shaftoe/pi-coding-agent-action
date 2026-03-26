@@ -10,10 +10,10 @@ const githubToken = core.getInput('github_token');
 const thinkingInput = core.getInput('thinking_level');
 
 export async function run() {
-  const payload = github.context.payload;
-  const body = payload.issue?.body ?? payload.pull_request?.body ?? undefined;
-  if (!body) {
-    throw new Error('no body, skipping prompt');
+  const comment = github.context.payload.comment;
+  if (!comment) {
+    core.notice('no comment found in context, skipping prompt');
+    return;
   }
 
   const pi = await new PiClient(
@@ -22,7 +22,8 @@ export async function run() {
     token,
     (thinkingInput ?? 'off') as ThinkingLevel
   ).ready();
-  const result = await pi.prompt(body);
+  core.info('[prompt] ' + comment.body);
+  const result = await pi.prompt(comment.body);
 
   const octokit = github.getOctokit(githubToken);
   await octokit.rest.issues.createComment({

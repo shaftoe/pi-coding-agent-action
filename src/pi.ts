@@ -38,7 +38,7 @@ export class PiClient {
     this.modelRegistry = new ModelRegistry(this.authStorage);
 
     if (this.token) {
-      core.notice(`Setting api_key auth token for provider: ${this.provider}`);
+      core.info(`Setting api_key auth token for provider: ${this.provider}`);
       this.authStorage.set(this.provider, {
         type: 'api_key',
         key: this.token,
@@ -89,6 +89,7 @@ export class PiClient {
       throw new Error('no text, skipping prompt');
     }
 
+    core.info('Pi is thinking...' + text);
     await this.session.prompt(text);
     process.stdout.write('\n'); // ensure new line after prompt, usually missing from agent
 
