@@ -19,8 +19,20 @@ process.stdout.write = _mockedWrite as typeof process.stdout.write;
 
 // Mock @actions/core to suppress info/debug/notice/warning logging
 const noop = (): void => {};
+const mockGetInput = mock((name: string) => {
+  if (name === 'github_token') {
+    return 'fake-token';
+  }
+  if (name === 'prompt') {
+    return '';
+  }
+  if (name === 'trigger') {
+    return '/pi';
+  }
+  return '';
+});
 mock.module('@actions/core', () => ({
-  getInput: mock(() => '/pi'),
+  getInput: mockGetInput,
   notice: mock(noop),
   info: mock(noop),
   debug: mock(noop),
@@ -38,7 +50,7 @@ process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-${Date.now()}.j
 fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 
 // Dynamic import to ensure env vars are set before module loads
-const githubModule = import('./github/index.js');
+const githubModule = import('./github/index');
 const {
   getPrompt,
   createFinalComment,
@@ -138,6 +150,77 @@ describe('getPrompt', () => {
     expect(result).toBeDefined();
     expect(result).toContain('Issue/PR #456: Title only issue');
     expect(result).not.toContain('Description:');
+  });
+
+  describe('with prompt input', () => {
+    test('uses prompt input when provided, enriched with issue context', async () => {
+      github.context.payload = {
+        issue: {
+          number: 42,
+          title: 'Test Issue',
+          body: 'Test description',
+        },
+      };
+
+      const result = await getPrompt('Review this code for bugs');
+      expect(result).toBeDefined();
+      expect(result).toContain('Issue/PR #42: Test Issue');
+      expect(result).toContain('Description:');
+      expect(result).toContain('Test description');
+      expect(result).toContain('Instruction:');
+      expect(result).toContain('Review this code for bugs');
+    });
+
+    test('uses prompt input without issue context', async () => {
+      github.context.payload = {};
+
+      const result = await getPrompt('Review this code for bugs');
+      expect(result).toBe('Review this code for bugs');
+    });
+
+    test('returns undefined for empty prompt input', async () => {
+      const result = await getPrompt('   ');
+      expect(result).toBeUndefined();
+    });
+
+    test('does not strip trigger phrase from prompt input', async () => {
+      github.context.payload = {};
+
+      const result = await getPrompt('/pi This should not be stripped');
+      expect(result).toContain('/pi This should not be stripped');
+    });
+
+    test('prefers prompt input over comment when both are available', async () => {
+      github.context.payload = {
+        comment: { id: 1, body: '/pi From comment' },
+        issue: {
+          number: 99,
+          title: 'Priority Test',
+        },
+      };
+
+      const result = await getPrompt('Review this code for bugs');
+      expect(result).toContain('Instruction:');
+      expect(result).toContain('Review this code for bugs');
+      expect(result).not.toContain('From comment');
+    });
+
+    test('enriches prompt input with PR context', async () => {
+      github.context.eventName = 'pull_request';
+      github.context.payload = {
+        pull_request: {
+          number: 123,
+          title: 'Fix bug',
+          body: 'This PR fixes the bug',
+        },
+      };
+
+      const result = await getPrompt('Review this code for bugs');
+      expect(result).toContain('Issue/PR #123: Fix bug');
+      expect(result).toContain('This PR fixes the bug');
+      expect(result).toContain('Instruction:');
+      expect(result).toContain('Review this code for bugs');
+    });
   });
 });
 

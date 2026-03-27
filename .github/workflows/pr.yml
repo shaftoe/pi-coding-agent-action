@@ -1,10 +1,8 @@
-name: Pi AI Agent
+name: Review PR
 
 on:
-  issue_comment:
-    types: [created]
-  issues:
-    types: [opened, edited]
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
@@ -13,17 +11,13 @@ permissions:
 
 jobs:
   pi-agent:
-    if: |
-      (github.actor == 'shaftoe') && contains(github.event.comment.body, '/pi')
-
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || '' }}
-          fetch-depth: 0
+          fetch-depth: 1
 
       - uses: actions/setup-node@v6
         with:
@@ -37,3 +31,4 @@ jobs:
           model: glm-4.7
           token: ${{ secrets.ZAI_API_KEY }}
           thinking_level: high
+          prompt: This is a GitHub PR (${{ github.event.pull_request.number }}) that needs code review. Focus on identifying issues, bugs, security concerns, and improvements.

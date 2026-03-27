@@ -26,6 +26,10 @@ inputs:
     required: false
     default: 'off'
 
+  prompt:
+    description: 'Optional prompt to send to the agent. When provided, the trigger phrase is not required and the prompt is used as-is (useful for non-interactive workflows). Falls back to extracting the prompt from the triggering comment if not set.'
+    required: false
+
   trigger:
     description: 'Trigger phrase for the pi agent (e.g. /pi)'
     required: false

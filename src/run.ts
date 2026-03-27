@@ -35,7 +35,7 @@ export async function run() {
   const token = core.getInput('token');
   const thinkingInput = core.getInput('thinking_level') ?? 'off';
 
-  const prompt = await getPrompt();
+  const prompt = await getPrompt(core.getInput('prompt'));
   if (!prompt) {
     return;
   }

@@ -160,15 +160,54 @@ export function getIssueOrPullRequestContext(): IssueOrPullRequestContext | unde
 }
 
 /**
+ * Enrich a prompt string with issue/PR context when available.
+ *
+ * @param instruction - The raw instruction text.
+ * @param label - Label for the instruction section (e.g. "Comment/Instruction" or "Instruction").
+ * @returns The enriched prompt, or the original instruction if no context is available.
+ */
+function enrichWithContext(instruction: string, label: string): string {
+  const issueOrPrContext = getIssueOrPullRequestContext();
+  if (issueOrPrContext) {
+    const { title, body, number } = issueOrPrContext;
+    const contextParts: string[] = [`Issue/PR #${number}: ${title}`];
+
+    if (body) {
+      contextParts.push(`\nDescription:\n${body}`);
+    }
+
+    contextParts.push(`\n\n${label}:\n${instruction}`);
+    return contextParts.join('');
+  }
+
+  return instruction;
+}
+
+/**
  * Build the full prompt that will be sent to the Pi agent.
  *
- * The triggering comment body is used as the instruction. If an associated issue
- * or PR is available in the current context, its title and description are
- * prepended for additional context.
+ * First checks for a `prompt` action input. If provided, it is used as-is
+ * (no trigger stripping). If not provided, falls back to extracting the prompt
+ * from the triggering comment.
  *
- * @returns The assembled prompt string, or `undefined` if no comment was found.
+ * In both cases, if an issue/PR is available in the current context, its title
+ * and description are prepended for additional context.
+ *
+ * @returns The assembled prompt string, or `undefined` if no prompt source was
+ *          found.
  */
-export async function getPrompt(): Promise<string | undefined> {
+export async function getPrompt(promptInput?: string): Promise<string | undefined> {
+  // Prefer explicit prompt input over comment-based extraction
+  if (promptInput) {
+    const trimmed = promptInput.trim();
+    if (!trimmed) {
+      core.notice('prompt input is empty, skipping');
+      return undefined;
+    }
+    return enrichWithContext(trimmed, 'Instruction');
+  }
+
+  // Fall back to comment-based prompt
   const comment = await getComment();
   if (!comment) {
     return undefined;
@@ -180,22 +219,7 @@ export async function getPrompt(): Promise<string | undefined> {
     return undefined;
   }
 
-  // Fetch additional context from issue/PR
-  const issueOrPrContext = getIssueOrPullRequestContext();
-  if (issueOrPrContext) {
-    const { title, body, number } = issueOrPrContext;
-    const contextParts: string[] = [`Issue/PR #${number}: ${title}`];
-
-    if (body) {
-      contextParts.push(`\nDescription:\n${body}`);
-    }
-
-    contextParts.push(`\n\nComment/Instruction:\n${prompt}`);
-    return contextParts.join('');
-  }
-
-  // Return just the comment body if no context available
-  return prompt;
+  return enrichWithContext(prompt, 'Comment/Instruction');
 }
 
 async function getComment(): Promise<typeof github.context.payload.comment | undefined> {

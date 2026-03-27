@@ -40,7 +40,7 @@ mock.module('@actions/core', () => ({
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 
 // Dynamic import to ensure env vars and mocks are set before module loads
-const toolsModule = import('./tools.js');
+const toolsModule = import('./tools');
 const { extFactory } =
   // @ts-expect-error TS1309 -- Top-level await not supported in CommonJS, but Bun test runner handles it
   await toolsModule;
