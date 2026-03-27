@@ -1,5 +1,7 @@
 # Pi Coding Agent GitHub Action
 
+afasdfadsfdstypo
+
 This is a GitHub action that uses the [pi coding agent](https://pi.dev) to integrate with GitHub workflows (issues, pull requests, etc.).
 
 Inspired by OpenCode's [GitHub action](https://opencode.ai/docs/github/).
