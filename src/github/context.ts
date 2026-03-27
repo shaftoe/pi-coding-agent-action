@@ -147,12 +147,11 @@ async function getComment(): Promise<typeof github.context.payload.comment | und
   return comment;
 }
 
-export async function getIssueOrPRThread(
+function resolveThreadParams(
   params?: GetIssueOrPRThreadParams
-): Promise<IssueOrPRThread | undefined> {
+): { owner: string; repo: string; issueNumber: number; maxComments: number } | undefined {
   const { owner, repo, issue_number, max_comments = 100 } = params ?? {};
 
-  // Determine owner/repo/issue_number from params or context
   const resolvedOwner = owner ?? github.context.repo.owner;
   const resolvedRepo = repo ?? github.context.repo.repo;
   const resolvedIssueNumber = issue_number ?? github.context.issue.number;
@@ -162,108 +161,167 @@ export async function getIssueOrPRThread(
     return undefined;
   }
 
+  return {
+    owner: resolvedOwner,
+    repo: resolvedRepo,
+    issueNumber: resolvedIssueNumber,
+    maxComments: max_comments,
+  };
+}
+
+async function fetchIssueData(
+  owner: string,
+  repo: string,
+  issueNumber: number
+): Promise<{
+  issue: Awaited<ReturnType<typeof octokit.rest.issues.get>>['data'];
+  isPullRequest: boolean;
+}> {
+  const issueData = await octokit.rest.issues.get({
+    owner,
+    repo,
+    issue_number: issueNumber,
+  });
+
+  const issue = issueData.data;
+  const isPullRequest = issue.pull_request !== undefined;
+
+  return { issue, isPullRequest };
+}
+
+async function fetchPRData(
+  owner: string,
+  repo: string,
+  issueNumber: number
+): Promise<Awaited<ReturnType<typeof octokit.rest.pulls.get>>['data'] | undefined> {
   try {
-    // Fetch the issue/PR
-    const issueData = await octokit.rest.issues.get({
-      owner: resolvedOwner,
-      repo: resolvedRepo,
-      issue_number: resolvedIssueNumber,
+    const prData = await octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: issueNumber,
+    });
+    return prData.data;
+  } catch (_e) {
+    core.debug('[getIssueOrPRThread] Failed to fetch PR data, continuing');
+    return undefined;
+  }
+}
+
+function transformComment(comment: {
+  id: number;
+  user?: { login?: string | null; type?: string | null } | null;
+  created_at: string;
+  updated_at: string | null;
+  body?: string | null;
+}): ThreadComment {
+  const triggeringCommentId = github.context.payload.comment?.id;
+
+  const baseComment: ThreadComment = {
+    id: comment.id,
+    author: comment.user?.login ?? 'unknown',
+    author_type: comment.user?.type === 'Bot' ? 'bot' : 'user',
+    created_at: comment.created_at,
+    body: comment.body ?? '',
+    is_triggering_comment: comment.id === triggeringCommentId,
+  };
+
+  // Only include updated_at if it's not null (exactOptionalPropertyTypes)
+  if (comment.updated_at !== null) {
+    baseComment.updated_at = comment.updated_at;
+  }
+
+  return baseComment;
+}
+
+async function fetchThreadComments(
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  maxComments: number
+): Promise<ThreadComment[]> {
+  const comments: ThreadComment[] = [];
+  let page = 1;
+  const perPage = Math.min(maxComments, 100);
+
+  while (comments.length < maxComments) {
+    const commentsData = await octokit.rest.issues.listComments({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      per_page: perPage,
+      page,
     });
 
-    const issue = issueData.data;
-
-    // Determine if it's a PR by checking if pull_request url exists
-    const isPullRequest = issue.pull_request !== undefined;
-
-    // Fetch PR-specific data if applicable
-    let prData;
-    if (isPullRequest) {
-      try {
-        prData = await octokit.rest.pulls.get({
-          owner: resolvedOwner,
-          repo: resolvedRepo,
-          pull_number: resolvedIssueNumber,
-        });
-      } catch (_e) {
-        // PR data fetch failed, continue without it
-        core.debug('[getIssueOrPRThread] Failed to fetch PR data, continuing');
-      }
+    if (commentsData.data.length === 0) {
+      break;
     }
 
-    // Fetch comments with pagination
-    const comments: ThreadComment[] = [];
-    let page = 1;
-    const perPage = Math.min(max_comments, 100); // GitHub API max per_page is 100
-
-    while (comments.length < max_comments) {
-      const commentsData = await octokit.rest.issues.listComments({
-        owner: resolvedOwner,
-        repo: resolvedRepo,
-        issue_number: resolvedIssueNumber,
-        per_page: perPage,
-        page,
-      });
-
-      if (commentsData.data.length === 0) {
+    for (const comment of commentsData.data) {
+      if (comments.length >= maxComments) {
         break;
       }
-
-      for (const comment of commentsData.data) {
-        if (comments.length >= max_comments) {
-          break;
-        }
-
-        const commentObj: ThreadComment = {
-          id: comment.id,
-          author: comment.user?.login ?? 'unknown',
-          author_type: comment.user?.type === 'Bot' ? 'bot' : 'user',
-          created_at: comment.created_at,
-          updated_at: comment.updated_at,
-          body: comment.body ?? '',
-        };
-
-        // Check if this is the triggering comment
-        const triggeringCommentId = github.context.payload.comment?.id;
-        if (comment.id === triggeringCommentId) {
-          commentObj.is_triggering_comment = true;
-        }
-
-        comments.push(commentObj);
-      }
-
-      if (commentsData.data.length < perPage) {
-        break;
-      }
-      page++;
+      comments.push(transformComment(comment));
     }
 
-    // Build the result
-    const result: IssueOrPRThread = {
-      number: issue.number,
-      title: issue.title,
-      body: issue.body,
-      state: (issue.state === 'closed' && prData?.data.merged_at ? 'merged' : issue.state) as
-        | 'open'
-        | 'closed'
-        | 'merged',
-      author: issue.user?.login ?? 'unknown',
-      author_type: issue.user?.type === 'Bot' ? 'bot' : 'user',
-      created_at: issue.created_at,
-      updated_at: issue.updated_at,
-      closed_at: issue.closed_at,
-      merged_at: prData?.data.merged_at,
-      labels: issue.labels.map(l => (typeof l === 'string' ? l : (l.name ?? ''))),
-      is_pull_request: isPullRequest,
-      head_branch: prData?.data.head.ref,
-      base_branch: prData?.data.base.ref,
-      head_sha: prData?.data.head.sha,
-      comments,
-    };
+    if (commentsData.data.length < perPage) {
+      break;
+    }
+    page++;
+  }
 
-    return result;
+  return comments;
+}
+
+function buildThreadResult(
+  issue: Awaited<ReturnType<typeof octokit.rest.issues.get>>['data'],
+  isPullRequest: boolean,
+  prData?: Awaited<ReturnType<typeof octokit.rest.pulls.get>>['data'],
+  comments?: ThreadComment[]
+): IssueOrPRThread {
+  return {
+    number: issue.number,
+    title: issue.title,
+    body: issue.body,
+    state: (issue.state === 'closed' && prData?.merged_at ? 'merged' : issue.state) as
+      | 'open'
+      | 'closed'
+      | 'merged',
+    author: issue.user?.login ?? 'unknown',
+    author_type: issue.user?.type === 'Bot' ? 'bot' : 'user',
+    created_at: issue.created_at,
+    updated_at: issue.updated_at,
+    closed_at: issue.closed_at,
+    merged_at: prData?.merged_at ?? undefined,
+    labels: issue.labels.map(l => (typeof l === 'string' ? l : (l.name ?? ''))),
+    is_pull_request: isPullRequest,
+    head_branch: prData?.head.ref,
+    base_branch: prData?.base.ref,
+    head_sha: prData?.head.sha,
+    comments: comments ?? [],
+  };
+}
+
+export async function getIssueOrPRThread(
+  params?: GetIssueOrPRThreadParams
+): Promise<IssueOrPRThread | undefined> {
+  const resolvedParams = resolveThreadParams(params);
+  if (!resolvedParams) {
+    return undefined;
+  }
+
+  const { owner, repo, issueNumber, maxComments } = resolvedParams;
+
+  try {
+    const { issue, isPullRequest } = await fetchIssueData(owner, repo, issueNumber);
+
+    const prData = isPullRequest ? await fetchPRData(owner, repo, issueNumber) : undefined;
+
+    const comments = await fetchThreadComments(owner, repo, issueNumber, maxComments);
+
+    return buildThreadResult(issue, isPullRequest, prData, comments);
   } catch (error) {
     if (error instanceof Error && 'status' in error && error.status === 404) {
-      core.debug(`[getIssueOrPRThread] Issue/PR #${resolvedIssueNumber} not found`);
+      core.debug(`[getIssueOrPRThread] Issue/PR #${issueNumber} not found`);
       return undefined;
     }
     throw error;
