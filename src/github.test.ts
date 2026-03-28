@@ -51,16 +51,21 @@ fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 
 // Dynamic import to ensure env vars are set before module loads
 const githubModule = import('./github/index.js');
-const {
-  getPrompt,
-  createFinalComment,
-  getIssueOrPullRequestContext,
-  isPR,
-  getContextType,
-  getIssueOrPRThread,
-  updatePullRequest,
-} = // @ts-expect-error TS1309 -- Top-level await not supported in CommonJS, but Bun test runner handles it
-  await githubModule;
+const contextModule = import('./github/context.js');
+const [
+  {
+    getPrompt,
+    createFinalComment,
+    getIssueOrPRThread,
+    updatePullRequest,
+  },
+  {
+    getIssueOrPullRequestContext,
+    isPR,
+    getContextType,
+  },
+] = // @ts-expect-error TS1309 -- Top-level await not supported in CommonJS, but Bun test runner handles it
+  await Promise.all([githubModule, contextModule]);
 
 describe('getPrompt', () => {
   beforeEach(() => {

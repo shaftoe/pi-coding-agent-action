@@ -12,6 +12,9 @@ import { Temporal } from '@js-temporal/polyfill';
 import { getOctokit } from './octokit.js';
 import { DEFAULT_TRIGGER, MAX_COMMENTS } from './constants.js';
 
+const trigger = core.getInput('trigger') || DEFAULT_TRIGGER;
+const octokit = getOctokit();
+
 /**
  * Debug logging helper.
  */
@@ -48,9 +51,6 @@ export function getStartTimeFromContext(): Temporal.Instant | undefined {
   debug(`[getStartTimeFromContext] Could not determine start time from event type: ${eventName}`);
   return undefined;
 }
-
-const trigger = core.getInput('trigger') || DEFAULT_TRIGGER;
-const octokit = getOctokit();
 
 export interface IssueOrPullRequestContext {
   title: string;

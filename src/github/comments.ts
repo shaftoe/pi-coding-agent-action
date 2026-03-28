@@ -27,6 +27,9 @@ export interface CommentMetadata {
   executionDuration?: Temporal.Duration;
 }
 
+export type CreateCommentType =
+  RestEndpointMethodTypes.RestEndpointMethodTypes['issues']['createComment']['response'];
+
 /**
  * Format a Temporal Duration to a human-readable string, rounded to the nearest second.
  *
@@ -55,9 +58,6 @@ function formatExecutionTime(duration: Temporal.Duration): string {
 
   return parts.join(' ');
 }
-
-export type CreateCommentType =
-  RestEndpointMethodTypes.RestEndpointMethodTypes['issues']['createComment']['response'];
 
 /**
  * Create a comment on the current issue or pull request.

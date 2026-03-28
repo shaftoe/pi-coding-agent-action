@@ -12,11 +12,8 @@ import {
   GET_ISSUE_PR_THREAD_PARAM_ISSUE_NUMBER_DESCRIPTION,
   GET_ISSUE_PR_THREAD_PARAM_MAX_COMMENTS_DESCRIPTION,
 } from '../prompt';
-import {
-  getIssueOrPRThread,
-  CANCELLATION_MESSAGE_GET_THREAD,
-} from '../../github/index';
 import { formatThreadAsText } from './common';
+import { getIssueOrPRThread, CANCELLATION_MESSAGE_GET_THREAD } from '../../github/index';
 import type { ToolDefinition, AgentToolResult } from '@mariozechner/pi-coding-agent';
 
 /**
@@ -62,13 +59,7 @@ export const getIssueOrPRThreadTool: ToolDefinition = {
   // @ts-expect-error - TypeBox Symbol property not recognized by TypeScript
   parameters: getIssueOrPRThreadSchema,
 
-  async execute(
-    _toolCallId,
-    params,
-    signal,
-    _onUpdate,
-    _ctx
-  ): Promise<AgentToolResult<unknown>> {
+  async execute(_toolCallId, params, signal, _onUpdate, _ctx): Promise<AgentToolResult<unknown>> {
     // Check for cancellation
     if (signal?.aborted) {
       return {

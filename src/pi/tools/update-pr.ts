@@ -13,13 +13,9 @@ import {
   UPDATE_PULL_REQUEST_PARAM_MESSAGE_DESCRIPTION,
   UPDATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from '../prompt';
-import {
-  updatePullRequest,
-  CANCELLATION_MESSAGE_UPDATE_PR,
-  type UpdatePullRequestParams,
-  type UpdatePullRequestDetails,
-} from '../../github/index';
+import { updatePullRequest, CANCELLATION_MESSAGE_UPDATE_PR } from '../../github/index';
 import type { ToolDefinition, AgentToolResult } from '@mariozechner/pi-coding-agent';
+import type { UpdatePullRequestParams, UpdatePullRequestDetails } from '../../github/index';
 
 /**
  * Schema for the update_pull_request tool.

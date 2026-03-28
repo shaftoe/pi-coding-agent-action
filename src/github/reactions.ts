@@ -10,6 +10,14 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
+import { getOctokit } from './octokit.js';
+import { REACTION_TYPE_EYES } from './constants.js';
+export type CreateReactionType =
+  RestEndpointMethodTypes.RestEndpointMethodTypes['reactions']['createForIssueComment']['response'];
+export type DeleteReactionType =
+  RestEndpointMethodTypes.RestEndpointMethodTypes['reactions']['deleteForIssueComment']['response'];
+
+const octokit = getOctokit();
 
 /**
  * Debug logging helper.
@@ -17,15 +25,6 @@ import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
 function debug(msg: string): void {
   core.debug(msg);
 }
-import { getOctokit } from './octokit.js';
-import { REACTION_TYPE_EYES } from './constants.js';
-
-const octokit = getOctokit();
-
-export type CreateReactionType =
-  RestEndpointMethodTypes.RestEndpointMethodTypes['reactions']['createForIssueComment']['response'];
-export type DeleteReactionType =
-  RestEndpointMethodTypes.RestEndpointMethodTypes['reactions']['deleteForIssueComment']['response'];
 
 /**
  * Add an "eyes" (👀) reaction to the triggering comment to signal that the
