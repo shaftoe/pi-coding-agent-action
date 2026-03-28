@@ -61,6 +61,11 @@ export class Client {
 
     if (foundModel) {
       this.model = foundModel;
+      let msg = `🤖 Model: ${this.model.provider}/${this.model.id}`;
+      if (this.thinkingLevel !== 'off') {
+        msg += ` (thinking: ${this.thinkingLevel})`;
+      }
+      core.info(msg);
     } else {
       throw new Error('Model not found: ' + this.provider + '/' + this.modelStr);
     }
