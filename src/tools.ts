@@ -335,6 +335,7 @@ const updatePullRequestTool: ToolDefinition = {
   description: UPDATE_PULL_REQUEST_DESCRIPTION,
   promptSnippet: UPDATE_PULL_REQUEST_PROMPT_SNIPPET,
   promptGuidelines: UPDATE_PULL_REQUEST_PROMPT_GUIDELINES,
+  // @ts-expect-error - TypeBox Symbol property not recognized by TypeScript
   parameters: Type.Object({
     pull_number: Type.Optional(
       Type.Integer({

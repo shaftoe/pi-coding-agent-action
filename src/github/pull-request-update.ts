@@ -8,7 +8,6 @@
  * testing without side effects.
  */
 
-import * as core from '@actions/core';
 import * as github from '@actions/github';
 import { getOctokit } from './octokit.js';
 import {

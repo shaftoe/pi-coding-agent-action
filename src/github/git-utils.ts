@@ -34,7 +34,7 @@ export type FileMode =
 /**
  * Create a logger with a custom emoji prefix.
  */
-export function createLogger(emoji: string = '🔀') {
+export function createLogger(emoji = '🔀') {
   return {
     debug: (msg: string): void => core.debug(`${emoji} ${msg}`),
     info: (msg: string): void => core.info(`${emoji} ${msg}`),
@@ -49,11 +49,7 @@ export function createLogger(emoji: string = '🔀') {
  * @param sha - Blob SHA.
  * @returns The decoded UTF-8 content, or null if fetching fails.
  */
-async function fetchBlobContent(
-  owner: string,
-  repo: string,
-  sha: string
-): Promise<string | null> {
+async function fetchBlobContent(owner: string, repo: string, sha: string): Promise<string | null> {
   try {
     const blob = await octokit.rest.git.getBlob({
       owner,
@@ -78,7 +74,7 @@ async function fetchBlobContent(
  */
 export async function buildFileMap(
   treeSha: string,
-  fetchContents: boolean = true
+  fetchContents = true
 ): Promise<Map<string, { sha: string; content: string | null }>> {
   const owner = github.context.repo.owner;
   const repo = github.context.repo.repo;

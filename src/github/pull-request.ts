@@ -7,7 +7,6 @@
  * Supports dry-run mode for testing without side effects.
  */
 
-import * as core from '@actions/core';
 import * as github from '@actions/github';
 import { Temporal } from '@js-temporal/polyfill';
 import { getOctokit } from './octokit.js';
