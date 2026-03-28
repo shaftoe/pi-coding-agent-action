@@ -61,11 +61,6 @@ export class Client {
 
     if (foundModel) {
       this.model = foundModel;
-      let msg = `🤖 Model: ${this.model.provider}/${this.model.id}`;
-      if (this.thinkingLevel !== 'off') {
-        msg += ` (thinking: ${this.thinkingLevel})`;
-      }
-      core.info(msg);
     } else {
       throw new Error('Model not found: ' + this.provider + '/' + this.modelStr);
     }
@@ -95,9 +90,11 @@ export class Client {
       }
       switch (event.assistantMessageEvent.type) {
         case 'text_delta':
+          // Sent to the user as comment as final step
           this.outputChunks.push(event.assistantMessageEvent.delta);
           break;
         case 'thinking_delta':
+          // We write the thinking into action logs directly
           process.stdout.write(event.assistantMessageEvent.delta);
           break;
         default:

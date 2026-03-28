@@ -12,13 +12,9 @@ import {
   CREATE_PULL_REQUEST_PARAM_BASE_DESCRIPTION,
   CREATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from '../prompt';
-import {
-  createPullRequest,
-  CANCELLATION_MESSAGE_CREATE_PR,
-  type CreatePullRequestParams,
-  type CreatePullRequestDetails,
-} from '../../github/index';
+import { createPullRequest, CANCELLATION_MESSAGE_CREATE_PR } from '../../github/index';
 import type { ToolDefinition, AgentToolResult } from '@mariozechner/pi-coding-agent';
+import type { CreatePullRequestParams, CreatePullRequestDetails } from '../../github/index';
 
 /**
  * Schema for the create_pull_request tool.
