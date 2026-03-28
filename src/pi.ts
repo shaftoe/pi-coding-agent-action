@@ -25,12 +25,20 @@ import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
  * Registers custom extension factories (tool definitions) and overrides the
  * default system prompt with the one tailored for GitHub Actions usage.
  *
+ * Also appends AGENTS.md content to the system prompt to provide project context.
+ *
  * @returns A fully loaded {@link DefaultResourceLoader} instance.
  */
 async function getResourceLoader(): Promise<DefaultResourceLoader> {
   const loader = new DefaultResourceLoader({
     extensionFactories: [extFactory],
     systemPromptOverride: () => SYSTEM_PROMPT,
+    appendSystemPromptOverride: (agentsFiles) => {
+      if (agentsFiles.length === 0) {
+        return [];
+      }
+      return agentsFiles;
+    },
   });
   await loader.reload();
   return loader;
