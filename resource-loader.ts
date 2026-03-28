@@ -10,7 +10,7 @@
  */
 
 import { DefaultResourceLoader } from '@mariozechner/pi-coding-agent';
-import { SYSTEM_PROMPT } from '../prompt';
+import { SYSTEM_PROMPT } from './prompt';
 import { loggingFactory } from './logging';
 import { extensionsFactory } from './tools/index';
 

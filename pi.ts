@@ -15,7 +15,7 @@ import {
 } from '@mariozechner/pi-coding-agent';
 import { loggingFactory } from './pi/logging';
 import { extensionsFactory } from './pi/tools';
-import { SYSTEM_PROMPT } from './prompt';
+import { SYSTEM_PROMPT } from './pi/prompt';
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
 import type { Api, Model } from '@mariozechner/pi-ai';
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';

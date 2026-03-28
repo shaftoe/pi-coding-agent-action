@@ -20,6 +20,7 @@ This is a GitHub Action that integrates the [Pi coding agent](https://pi.dev) wi
     - `client.ts` - Pi client wrapper class
     - `resource-loader.ts` - Resource loader configuration
     - `context-visualizer.ts` - Context and tool execution logging via SDK events
+    - `prompt.ts` - Central place for all prompt management (system prompt, tool prompts)
     - `tools/` - Custom tool implementations
       - `index.ts` - Tool registration factory (extFactory)
       - `common.ts` - Shared utilities (formatThreadAsText for thread formatting)
@@ -27,9 +28,9 @@ This is a GitHub Action that integrates the [Pi coding agent](https://pi.dev) wi
       - `get-thread.ts` - get_issue_or_pr_thread tool definition
       - `update-pr.ts` - update_pull_request tool definition
     - `tools.test.ts` - Tests for tool definitions
+    - `prompt.test.ts` - Tests for prompt.ts
   - `github/` - GitHub API interactions and context enrichment
-  - `prompt.ts` - Central place for all prompt management (system prompt, tool prompts)
-  - `github.test.ts`, `run.test.ts`, `prompt.test.ts` - Test files
+  - `github.test.ts`, `run.test.ts` - Test files
 - `.github/workflows/` - Workflow definitions
 
 ## Important Notes for Agents
