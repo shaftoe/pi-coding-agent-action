@@ -9,24 +9,41 @@ Inspired by OpenCode's [GitHub action](https://opencode.ai/docs/github/).
 - **Issue assistance**: Type `/pi` in an issue comment to have the agent analyze the issue and create a fix
 - **PR assistance**: Type `/pi` in a PR comment to have the agent review and improve the pull request
 - **Automated commits**: The agent can make changes, commit them, and create PRs automatically
-- **Flexible LLM support**: Support for various providers
+- **Flexible LLM support**: Support for various providers (Anthropic, OpenAI, Google, etc.)
 
 ## Usage
 
 ### Interactive Workflows
 
-- create a GitHub workflow which triggers when e.g. comments are added and [filter by `if`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idif)
-- add `actions/checkout` and `actions/setup-node` as pre-requisite steps
-- finally, add `shaftoe/pi-coding-agent-action` 
+- Create a GitHub workflow which triggers when comments are added (e.g., `issue_comment`)
+- Filter by `if` to only run on the trigger phrase (e.g., `contains(github.event.comment.body, '/pi')`)
+- Add `actions/checkout` and `actions/setup-node` as prerequisite steps
+- Finally, add `shaftoe/pi-coding-agent-action`
 
 Example:
 
 ```yaml
+name: Pi Agent
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  pi-agent:
+    if: contains(github.event.comment.body, '/pi')
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v6
+      - name: Setup Node
+        uses: actions/setup-node@v6
         with:
           node-version: 24
 
@@ -77,7 +94,7 @@ When using the `prompt` input, the action still enriches the prompt with issue/P
 
 ### Quick Start
 
-Create a workflow file, e.g. `.github/workflows/pi-agent.yml`. See the [interactive](./.github/workflows/pi.yml) and [not interactive](./.github/workflows/pr.yml) workflows in this very repository to get started.
+Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interactive](./.github/workflows/pi.yml) and [non-interactive](./.github/workflows/pr.yml) workflows in this repository to get started.
 
 ## Inputs
 
@@ -93,32 +110,119 @@ Create a workflow file, e.g. `.github/workflows/pi-agent.yml`. See the [interact
 
 ## How It Works
 
-1. User comments `/pi [instructions]` in an issue
-2. Action fetches issue context via GitHub CLI
+1. User comments `/pi [instructions]` in an issue or PR
+2. Action fetches issue/PR context via GitHub API
 3. Creates a new branch: `pi/issue{number}-{timestamp}`
-4. Runs `pi` agent with the issue context
+4. Runs Pi agent with the issue/PR context
 5. If changes are made:
-   - Stages all modified files
+   - Stages all modified files via Git Data API
    - Commits with AI-generated summary
-   - Pushes to remote
+   - Pushes to remote via GitHub API
    - Creates a new PR
-6. Posts result as a comment
+6. Posts result as a comment with metadata footer
 
 ## Architecture
 
-The action is built on top of the [Pi coding agent](https://pi.dev) framework and consists of several key components:
+The action is built on top of the [Pi coding agent](https://pi.dev) framework and consists of several key modules organized in a modular, well-structured TypeScript codebase.
+
+### Directory Structure
+
+```
+src/
+├── run.ts                    # Main entry point and orchestration
+├── index.ts                  # Action entry point for dist/
+├── pi/                       # Pi integration layer
+│   ├── index.ts              # Barrel export for pi module
+│   ├── client.ts             # Pi SDK wrapper for session management
+│   ├── prompt.ts             # System prompt and tool prompt definitions
+│   ├── logging.ts            # Centralized logging via SDK events
+│   ├── resource-loader.ts    # Resource loader configuration
+│   └── tools/                # Custom Pi tool extensions
+│       ├── index.ts          # Extension factory registration
+│       ├── create-pr.ts      # create_pull_request tool
+│       ├── update-pr.ts      # update_pull_request tool
+│       ├── get-thread.ts     # get_issue_or_pr_thread tool
+│       ├── common.ts         # Shared tool utilities
+│       └── tools.test.ts     # Tool tests
+└── github/                   # GitHub API integration
+    ├── index.ts              # Barrel export for github module
+    ├── context.ts            # Context extraction and thread retrieval
+    ├── octokit.ts            # Shared Octokit client singleton
+    ├── reactions.ts          # Reaction management (add/remove eyes)
+    ├── comments.ts           # Comment creation with metadata footer
+    ├── git-utils.ts          # Git operations (scanning, blobs, commits)
+    ├── pull-request.ts       # PR creation logic
+    ├── pull-request-update.ts # PR update logic
+    └── constants.ts          # GitHub-related constants
+```
 
 ### Core Components
 
-- **`run.ts`** - Main entry point that orchestrates the GitHub workflow integration, manages the agent lifecycle, and handles user prompts
-- **`pi.ts`** - Pi integration, setup the agent using its [SDK](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/sdk.md)
-- **`github`** - GitHub API interaction layer that provides context enrichment, issue/PR thread retrieval, reaction management, and pull request creation
-- **`tools.ts`** - Extension factory that registers custom tools with the Pi agent
-- **`prompt.ts`** - Prompt definitions including system prompts and tool-specific guidelines
+#### `src/run.ts`
+Main orchestration logic that:
+- Reads action inputs (provider, model, token, thinking_level)
+- Fetches user prompt from GitHub comment or uses direct prompt input
+- Initializes Pi client session
+- Manages agent lifecycle (start, prompt, finalize)
+- Handles reaction management for user feedback
+- Posts final results with metadata footer
+
+#### `src/pi/client.ts`
+Wraps the Pi SDK for headless execution:
+- Model resolution via `ModelRegistry`
+- Authentication via `AuthStorage`
+- Agent session creation and lifecycle
+- Streaming event handling (text and thinking deltas)
+- Prompt execution with response collection
+
+#### `src/pi/prompt.ts`
+Central prompt management containing:
+- System prompt for GitHub Actions context
+- Tool-specific prompt descriptions and guidelines
+- Parameter descriptions for all custom tools
+- Prompt snippets and best practices
+
+#### `src/pi/logging.ts`
+Context visualization and logging:
+- Subscribes to Pi SDK events (`tool_execution_start`, `tool_execution_end`, `before_agent_start`, `agent_end`)
+- Logs available tools and configuration before session
+- Displays truncated system prompt and user prompt
+- Reports tool execution status and errors
+
+#### `src/pi/resource-loader.ts`
+Configures the Pi agent resource loader:
+- Registers custom extension factories (tools + logging)
+- Overrides default system prompt with GitHub Actions version
+- Appends AGENTS.md content for project context
+
+#### `src/pi/tools/`
+Custom tools that extend Pi's capabilities:
+
+- **`create-pr.ts`** - Creates new pull requests by detecting file changes, creating branches, committing via Git Data API, and opening PRs. Supports dry-run mode.
+- **`update-pr.ts`** - Updates existing PRs by pushing new commits to PR branch and optionally updating title/description. Supports dry-run mode.
+- **`get-thread.ts`** - Retrieves full issue/PR thread including metadata, comments, labels, and PR-specific info.
+- **`common.ts`** - Shared utilities for tools (error handling, abort checking).
+- **`index.ts`** - Extension factory that registers all tools with Pi SDK.
+
+#### `src/github/`
+GitHub API interaction layer:
+
+- **`context.ts`** - Extracts GitHub context (issue/PR metadata, comments), determines event types, and provides `getIssueOrPRThread()` for rich context retrieval.
+- **`octokit.ts`** - Lazy-initialized shared Octokit client singleton.
+- **`reactions.ts`** - Adds/removes "eyes" (👀) reaction for visual feedback.
+- **`comments.ts`** - Creates comments with automatic metadata footer (action run link, model info, execution time).
+- **`git-utils.ts`** - Git operations via Git Data API:
+  - File change scanning (new, modified, deleted files)
+  - Respects `.gitignore` and built-in ignore patterns
+  - Blob and tree creation
+  - Commit creation and branch updates
+- **`pull-request.ts`** - High-level PR creation orchestrating git-utils.
+- **`pull-request-update.ts`** - High-level PR update orchestrating git-utils.
+- **`constants.ts`** - Constants for file modes, ignore patterns, reaction types.
 
 ### Custom Tools
 
-The action extends Pi with three internal tools:
+The action extends Pi with three custom tools:
 
 | Tool | Description |
 |------|-------------|
@@ -126,22 +230,62 @@ The action extends Pi with three internal tools:
 | `update_pull_request` | Updates an existing pull request by pushing new commits to the PR branch and optionally updating the title and/or description. Supports `dry_run` mode for testing without actual modifications. |
 | `get_issue_or_pr_thread` | Retrieves the full thread of an issue or pull request including title, body, state, labels, branch info (for PRs), and all comments. Useful for understanding the full context before making changes. |
 
+### Data Flow
+
+1. **Trigger Detection**: Action reads GitHub event payload to determine if triggered by comment or direct prompt
+2. **Context Extraction**: `github/context.ts` extracts issue/PR metadata and enriches prompt
+3. **Reaction Management**: `github/reactions.ts` adds "eyes" reaction for visual feedback
+4. **Session Initialization**: `pi/client.ts` creates Pi agent session with model, auth, and resource loader
+5. **Prompt Execution**: User prompt sent to agent with streaming output
+6. **Tool Invocations**: Custom tools invoked via `pi/tools/` extensions:
+   - `get_issue_or_pr_thread` for context
+   - `create_pull_request` / `update_pull_request` for making changes
+7. **Git Operations**: `github/git-utils.ts` handles all Git operations via GitHub API
+8. **Finalization**: Reaction removed, final comment posted with metadata footer by `github/comments.ts`
+
 ## Development
+
+### Prerequisites
+
+- Bun package manager (preferred) or npm
+- Node.js 24+
 
 ### Validation
 
-Before committing, the following checks run automatically (via Lefthook):
-- Code formatting (Prettier)
-- Linting (ESLint)
-- Type checking (TypeScript)
-- Tests
-- Building
-
-To run all validations manually:
+Before committing, run the following checks:
 
 ```bash
 bun run validate
 ```
+
+This runs:
+- Code formatting (Prettier)
+- Linting (ESLint)
+- Type checking (TypeScript)
+- Building
+
+### Testing
+
+The project uses `bun test` for testing:
+
+```bash
+# Run all tests
+bun test
+
+# Run tests with coverage
+bun run test:coverage
+
+# Watch mode for development
+bun run test:watch
+```
+
+### Project Guidelines
+
+- Follow the existing code style and conventions
+- Add tests for new functionality
+- Update documentation as needed
+- Use `bun` as the package manager (preferred over npm)
+- Run `bun run validate` before committing
 
 ## License
 
