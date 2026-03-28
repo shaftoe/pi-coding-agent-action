@@ -167,7 +167,7 @@ export async function scanForChanges(
       }
 
       if (entry.isDirectory()) {
-        await scanDirectory(fullPath, relativePath);
+        await scanDirectory(fullPath, relativeFilePath);
       } else if (entry.isFile()) {
         // Skip files that are too large (>1MB to be safe)
         const stats = await fs.stat(fullPath);
