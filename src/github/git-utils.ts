@@ -237,7 +237,7 @@ export async function scanForChanges(
  *
  * @param changedFiles - Array of changed file descriptors.
  * @param deletedFiles - Array of file paths that were deleted.
- * @param parentSha - SHA of the parent commit to use as the tree's parent.
+ * @param parentCommitSha - SHA of the parent commit (will be resolved to tree SHA).
  * @param log - Logger instance for debug output.
  * @returns The SHA of the newly created tree.
  */
@@ -248,11 +248,22 @@ export async function createBlobsAndTree(
     mode: FileMode;
   }[],
   deletedFiles: string[],
-  parentSha: string,
+  parentCommitSha: string,
   log = createLogger()
 ): Promise<string> {
   const owner = github.context.repo.owner;
   const repo = github.context.repo.repo;
+
+  // Resolve the tree SHA from the commit SHA
+  // GitHub's createTree API requires a tree SHA for base_tree, not a commit SHA
+  log.debug(`Resolving tree SHA from commit SHA: ${parentCommitSha}`);
+  const commit = await octokit.rest.git.getCommit({
+    owner,
+    repo,
+    commit_sha: parentCommitSha,
+  });
+  const baseTreeSha = commit.data.tree.sha;
+  log.debug(`Resolved base tree SHA: ${baseTreeSha}`);
 
   log.debug(`Creating blobs for changed files...`);
 
@@ -293,7 +304,7 @@ export async function createBlobsAndTree(
   const tree = await octokit.rest.git.createTree({
     owner,
     repo,
-    base_tree: parentSha,
+    base_tree: baseTreeSha,
     tree: treeEntries,
   });
   log.debug(`Created tree: ${tree.data.sha}`);

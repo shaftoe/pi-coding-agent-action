@@ -28,10 +28,7 @@ export const loggingFactory = (pi: ExtensionAPI) => {
   });
 
   pi.on('before_agent_start', async (event, ctx) => {
-    core.info('::group::🤖 Agent Configuration');
-    core.info('╔════════════════════════════════════════════════════════════════╗');
-    core.info('║                  🤖 AGENT SESSION CONTEXT                      ║');
-    core.info('╚════════════════════════════════════════════════════════════════╝');
+    core.info('::group::🤖 Agent Session settings');
 
     const model = ctx.model;
     const thinkingLevel = pi.getThinkingLevel();
