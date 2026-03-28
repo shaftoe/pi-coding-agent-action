@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # Enable version updates for npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    # Check for updates once a week
+    schedule:
+      interval: "weekly"
+    # Limit the number of open pull requests for version updates
+    open-pull-requests-limit: 10
+    # Group dependencies to reduce noise
+    groups:
+      production-dependencies:
+        patterns:
+          - "@actions/*"
+          - "@js-temporal/*"
+          - "@mariozechner/*"
+          - "@sinclair/typebox"
+          - "ignore"
+      development-dependencies:
+        patterns:
+          - "@types/*"
+          - "bun-types"
+          - "eslint"
+          - "eslint-*"
+          - "prettier"
+          - "typescript"
+          - "esbuild"
+          - "isomorphic-git"
