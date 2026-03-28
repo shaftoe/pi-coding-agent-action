@@ -8,32 +8,19 @@
  * testing without side effects.
  */
 
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-import ignore from 'ignore';
 import { getOctokit } from './octokit.js';
 import {
-  FILE_MODE_DIRECTORY,
-  FILE_MODE_EXECUTABLE,
-  FILE_MODE_REGULAR,
-  MAX_FILE_SIZE_BYTES,
-  IGNORE_PATTERNS,
-} from './constants.js';
+  createLogger,
+  scanForChanges,
+  createBlobsAndTree,
+  createCommitAndUpdateBranch,
+  buildFileMap,
+} from './git-utils.js';
 
 const octokit = getOctokit();
-
-/**
- * Logging helpers with emoji labels for pull-request update operations.
- */
-function pruDebug(msg: string): void {
-  core.debug(`🔀 ${msg}`);
-}
-
-function pruInfo(msg: string): void {
-  core.info(`🔀 ${msg}`);
-}
+const log = createLogger();
 
 export interface UpdatePullRequestParams {
   pull_number?: number;
@@ -60,214 +47,10 @@ export interface UpdatePullRequestDetails {
 }
 
 /**
- * Git file mode types
- */
-export type FileMode =
-  | typeof FILE_MODE_REGULAR
-  | typeof FILE_MODE_EXECUTABLE
-  | typeof FILE_MODE_DIRECTORY;
-
-/**
- * Recursively scan the local repository for files that are new or modified
- * compared to the current PR branch head.
- *
- * Respects `.gitignore` and the additional {@link IGNORE_PATTERNS}. Skips
- * binary files and files larger than {@link MAX_FILE_SIZE_BYTES}.
- *
- * @param headFiles - Map of head-branch file paths to their SHA and content,
- *                   used for change detection.
- * @returns An array of changed file descriptors (path, content, mode).
- */
-async function scanForChanges(
-  headFiles: Map<string, { sha: string; content: string | null }>
-): Promise<
-  {
-    path: string;
-    content: string;
-    mode: FileMode;
-  }[]
-> {
-  pruDebug(`Scanning local files for changes...`);
-
-  const repoRoot = process.env.GITHUB_WORKSPACE ?? process.cwd();
-
-  const ig = ignore();
-  try {
-    const gitignoreContent = await fs.readFile(path.join(repoRoot, '.gitignore'), 'utf-8');
-    ig.add(gitignoreContent);
-  } catch (_e) {
-    // No .gitignore file, that's fine
-  }
-  // Add additional patterns to always ignore
-  ig.add(IGNORE_PATTERNS);
-
-  const changedFiles: {
-    path: string;
-    content: string;
-    mode: FileMode;
-  }[] = [];
-
-  async function scanDirectory(dir: string, relativePath = '') {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      const relativeFilePath = relativePath ? path.join(relativePath, entry.name) : entry.name;
-
-      if (ig.ignores(relativeFilePath)) {
-        pruDebug(`Ignored: ${relativeFilePath}`);
-        continue;
-      }
-
-      if (entry.isDirectory()) {
-        await scanDirectory(fullPath, relativePath);
-      } else if (entry.isFile()) {
-        // Skip files that are too large (>1MB to be safe)
-        const stats = await fs.stat(fullPath);
-        if (stats.size > MAX_FILE_SIZE_BYTES) {
-          pruDebug(`Skipping large file (>1MB): ${relativeFilePath}`);
-          continue;
-        }
-
-        // Try to read file content, skip if binary
-        let localContent: string;
-        try {
-          localContent = await fs.readFile(fullPath, 'utf-8');
-        } catch (_e) {
-          pruDebug(`Skipping file (likely binary): ${relativeFilePath}`);
-          continue;
-        }
-
-        const headFile = headFiles.get(relativeFilePath);
-
-        // Check if file is new or modified
-        let isChanged = false;
-        if (!headFile) {
-          // New file
-          isChanged = true;
-          pruDebug(`New file: ${relativeFilePath}`);
-        } else if (headFile.content !== null && headFile.content !== localContent) {
-          // Modified file
-          isChanged = true;
-          pruDebug(`Modified file: ${relativeFilePath}`);
-        }
-
-        if (isChanged) {
-          changedFiles.push({
-            path: relativeFilePath,
-            content: localContent,
-            mode: FILE_MODE_REGULAR,
-          });
-        }
-      }
-    }
-  }
-
-  await scanDirectory(repoRoot, '');
-
-  pruDebug(`Found ${changedFiles.length} changed file(s)`);
-  return changedFiles;
-}
-
-/**
- * Upload changed files as Git blobs and create a tree that references them.
- *
- * @param changedFiles - Array of changed file descriptors.
- * @param parentSha    - SHA of the parent commit (current PR head).
- * @returns The SHA of the newly created tree.
- */
-async function createBlobsAndTree(
-  changedFiles: {
-    path: string;
-    content: string;
-    mode: FileMode;
-  }[],
-  parentSha: string
-): Promise<string> {
-  const owner = github.context.repo.owner;
-  const repo = github.context.repo.repo;
-
-  pruDebug(`Creating blobs for changed files...`);
-
-  // Create blobs for all changed files and map their paths to SHAs
-  const blobShaMap = new Map<string, string>();
-  for (const file of changedFiles) {
-    const blob = await octokit.rest.git.createBlob({
-      owner,
-      repo,
-      content: Buffer.from(file.content).toString('base64'),
-      encoding: 'base64',
-    });
-    blobShaMap.set(file.path, blob.data.sha);
-    pruDebug(`Created blob for ${file.path}: ${blob.data.sha}`);
-  }
-  pruDebug(`Created ${blobShaMap.size} blob(s)`);
-
-  // Create tree with all the blob references
-  pruDebug(`Creating tree with changes...`);
-  const tree = await octokit.rest.git.createTree({
-    owner,
-    repo,
-    base_tree: parentSha,
-    tree: Array.from(blobShaMap.entries()).map(([path, sha]) => ({
-      path,
-      mode: FILE_MODE_REGULAR,
-      type: 'blob',
-      sha,
-    })),
-  });
-  pruDebug(`Created tree: ${tree.data.sha}`);
-
-  return tree.data.sha;
-}
-
-/**
- * Create a commit on the given tree and point the branch reference at it.
- *
- * @param treeSha    - SHA of the tree containing the changed files.
- * @param parentSha  - SHA of the parent commit (current PR head).
- * @param branchName - Name of the branch to update.
- * @param message    - Commit message.
- * @returns The SHA of the new commit.
- */
-async function createCommitAndUpdateBranch(
-  treeSha: string,
-  parentSha: string,
-  branchName: string,
-  message: string
-): Promise<string> {
-  const owner = github.context.repo.owner;
-  const repo = github.context.repo.repo;
-
-  // Create a single commit with the new tree
-  pruDebug(`Creating commit...`);
-  const commit = await octokit.rest.git.createCommit({
-    owner,
-    repo,
-    message,
-    tree: treeSha,
-    parents: [parentSha],
-  });
-  pruDebug(`Created commit: ${commit.data.sha}`);
-
-  // Update the branch reference to point to the new commit
-  pruDebug(`Updating branch reference...`);
-  await octokit.rest.git.updateRef({
-    owner,
-    repo,
-    ref: `heads/${branchName}`,
-    sha: commit.data.sha,
-  });
-  pruDebug(`Branch updated successfully`);
-
-  return commit.data.sha;
-}
-
-/**
  * Update an existing pull request's title and/or body via the GitHub REST API.
  *
  * @param pullNumber - PR number.
- * @param updates    - Object with optional title and/or body.
+ * @param updates - Object with optional title and/or body.
  * @returns An object containing the updated PR URL.
  */
 async function updatePullRequestMetadata(
@@ -293,7 +76,7 @@ async function updatePullRequestMetadata(
     return { titleUpdated: false, bodyUpdated: false };
   }
 
-  pruDebug(`Updating PR #${pullNumber} metadata...`);
+  log.debug(`Updating PR #${pullNumber} metadata...`);
 
   await octokit.rest.pulls.update({
     owner,
@@ -333,16 +116,16 @@ export async function updatePullRequest(
     throw new Error('Pull request number not provided and not available in context');
   }
 
-  pruDebug(`PR Number: ${resolvedPullNumber}`);
-  pruDebug(`Title: ${title ?? '(no change)'}`);
-  pruDebug(`Body: ${body ? '(provided)' : '(no change)'}`);
-  pruDebug(`DryRun: ${dryRun ?? false}`);
+  log.debug(`PR Number: ${resolvedPullNumber}`);
+  log.debug(`Title: ${title ?? '(no change)'}`);
+  log.debug(`Body: ${body ? '(provided)' : '(no change)'}`);
+  log.debug(`DryRun: ${dryRun ?? false}`);
 
   // Fetch PR details
   const owner = github.context.repo.owner;
   const repo = github.context.repo.repo;
 
-  pruDebug(`Fetching PR #${resolvedPullNumber}...`);
+  log.debug(`Fetching PR #${resolvedPullNumber}...`);
   const prData = await octokit.rest.pulls.get({
     owner,
     repo,
@@ -354,10 +137,10 @@ export async function updatePullRequest(
   const headSha = prData.data.head.sha;
   const prUrl = prData.data.html_url;
 
-  pruDebug(`PR found: ${prUrl}`);
-  pruDebug(`Head branch: ${headBranch}`);
-  pruDebug(`Base branch: ${baseBranch}`);
-  pruDebug(`Head SHA: ${headSha}`);
+  log.debug(`PR found: ${prUrl}`);
+  log.debug(`Head branch: ${headBranch}`);
+  log.debug(`Base branch: ${baseBranch}`);
+  log.debug(`Head SHA: ${headSha}`);
 
   // Dry run mode for metadata updates only (no changes)
   if (dryRun) {
@@ -372,7 +155,7 @@ export async function updatePullRequest(
     parts.push(`- Base branch: ${baseBranch}`);
 
     const message = parts.join('\n');
-    pruDebug(message);
+    log.debug(message);
 
     return {
       content: [{ type: 'text' as const, text: message }],
@@ -387,54 +170,29 @@ export async function updatePullRequest(
   }
 
   // Get files that exist in the current PR head tree (for comparison)
-  pruDebug(`Getting PR head tree...`);
-  const headTree = await octokit.rest.git.getTree({
-    owner,
-    repo,
-    tree_sha: headSha,
-    recursive: 'true',
-  });
-
-  // Create a map of head files for quick lookup: path -> {sha, content}
-  const headFiles = new Map<string, { sha: string; content: string | null }>();
-  for (const item of headTree.data.tree) {
-    if (item.type === 'blob') {
-      let content: string | null = null;
-      if (item.sha) {
-        try {
-          const blob = await octokit.rest.git.getBlob({
-            owner,
-            repo,
-            file_sha: item.sha,
-          });
-          content = Buffer.from(blob.data.content, 'base64').toString('utf-8');
-        } catch (_e) {
-          // Could not fetch blob content, continue with null
-        }
-      }
-      headFiles.set(item.path, { sha: item.sha, content });
-    }
-  }
-  pruDebug(`Found ${headFiles.size} files in PR head`);
+  log.debug(`Getting PR head tree...`);
+  const headFiles = await buildFileMap(headSha);
+  log.debug(`Found ${headFiles.size} files in PR head`);
 
   // Scan for changes
-  const changedFiles = await scanForChanges(headFiles);
+  const changedFiles = await scanForChanges(headFiles, log);
 
   let commitSha: string | undefined;
   if (changedFiles.length > 0) {
     // Create blobs and tree
-    const treeSha = await createBlobsAndTree(changedFiles, headSha);
+    const treeSha = await createBlobsAndTree(changedFiles, headSha, log);
 
     // Create commit and update branch
     commitSha = await createCommitAndUpdateBranch(
       treeSha,
       headSha,
       headBranch,
-      title ?? `Update PR #${resolvedPullNumber}`
+      title ?? `Update PR #${resolvedPullNumber}`,
+      log
     );
-    pruInfo(`Created new commit ${commitSha} on branch ${headBranch}`);
+    log.info(`Created new commit ${commitSha} on branch ${headBranch}`);
   } else {
-    pruInfo(`No code changes detected, only updating PR metadata if provided`);
+    log.info(`No code changes detected, only updating PR metadata if provided`);
   }
 
   // Update PR title/body if provided
@@ -453,10 +211,10 @@ export async function updatePullRequest(
     bodyUpdated = metadataResult.bodyUpdated;
 
     if (titleUpdated) {
-      pruInfo(`Updated PR title to: ${title}`);
+      log.info(`Updated PR title to: ${title}`);
     }
     if (bodyUpdated) {
-      pruInfo(`Updated PR description`);
+      log.info(`Updated PR description`);
     }
   }
 
@@ -472,7 +230,7 @@ export async function updatePullRequest(
   }
 
   const successMessage = successParts.join('\n');
-  pruInfo(`SUCCESS: ${successMessage}`);
+  log.info(`SUCCESS: ${successMessage}`);
 
   const details: UpdatePullRequestDetails = {
     pullRequestNumber: resolvedPullNumber,
