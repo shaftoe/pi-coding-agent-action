@@ -3,6 +3,9 @@ name: Build and Test
 on:
   workflow_dispatch:
   push:
+    branches:
+      - v2
+  pull_request:
 
 jobs:
   build-and-test:
