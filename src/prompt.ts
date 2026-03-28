@@ -75,7 +75,7 @@ export const UPDATE_PULL_REQUEST_PROMPT_GUIDELINES = [
   'Use update_pull_request when working within an existing PR flow to push new commits and/or update PR metadata.',
   'Make sure your changes are made (modified files exist) before calling this tool. The tool will detect changes and create a new commit on the PR branch.',
   'By default, the tool works with the current PR from the GitHub context. Only provide pull_number when you need to update a different PR.',
-  'The tool commits changes with the provided title (or a default message) and pushes them to the existing PR branch.',
+  'The tool commits changes with the provided message (or generates a default message) and pushes them to the existing PR branch.',
   'You can update the PR title and/or body using the title and body parameters.',
   'Use dryRun=true first to verify the update configuration, then dryRun=false to apply the changes.',
 ];
@@ -91,6 +91,9 @@ export const UPDATE_PULL_REQUEST_PARAM_TITLE_DESCRIPTION =
 
 export const UPDATE_PULL_REQUEST_PARAM_BODY_DESCRIPTION =
   'New pull request description in markdown format. If not provided, the description is not changed.';
+
+export const UPDATE_PULL_REQUEST_PARAM_MESSAGE_DESCRIPTION =
+  'Commit message for the new commit. If not provided, a descriptive message will be auto-generated based on the changes.';
 
 export const UPDATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION =
   'Set to true to simulate the PR update without actually modifying anything (for testing). Set to false to apply the actual changes.';

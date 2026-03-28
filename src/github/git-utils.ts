@@ -102,8 +102,22 @@ export async function buildFileMap(
 }
 
 /**
+ * Result of scanning for changes in the repository.
+ */
+export interface ChangeScanResult {
+  /** Files that are new or modified */
+  changedFiles: {
+    path: string;
+    content: string;
+    mode: FileMode;
+  }[];
+  /** Files that exist in the reference but were deleted locally */
+  deletedFiles: string[];
+}
+
+/**
  * Recursively scan the local repository for files that are new or modified
- * compared to a reference set of files.
+ * compared to a reference set of files. Also tracks files that have been deleted.
  *
  * Respects `.gitignore` and the additional {@link IGNORE_PATTERNS}. Skips
  * binary files and files larger than {@link MAX_FILE_SIZE_BYTES}.
@@ -111,18 +125,12 @@ export async function buildFileMap(
  * @param referenceFiles - Map of reference file paths to their SHA and content,
  *                         used for change detection.
  * @param log - Logger instance for debug output.
- * @returns An array of changed file descriptors (path, content, mode).
+ * @returns An object containing changed files and deleted files.
  */
 export async function scanForChanges(
   referenceFiles: Map<string, { sha: string; content: string | null }>,
   log = createLogger()
-): Promise<
-  {
-    path: string;
-    content: string;
-    mode: FileMode;
-  }[]
-> {
+): Promise<ChangeScanResult> {
   log.debug(`Scanning local files for changes...`);
 
   const repoRoot = process.env.GITHUB_WORKSPACE ?? process.cwd();
@@ -142,6 +150,9 @@ export async function scanForChanges(
     content: string;
     mode: FileMode;
   }[] = [];
+
+  // Track all files we encounter locally to detect deletions
+  const localFilesEncountered = new Set<string>();
 
   async function scanDirectory(dir: string, relativePath = '') {
     const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -195,20 +206,37 @@ export async function scanForChanges(
             mode: FILE_MODE_REGULAR,
           });
         }
+
+        // Track that we found this file locally
+        localFilesEncountered.add(relativeFilePath);
       }
     }
   }
 
   await scanDirectory(repoRoot, '');
 
-  log.debug(`Found ${changedFiles.length} changed file(s)`);
-  return changedFiles;
+  // Detect deleted files by comparing reference files with what we found locally
+  const deletedFiles: string[] = [];
+  for (const refFilePath of referenceFiles.keys()) {
+    if (!localFilesEncountered.has(refFilePath)) {
+      // This file exists in the reference but wasn't found locally - it was deleted
+      deletedFiles.push(refFilePath);
+      log.debug(`Deleted file: ${refFilePath}`);
+    }
+  }
+
+  log.debug(
+    `Found ${changedFiles.length} changed file(s) and ${deletedFiles.length} deleted file(s)`
+  );
+  return { changedFiles, deletedFiles };
 }
 
 /**
  * Upload changed files as Git blobs and create a tree that references them.
+ * Handles both new/modified files and deleted files.
  *
  * @param changedFiles - Array of changed file descriptors.
+ * @param deletedFiles - Array of file paths that were deleted.
  * @param parentSha - SHA of the parent commit to use as the tree's parent.
  * @param log - Logger instance for debug output.
  * @returns The SHA of the newly created tree.
@@ -219,6 +247,7 @@ export async function createBlobsAndTree(
     content: string;
     mode: FileMode;
   }[],
+  deletedFiles: string[],
   parentSha: string,
   log = createLogger()
 ): Promise<string> {
@@ -241,18 +270,31 @@ export async function createBlobsAndTree(
   }
   log.debug(`Created ${blobShaMap.size} blob(s)`);
 
-  // Create tree with all the blob references
+  // Create tree with all the blob references and deletions
   log.debug(`Creating tree with changes...`);
+  const treeEntries = Array.from(blobShaMap.entries()).map(([path, sha]) => ({
+    path,
+    mode: FILE_MODE_REGULAR,
+    type: 'blob' as const,
+    sha,
+  }));
+
+  // Add deleted files with sha: null to remove them from the tree
+  for (const deletedPath of deletedFiles) {
+    treeEntries.push({
+      path: deletedPath,
+      mode: FILE_MODE_REGULAR,
+      type: 'blob' as const,
+      sha: null as unknown as string, // Setting sha to null deletes the file - type assertion for TypeScript
+    });
+    log.debug(`Marked for deletion: ${deletedPath}`);
+  }
+
   const tree = await octokit.rest.git.createTree({
     owner,
     repo,
     base_tree: parentSha,
-    tree: Array.from(blobShaMap.entries()).map(([path, sha]) => ({
-      path,
-      mode: FILE_MODE_REGULAR,
-      type: 'blob',
-      sha,
-    })),
+    tree: treeEntries,
   });
   log.debug(`Created tree: ${tree.data.sha}`);
 

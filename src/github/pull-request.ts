@@ -232,9 +232,9 @@ export async function createPullRequest(
     log.debug(`Found ${baseFiles.size} files in base branch`);
 
     // Scan for changes
-    const changedFiles = await scanForChanges(baseFiles, log);
+    const { changedFiles, deletedFiles } = await scanForChanges(baseFiles, log);
 
-    if (changedFiles.length === 0) {
+    if (changedFiles.length === 0 && deletedFiles.length === 0) {
       const errorMsg =
         'No changes detected. Please add new files and/or make your changes before creating a pull request.';
       throw new Error(errorMsg);
@@ -251,7 +251,7 @@ export async function createPullRequest(
     log.debug(`Branch created successfully`);
 
     // Create blobs and tree
-    const treeSha = await createBlobsAndTree(changedFiles, baseSha, log);
+    const treeSha = await createBlobsAndTree(changedFiles, deletedFiles, baseSha, log);
 
     // Create commit and update branch
     await createCommitAndUpdateBranch(treeSha, baseSha, head, title, log);

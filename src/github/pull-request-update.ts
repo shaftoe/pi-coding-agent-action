@@ -25,6 +25,7 @@ export interface UpdatePullRequestParams {
   pull_number?: number;
   title?: string;
   body?: string;
+  message?: string;
   dryRun?: boolean;
 }
 
@@ -107,12 +108,15 @@ async function updatePullRequestMetadata(
 export async function updatePullRequest(
   params: UpdatePullRequestParams
 ): Promise<UpdatePullRequestResult> {
-  const { pull_number, title, body, dryRun } = params;
+  const { pull_number, title, body, message, dryRun } = params;
 
   // Resolve PR number from context if not provided
   const resolvedPullNumber = pull_number ?? github.context.issue.number;
   if (!resolvedPullNumber) {
-    throw new Error('Pull request number not provided and not available in context');
+    throw new Error(
+      'Pull request number not provided and not available in context. ' +
+        'Please provide pull_number parameter or run this action in the context of a pull request.'
+    );
   }
 
   log.debug(`PR Number: ${resolvedPullNumber}`);
@@ -131,6 +135,14 @@ export async function updatePullRequest(
     pull_number: resolvedPullNumber,
   });
 
+  // Verify we got a valid pull request (not an issue)
+  if (prData.status !== 200 || !prData.data) {
+    throw new Error(
+      `Could not fetch pull request #${resolvedPullNumber}. ` +
+        `Please verify the pull request number is correct and that you have access to this repository.`
+    );
+  }
+
   const headBranch = prData.data.head.ref;
   const baseBranch = prData.data.base.ref;
   const headSha = prData.data.head.sha;
@@ -141,7 +153,15 @@ export async function updatePullRequest(
   log.debug(`Base branch: ${baseBranch}`);
   log.debug(`Head SHA: ${headSha}`);
 
-  // Dry run mode for metadata updates only (no changes)
+  // Get files that exist in the current PR head tree (for comparison)
+  log.debug(`Getting PR head tree...`);
+  const headFiles = await buildFileMap(headSha);
+  log.debug(`Found ${headFiles.size} files in PR head`);
+
+  // Scan for changes (do this before dry run check so dry run can report them)
+  const { changedFiles, deletedFiles } = await scanForChanges(headFiles, log);
+
+  // Dry run mode - report what would happen without making changes
   if (dryRun) {
     const parts: string[] = [`[DRY RUN] Would update pull request #${resolvedPullNumber}:`];
     if (title !== undefined) {
@@ -152,6 +172,17 @@ export async function updatePullRequest(
     }
     parts.push(`- Head branch: ${headBranch}`);
     parts.push(`- Base branch: ${baseBranch}`);
+    if (changedFiles.length > 0 || deletedFiles.length > 0) {
+      parts.push(`- Code changes:`);
+      if (changedFiles.length > 0) {
+        parts.push(`  - ${changedFiles.length} modified/new file(s)`);
+      }
+      if (deletedFiles.length > 0) {
+        parts.push(`  - ${deletedFiles.length} deleted file(s)`);
+      }
+    } else {
+      parts.push(`- No code changes detected`);
+    }
 
     const message = parts.join('\n');
     log.debug(message);
@@ -168,27 +199,27 @@ export async function updatePullRequest(
     };
   }
 
-  // Get files that exist in the current PR head tree (for comparison)
-  log.debug(`Getting PR head tree...`);
-  const headFiles = await buildFileMap(headSha);
-  log.debug(`Found ${headFiles.size} files in PR head`);
-
-  // Scan for changes
-  const changedFiles = await scanForChanges(headFiles, log);
-
   let commitSha: string | undefined;
-  if (changedFiles.length > 0) {
+  if (changedFiles.length > 0 || deletedFiles.length > 0) {
     // Create blobs and tree
-    const treeSha = await createBlobsAndTree(changedFiles, headSha, log);
+    const treeSha = await createBlobsAndTree(changedFiles, deletedFiles, headSha, log);
+
+    // Generate commit message
+    let commitMessage = message;
+    if (!commitMessage) {
+      // Generate a descriptive commit message based on the changes
+      const changes: string[] = [];
+      if (changedFiles.length > 0) {
+        changes.push(`${changedFiles.length} modified/new file(s)`);
+      }
+      if (deletedFiles.length > 0) {
+        changes.push(`${deletedFiles.length} deleted file(s)`);
+      }
+      commitMessage = `Update PR #${resolvedPullNumber}: ${changes.join(', ')}`;
+    }
 
     // Create commit and update branch
-    commitSha = await createCommitAndUpdateBranch(
-      treeSha,
-      headSha,
-      headBranch,
-      title ?? `Update PR #${resolvedPullNumber}`,
-      log
-    );
+    commitSha = await createCommitAndUpdateBranch(treeSha, headSha, headBranch, commitMessage, log);
     log.info(`Created new commit ${commitSha} on branch ${headBranch}`);
   } else {
     log.info(`No code changes detected, only updating PR metadata if provided`);

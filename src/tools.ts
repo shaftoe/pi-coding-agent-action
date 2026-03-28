@@ -44,6 +44,7 @@ import {
   UPDATE_PULL_REQUEST_PARAM_PULL_NUMBER_DESCRIPTION,
   UPDATE_PULL_REQUEST_PARAM_TITLE_DESCRIPTION,
   UPDATE_PULL_REQUEST_PARAM_BODY_DESCRIPTION,
+  UPDATE_PULL_REQUEST_PARAM_MESSAGE_DESCRIPTION,
   UPDATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from './prompt';
 import type { ExtensionAPI, ToolDefinition, AgentToolResult } from '@mariozechner/pi-coding-agent';
@@ -352,6 +353,11 @@ const updatePullRequestTool: ToolDefinition = {
         description: UPDATE_PULL_REQUEST_PARAM_BODY_DESCRIPTION,
       })
     ),
+    message: Type.Optional(
+      Type.String({
+        description: UPDATE_PULL_REQUEST_PARAM_MESSAGE_DESCRIPTION,
+      })
+    ),
     dryRun: Type.Optional(
       Type.Boolean({
         description: UPDATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
@@ -383,7 +389,7 @@ const updatePullRequestTool: ToolDefinition = {
     }
 
     try {
-      const { pull_number, title, body, dryRun } = params as UpdatePullRequestParams;
+      const { pull_number, title, body, message, dryRun } = params as UpdatePullRequestParams;
 
       // Delegate to the GitHub-specific implementation
       const updateParams: UpdatePullRequestParams = {};
@@ -395,6 +401,9 @@ const updatePullRequestTool: ToolDefinition = {
       }
       if (body !== undefined) {
         updateParams.body = body;
+      }
+      if (message !== undefined) {
+        updateParams.message = message;
       }
       if (dryRun !== undefined) {
         updateParams.dryRun = dryRun;
