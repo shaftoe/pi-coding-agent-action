@@ -1,10 +1,12 @@
 /**
  * @file Pi extension factory – registers custom tools with the agent.
  *
- * Defines two tools that extend Pi's built-in capabilities:
+ * Defines three tools that extend Pi's built-in capabilities:
  *
  * - **`create_pull_request`** – creates a GitHub pull request with the current
  *   working-tree changes.
+ * - **`update_pull_request`** – updates an existing pull request by pushing
+ *   new commits to the PR branch and optionally updating the title and/or body.
  * - **`get_issue_or_pr_thread`** – fetches the full comment thread of an issue
  *   or pull request for context.
  *
@@ -15,8 +17,12 @@
 import { Type } from '@sinclair/typebox';
 import * as core from '@actions/core';
 import { Temporal } from '@js-temporal/polyfill';
-import { createPullRequest, getIssueOrPRThread } from './github/index';
-import { CANCELLATION_MESSAGE_CREATE_PR, CANCELLATION_MESSAGE_GET_THREAD } from './github/index';
+import { createPullRequest, getIssueOrPRThread, updatePullRequest } from './github/index';
+import {
+  CANCELLATION_MESSAGE_CREATE_PR,
+  CANCELLATION_MESSAGE_GET_THREAD,
+  CANCELLATION_MESSAGE_UPDATE_PR,
+} from './github/index';
 import {
   CREATE_PULL_REQUEST_PROMPT_SNIPPET,
   CREATE_PULL_REQUEST_PROMPT_GUIDELINES,
@@ -32,6 +38,13 @@ import {
   GET_ISSUE_PR_THREAD_PARAM_REPO_DESCRIPTION,
   GET_ISSUE_PR_THREAD_PARAM_ISSUE_NUMBER_DESCRIPTION,
   GET_ISSUE_PR_THREAD_PARAM_MAX_COMMENTS_DESCRIPTION,
+  UPDATE_PULL_REQUEST_PROMPT_SNIPPET,
+  UPDATE_PULL_REQUEST_PROMPT_GUIDELINES,
+  UPDATE_PULL_REQUEST_DESCRIPTION,
+  UPDATE_PULL_REQUEST_PARAM_PULL_NUMBER_DESCRIPTION,
+  UPDATE_PULL_REQUEST_PARAM_TITLE_DESCRIPTION,
+  UPDATE_PULL_REQUEST_PARAM_BODY_DESCRIPTION,
+  UPDATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from './prompt';
 import type { ExtensionAPI, ToolDefinition, AgentToolResult } from '@mariozechner/pi-coding-agent';
 import type {
@@ -39,6 +52,8 @@ import type {
   CreatePullRequestDetails,
   GetIssueOrPRThreadParams,
   IssueOrPRThread,
+  UpdatePullRequestParams,
+  UpdatePullRequestDetails,
 } from './github/index';
 
 /**
@@ -314,16 +329,93 @@ const getIssueOrPRThreadTool: ToolDefinition = {
   },
 };
 
+const updatePullRequestTool: ToolDefinition = {
+  name: 'update_pull_request',
+  label: 'Update Pull Request',
+  description: UPDATE_PULL_REQUEST_DESCRIPTION,
+  promptSnippet: UPDATE_PULL_REQUEST_PROMPT_SNIPPET,
+  promptGuidelines: UPDATE_PULL_REQUEST_PROMPT_GUIDELINES,
+  parameters: Type.Object({
+    pull_number: Type.Optional(
+      Type.Integer({
+        description: UPDATE_PULL_REQUEST_PARAM_PULL_NUMBER_DESCRIPTION,
+      })
+    ),
+    title: Type.Optional(
+      Type.String({
+        description: UPDATE_PULL_REQUEST_PARAM_TITLE_DESCRIPTION,
+      })
+    ),
+    body: Type.Optional(
+      Type.String({
+        description: UPDATE_PULL_REQUEST_PARAM_BODY_DESCRIPTION,
+      })
+    ),
+    dryRun: Type.Optional(
+      Type.Boolean({
+        description: UPDATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
+      })
+    ),
+  }),
+
+  async execute(
+    _toolCallId,
+    params,
+    signal,
+    _onUpdate,
+    _ctx
+  ): Promise<AgentToolResult<UpdatePullRequestDetails>> {
+    const [cancelled, cleanup] = handleToolStart('update_pull_request', signal);
+
+    if (cancelled) {
+      return {
+        content: [{ type: 'text' as const, text: CANCELLATION_MESSAGE_UPDATE_PR }],
+        details: {
+          pullRequestNumber: 0,
+          pullRequestUrl: '',
+          headBranch: '',
+          baseBranch: '',
+          dryRun: false,
+          cancelled: true,
+        },
+      };
+    }
+
+    try {
+      const { pull_number, title, body, dryRun } = params as UpdatePullRequestParams;
+
+      // Delegate to the GitHub-specific implementation
+      const updateParams: UpdatePullRequestParams = {};
+      if (pull_number !== undefined) {
+        updateParams.pull_number = pull_number;
+      }
+      if (title !== undefined) {
+        updateParams.title = title;
+      }
+      if (body !== undefined) {
+        updateParams.body = body;
+      }
+      if (dryRun !== undefined) {
+        updateParams.dryRun = dryRun;
+      }
+
+      return await updatePullRequest(updateParams);
+    } finally {
+      cleanup();
+    }
+  },
+};
+
 /**
  * Extension factory that registers all custom tools with the Pi agent.
  *
  * Called by the Pi SDK resource loader during session initialisation. Registers
- * the `create_pull_request` and `get_issue_or_pr_thread` tools.
+ * the `create_pull_request`, `update_pull_request`, and `get_issue_or_pr_thread` tools.
  *
  * @param pi - The Pi extension API used to register tools.
  */
 export const extFactory = (pi: ExtensionAPI): void => {
-  const tools = [createPRTool, getIssueOrPRThreadTool];
+  const tools = [createPRTool, updatePullRequestTool, getIssueOrPRThreadTool];
   tools.forEach(tool => {
     pi.registerTool(tool);
     core.debug(`🔧 [${tool.name}] Tool registered successfully`);

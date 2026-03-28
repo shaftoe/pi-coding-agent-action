@@ -41,6 +41,14 @@ export {
   type CreatePullRequestDetails,
 } from './pull-request.js';
 
+// Pull request update functions
+export {
+  updatePullRequest,
+  type UpdatePullRequestParams,
+  type UpdatePullRequestResult,
+  type UpdatePullRequestDetails,
+} from './pull-request-update.js';
+
 // Constants
 export {
   REACTION_TYPE_EYES,
@@ -51,5 +59,6 @@ export {
   BRANCH_PREFIX,
   CANCELLATION_MESSAGE_CREATE_PR,
   CANCELLATION_MESSAGE_GET_THREAD,
+  CANCELLATION_MESSAGE_UPDATE_PR,
   IGNORE_PATTERNS,
 } from './constants.js';

@@ -84,16 +84,18 @@ function getToolByName(tools: TestTool[], name: string): TestTool | undefined {
 describe('extFactory', () => {
   let tools: TestTool[];
   let createPRTool: TestTool;
+  let updatePRTool: TestTool;
   let getIssuePRThreadTool: TestTool;
 
   beforeEach(() => {
     tools = captureRegisteredTools();
     createPRTool = getToolByName(tools, 'create_pull_request')!;
+    updatePRTool = getToolByName(tools, 'update_pull_request')!;
     getIssuePRThreadTool = getToolByName(tools, 'get_issue_or_pr_thread')!;
   });
 
-  test('registers two tools', () => {
-    expect(tools.length).toBe(2);
+  test('registers three tools', () => {
+    expect(tools.length).toBe(3);
   });
 
   test('registers a tool named create_pull_request', () => {
@@ -104,6 +106,11 @@ describe('extFactory', () => {
   test('registers a tool named get_issue_or_pr_thread', () => {
     expect(getIssuePRThreadTool).toBeDefined();
     expect(getIssuePRThreadTool.name).toBe('get_issue_or_pr_thread');
+  });
+
+  test('registers a tool named update_pull_request', () => {
+    expect(updatePRTool).toBeDefined();
+    expect(updatePRTool.name).toBe('update_pull_request');
   });
 
   test('create_pull_request has a non-empty description', () => {
@@ -124,6 +131,10 @@ describe('extFactory', () => {
     expect(getIssuePRThreadTool.label).toBe('Get Issue/PR Thread');
   });
 
+  test('update_pull_request has a label', () => {
+    expect(updatePRTool.label).toBe('Update Pull Request');
+  });
+
   test('create_pull_request has prompt guidelines', () => {
     expect(Array.isArray(createPRTool.promptGuidelines)).toBe(true);
     expect(createPRTool.promptGuidelines.length).toBeGreaterThan(0);
@@ -134,6 +145,11 @@ describe('extFactory', () => {
     expect(getIssuePRThreadTool.promptGuidelines.length).toBeGreaterThan(0);
   });
 
+  test('update_pull_request has prompt guidelines', () => {
+    expect(Array.isArray(updatePRTool.promptGuidelines)).toBe(true);
+    expect(updatePRTool.promptGuidelines.length).toBeGreaterThan(0);
+  });
+
   test('create_pull_request has a prompt snippet', () => {
     expect(typeof createPRTool.promptSnippet).toBe('string');
     expect(createPRTool.promptSnippet.length).toBeGreaterThan(0);
@@ -142,6 +158,16 @@ describe('extFactory', () => {
   test('get_issue_or_pr_thread has a prompt snippet', () => {
     expect(typeof getIssuePRThreadTool.promptSnippet).toBe('string');
     expect(getIssuePRThreadTool.promptSnippet.length).toBeGreaterThan(0);
+  });
+
+  test('update_pull_request has a prompt snippet', () => {
+    expect(typeof updatePRTool.promptSnippet).toBe('string');
+    expect(updatePRTool.promptSnippet.length).toBeGreaterThan(0);
+  });
+
+  test('update_pull_request has a non-empty description', () => {
+    expect(typeof updatePRTool.description).toBe('string');
+    expect(updatePRTool.description.length).toBeGreaterThan(0);
   });
 
   test('create_pull_request parameters require title as string', () => {
@@ -171,6 +197,42 @@ describe('extFactory', () => {
   test('create_pull_request title is required', () => {
     const params = createPRTool.parameters;
     expect(params.required).toContain('title');
+  });
+
+  test('update_pull_request parameters pull_number is optional', () => {
+    const params = updatePRTool.parameters;
+    expect(params.properties.pull_number).toBeDefined();
+    // When all fields are optional, required may be undefined
+    if (Array.isArray(params.required)) {
+      expect(params.required).not.toInclude('pull_number');
+    }
+  });
+
+  test('update_pull_request parameters title is optional', () => {
+    const params = updatePRTool.parameters;
+    expect(params.properties.title).toBeDefined();
+    // When all fields are optional, required may be undefined
+    if (Array.isArray(params.required)) {
+      expect(params.required).not.toInclude('title');
+    }
+  });
+
+  test('update_pull_request parameters body is optional', () => {
+    const params = updatePRTool.parameters;
+    expect(params.properties.body).toBeDefined();
+    // When all fields are optional, required may be undefined
+    if (Array.isArray(params.required)) {
+      expect(params.required).not.toInclude('body');
+    }
+  });
+
+  test('update_pull_request parameters dryRun is optional', () => {
+    const params = updatePRTool.parameters;
+    expect(params.properties.dryRun).toBeDefined();
+    // When all fields are optional, required may be undefined
+    if (Array.isArray(params.required)) {
+      expect(params.required).not.toInclude('dryRun');
+    }
   });
 
   test('get_issue_or_pr_thread parameters owner is optional', () => {
@@ -245,6 +307,26 @@ describe('extFactory', () => {
       expect(result.content[0]?.text).toContain('cancelled');
       expect(result.details.cancelled).toBe(true);
       expect(result.details.number).toBe(0);
+    });
+  });
+
+  describe('update_pull_request execute', () => {
+    test('returns cancellation message when signal is aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      const result = await updatePRTool.execute(
+        'id',
+        {},
+        controller.signal,
+        undefined,
+        noop
+      );
+
+      expect(result.content[0]?.text).toContain('cancelled');
+      expect(result.details.cancelled).toBe(true);
+      expect(result.details.pullRequestNumber).toBe(0);
+      expect(result.details.pullRequestUrl).toBe('');
     });
   });
 });

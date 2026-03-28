@@ -58,6 +58,7 @@ const {
   isPR,
   getContextType,
   getIssueOrPRThread,
+  updatePullRequest,
 } = // @ts-expect-error TS1309 -- Top-level await not supported in CommonJS, but Bun test runner handles it
   await githubModule;
 
@@ -429,5 +430,11 @@ describe('getIssueOrPullRequestContext', () => {
 describe('getIssueOrPRThread', () => {
   test('is exported function', () => {
     expect(typeof getIssueOrPRThread).toBe('function');
+  });
+});
+
+describe('updatePullRequest', () => {
+  test('is exported function', () => {
+    expect(typeof updatePullRequest).toBe('function');
   });
 });

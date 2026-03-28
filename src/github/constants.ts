@@ -19,6 +19,7 @@ export const BRANCH_PREFIX = 'pi/issue' as const;
 // Cancellation messages
 export const CANCELLATION_MESSAGE_CREATE_PR = 'Pull request creation was cancelled';
 export const CANCELLATION_MESSAGE_GET_THREAD = 'Thread retrieval was cancelled';
+export const CANCELLATION_MESSAGE_UPDATE_PR = 'Pull request update was cancelled';
 
 // Ignore patterns for file scanning
 export const IGNORE_PATTERNS = [

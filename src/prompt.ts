@@ -64,3 +64,33 @@ export const GET_ISSUE_PR_THREAD_PARAM_ISSUE_NUMBER_DESCRIPTION =
 
 export const GET_ISSUE_PR_THREAD_PARAM_MAX_COMMENTS_DESCRIPTION =
   'Maximum number of comments to fetch. Defaults to 100. Use for limiting very long threads.';
+
+//
+// Update Pull Request
+//
+export const UPDATE_PULL_REQUEST_PROMPT_SNIPPET =
+  'Update an existing pull request by pushing new commits to the PR branch and optionally updating the title and/or body.';
+
+export const UPDATE_PULL_REQUEST_PROMPT_GUIDELINES = [
+  'Use update_pull_request when working within an existing PR flow to push new commits and/or update PR metadata.',
+  'Make sure your changes are made (modified files exist) before calling this tool. The tool will detect changes and create a new commit on the PR branch.',
+  'By default, the tool works with the current PR from the GitHub context. Only provide pull_number when you need to update a different PR.',
+  'The tool commits changes with the provided title (or a default message) and pushes them to the existing PR branch.',
+  'You can update the PR title and/or body using the title and body parameters.',
+  'Use dryRun=true first to verify the update configuration, then dryRun=false to apply the changes.',
+];
+
+export const UPDATE_PULL_REQUEST_DESCRIPTION =
+  'Update an existing pull request by pushing new commits to the PR branch. Optionally updates the PR title and/or description. The tool detects changes in the working tree, creates a new commit on the PR branch, and updates the PR metadata if provided.';
+
+export const UPDATE_PULL_REQUEST_PARAM_PULL_NUMBER_DESCRIPTION =
+  'Pull request number. If not provided, uses the current PR from context.';
+
+export const UPDATE_PULL_REQUEST_PARAM_TITLE_DESCRIPTION =
+  'New pull request title. If not provided, the title is not changed.';
+
+export const UPDATE_PULL_REQUEST_PARAM_BODY_DESCRIPTION =
+  'New pull request description in markdown format. If not provided, the description is not changed.';
+
+export const UPDATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION =
+  'Set to true to simulate the PR update without actually modifying anything (for testing). Set to false to apply the actual changes.';
