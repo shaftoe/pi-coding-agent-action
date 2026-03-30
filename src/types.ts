@@ -90,4 +90,8 @@ export interface CommentMetadata {
   executionDuration?: Temporal.Duration;
   /** Session statistics including token usage */
   sessionStats?: SessionStats;
+  /** Action version */
+  actionVersion?: string;
+  /** Pi SDK version */
+  piSdkVersion?: string;
 }

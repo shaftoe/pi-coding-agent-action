@@ -126,7 +126,7 @@ export class Agent {
   /**
    * Get session statistics including token usage.
    *
-   * @returns Session stats or undefined if session not ready.
+   * @returns Session stats or undefined if session not ready or stats unavailable.
    */
   getSessionStats():
     | { inputTokens: number; outputTokens: number; totalTokens: number; cost: number }
@@ -135,12 +135,17 @@ export class Agent {
       return undefined;
     }
 
-    const stats = this.session.getSessionStats();
-    return {
-      inputTokens: stats.tokens.input,
-      outputTokens: stats.tokens.output,
-      totalTokens: stats.tokens.total,
-      cost: stats.cost,
-    };
+    try {
+      const stats = this.session.getSessionStats();
+      return {
+        inputTokens: stats.tokens.input,
+        outputTokens: stats.tokens.output,
+        totalTokens: stats.tokens.total,
+        cost: stats.cost,
+      };
+    } catch (_error) {
+      // Session stats are metadata - don't fail the action if unavailable
+      return undefined;
+    }
   }
 }

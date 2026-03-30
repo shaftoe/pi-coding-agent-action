@@ -450,4 +450,127 @@ describe('ActionOrchestrator', () => {
       expect(mockPiFactory).toHaveBeenCalledWith(expect.objectContaining({ thinkingLevel: '   ' }));
     });
   });
+
+  describe('error handling - session stats', () => {
+    test('continues execution when getSessionStats throws', async () => {
+      const statsError = new Error('Stats API failed');
+      const getSessionStatsMock = mock(() => {
+        throw statsError;
+      });
+      mockPiAgent.getSessionStats = getSessionStatsMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+
+      // Should not throw - execution continues without stats
+      await expect(orchestrator.execute()).resolves.toBeUndefined();
+
+      // Comment should still be created without stats
+      expect(mockGithub.createFinalComment).toHaveBeenCalled();
+      const calls = (mockGithub.createFinalComment as any).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      const metadata = calls[0][1];
+      expect(metadata.sessionStats).toBeUndefined();
+
+      // Prompt was still called
+      expect(mockPiAgent.prompt).toHaveBeenCalled();
+    });
+
+    test('includes session stats when available', async () => {
+      const sessionStats = {
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        cost: 0.001,
+      };
+      const getSessionStatsMock = mock(() => sessionStats);
+      mockPiAgent.getSessionStats = getSessionStatsMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+
+      await expect(orchestrator.execute()).resolves.toBeUndefined();
+
+      // Comment should be created with stats
+      const calls = (mockGithub.createFinalComment as any).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      const metadata = calls[0][1];
+      expect(metadata.sessionStats).toEqual(sessionStats);
+    });
+
+    test('handles getSessionStats returning undefined', async () => {
+      const getSessionStatsMock = mock(() => undefined);
+      mockPiAgent.getSessionStats = getSessionStatsMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+
+      await expect(orchestrator.execute()).resolves.toBeUndefined();
+
+      // Comment should be created without stats
+      const calls = (mockGithub.createFinalComment as any).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      const metadata = calls[0][1];
+      expect(metadata.sessionStats).toBeUndefined();
+    });
+  });
+
+  describe('error handling - finalize failures', () => {
+    test('re-throws error after finalize succeeds in catch block', async () => {
+      const error = new Error('Prompt failed');
+      const promptMock = mock(async () => {
+        throw error;
+      });
+      mockPiAgent.prompt = promptMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+
+      await expect(orchestrator.execute()).rejects.toBe(error);
+
+      expect(mockCore.setFailed).toHaveBeenCalledWith(error);
+      expect(mockGithub.createFinalComment).toHaveBeenCalledWith(
+        'Prompt failed',
+        expect.any(Object)
+      );
+    });
+
+    test('fails action when finalize in catch block throws', async () => {
+      const error = new Error('Prompt failed');
+      const finalizeError = new Error('Failed to post comment');
+      const promptMock = mock(async () => {
+        throw error;
+      });
+      mockPiAgent.prompt = promptMock as any;
+
+      const createFinalCommentMock = mock(async () => {
+        throw finalizeError;
+      });
+      mockGithub.createFinalComment = createFinalCommentMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+
+      await expect(orchestrator.execute()).rejects.toThrow('Failed to post comment');
+
+      // setFailed should NOT have been called (error thrown before it)
+      expect(mockCore.setFailed).not.toHaveBeenCalled();
+
+      // Final comment creation was attempted in catch block
+      expect(mockGithub.createFinalComment).toHaveBeenCalledWith(
+        'Prompt failed',
+        expect.any(Object)
+      );
+    });
+
+    test('calls setFailed after finalize succeeds', async () => {
+      const error = new Error('API timeout');
+      const promptMock = mock(async () => {
+        throw error;
+      });
+      mockPiAgent.prompt = promptMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+
+      await expect(orchestrator.execute()).rejects.toThrow(error);
+
+      expect(mockCore.setFailed).toHaveBeenCalledWith(error);
+      expect(mockCore.setFailed).toHaveBeenCalledTimes(1);
+    });
+  });
 });

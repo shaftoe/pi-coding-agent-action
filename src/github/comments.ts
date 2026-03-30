@@ -10,6 +10,7 @@ import * as github from '@actions/github';
 import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
 import { Temporal } from '@js-temporal/polyfill';
 import { getOctokit } from './octokit.js';
+import type { SessionStats } from '../types.js';
 
 const octokit = getOctokit();
 
@@ -26,12 +27,11 @@ export interface CommentMetadata {
   /** Total execution time as a Temporal Duration */
   executionDuration?: Temporal.Duration;
   /** Session statistics including token usage */
-  sessionStats?: {
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-    cost: number;
-  };
+  sessionStats?: SessionStats;
+  /** Action version */
+  actionVersion?: string;
+  /** Pi SDK version */
+  piSdkVersion?: string;
 }
 
 export type CreateCommentType =
@@ -92,8 +92,10 @@ async function createComment(body: string): Promise<CreateCommentType | undefine
  *
  * @param value - Number to format
  * @returns Formatted string (e.g., "1.2K", "1.5M", "500")
+ *
+ * @internal Exported for testing purposes only.
  */
-function formatNumber(value: number): string {
+export function formatNumber(value: number): string {
   if (value >= 1000000) {
     return `${(value / 1000000).toFixed(1)}M`;
   }
@@ -153,6 +155,18 @@ export async function createFinalComment(
         tokenInfo += ` ($${cost.toFixed(4)})`;
       }
       metadataParts.push(tokenInfo);
+    }
+
+    // Add version information
+    if (metadata?.actionVersion || metadata?.piSdkVersion) {
+      const versionParts: string[] = [];
+      if (metadata.actionVersion) {
+        versionParts.push(`v${metadata.actionVersion}`);
+      }
+      if (metadata.piSdkVersion) {
+        versionParts.push(`pi-sdk@${metadata.piSdkVersion}`);
+      }
+      metadataParts.push(versionParts.join(', '));
     }
 
     finalBody = `${body}\n\n---\n\n${metadataParts.join(' | ')}`;

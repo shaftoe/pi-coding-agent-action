@@ -55,7 +55,7 @@ import { Temporal } from '@js-temporal/polyfill';
 
 // Dynamic import to ensure mocks are set up before module loads
 // @ts-expect-error TS1309 -- Top-level await not supported in CommonJS, but Bun test runner handles it
-const { formatExecutionTime } = await import('../../src/github/comments');
+const { formatExecutionTime, formatNumber } = await import('../../src/github/comments');
 
 describe('formatExecutionTime', () => {
   test('formats seconds only', () => {
@@ -117,5 +117,54 @@ describe('formatExecutionTime', () => {
     expect(formatExecutionTime(Temporal.Duration.from({ seconds: 1 }))).toBe('1s');
     expect(formatExecutionTime(Temporal.Duration.from({ minutes: 1 }))).toBe('1m');
     expect(formatExecutionTime(Temporal.Duration.from({ hours: 1 }))).toBe('1h');
+  });
+});
+
+describe('formatNumber', () => {
+  test('formats small numbers', () => {
+    expect(formatNumber(0)).toBe('0');
+    expect(formatNumber(1)).toBe('1');
+    expect(formatNumber(500)).toBe('500');
+    expect(formatNumber(999)).toBe('999');
+  });
+
+  test('formats thousands', () => {
+    expect(formatNumber(1000)).toBe('1.0K');
+    expect(formatNumber(1500)).toBe('1.5K');
+    expect(formatNumber(9999)).toBe('10.0K');
+    expect(formatNumber(10000)).toBe('10.0K');
+    expect(formatNumber(999999)).toBe('1000.0K');
+  });
+
+  test('formats millions', () => {
+    expect(formatNumber(1000000)).toBe('1.0M');
+    expect(formatNumber(1500000)).toBe('1.5M');
+    expect(formatNumber(10000000)).toBe('10.0M');
+    expect(formatNumber(999999999)).toBe('1000.0M');
+  });
+
+  test('handles boundary values', () => {
+    expect(formatNumber(999)).toBe('999');
+    expect(formatNumber(1000)).toBe('1.0K');
+    expect(formatNumber(999999)).toBe('1000.0K');
+    expect(formatNumber(1000000)).toBe('1.0M');
+  });
+
+  test('handles negative numbers gracefully', () => {
+    expect(formatNumber(-1)).toBe('-1');
+    expect(formatNumber(-500)).toBe('-500');
+    expect(formatNumber(-1000)).toBe('-1000');
+    expect(formatNumber(-1500000)).toBe('-1500000');
+  });
+
+  test('handles very large numbers', () => {
+    expect(formatNumber(1000000000)).toBe('1000.0M');
+    expect(formatNumber(9999999999)).toBe('10000.0M');
+  });
+
+  test('formats with one decimal place', () => {
+    expect(formatNumber(1234)).toBe('1.2K');
+    expect(formatNumber(12345)).toBe('12.3K');
+    expect(formatNumber(1234567)).toBe('1.2M');
   });
 });
