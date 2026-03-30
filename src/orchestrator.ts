@@ -8,7 +8,14 @@
  */
 
 import { Temporal } from '@js-temporal/polyfill';
-import type { CoreAdapter, GitHubAdapter, PiAgentFactory, PiConfig } from './types';
+import type {
+  CommentMetadata,
+  CoreAdapter,
+  GitHubAdapter,
+  PiAgentFactory,
+  PiConfig,
+  SessionStats,
+} from './types';
 import type { CreateReactionType } from './github/reactions';
 
 /**
@@ -49,13 +56,13 @@ export class ActionOrchestrator {
 
       const pi = this.piAgentFactory(config);
       result = await pi.prompt(prompt);
+      const sessionStats = pi.getSessionStats();
+      await this.finalize(result, config, startTime, reaction, sessionStats);
     } catch (e) {
       await this.finalize(e instanceof Error ? e.message : String(e), config, startTime, reaction);
       this.core.setFailed(e as Error);
       throw e;
     }
-
-    await this.finalize(result, config, startTime, reaction);
   }
 
   /**
@@ -78,7 +85,8 @@ export class ActionOrchestrator {
     body: string,
     config: PiConfig,
     startTime: Temporal.Instant,
-    reaction?: CreateReactionType
+    reaction?: CreateReactionType,
+    sessionStats?: SessionStats
   ): Promise<void> {
     try {
       if (reaction) {
@@ -88,11 +96,17 @@ export class ActionOrchestrator {
       // Silently ignore reaction deletion errors - don't stop execution
     }
 
-    await this.github.createFinalComment(body, {
+    const metadata: CommentMetadata = {
       provider: config.provider,
       model: config.model,
       thinkingLevel: config.thinkingLevel,
       executionDuration: startTime.until(Temporal.Now.instant()),
-    });
+    };
+
+    if (sessionStats) {
+      metadata.sessionStats = sessionStats;
+    }
+
+    await this.github.createFinalComment(body, metadata);
   }
 }

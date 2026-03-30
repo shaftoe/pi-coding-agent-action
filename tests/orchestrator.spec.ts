@@ -56,8 +56,10 @@ describe('ActionOrchestrator', () => {
 
     // Create mock Pi agent
     const promptMock = mock(async () => 'Here are your tests!');
+    const getSessionStatsMock = mock(() => undefined);
     mockPiAgent = {
       prompt: promptMock as any,
+      getSessionStats: getSessionStatsMock as any,
     };
 
     mockPiFactory = mock(() => mockPiAgent);

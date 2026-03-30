@@ -25,6 +25,13 @@ export interface CommentMetadata {
   thinkingLevel?: string;
   /** Total execution time as a Temporal Duration */
   executionDuration?: Temporal.Duration;
+  /** Session statistics including token usage */
+  sessionStats?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    cost: number;
+  };
 }
 
 export type CreateCommentType =
@@ -81,6 +88,22 @@ async function createComment(body: string): Promise<CreateCommentType | undefine
 }
 
 /**
+ * Format a number with appropriate suffix (K for thousands, M for millions).
+ *
+ * @param value - Number to format
+ * @returns Formatted string (e.g., "1.2K", "1.5M", "500")
+ */
+function formatNumber(value: number): string {
+  if (value >= 1000000) {
+    return `${(value / 1000000).toFixed(1)}M`;
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}K`;
+  }
+  return String(value);
+}
+
+/**
  * Post the final result (or error) comment on the current issue or pull request.
  *
  * Automatically appends a "View action run" link pointing to the GitHub Actions
@@ -120,6 +143,16 @@ export async function createFinalComment(
 
     if (metadata?.executionDuration !== undefined) {
       metadataParts.push(`Time: ${formatExecutionTime(metadata.executionDuration)}`);
+    }
+
+    // Add token usage if available
+    if (metadata?.sessionStats) {
+      const { totalTokens, cost } = metadata.sessionStats;
+      let tokenInfo = `Tokens: ${formatNumber(totalTokens)}`;
+      if (cost > 0) {
+        tokenInfo += ` ($${cost.toFixed(4)})`;
+      }
+      metadataParts.push(tokenInfo);
     }
 
     finalBody = `${body}\n\n---\n\n${metadataParts.join(' | ')}`;

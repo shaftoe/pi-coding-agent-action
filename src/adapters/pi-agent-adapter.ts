@@ -4,7 +4,7 @@
  * Provides the production implementation for Pi agent operations.
  */
 
-import type { PiAgent, PiAgentFactory, PiConfig } from '../types';
+import type { PiAgent, PiAgentFactory, PiConfig, SessionStats } from '../types';
 import { Agent } from '../pi';
 
 /**
@@ -17,6 +17,10 @@ export const createRealPiAgent: PiAgentFactory = (config: PiConfig): PiAgent => 
     async prompt(text: string): Promise<string> {
       await agent.ready();
       return agent.prompt(text);
+    },
+
+    getSessionStats(): SessionStats | undefined {
+      return agent.getSessionStats();
     },
   };
 };

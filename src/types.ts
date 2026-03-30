@@ -46,6 +46,18 @@ export interface GitHubAdapter {
 export interface PiAgent {
   /** Send a prompt and receive the AI response. */
   prompt(text: string): Promise<string>;
+  /** Get session statistics including token usage. */
+  getSessionStats(): SessionStats | undefined;
+}
+
+/**
+ * Session statistics including token usage.
+ */
+export interface SessionStats {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cost: number;
 }
 
 /**
@@ -76,4 +88,6 @@ export interface CommentMetadata {
   thinkingLevel?: string;
   /** Total execution time as a Temporal Duration */
   executionDuration?: Temporal.Duration;
+  /** Session statistics including token usage */
+  sessionStats?: SessionStats;
 }
