@@ -1,43 +1,32 @@
 /**
- * @file Shared Git utilities for pull request operations.
+ * @file File change scanning and detection logic.
  *
- * Contains common logic used by both create and update pull request flows:
- * - File change scanning and detection
- * - Blob and tree creation via Git Data API
- * - Commit creation and branch updates
+ * Scans the local repository for files that are new, modified, or deleted
+ * compared to a reference set of files from a Git tree.
  */
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import * as core from '@actions/core';
 import * as github from '@actions/github';
 import ignore from 'ignore';
-import { getOctokit } from './octokit.js';
-import {
-  FILE_MODE_DIRECTORY,
-  FILE_MODE_EXECUTABLE,
-  FILE_MODE_REGULAR,
-  IGNORE_PATTERNS,
-} from './constants.js';
+import { getOctokit } from '../octokit.js';
+import { IGNORE_PATTERNS } from '../constants.js';
+import { createLogger, FileMode } from './types.js';
 
 const octokit = getOctokit();
 
 /**
- * Git file mode types
+ * Result of scanning for changes in the repository.
  */
-export type FileMode =
-  | typeof FILE_MODE_REGULAR
-  | typeof FILE_MODE_EXECUTABLE
-  | typeof FILE_MODE_DIRECTORY;
-
-/**
- * Create a logger with a custom emoji prefix.
- */
-export function createLogger(emoji = '🔀') {
-  return {
-    debug: (msg: string): void => core.debug(`${emoji} ${msg}`),
-    info: (msg: string): void => core.info(`${emoji} ${msg}`),
-  };
+export interface ChangeScanResult {
+  /** Files that are new or modified */
+  changedFiles: {
+    path: string;
+    content: string;
+    mode: FileMode;
+  }[];
+  /** Files that exist in the reference but were deleted locally */
+  deletedFiles: string[];
 }
 
 /**
@@ -48,7 +37,11 @@ export function createLogger(emoji = '🔀') {
  * @param sha - Blob SHA.
  * @returns The decoded UTF-8 content, or null if fetching fails.
  */
-async function fetchBlobContent(owner: string, repo: string, sha: string): Promise<string | null> {
+async function fetchBlobContent(
+  owner: string,
+  repo: string,
+  sha: string
+): Promise<string | null> {
   try {
     const blob = await octokit.rest.git.getBlob({
       owner,
@@ -98,20 +91,6 @@ export async function buildFileMap(
   }
 
   return fileMap;
-}
-
-/**
- * Result of scanning for changes in the repository.
- */
-export interface ChangeScanResult {
-  /** Files that are new or modified */
-  changedFiles: {
-    path: string;
-    content: string;
-    mode: FileMode;
-  }[];
-  /** Files that exist in the reference but were deleted locally */
-  deletedFiles: string[];
 }
 
 /**
@@ -199,7 +178,7 @@ async function processFileEntry(
     return {
       path: relativePath,
       content: localContent,
-      mode: FILE_MODE_REGULAR,
+      mode: '100644',
     };
   }
 
@@ -241,9 +220,15 @@ export async function scanDirectory(
     }
 
     if (entry.isDirectory()) {
-      const subDirResult = await scanDirectory(fullPath, relativeFilePath, referenceFiles, ig, log);
+      const subDirResult = await scanDirectory(
+        fullPath,
+        relativeFilePath,
+        referenceFiles,
+        ig,
+        log
+      );
       changedFiles.push(...subDirResult.changedFiles);
-      subDirResult.encounteredFiles.forEach(file => encounteredFiles.add(file));
+      subDirResult.encounteredFiles.forEach((file) => encounteredFiles.add(file));
     } else if (entry.isFile()) {
       const fileResult = await processFileEntry(fullPath, relativeFilePath, referenceFiles, log);
       if (fileResult) {
@@ -309,118 +294,4 @@ export async function scanForChanges(
     `Found ${changedFiles.length} changed file(s) and ${deletedFiles.length} deleted file(s)`
   );
   return { changedFiles, deletedFiles };
-}
-
-/**
- * Upload changed files as Git blobs and create a tree that references them.
- * Handles both new/modified files and deleted files.
- *
- * @param changedFiles - Array of changed file descriptors.
- * @param deletedFiles - Array of file paths that were deleted.
- * @param parentSha - SHA of the parent commit to use as the tree's parent.
- * @param log - Logger instance for debug output.
- * @returns The SHA of the newly created tree.
- */
-export async function createBlobsAndTree(
-  changedFiles: {
-    path: string;
-    content: string;
-    mode: FileMode;
-  }[],
-  deletedFiles: string[],
-  parentSha: string,
-  log = createLogger()
-): Promise<string> {
-  const owner = github.context.repo.owner;
-  const repo = github.context.repo.repo;
-
-  log.debug(`Creating blobs for changed files...`);
-
-  // Create blobs for all changed files and map their paths to SHAs
-  const blobShaMap = new Map<string, string>();
-  for (const file of changedFiles) {
-    const blob = await octokit.rest.git.createBlob({
-      owner,
-      repo,
-      content: Buffer.from(file.content).toString('base64'),
-      encoding: 'base64',
-    });
-    blobShaMap.set(file.path, blob.data.sha);
-    log.debug(`Created blob for ${file.path}: ${blob.data.sha}`);
-  }
-  log.debug(`Created ${blobShaMap.size} blob(s)`);
-
-  // Create tree with all the blob references and deletions
-  log.debug(`Creating tree with changes...`);
-  const treeEntries = Array.from(blobShaMap.entries()).map(([path, sha]) => ({
-    path,
-    mode: FILE_MODE_REGULAR,
-    type: 'blob' as const,
-    sha,
-  }));
-
-  // Add deleted files with sha: null to remove them from the tree
-  for (const deletedPath of deletedFiles) {
-    treeEntries.push({
-      path: deletedPath,
-      mode: FILE_MODE_REGULAR,
-      type: 'blob' as const,
-      sha: null as unknown as string, // Setting sha to null deletes the file - type assertion for TypeScript
-    });
-    log.debug(`Marked for deletion: ${deletedPath}`);
-  }
-
-  const tree = await octokit.rest.git.createTree({
-    owner,
-    repo,
-    base_tree: parentSha,
-    tree: treeEntries,
-  });
-  log.debug(`Created tree: ${tree.data.sha}`);
-
-  return tree.data.sha;
-}
-
-/**
- * Create a commit on the given tree and point the branch reference at it.
- *
- * @param treeSha - SHA of the tree containing the changed files.
- * @param parentSha - SHA of the parent commit.
- * @param branchName - Name of the branch to update.
- * @param message - Commit message.
- * @param log - Logger instance for debug output.
- * @returns The SHA of the new commit.
- */
-export async function createCommitAndUpdateBranch(
-  treeSha: string,
-  parentSha: string,
-  branchName: string,
-  message: string,
-  log = createLogger()
-): Promise<string> {
-  const owner = github.context.repo.owner;
-  const repo = github.context.repo.repo;
-
-  // Create a single commit with the new tree
-  log.debug(`Creating commit...`);
-  const commit = await octokit.rest.git.createCommit({
-    owner,
-    repo,
-    message,
-    tree: treeSha,
-    parents: [parentSha],
-  });
-  log.debug(`Created commit: ${commit.data.sha}`);
-
-  // Update the branch reference to point to the new commit
-  log.debug(`Updating branch reference...`);
-  await octokit.rest.git.updateRef({
-    owner,
-    repo,
-    ref: `heads/${branchName}`,
-    sha: commit.data.sha,
-  });
-  log.debug(`Branch updated successfully`);
-
-  return commit.data.sha;
 }

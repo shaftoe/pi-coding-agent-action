@@ -17,7 +17,7 @@ import {
   createBlobsAndTree,
   createCommitAndUpdateBranch,
   buildFileMap,
-} from './git-utils.js';
+} from './git/index.js';
 
 const octokit = getOctokit();
 const log = createLogger();
