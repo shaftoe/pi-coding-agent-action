@@ -10,21 +10,22 @@ import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 
 export const loggingFactory = (pi: ExtensionAPI) => {
   pi.on('tool_execution_start', async event => {
-    core.info('\n');
-    core.info('::group::🔧 Tool Execution');
-    core.info(`Tool called: ${event.toolName}`);
+    core.debug('\n');
+    core.debug(`🔧 Tool Execution started: ${event.toolName} (${event.toolCallId})`);
   });
 
   pi.on('tool_execution_end', async event => {
+    core.info('\n');
+    core.info(`::group::🔧 Tool Execution: ${event.toolName} (${event.toolCallId})`);
     // Check for cancellation via details.cancelled pattern
     const cancelled = event.result?.details?.cancelled === true;
 
     if (cancelled) {
-      core.warning(`⚠️ Tool execution cancelled: ${event.toolName}`);
+      core.warning(`⚠️ cancelled`);
     } else if (event.isError) {
-      core.info(`❌ Tool execution failed: ${event.toolName}`);
+      core.info(`❌ failed`);
     } else {
-      core.info(`✅ Tool execution succeeded: ${event.toolName}`);
+      core.info(`✅ succeeded`);
     }
     core.info('::endgroup::');
   });
