@@ -12,25 +12,32 @@ import { createLogger, FileMode } from './types';
 const octokit = getOctokit();
 
 /**
- * Upload changed files as Git blobs and create a tree that references them.
- * Handles both new/modified files and deleted files.
- *
- * @param changedFiles - Array of changed file descriptors.
- * @param deletedFiles - Array of file paths that were deleted.
- * @param parentSha - SHA of the parent commit to use as the tree's parent.
- * @param log - Logger instance for debug output.
- * @returns The SHA of the newly created tree.
+ * Parameters for blob and tree creation operation.
  */
-export async function createBlobsAndTree(
+export interface CreateBlobsAndTreeParams {
+  /** Array of changed file descriptors. */
   changedFiles: {
     path: string;
     content: string;
     mode: FileMode;
-  }[],
-  deletedFiles: string[],
-  parentSha: string,
-  log = createLogger()
-): Promise<string> {
+  }[];
+  /** Array of file paths that were deleted. */
+  deletedFiles: string[];
+  /** SHA of the parent commit to use as the tree's parent. */
+  parentSha: string;
+  /** Logger instance for debug output. */
+  log: ReturnType<typeof createLogger>;
+}
+
+/**
+ * Upload changed files as Git blobs and create a tree that references them.
+ * Handles both new/modified files and deleted files.
+ *
+ * @param params - Parameters controlling the blob and tree creation operation.
+ * @returns The SHA of the newly created tree.
+ */
+export async function createBlobsAndTree(params: CreateBlobsAndTreeParams): Promise<string> {
+  const { changedFiles, deletedFiles, parentSha, log = createLogger() } = params;
   const owner = github.context.repo.owner;
   const repo = github.context.repo.repo;
 

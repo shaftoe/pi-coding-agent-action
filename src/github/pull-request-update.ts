@@ -231,7 +231,12 @@ export async function updatePullRequest(
   let commitSha: string | undefined;
   if (changedFiles.length > 0 || deletedFiles.length > 0) {
     // Create blobs and tree
-    const treeSha = await createBlobsAndTree(changedFiles, deletedFiles, headSha, log);
+    const treeSha = await createBlobsAndTree({
+      changedFiles,
+      deletedFiles,
+      parentSha: headSha,
+      log,
+    });
 
     // Generate commit message
     let commitMessage = message;
@@ -248,7 +253,13 @@ export async function updatePullRequest(
     }
 
     // Create commit and update branch
-    commitSha = await createCommitAndUpdateBranch(treeSha, headSha, headBranch, commitMessage, log);
+    commitSha = await createCommitAndUpdateBranch({
+      treeSha,
+      parentSha: headSha,
+      branchName: headBranch,
+      message: commitMessage,
+      log,
+    });
     log.info(`Created new commit ${commitSha} on branch ${headBranch}`);
   } else {
     log.info(`No code changes detected, only updating PR metadata if provided`);

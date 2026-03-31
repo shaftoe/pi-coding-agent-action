@@ -182,25 +182,34 @@ async function processFileEntry(
 }
 
 /**
+ * Parameters for the directory scan operation.
+ */
+export interface ScanDirectoryParams {
+  /** Absolute path to the directory to scan. */
+  dir: string;
+  /** Relative path within the repository. */
+  relativePath: string;
+  /** Map of reference files for comparison. */
+  referenceFiles: Map<string, { sha: string; content: string | null }>;
+  /** Ignore instance with loaded patterns. */
+  ig: ignore.Ignore;
+  /** Logger instance for debug output. */
+  log: ReturnType<typeof createLogger>;
+}
+
+/**
  * Recursively scan a directory for files and determine changes.
  *
- * @param dir - Absolute path to the directory to scan.
- * @param relativePath - Relative path within the repository.
- * @param referenceFiles - Map of reference files for comparison.
- * @param ig - Ignore instance with loaded patterns.
- * @param log - Logger instance for debug output.
+ * @param params - Parameters controlling the scan operation.
  * @returns Changed files and all encountered files.
  */
 export async function scanDirectory(
-  dir: string,
-  relativePath: string,
-  referenceFiles: Map<string, { sha: string; content: string | null }>,
-  ig: ignore.Ignore,
-  log: ReturnType<typeof createLogger>
+  params: ScanDirectoryParams
 ): Promise<{
   changedFiles: { path: string; content: string; mode: FileMode }[];
   encounteredFiles: Set<string>;
 }> {
+  const { dir, relativePath, referenceFiles, ig, log } = params;
   const changedFiles: { path: string; content: string; mode: FileMode }[] = [];
   const encounteredFiles = new Set<string>();
 
@@ -216,7 +225,13 @@ export async function scanDirectory(
     }
 
     if (entry.isDirectory()) {
-      const subDirResult = await scanDirectory(fullPath, relativeFilePath, referenceFiles, ig, log);
+      const subDirResult = await scanDirectory({
+        dir: fullPath,
+        relativePath: relativeFilePath,
+        referenceFiles,
+        ig,
+        log,
+      });
       changedFiles.push(...subDirResult.changedFiles);
       subDirResult.encounteredFiles.forEach(file => encounteredFiles.add(file));
     } else if (entry.isFile()) {
@@ -262,13 +277,13 @@ export async function scanForChanges(
   ig.add(IGNORE_PATTERNS);
 
   // Scan directory recursively
-  const { changedFiles, encounteredFiles: localFilesEncountered } = await scanDirectory(
-    repoRoot,
-    '',
+  const { changedFiles, encounteredFiles: localFilesEncountered } = await scanDirectory({
+    dir: repoRoot,
+    relativePath: '',
     referenceFiles,
     ig,
-    log
-  );
+    log,
+  });
 
   // Detect deleted files by comparing reference files with what we found locally
   const deletedFiles: string[] = [];

@@ -313,7 +313,13 @@ describe('scanDirectory', () => {
     const referenceFiles = new Map();
     const ig = ignore();
 
-    const result = await scanDirectory(tempDir, '', referenceFiles, ig, mockLog);
+    const result = await scanDirectory({
+      dir: tempDir,
+      relativePath: '',
+      referenceFiles,
+      ig,
+      log: mockLog,
+    });
 
     expect(result.changedFiles).toHaveLength(1);
     expect(result.changedFiles[0]).toBeDefined();
@@ -331,7 +337,13 @@ describe('scanDirectory', () => {
     const referenceFiles = new Map();
     const ig = ignore();
 
-    const result = await scanDirectory(tempDir, '', referenceFiles, ig, mockLog);
+    const result = await scanDirectory({
+      dir: tempDir,
+      relativePath: '',
+      referenceFiles,
+      ig,
+      log: mockLog,
+    });
 
     expect(result.changedFiles).toHaveLength(2);
     expect(result.changedFiles.some(f => f.path === 'root.txt')).toBe(true);
@@ -355,7 +367,13 @@ describe('scanDirectory', () => {
     const referenceFiles = new Map();
     const ig = ignore();
 
-    const result = await scanDirectory(tempDir, '', referenceFiles, ig, mockLog);
+    const result = await scanDirectory({
+      dir: tempDir,
+      relativePath: '',
+      referenceFiles,
+      ig,
+      log: mockLog,
+    });
 
     expect(result.changedFiles).toHaveLength(4);
 
@@ -408,7 +426,13 @@ describe('scanDirectory', () => {
 
     const ig = ignore();
 
-    const result = await scanDirectory(tempDir, '', referenceFiles, ig, mockLog);
+    const result = await scanDirectory({
+      dir: tempDir,
+      relativePath: '',
+      referenceFiles,
+      ig,
+      log: mockLog,
+    });
 
     expect(result.changedFiles).toHaveLength(1);
     expect(result.changedFiles[0]).toBeDefined();
@@ -432,7 +456,13 @@ describe('scanDirectory', () => {
 
     const ig = ignore();
 
-    const result = await scanDirectory(tempDir, '', referenceFiles, ig, mockLog);
+    const result = await scanDirectory({
+      dir: tempDir,
+      relativePath: '',
+      referenceFiles,
+      ig,
+      log: mockLog,
+    });
 
     // No changed files
     expect(result.changedFiles).toHaveLength(0);
@@ -454,7 +484,13 @@ describe('scanDirectory', () => {
     const ig = ignore();
     ig.add('excluded.txt');
 
-    const result = await scanDirectory(tempDir, '', referenceFiles, ig, mockLog);
+    const result = await scanDirectory({
+      dir: tempDir,
+      relativePath: '',
+      referenceFiles,
+      ig,
+      log: mockLog,
+    });
 
     expect(result.changedFiles).toHaveLength(1);
     expect(result.changedFiles[0]).toBeDefined();
@@ -476,7 +512,13 @@ describe('scanDirectory', () => {
 
     const ig = ignore();
 
-    const result = await scanDirectory(tempDir, '', referenceFiles, ig, mockLog);
+    const result = await scanDirectory({
+      dir: tempDir,
+      relativePath: '',
+      referenceFiles,
+      ig,
+      log: mockLog,
+    });
 
     // Should find changed.txt and new.txt as changed
     expect(result.changedFiles).toHaveLength(2);
@@ -493,7 +535,13 @@ describe('scanDirectory', () => {
     const referenceFiles = new Map();
     const ig = ignore();
 
-    const result = await scanDirectory(tempDir, '', referenceFiles, ig, mockLog);
+    const result = await scanDirectory({
+      dir: tempDir,
+      relativePath: '',
+      referenceFiles,
+      ig,
+      log: mockLog,
+    });
 
     expect(result.changedFiles).toHaveLength(0);
     expect(result.encounteredFiles.size).toBe(0);

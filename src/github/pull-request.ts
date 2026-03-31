@@ -272,10 +272,21 @@ export async function createPullRequest(
     log.debug(`Branch created successfully`);
 
     // Create blobs and tree
-    const treeSha = await createBlobsAndTree(changedFiles, deletedFiles, baseSha, log);
+    const treeSha = await createBlobsAndTree({
+      changedFiles,
+      deletedFiles,
+      parentSha: baseSha,
+      log,
+    });
 
     // Create commit and update branch
-    await createCommitAndUpdateBranch(treeSha, baseSha, head, title, log);
+    await createCommitAndUpdateBranch({
+      treeSha,
+      parentSha: baseSha,
+      branchName: head,
+      message: title,
+      log,
+    });
 
     // Create pull request
     const prResult = await createPullRequestOnGitHub(title, bodyText, baseBranch, head);

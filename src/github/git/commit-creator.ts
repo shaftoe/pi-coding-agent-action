@@ -11,22 +11,31 @@ import { createLogger } from './types';
 const octokit = getOctokit();
 
 /**
+ * Parameters for commit creation and branch update operation.
+ */
+export interface CreateCommitAndUpdateBranchParams {
+  /** SHA of the tree containing the changed files. */
+  treeSha: string;
+  /** SHA of the parent commit. */
+  parentSha: string;
+  /** Name of the branch to update. */
+  branchName: string;
+  /** Commit message. */
+  message: string;
+  /** Logger instance for debug output. */
+  log?: ReturnType<typeof createLogger>;
+}
+
+/**
  * Create a commit on the given tree and point the branch reference at it.
  *
- * @param treeSha - SHA of the tree containing the changed files.
- * @param parentSha - SHA of the parent commit.
- * @param branchName - Name of the branch to update.
- * @param message - Commit message.
- * @param log - Logger instance for debug output.
+ * @param params - Parameters controlling the commit creation and branch update operation.
  * @returns The SHA of the new commit.
  */
 export async function createCommitAndUpdateBranch(
-  treeSha: string,
-  parentSha: string,
-  branchName: string,
-  message: string,
-  log = createLogger()
+  params: CreateCommitAndUpdateBranchParams
 ): Promise<string> {
+  const { treeSha, parentSha, branchName, message, log = createLogger() } = params;
   const owner = github.context.repo.owner;
   const repo = github.context.repo.repo;
 
