@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import * as github from '@actions/github';
 import ignore from 'ignore';
 import { getOctokit } from '../octokit.js';
-import { IGNORE_PATTERNS } from '../constants.js';
+import { FILE_MODE_REGULAR, IGNORE_PATTERNS } from '../constants.js';
 import { createLogger, FileMode } from './types.js';
 
 const octokit = getOctokit();
@@ -178,7 +178,7 @@ async function processFileEntry(
     return {
       path: relativePath,
       content: localContent,
-      mode: '100644',
+      mode: FILE_MODE_REGULAR,
     };
   }
 
