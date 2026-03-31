@@ -2,11 +2,8 @@
  * @file Tool builder factory to reduce duplication in tool definitions.
  */
 
-import type {
-  ToolDefinition,
-  AgentToolResult,
-} from '@mariozechner/pi-coding-agent';
 import { TSchema, Static } from '@sinclair/typebox';
+import type { ToolDefinition, AgentToolResult } from '@mariozechner/pi-coding-agent';
 
 /**
  * Configuration for building a tool with cancellation handling.
@@ -29,9 +26,7 @@ export interface ToolConfig<TSchemaType extends TSchema, TDetails> {
   /** Cancellation details object */
   cancellationDetails: TDetails;
   /** Execute function that performs the actual work */
-  execute: (
-    params: Static<TSchemaType>
-  ) => Promise<AgentToolResult<TDetails>>;
+  execute: (params: Static<TSchemaType>) => Promise<AgentToolResult<TDetails>>;
 }
 
 /**
@@ -46,24 +41,6 @@ export interface ToolConfig<TSchemaType extends TSchema, TDetails> {
  * @template TDetails - The details type returned by the tool
  * @param config - Tool configuration
  * @returns A complete ToolDefinition
- *
- * @example
- * ```typescript
- * export const createPRTool = buildTool({
- *   name: 'create_pull_request',
- *   label: 'Create Pull Request',
- *   description: CREATE_PULL_REQUEST_DESCRIPTION,
- *   promptSnippet: CREATE_PULL_REQUEST_PROMPT_SNIPPET,
- *   promptGuidelines: CREATE_PULL_REQUEST_PROMPT_GUIDELINES,
- *   parameters: createPullRequestSchema,
- *   cancellationMessage: CANCELLATION_MESSAGE_CREATE_PR,
- *   cancellationDetails: { pullRequestNumber: 0, pullRequestUrl: '', ... },
- *   execute: async (params) => {
- *     const { title, body, base, dryRun } = params;
- *     return await createPullRequest({ title, body, base, dryRun });
- *   },
- * });
- * ```
  */
 export function buildTool<TSchemaType extends TSchema, TDetails>(
   config: ToolConfig<TSchemaType, TDetails>
