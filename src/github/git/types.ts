@@ -14,6 +14,21 @@ export type FileMode =
   | typeof FILE_MODE_DIRECTORY;
 
 /**
+ * Tree entry for creating Git trees.
+ * Setting `sha` to `null` indicates the file should be deleted.
+ */
+export interface TreeEntry {
+  /** Path to the file or directory */
+  path: string;
+  /** File mode (permissions) */
+  mode: FileMode;
+  /** Type of tree entry */
+  type: 'blob' | 'tree';
+  /** SHA of the blob/tree, or `null` to delete the file */
+  sha: string | null;
+}
+
+/**
  * Create a logger with a custom emoji prefix.
  */
 export function createLogger(emoji = '🔀') {

@@ -7,7 +7,7 @@
 import * as github from '@actions/github';
 import { getOctokit } from '../octokit';
 import { FILE_MODE_REGULAR } from '../constants';
-import { createLogger, FileMode } from './types';
+import { createLogger, FileMode, TreeEntry } from './types';
 
 const octokit = getOctokit();
 
@@ -59,7 +59,7 @@ export async function createBlobsAndTree(params: CreateBlobsAndTreeParams): Prom
 
   // Create tree with all the blob references and deletions
   log.debug(`Creating tree with changes...`);
-  const treeEntries = Array.from(blobShaMap.entries()).map(([path, sha]) => ({
+  const treeEntries: TreeEntry[] = Array.from(blobShaMap.entries()).map(([path, sha]) => ({
     path,
     mode: FILE_MODE_REGULAR,
     type: 'blob' as const,
@@ -72,7 +72,7 @@ export async function createBlobsAndTree(params: CreateBlobsAndTreeParams): Prom
       path: deletedPath,
       mode: FILE_MODE_REGULAR,
       type: 'blob' as const,
-      sha: null as unknown as string, // Setting sha to null deletes the file - type assertion for TypeScript
+      sha: null, // Setting sha to null deletes the file
     });
     log.debug(`Marked for deletion: ${deletedPath}`);
   }
