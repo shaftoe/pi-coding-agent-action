@@ -44,6 +44,35 @@ export interface CreatePullRequestDetails {
 }
 
 /**
+ * Get the default branch from the GitHub workflow context.
+ *
+ * @returns The default branch name from context, or `undefined` if not available.
+ */
+function getDefaultBranchFromContext(): string | undefined {
+  return github.context.payload.repository?.default_branch;
+}
+
+/**
+ * Fetch the default branch from the GitHub API.
+ *
+ * @returns The default branch name fetched from the repository.
+ */
+async function getDefaultBranchFromAPI(): Promise<string> {
+  const owner = github.context.repo.owner;
+  const repo = github.context.repo.repo;
+
+  log.debug(`Fetching repository default branch from GitHub API...`);
+  const repoData = await octokit.rest.repos.get({
+    owner,
+    repo,
+  });
+
+  const defaultBranch = repoData.data.default_branch;
+  log.debug(`Fetched default branch: ${defaultBranch}`);
+  return defaultBranch;
+}
+
+/**
  * Resolve the base (target) branch for the pull request.
  *
  * Uses the explicitly provided branch if given, otherwise falls back to the
@@ -53,32 +82,21 @@ export interface CreatePullRequestDetails {
  * @returns The resolved base branch name.
  */
 async function determineBaseBranch(providedBase: string | undefined): Promise<string> {
-  let baseBranch: string;
+  // Use explicitly provided branch if available
   if (providedBase) {
-    // Explicitly provided by caller
-    baseBranch = providedBase;
-    log.debug(`Using provided base branch: ${baseBranch}`);
-    return baseBranch;
+    log.debug(`Using provided base branch: ${providedBase}`);
+    return providedBase;
   }
 
-  if (github.context.payload.repository?.default_branch) {
-    // Available in context
-    baseBranch = github.context.payload.repository.default_branch;
-    log.debug(`Using default branch from context: ${baseBranch}`);
-    return baseBranch;
+  // Use default branch from context if available
+  const contextDefaultBranch = getDefaultBranchFromContext();
+  if (contextDefaultBranch) {
+    log.debug(`Using default branch from context: ${contextDefaultBranch}`);
+    return contextDefaultBranch;
   }
 
-  // Fetch from GitHub API
-  log.debug(`Fetching repository default branch from GitHub API...`);
-  const owner = github.context.repo.owner;
-  const repo = github.context.repo.repo;
-  const repoData = await octokit.rest.repos.get({
-    owner,
-    repo,
-  });
-  baseBranch = repoData.data.default_branch;
-  log.debug(`Fetched default branch: ${baseBranch}`);
-  return baseBranch;
+  // Fall back to fetching from GitHub API
+  return getDefaultBranchFromAPI();
 }
 
 /**
@@ -107,16 +125,35 @@ function generatePullRequestBody(providedBody: string | undefined): string {
 }
 
 /**
+ * Check if the current context is a pull request.
+ *
+ * @returns `true` if the context represents a pull request.
+ */
+function isPullRequestContext(): boolean {
+  const eventType = github.context.eventName;
+  return eventType === 'pull_request' || github.context.payload.pull_request !== undefined;
+}
+
+/**
+ * Check if the current context is an issue.
+ *
+ * @returns `true` if the context represents an issue.
+ */
+function isIssueContext(): boolean {
+  const eventType = github.context.eventName;
+  return eventType === 'issue_comment' || eventType === 'issues';
+}
+
+/**
  * Classify the current GitHub context as an issue or a pull request.
  *
  * @returns `'issue'`, `'pull_request'`, or `undefined`.
  */
 function getContextType(): 'issue' | 'pull_request' | undefined {
-  const eventType = github.context.eventName;
-  if (eventType === 'pull_request' || github.context.payload.pull_request !== undefined) {
+  if (isPullRequestContext()) {
     return 'pull_request';
   }
-  if (eventType === 'issue_comment' || github.context.eventName === 'issues') {
+  if (isIssueContext()) {
     return 'issue';
   }
   return undefined;

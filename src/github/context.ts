@@ -23,6 +23,58 @@ function debug(msg: string): void {
 }
 
 /**
+ * Extract timestamp for issue_comment events.
+ *
+ * @param payload - The GitHub event payload.
+ * @returns The comment's created_at instant, or `undefined` if not available.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractTimestampForIssueComment(payload: any): Temporal.Instant | undefined {
+  if (payload.comment?.created_at) {
+    return Temporal.Instant.from(payload.comment.created_at);
+  }
+  return undefined;
+}
+
+/**
+ * Extract timestamp for issues events.
+ *
+ * @param payload - The GitHub event payload.
+ * @returns The issue's updated_at instant, or `undefined` if not available.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractTimestampForIssues(payload: any): Temporal.Instant | undefined {
+  if (payload.issue?.updated_at) {
+    return Temporal.Instant.from(payload.issue.updated_at);
+  }
+  return undefined;
+}
+
+/**
+ * Extract timestamp for pull_request events.
+ *
+ * @param payload - The GitHub event payload.
+ * @returns The PR's updated_at instant, or `undefined` if not available.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractTimestampForPullRequest(payload: any): Temporal.Instant | undefined {
+  if (payload.pull_request?.updated_at) {
+    return Temporal.Instant.from(payload.pull_request.updated_at);
+  }
+  return undefined;
+}
+
+/**
+ * Strategy map for extracting timestamps from different GitHub event types.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const timestampExtractors: Record<string, (payload: any) => Temporal.Instant | undefined> = {
+  issue_comment: extractTimestampForIssueComment,
+  issues: extractTimestampForIssues,
+  pull_request: extractTimestampForPullRequest,
+};
+
+/**
  * Extract the start timestamp from the GitHub event payload.
  *
  * Uses the timestamp of the triggering event to measure the total time from
@@ -36,25 +88,18 @@ function debug(msg: string): void {
 export function getStartTimeFromContext(): Temporal.Instant | undefined {
   const { eventName, payload } = github.context;
 
-  // For issue_comment events, use the comment's created_at timestamp
-  if (eventName === 'issue_comment' && payload.comment?.created_at) {
-    return Temporal.Instant.from(payload.comment.created_at);
+  const extractor = timestampExtractors[eventName];
+  if (!extractor) {
+    debug(`[getStartTimeFromContext] No timestamp extractor for event type: ${eventName}`);
+    return undefined;
   }
 
-  // For issues events (opened/edited), use the issue's updated_at timestamp
-  // (updated_at matches created_at on first creation, and reflects most recent edit time)
-  if (eventName === 'issues' && payload.issue?.updated_at) {
-    return Temporal.Instant.from(payload.issue.updated_at);
+  const timestamp = extractor(payload);
+  if (!timestamp) {
+    debug(`[getStartTimeFromContext] Could not extract timestamp for event type: ${eventName}`);
   }
 
-  // For pull_request events, use the PR's updated_at timestamp
-  // (updated_at matches created_at on first creation, and reflects most recent commit/action time)
-  if (eventName === 'pull_request' && payload.pull_request?.updated_at) {
-    return Temporal.Instant.from(payload.pull_request.updated_at);
-  }
-
-  debug(`[getStartTimeFromContext] Could not determine start time from event type: ${eventName}`);
-  return undefined;
+  return timestamp;
 }
 
 export interface IssueOrPullRequestContext {
@@ -115,6 +160,16 @@ export function isPR(): boolean {
 }
 
 /**
+ * Determine if the current GitHub context is an issue.
+ *
+ * @returns `true` if the event type is `issue_comment` or `issues`.
+ */
+export function isIssue(): boolean {
+  const eventType = github.context.eventName;
+  return eventType === 'issue_comment' || eventType === 'issues';
+}
+
+/**
  * Determine whether the current context originated from an issue or a pull
  * request.
  *
@@ -125,7 +180,7 @@ export function getContextType(): 'issue' | 'pull_request' | undefined {
   if (isPR()) {
     return 'pull_request';
   }
-  if (github.context.eventName === 'issue_comment' || github.context.eventName === 'issues') {
+  if (isIssue()) {
     return 'issue';
   }
   return undefined;

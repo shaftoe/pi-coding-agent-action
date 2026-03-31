@@ -10,13 +10,11 @@ import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 
 export const loggingFactory = (pi: ExtensionAPI) => {
   pi.on('tool_execution_start', async event => {
-    core.debug('\n');
     core.debug(`🔧 Tool Execution started: ${event.toolName} (${event.toolCallId})`);
   });
 
   pi.on('tool_execution_end', async event => {
-    core.info('\n');
-    core.info(`::group::🔧 Tool Execution: ${event.toolName} (${event.toolCallId})`);
+    core.debug(`::group::🔧 Tool Execution: ${event.toolName} (${event.toolCallId})`);
     // Check for cancellation via details.cancelled pattern
     const cancelled = event.result?.details?.cancelled === true;
 
