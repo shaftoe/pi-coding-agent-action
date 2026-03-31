@@ -10,7 +10,7 @@ import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 
 export const loggingFactory = (pi: ExtensionAPI) => {
   pi.on('tool_execution_start', async event => {
-    core.debug('\n');
+    core.info('\n');
     core.debug(`🔧 Tool Execution started: ${event.toolName} (${event.toolCallId})`);
   });
 
