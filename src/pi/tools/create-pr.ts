@@ -2,7 +2,7 @@
  * @file create_pull_request tool definition.
  */
 
-import { Type, Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import {
   CREATE_PULL_REQUEST_PROMPT_SNIPPET,
   CREATE_PULL_REQUEST_PROMPT_GUIDELINES,
@@ -13,8 +13,8 @@ import {
   CREATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from '../prompt';
 import { createPullRequest, CANCELLATION_MESSAGE_CREATE_PR } from '../../github/index';
-import type { ToolDefinition, AgentToolResult } from '@mariozechner/pi-coding-agent';
-import type { CreatePullRequestParams, CreatePullRequestDetails } from '../../github/index';
+import type { CreatePullRequestParams } from '../../github/index';
+import { buildTool } from './tool-builder';
 
 /**
  * Schema for the create_pull_request tool.
@@ -41,45 +41,25 @@ const createPullRequestSchema = Type.Object({
 });
 
 /**
- * Runtime type for the create_pull_request tool parameters.
- */
-type CreatePullRequestToolParams = Static<typeof createPullRequestSchema>;
-
-/**
  * Tool definition for creating a pull request.
  */
-export const createPRTool: ToolDefinition = {
+export const createPRTool = buildTool({
   name: 'create_pull_request',
   label: 'Create Pull Request',
   description: CREATE_PULL_REQUEST_DESCRIPTION,
   promptSnippet: CREATE_PULL_REQUEST_PROMPT_SNIPPET,
   promptGuidelines: CREATE_PULL_REQUEST_PROMPT_GUIDELINES,
-  // @ts-expect-error - TypeBox Symbol property not recognized by TypeScript
   parameters: createPullRequestSchema,
-
-  async execute(
-    _toolCallId,
-    params,
-    signal,
-    _onUpdate,
-    _ctx
-  ): Promise<AgentToolResult<CreatePullRequestDetails>> {
-    // Check for cancellation
-    if (signal?.aborted) {
-      return {
-        content: [{ type: 'text' as const, text: CANCELLATION_MESSAGE_CREATE_PR }],
-        details: {
-          pullRequestNumber: 0,
-          pullRequestUrl: '',
-          headBranch: '',
-          baseBranch: '',
-          dryRun: false,
-          cancelled: true,
-        },
-      };
-    }
-
-    const { title, body, base, dryRun } = params as CreatePullRequestToolParams;
+  cancellationMessage: CANCELLATION_MESSAGE_CREATE_PR,
+  cancellationDetails: {
+    pullRequestNumber: 0,
+    pullRequestUrl: '',
+    headBranch: '',
+    baseBranch: '',
+    dryRun: false,
+  },
+  execute: async (params) => {
+    const { title, body, base, dryRun } = params;
 
     // Delegate to the GitHub-specific implementation
     const prParams: CreatePullRequestParams = { title };
@@ -95,4 +75,4 @@ export const createPRTool: ToolDefinition = {
 
     return await createPullRequest(prParams);
   },
-};
+});

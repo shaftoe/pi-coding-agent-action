@@ -2,7 +2,7 @@
  * @file update_pull_request tool definition.
  */
 
-import { Type, Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import {
   UPDATE_PULL_REQUEST_PROMPT_SNIPPET,
   UPDATE_PULL_REQUEST_PROMPT_GUIDELINES,
@@ -14,8 +14,8 @@ import {
   UPDATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from '../prompt';
 import { updatePullRequest, CANCELLATION_MESSAGE_UPDATE_PR } from '../../github/index';
-import type { ToolDefinition, AgentToolResult } from '@mariozechner/pi-coding-agent';
-import type { UpdatePullRequestParams, UpdatePullRequestDetails } from '../../github/index';
+import type { UpdatePullRequestParams } from '../../github/index';
+import { buildTool } from './tool-builder';
 
 /**
  * Schema for the update_pull_request tool.
@@ -49,45 +49,25 @@ const updatePullRequestSchema = Type.Object({
 });
 
 /**
- * Runtime type for the update_pull_request tool parameters.
- */
-type UpdatePullRequestToolParams = Static<typeof updatePullRequestSchema>;
-
-/**
  * Tool definition for updating a pull request.
  */
-export const updatePullRequestTool: ToolDefinition = {
+export const updatePullRequestTool = buildTool({
   name: 'update_pull_request',
   label: 'Update Pull Request',
   description: UPDATE_PULL_REQUEST_DESCRIPTION,
   promptSnippet: UPDATE_PULL_REQUEST_PROMPT_SNIPPET,
   promptGuidelines: UPDATE_PULL_REQUEST_PROMPT_GUIDELINES,
-  // @ts-expect-error - TypeBox Symbol property not recognized by TypeScript
   parameters: updatePullRequestSchema,
-
-  async execute(
-    _toolCallId,
-    params,
-    signal,
-    _onUpdate,
-    _ctx
-  ): Promise<AgentToolResult<UpdatePullRequestDetails>> {
-    // Check for cancellation
-    if (signal?.aborted) {
-      return {
-        content: [{ type: 'text' as const, text: CANCELLATION_MESSAGE_UPDATE_PR }],
-        details: {
-          pullRequestNumber: 0,
-          pullRequestUrl: '',
-          headBranch: '',
-          baseBranch: '',
-          dryRun: false,
-          cancelled: true,
-        },
-      };
-    }
-
-    const { pull_number, title, body, message, dryRun } = params as UpdatePullRequestToolParams;
+  cancellationMessage: CANCELLATION_MESSAGE_UPDATE_PR,
+  cancellationDetails: {
+    pullRequestNumber: 0,
+    pullRequestUrl: '',
+    headBranch: '',
+    baseBranch: '',
+    dryRun: false,
+  },
+  execute: async (params) => {
+    const { pull_number, title, body, message, dryRun } = params;
 
     // Delegate to the GitHub-specific implementation
     const updateParams: UpdatePullRequestParams = {};
@@ -109,4 +89,4 @@ export const updatePullRequestTool: ToolDefinition = {
 
     return await updatePullRequest(updateParams);
   },
-};
+});
