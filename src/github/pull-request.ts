@@ -11,6 +11,7 @@ import * as github from '@actions/github';
 import { Temporal } from '@js-temporal/polyfill';
 import { getOctokit } from './octokit';
 import { BRANCH_PREFIX, MAX_TITLE_LENGTH } from './constants';
+import { getContextType } from './context-utils';
 import {
   createLogger,
   scanForChanges,
@@ -104,22 +105,6 @@ function generatePullRequestBody(providedBody: string | undefined): string {
   }
 
   return bodyText;
-}
-
-/**
- * Classify the current GitHub context as an issue or a pull request.
- *
- * @returns `'issue'`, `'pull_request'`, or `undefined`.
- */
-function getContextType(): 'issue' | 'pull_request' | undefined {
-  const eventType = github.context.eventName;
-  if (eventType === 'pull_request' || github.context.payload.pull_request !== undefined) {
-    return 'pull_request';
-  }
-  if (eventType === 'issue_comment' || github.context.eventName === 'issues') {
-    return 'issue';
-  }
-  return undefined;
 }
 
 /**
