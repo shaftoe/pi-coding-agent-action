@@ -31,6 +31,17 @@ const mockGetInput = mock((name: string) => {
   }
   return '';
 });
+
+// Create a test CoreAdapter
+const testCoreAdapter = {
+  getInput: mockGetInput,
+  setFailed: mock(noop),
+  notice: mock(noop),
+  info: mock(noop),
+  debug: mock(noop),
+  warning: mock(noop),
+};
+
 mock.module('@actions/core', () => ({
   getInput: mockGetInput,
   notice: mock(noop),
@@ -50,23 +61,32 @@ process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-${Date.now()}.j
 fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 
 // Dynamic import to ensure env vars are set before module loads
+// Also initialize the github module context with test adapter
 const githubModule = import('../src/github/index.js');
 const contextModule = import('../src/github/context.js');
 const [
-  {
-    getPrompt,
-    createFinalComment,
-    getIssueOrPRThread,
-    updatePullRequest,
-  },
-  {
-    getIssueOrPullRequestContext,
-    isPR,
-    getContextType,
-    getStartTimeFromContext,
-  },
+  githubExports,
+  contextExports,
 ] = // @ts-expect-error TS1309 -- Top-level await not supported in CommonJS, but Bun test runner handles it
   await Promise.all([githubModule, contextModule]);
+
+// Initialize the github module context with test adapter
+const { setCoreAdapter } = githubExports;
+setCoreAdapter(testCoreAdapter);
+
+const {
+  getPrompt,
+  createFinalComment,
+  getIssueOrPRThread,
+  updatePullRequest,
+} = githubExports;
+
+const {
+  getIssueOrPullRequestContext,
+  isPR,
+  getContextType,
+  getStartTimeFromContext,
+} = contextExports;
 
 describe('getPrompt', () => {
   beforeEach(() => {
