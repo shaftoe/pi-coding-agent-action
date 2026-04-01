@@ -204,6 +204,9 @@ bun run test:coverage
 
 # Watch mode for development
 bun run test:watch
+
+# Run E2E tests (requires setup, see below)
+# E2E tests are opt-in and require environment variables
 ```
 
 #### Test Architecture
