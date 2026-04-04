@@ -123,6 +123,7 @@ src/
 ├── run.ts                     # Main entry point (creates adapters and orchestrator)
 ├── orchestrator.ts            # Business logic orchestration with adapter pattern
 ├── types.ts                   # Shared type definitions and adapter interfaces
+├── import-meta-url.js         # Polyfill for import.meta.url (ES modules)
 ├── adapters/                  # Production implementations of adapter interfaces
 │   ├── core-adapter.ts        # GitHub Actions Core operations
 │   ├── github-adapter.ts      # GitHub API operations
@@ -137,17 +138,47 @@ src/
 │       ├── index.ts           # Extension factory registration
 │       ├── create-pr.ts       # create_pull_request tool
 │       ├── update-pr.ts       # update_pull_request tool
+│       ├── get-thread.ts      # get_issue_or_pr_thread tool
 │       └── common.ts          # Shared tool utilities
 └── github/                    # GitHub API integration
     ├── index.ts               # Barrel export for github module
     ├── context.ts             # Context extraction and thread retrieval
+    ├── context-utils.ts       # Context utility functions
     ├── octokit.ts             # Shared Octokit client singleton
     ├── reactions.ts           # Reaction management (add/remove eyes)
     ├── comments.ts            # Comment creation with metadata footer
-    ├── git-utils.ts           # Git operations (scanning, blobs, commits)
     ├── pull-request.ts        # PR creation logic
     ├── pull-request-update.ts # PR update logic
-    └── constants.ts           # GitHub-related constants
+    ├── constants.ts           # GitHub-related constants
+    └── git/                   # Git operations via GitHub API
+        ├── index.ts           # Barrel export for git module
+        ├── commit-creator.ts  # Commit creation via Git Data API
+        ├── file-scanner.ts    # File scanning and change detection
+        ├── tree-builder.ts    # Git tree construction
+        └── types.ts           # Git-related type definitions
+
+tests/
+├── orchestrator.spec.ts       # Orchestrator business logic tests
+├── github.spec.ts             # GitHub module integration tests
+├── tsconfig.json              # Test TypeScript configuration
+├── helpers/                   # Test helpers and utilities
+│   └── fakes.ts               # Mock implementations for testing
+├── e2e/                       # End-to-end tests
+│   └── pi-agent.spec.ts       # Real Pi SDK integration tests
+├── github/                    # GitHub module tests
+│   ├── comments.spec.ts       # Comment creation tests
+│   ├── git.spec.ts            # Git operations tests
+│   ├── pull-request-logic.spec.ts    # PR creation logic tests
+│   └── pull-request-update-logic.spec.ts  # PR update logic tests
+└── pi/                        # Pi module tests
+    ├── agent-logic.spec.ts    # Pi agent behavior tests
+    ├── logging.spec.ts        # Logging tests
+    ├── tools.spec.ts          # Tool interface tests
+    └── tools/                 # Tool execution tests
+        ├── common.spec.ts     # Common tool utilities tests
+        ├── create-pr-execution.spec.ts  # create_pr tool execution tests
+        ├── update-pr-execution.spec.ts  # update_pr tool execution tests
+        └── get-thread-execution.spec.ts # get_thread tool execution tests
 ```
 
 ### Custom Tools
@@ -170,7 +201,7 @@ The action extends Pi with three custom tools:
 6. **Tool Invocations**: Custom tools invoked via `pi/tools/` extensions:
    - `get_issue_or_pr_thread` for context
    - `create_pull_request` / `update_pull_request` for making changes
-7. **Git Operations**: `github/git-utils.ts` handles all Git operations via GitHub API
+7. **Git Operations**: `github/git/` module handles all Git operations via GitHub API:
 8. **Finalization**: Reaction removed, final comment posted with metadata footer by `github/comments.ts`
 
 ## Development
@@ -224,9 +255,20 @@ The test suite emphasizes **behavior verification** over implementation details:
   - Error handling and finalization
   - Early exit scenarios
 
-- **GitHub tests** (`tests/github.spec.ts`) - Tests GitHub API integration
-- **Pi tools tests** (`tests/pi/tools.spec.ts`) - Tests custom tool behavior
-- **Git utils tests** (`tests/github/git.spec.ts`) - Tests Git operations
+- **GitHub module tests**:
+  - `tests/github.spec.ts` - GitHub module integration tests
+  - `tests/github/comments.spec.ts` - Comment creation and formatting
+  - `tests/github/git.spec.ts` - Git operations via GitHub API
+  - `tests/github/pull-request-logic.spec.ts` - PR creation logic
+  - `tests/github/pull-request-update-logic.spec.ts` - PR update logic
+
+- **Pi module tests**:
+  - `tests/pi/agent-logic.spec.ts` - Pi agent behavior tests
+  - `tests/pi/logging.spec.ts` - Centralized logging tests
+  - `tests/pi/tools.spec.ts` - Tool interface tests
+  - `tests/pi/tools/*.spec.ts` - Tool execution tests for each tool
+
+- **E2E tests** (`tests/e2e/pi-agent.spec.ts`) - Real Pi SDK integration with actual API calls
 
 **Key principle**: Tests verify the orchestration flow and business logic, not the behavior of mocks. The adapter pattern enables testing the actual behavior of the action without requiring external services.
 
