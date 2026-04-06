@@ -6,7 +6,6 @@
   "scripts": {
     "package": "bun scripts/package.ts",
     "prepare": "bun run package",
-    "tag": "bun run scripts/tag-version.ts",
     "test": "bun test",
     "test:e2e": "RUN_E2E_TESTS=1 bun test tests/e2e",
     "test:coverage": "bun test --coverage --coverage-reporter=lcov",
@@ -16,7 +15,8 @@
     "type-check": "tsc --noEmit",
     "format": "prettier --check src/**/*.ts tests/**/*.ts",
     "format:fix": "prettier --write src/**/*.ts tests/**/*.ts",
-    "validate": "bun run lint && bun run type-check && bun run format"
+    "validate": "bun run lint && bun run type-check && bun run format",
+    "semantic-release": "semantic-release"
   },
   "keywords": [
     "github-action",
@@ -35,6 +35,11 @@
     "ignore": "^7.0.5"
   },
   "devDependencies": {
+    "@semantic-release/commit-analyzer": "^13.0.0",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^11.0.1",
+    "@semantic-release/npm": "^12.0.1",
+    "@semantic-release/release-notes-generator": "^14.0.1",
     "@types/node": "^25.5.2",
     "@typescript-eslint/eslint-plugin": "^8.58.0",
     "@typescript-eslint/parser": "^8.58.0",
@@ -43,6 +48,7 @@
     "eslint": "^10.2.0",
     "isomorphic-git": "^1.37.4",
     "prettier": "^3.8.1",
+    "semantic-release": "^24.2.2",
     "typescript": "^6.0.2"
   }
 }
