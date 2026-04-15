@@ -96,6 +96,7 @@ export interface PiConfig {
   thinkingLevel: string;
   promptInput: string;
   extensions?: string[];
+  loadBuiltinExtensions?: boolean;
 }
 
 /**

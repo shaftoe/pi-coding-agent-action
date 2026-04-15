@@ -17,7 +17,8 @@ export const createRealPiAgent: PiAgentFactory = (config: PiConfig, core): PiAge
     config.token,
     config.thinkingLevel,
     core,
-    config.extensions
+    config.extensions,
+    config.loadBuiltinExtensions
   );
 
   return {

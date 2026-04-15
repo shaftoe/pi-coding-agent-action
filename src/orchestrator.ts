@@ -89,6 +89,11 @@ export class ActionOrchestrator {
           .filter(Boolean)
       : undefined;
 
+    const loadBuiltinExtensionsInput = this.core.getInput('load_builtin_extensions');
+    const loadBuiltinExtensions = loadBuiltinExtensionsInput
+      ? loadBuiltinExtensionsInput.toLowerCase() === 'true'
+      : true; // default to true
+
     return {
       provider: this.core.getInput('provider'),
       model: this.core.getInput('model'),
@@ -96,6 +101,7 @@ export class ActionOrchestrator {
       thinkingLevel: this.core.getInput('thinking_level') ?? 'off',
       promptInput: this.core.getInput('prompt'),
       ...(extensions?.length ? { extensions } : {}),
+      loadBuiltinExtensions,
     };
   }
 

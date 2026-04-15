@@ -116,6 +116,14 @@ describe('ActionOrchestrator', () => {
       await orchestrator.execute();
 
       expect(mockGithub.getPrompt).toHaveBeenCalledWith('Review this code');
+
+      // Verify the config was also created with the prompt input
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          promptInput: 'Review this code',
+        }),
+        mockCore
+      );
     });
 
     test('adds reaction before Pi execution', async () => {
@@ -148,6 +156,7 @@ describe('ActionOrchestrator', () => {
           token: 'sk-test-key',
           thinkingLevel: 'medium',
           promptInput: '',
+          loadBuiltinExtensions: true, // default value
         },
         mockCore
       );
@@ -180,6 +189,7 @@ describe('ActionOrchestrator', () => {
           token: 'test-token',
           thinkingLevel: '', // Empty string, because ?? doesn't apply to empty strings
           promptInput: '',
+          loadBuiltinExtensions: true, // default value
         },
         mockCore
       );
@@ -506,6 +516,127 @@ describe('ActionOrchestrator', () => {
       await orchestrator.execute();
 
       expect(mockCore.getInput).toHaveBeenCalledWith('extensions');
+    });
+  });
+
+  describe('load_builtin_extensions configuration', () => {
+    test('defaults to true when not provided', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loadBuiltinExtensions: true,
+        }),
+        mockCore
+      );
+    });
+
+    test('parses true value correctly', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          load_builtin_extensions: 'true',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loadBuiltinExtensions: true,
+        }),
+        mockCore
+      );
+    });
+
+    test('parses false value correctly', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          load_builtin_extensions: 'false',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loadBuiltinExtensions: false,
+        }),
+        mockCore
+      );
+    });
+
+    test('calls getInput for load_builtin_extensions', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+      await orchestrator.execute();
+
+      expect(mockCore.getInput).toHaveBeenCalledWith('load_builtin_extensions');
+    });
+
+    test('handles case-insensitive true values', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          load_builtin_extensions: 'TRUE',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loadBuiltinExtensions: true,
+        }),
+        mockCore
+      );
+    });
+
+    test('handles case-insensitive false values', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          load_builtin_extensions: 'FALSE',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loadBuiltinExtensions: false,
+        }),
+        mockCore
+      );
     });
   });
 

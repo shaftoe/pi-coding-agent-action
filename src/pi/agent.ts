@@ -33,6 +33,7 @@ export class Agent {
   private outputChunks: string[] = [];
   private core: CoreAdapter;
   private extensions?: string[];
+  private loadBuiltinExtensions?: boolean;
 
   /**
    * Create a new Pi agent.
@@ -46,6 +47,7 @@ export class Agent {
    *                      (default `'off'`).
    * @param core       - The CoreAdapter for logging and debug output.
    * @param extensions - Optional array of extension sources (npm, git, or local paths).
+   * @param loadBuiltinExtensions - Whether to load built-in GitHub extensions (default true).
    * @throws {Error}   If the requested model cannot be found in the registry.
    */
   constructor(
@@ -54,7 +56,8 @@ export class Agent {
     token: string,
     level = 'off',
     core: CoreAdapter,
-    extensions?: string[]
+    extensions?: string[],
+    loadBuiltinExtensions?: boolean
   ) {
     this.modelStr = modelStr;
     this.provider = provider;
@@ -63,6 +66,9 @@ export class Agent {
     this.core = core;
     if (extensions !== undefined) {
       this.extensions = extensions;
+    }
+    if (loadBuiltinExtensions !== undefined) {
+      this.loadBuiltinExtensions = loadBuiltinExtensions;
     }
     this.modelRegistry = ModelRegistry.inMemory(this.authStorage);
 
@@ -97,7 +103,11 @@ export class Agent {
       thinkingLevel: this.thinkingLevel,
       authStorage: this.authStorage,
       modelRegistry: this.modelRegistry,
-      resourceLoader: await getResourceLoader(this.core, this.extensions),
+      resourceLoader: await getResourceLoader(
+        this.core,
+        this.extensions,
+        this.loadBuiltinExtensions
+      ),
     });
     this.session = session;
 

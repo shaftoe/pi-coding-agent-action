@@ -80,17 +80,24 @@ export async function resolveExtensions(extensions?: string[]): Promise<Extensio
  *
  * @param core - The CoreAdapter to use for logging within the Pi agent.
  * @param extensions - Optional array of extension sources (npm packages, git repos, or local paths).
+ * @param loadBuiltinExtensions - Whether to load built-in GitHub extensions (default true).
  * @returns A fully loaded {@link DefaultResourceLoader} instance.
  */
 export async function getResourceLoader(
   core: CoreAdapter,
-  extensions?: string[]
+  extensions?: string[],
+  loadBuiltinExtensions = true
 ): Promise<DefaultResourceLoader> {
   const { paths: additionalExtensionPaths, info: extensionInfo } =
     await resolveExtensions(extensions);
 
+  const extensionFactories = [createLoggingFactory(core, extensionInfo)];
+  if (loadBuiltinExtensions) {
+    extensionFactories.unshift(extensionsFactory);
+  }
+
   const loader = new DefaultResourceLoader({
-    extensionFactories: [extensionsFactory, createLoggingFactory(core, extensionInfo)],
+    extensionFactories,
     additionalExtensionPaths,
     systemPromptOverride: () => SYSTEM_PROMPT,
     appendSystemPromptOverride: agentsFiles => {

@@ -40,6 +40,11 @@ inputs:
     required: false
     default: ''
 
+  load_builtin_extensions:
+    description: 'Whether to load built-in GitHub extensions (create_pull_request, update_pull_request, get_issue_or_pr_thread)'
+    required: false
+    default: 'true'
+
 runs:
   using: 'node24'
   main: 'dist/index.js'
