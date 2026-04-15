@@ -145,6 +145,25 @@ describe('getPrompt', () => {
     expect(result).toContain('This PR fixes the bug');
   });
 
+  test('returns enriched prompt with PR context from pull_request_review_comment', async () => {
+    github.context.eventName = 'pull_request_review_comment';
+    github.context.payload = {
+      comment: { id: 1, body: '/pi Fix this line' },
+      pull_request: {
+        number: 789,
+        title: 'PR with inline comment',
+        body: 'This PR needs a fix',
+      },
+    };
+
+    const result = await getPrompt();
+    expect(result).toBeDefined();
+    expect(result).toContain('Issue/PR #789: PR with inline comment');
+    expect(result).toContain('Description:');
+    expect(result).toContain('This PR needs a fix');
+    expect(result).toContain('Fix this line');
+  });
+
   test('returns undefined when comment is empty', async () => {
     github.context.payload = {
       comment: { id: 1, body: '/pi' },
@@ -283,6 +302,15 @@ describe('isPR', () => {
     expect(isPR()).toBe(true);
   });
 
+  test('returns true for pull_request_review_comment event with pull_request payload', () => {
+    github.context.eventName = 'pull_request_review_comment';
+    github.context.payload = {
+      comment: { id: 1, body: '/pi fix this' },
+      pull_request: { number: 123 },
+    };
+    expect(isPR()).toBe(true);
+  });
+
   test('returns true when payload has pull_request', () => {
     github.context.eventName = 'issue_comment';
     github.context.payload = {
@@ -315,6 +343,15 @@ describe('getContextType', () => {
 
   test('returns pull_request for pull_request event', () => {
     github.context.eventName = 'pull_request';
+    expect(getContextType()).toBe('pull_request');
+  });
+
+  test('returns pull_request for pull_request_review_comment event', () => {
+    github.context.eventName = 'pull_request_review_comment';
+    github.context.payload = {
+      comment: { id: 1, body: '/pi fix this' },
+      pull_request: { number: 123 },
+    };
     expect(getContextType()).toBe('pull_request');
   });
 
@@ -435,6 +472,24 @@ describe('getIssueOrPullRequestContext', () => {
     };
     const result = getIssueOrPullRequestContext();
     expect(result).toBeUndefined();
+  });
+
+  test('returns pull request context for pull_request_review_comment event', () => {
+    github.context.eventName = 'pull_request_review_comment';
+    github.context.payload = {
+      comment: { id: 1, body: '/pi fix this line' },
+      pull_request: {
+        number: 456,
+        title: 'Fix for inline bug',
+        body: 'This PR fixes an inline issue',
+      },
+    };
+    const result = getIssueOrPullRequestContext();
+    expect(result).toEqual({
+      number: 456,
+      title: 'Fix for inline bug',
+      body: 'This PR fixes an inline issue',
+    });
   });
 
   test('returns context when pull_request has title but no body', () => {
@@ -572,6 +627,41 @@ describe('getStartTimeFromContext', () => {
     test('returns undefined when pull_request is missing', () => {
       github.context.eventName = 'pull_request';
       github.context.payload = {};
+
+      const result = getStartTimeFromContext();
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('pull_request_review_comment events', () => {
+    test('returns comment created_at timestamp for pull_request_review_comment events', () => {
+      github.context.eventName = 'pull_request_review_comment';
+      github.context.payload = {
+        comment: { id: 1, created_at: '2024-01-15T10:30:00Z' },
+        pull_request: { number: 123 },
+      };
+
+      const result = getStartTimeFromContext();
+      expect(result).toBeDefined();
+      expect(result?.toString()).toBe('2024-01-15T10:30:00Z');
+    });
+
+    test('returns undefined when review comment has no created_at', () => {
+      github.context.eventName = 'pull_request_review_comment';
+      github.context.payload = {
+        comment: { id: 1 },
+        pull_request: { number: 123 },
+      };
+
+      const result = getStartTimeFromContext();
+      expect(result).toBeUndefined();
+    });
+
+    test('returns undefined when review comment is missing', () => {
+      github.context.eventName = 'pull_request_review_comment';
+      github.context.payload = {
+        pull_request: { number: 123 },
+      };
 
       const result = getStartTimeFromContext();
       expect(result).toBeUndefined();

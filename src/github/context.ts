@@ -51,6 +51,12 @@ export function getStartTimeFromContext(): Temporal.Instant | undefined {
     return Temporal.Instant.from(payload.comment.created_at);
   }
 
+  // For pull_request_review_comment events (inline PR comments), use the
+  // review comment's created_at timestamp
+  if (eventName === 'pull_request_review_comment' && payload.comment?.created_at) {
+    return Temporal.Instant.from(payload.comment.created_at);
+  }
+
   // For issues events (opened/edited), use the issue's updated_at timestamp
   // (updated_at matches created_at on first creation, and reflects most recent edit time)
   if (eventName === 'issues' && payload.issue?.updated_at) {

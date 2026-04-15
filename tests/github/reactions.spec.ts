@@ -61,11 +61,29 @@ const mockDeleteReaction = mock(() =>
     url: '',
   } as any)
 );
+const mockCreatePRReviewReaction = mock(() =>
+  Promise.resolve({
+    data: { id: 12345, content: 'eyes' },
+    headers: {},
+    status: 200,
+    url: '',
+  } as any)
+);
+const mockDeletePRReviewReaction = mock(() =>
+  Promise.resolve({
+    data: {},
+    headers: {},
+    status: 204,
+    url: '',
+  } as any)
+);
 const mockOctokit = {
   rest: {
     reactions: {
       createForIssueComment: mockCreateReaction,
       deleteForIssueComment: mockDeleteReaction,
+      createForPullRequestReviewComment: mockCreatePRReviewReaction,
+      deleteForPullRequestComment: mockDeletePRReviewReaction,
     },
   },
 };
@@ -89,6 +107,7 @@ const githubModulePromise = import('../../src/github/index.js');
 
 // Setup default GitHub context
 const mockContext = {
+  eventName: 'issue_comment',
   repo: {
     owner: 'test-owner',
     repo: 'test-repo',
@@ -117,8 +136,10 @@ const reactionsModule = import('../../src/github/reactions.js');
 describe('addReaction', () => {
   beforeEach(async () => {
     mockCreateReaction.mockClear();
+    mockCreatePRReviewReaction.mockClear();
     mockDebugLog.length = 0;
-    // Reset to default context with comment
+    // Reset to default context with comment and issue_comment event
+    mockContext.eventName = 'issue_comment';
     mockContext.payload.comment = {
       id: 999,
       body: 'test comment',
@@ -199,13 +220,37 @@ describe('addReaction', () => {
     const callArgs = mockCreateReaction.mock.calls[0] as any[];
     expect(callArgs[0].comment_id).toBe(888);
   });
+
+  test('uses PR review comment API for pull_request_review_comment event', async () => {
+    const module = await reactionsModule;
+    const { addReaction } = module;
+
+    mockContext.eventName = 'pull_request_review_comment';
+    mockContext.payload.comment = {
+      id: 777,
+      body: '/pi fix this line',
+    };
+
+    await addReaction();
+
+    expect(mockCreatePRReviewReaction).toHaveBeenCalledWith({
+      owner: 'test-owner',
+      repo: 'test-repo',
+      comment_id: 777,
+      content: 'eyes',
+    });
+    // Should NOT call the issue comment API
+    expect(mockCreateReaction).not.toHaveBeenCalled();
+  });
 });
 
 describe('deleteReaction', () => {
   beforeEach(() => {
     mockDeleteReaction.mockClear();
+    mockDeletePRReviewReaction.mockClear();
     mockDebugLog.length = 0;
-    // Reset to default context with comment
+    // Reset to default context with comment and issue_comment event
+    mockContext.eventName = 'issue_comment';
     mockContext.payload.comment = {
       id: 999,
       body: 'test comment',
@@ -312,6 +357,35 @@ describe('deleteReaction', () => {
 
     await deleteReaction(undefined);
 
+    expect(mockDeleteReaction).not.toHaveBeenCalled();
+  });
+
+  test('uses PR review comment API for pull_request_review_comment event', async () => {
+    const module = await reactionsModule;
+    const { deleteReaction } = module;
+
+    mockContext.eventName = 'pull_request_review_comment';
+    mockContext.payload.comment = {
+      id: 777,
+      body: '/pi fix this line',
+    };
+
+    const reaction = {
+      data: { id: 55555, content: 'eyes' },
+      headers: {},
+      status: 200,
+      url: '',
+    } as any;
+
+    await deleteReaction(reaction);
+
+    expect(mockDeletePRReviewReaction).toHaveBeenCalledWith({
+      owner: 'test-owner',
+      repo: 'test-repo',
+      comment_id: 777,
+      reaction_id: 55555,
+    });
+    // Should NOT call the issue comment API
     expect(mockDeleteReaction).not.toHaveBeenCalled();
   });
 });
