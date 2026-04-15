@@ -45,7 +45,7 @@ process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-${Date.now()}.j
 fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 
 // Mock octokit
-const mockCreateReaction = mock(() =>
+const mockCreateIssueReaction = mock(() =>
   Promise.resolve({
     data: { id: 12345, content: 'eyes' },
     headers: {},
@@ -53,7 +53,23 @@ const mockCreateReaction = mock(() =>
     url: '',
   } as any)
 );
-const mockDeleteReaction = mock(() =>
+const mockCreatePRReviewReaction = mock(() =>
+  Promise.resolve({
+    data: { id: 12345, content: 'eyes' },
+    headers: {},
+    status: 200,
+    url: '',
+  } as any)
+);
+const mockDeleteIssueReaction = mock(() =>
+  Promise.resolve({
+    data: {},
+    headers: {},
+    status: 204,
+    url: '',
+  } as any)
+);
+const mockDeletePRReviewReaction = mock(() =>
   Promise.resolve({
     data: {},
     headers: {},
@@ -64,8 +80,10 @@ const mockDeleteReaction = mock(() =>
 const mockOctokit = {
   rest: {
     reactions: {
-      createForIssueComment: mockCreateReaction,
-      deleteForIssueComment: mockDeleteReaction,
+      createForIssueComment: mockCreateIssueReaction,
+      createForPullRequestReviewComment: mockCreatePRReviewReaction,
+      deleteForIssueComment: mockDeleteIssueReaction,
+      deleteForPullRequestComment: mockDeletePRReviewReaction,
     },
   },
 };
@@ -116,7 +134,8 @@ const reactionsModule = import('../../src/github/reactions.js');
 
 describe('addReaction', () => {
   beforeEach(async () => {
-    mockCreateReaction.mockClear();
+    mockCreateIssueReaction.mockClear();
+    mockCreatePRReviewReaction.mockClear();
     mockDebugLog.length = 0;
     // Reset to default context with comment
     mockContext.payload.comment = {
@@ -138,7 +157,7 @@ describe('addReaction', () => {
     expect(result).toBeDefined();
     expect(result?.data.id).toBe(12345);
     expect(result?.data.content).toBe('eyes');
-    expect(mockCreateReaction).toHaveBeenCalledWith({
+    expect(mockCreateIssueReaction).toHaveBeenCalledWith({
       owner: 'test-owner',
       repo: 'test-repo',
       comment_id: 999,
@@ -156,7 +175,8 @@ describe('addReaction', () => {
     const result = await addReaction();
 
     expect(result).toBeUndefined();
-    expect(mockCreateReaction).not.toHaveBeenCalled();
+    expect(mockCreateIssueReaction).not.toHaveBeenCalled();
+    expect(mockCreatePRReviewReaction).not.toHaveBeenCalled();
     expect(mockDebugLog.length).toBeGreaterThan(0);
     expect(mockDebugLog[0]).toContain('[reactions] no comment found');
   });
@@ -180,7 +200,7 @@ describe('addReaction', () => {
 
     await addReaction();
 
-    const callArgs = mockCreateReaction.mock.calls[0] as any[];
+    const callArgs = mockCreateIssueReaction.mock.calls[0] as any[];
     expect(callArgs[0].owner).toBe('test-owner');
     expect(callArgs[0].repo).toBe('test-repo');
   });
@@ -196,14 +216,40 @@ describe('addReaction', () => {
 
     await addReaction();
 
-    const callArgs = mockCreateReaction.mock.calls[0] as any[];
+    const callArgs = mockCreateIssueReaction.mock.calls[0] as any[];
     expect(callArgs[0].comment_id).toBe(888);
+  });
+
+  test('adds eyes reaction to PR review comment (inline comment)', async () => {
+    const module = await reactionsModule;
+    const { addReaction } = module;
+
+    // Set up PR review comment context
+    mockContext.payload.comment = {
+      id: 999,
+      body: 'inline comment on code',
+      pull_request_review_id: 456,
+    } as any;
+
+    const result = await addReaction();
+
+    expect(result).toBeDefined();
+    expect(result?.data.id).toBe(12345);
+    expect(result?.data.content).toBe('eyes');
+    expect(mockCreatePRReviewReaction).toHaveBeenCalledWith({
+      owner: 'test-owner',
+      repo: 'test-repo',
+      comment_id: 999,
+      content: 'eyes',
+    });
+    expect(mockCreateIssueReaction).not.toHaveBeenCalled();
   });
 });
 
 describe('deleteReaction', () => {
   beforeEach(() => {
-    mockDeleteReaction.mockClear();
+    mockDeleteIssueReaction.mockClear();
+    mockDeletePRReviewReaction.mockClear();
     mockDebugLog.length = 0;
     // Reset to default context with comment
     mockContext.payload.comment = {
@@ -226,7 +272,7 @@ describe('deleteReaction', () => {
     const result = await deleteReaction(reaction);
 
     expect(result).toBeDefined();
-    expect(mockDeleteReaction).toHaveBeenCalledWith({
+    expect(mockDeleteIssueReaction).toHaveBeenCalledWith({
       owner: 'test-owner',
       repo: 'test-repo',
       comment_id: 999,
@@ -241,7 +287,8 @@ describe('deleteReaction', () => {
     const result = await deleteReaction(undefined);
 
     expect(result).toBeUndefined();
-    expect(mockDeleteReaction).not.toHaveBeenCalled();
+    expect(mockDeleteIssueReaction).not.toHaveBeenCalled();
+    expect(mockDeletePRReviewReaction).not.toHaveBeenCalled();
   });
 
   test('returns undefined when no comment in context', async () => {
@@ -261,7 +308,8 @@ describe('deleteReaction', () => {
     const result = await deleteReaction(reaction);
 
     expect(result).toBeUndefined();
-    expect(mockDeleteReaction).not.toHaveBeenCalled();
+    expect(mockDeleteIssueReaction).not.toHaveBeenCalled();
+    expect(mockDeletePRReviewReaction).not.toHaveBeenCalled();
   });
 
   test('uses correct reaction ID from reaction response', async () => {
@@ -277,7 +325,7 @@ describe('deleteReaction', () => {
 
     await deleteReaction(reaction);
 
-    const callArgs = mockDeleteReaction.mock.calls[0] as any[];
+    const callArgs = mockDeleteIssueReaction.mock.calls[0] as any[];
     expect(callArgs[0].reaction_id).toBe(99999);
   });
 
@@ -299,7 +347,7 @@ describe('deleteReaction', () => {
 
     await deleteReaction(reaction);
 
-    const callArgs = mockDeleteReaction.mock.calls[0] as any[];
+    const callArgs = mockDeleteIssueReaction.mock.calls[0] as any[];
     expect(callArgs[0].comment_id).toBe(555);
   });
 
@@ -312,6 +360,36 @@ describe('deleteReaction', () => {
 
     await deleteReaction(undefined);
 
-    expect(mockDeleteReaction).not.toHaveBeenCalled();
+    expect(mockDeleteIssueReaction).not.toHaveBeenCalled();
+  });
+
+  test('deletes reaction from PR review comment (inline comment)', async () => {
+    const module = await reactionsModule;
+    const { deleteReaction } = module;
+
+    // Set up PR review comment context
+    mockContext.payload.comment = {
+      id: 999,
+      body: 'inline comment on code',
+      pull_request_review_id: 456,
+    } as any;
+
+    const reaction = {
+      data: { id: 12345, content: 'eyes' },
+      headers: {},
+      status: 200,
+      url: '',
+    } as any;
+
+    const result = await deleteReaction(reaction);
+
+    expect(result).toBeDefined();
+    expect(mockDeletePRReviewReaction).toHaveBeenCalledWith({
+      owner: 'test-owner',
+      repo: 'test-repo',
+      comment_id: 999,
+      reaction_id: 12345,
+    });
+    expect(mockDeleteIssueReaction).not.toHaveBeenCalled();
   });
 });

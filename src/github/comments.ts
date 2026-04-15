@@ -1,15 +1,16 @@
 /**
  * @file GitHub comment creation utilities.
  *
- * Provides a thin wrapper around the Octokit `issues.createComment` endpoint
- * with support for appending an action-run link to the final comment posted by
- * the Pi agent.
+ * Provides wrappers around Octokit endpoints for creating comments on issues/PRs
+ * and replies to PR review comments. Supports appending an action-run link to the
+ * final comment posted by the Pi agent.
  */
 
 import * as github from '@actions/github';
 import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
 import { Temporal } from '@js-temporal/polyfill';
 import { getOctokit } from './octokit';
+import { getCoreAdapter } from './index';
 import type { SessionStats } from '../types';
 
 /**
@@ -33,7 +34,15 @@ export interface CommentMetadata {
 }
 
 export type CreateCommentType =
-  RestEndpointMethodTypes.RestEndpointMethodTypes['issues']['createComment']['response'];
+  | RestEndpointMethodTypes.RestEndpointMethodTypes['issues']['createComment']['response']
+  | RestEndpointMethodTypes.RestEndpointMethodTypes['pulls']['createReplyForReviewComment']['response'];
+
+/**
+ * Debug logging helper.
+ */
+function debug(msg: string): void {
+  getCoreAdapter().debug(msg);
+}
 
 /**
  * Format a Temporal Duration to a human-readable string, rounded to the nearest second.
@@ -67,7 +76,22 @@ export function formatExecutionTime(duration: Temporal.Duration): string {
 }
 
 /**
- * Create a comment on the current issue or pull request.
+ * Check if the current comment is a pull request review comment (inline comment).
+ *
+ * PR review comments have a `pull_request_review_id` field in the payload.
+ *
+ * @returns `true` if the comment is a PR review comment, `false` otherwise.
+ */
+function isPullRequestReviewComment(): boolean {
+  const comment = github.context.payload.comment;
+  return comment?.pull_request_review_id !== undefined;
+}
+
+/**
+ * Create a comment on the current issue or pull request, or reply to an inline PR review comment.
+ *
+ * For inline PR review comments, creates a threaded reply. For regular comments,
+ * creates a top-level comment on the issue/PR.
  *
  * @param body - The Markdown body of the comment.
  * @returns The Octokit response, or `undefined` if `body` is empty.
@@ -78,12 +102,32 @@ async function createComment(body: string): Promise<CreateCommentType | undefine
   }
 
   const octokit = getOctokit();
-  return octokit.rest.issues.createComment({
-    owner: github.context.repo.owner,
-    repo: github.context.repo.repo,
-    issue_number: github.context.issue.number,
-    body,
-  });
+
+  // Check if this is a reply to a PR review comment (inline comment)
+  if (isPullRequestReviewComment()) {
+    const comment = github.context.payload.comment;
+    if (!comment) {
+      debug('[comments] no comment found for review reply');
+      return undefined;
+    }
+
+    debug('[comments] creating reply to PR review comment');
+    return octokit.rest.pulls.createReplyForReviewComment({
+      owner: github.context.repo.owner,
+      repo: github.context.repo.repo,
+      pull_number: github.context.issue.number,
+      comment_id: comment.id,
+      body,
+    });
+  } else {
+    debug('[comments] creating top-level issue/PR comment');
+    return octokit.rest.issues.createComment({
+      owner: github.context.repo.owner,
+      repo: github.context.repo.repo,
+      issue_number: github.context.issue.number,
+      body,
+    });
+  }
 }
 
 /**

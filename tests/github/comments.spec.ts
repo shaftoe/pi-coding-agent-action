@@ -24,14 +24,30 @@ const mockGetInput = mock((name: string) => {
   }
   return '';
 });
+const mockDebugLog: string[] = [];
+const debugLogger = (msg: string): void => {
+  mockDebugLog.push(msg);
+};
 mock.module('@actions/core', () => ({
   getInput: mockGetInput,
   notice: mock(noop),
   info: mock(noop),
-  debug: mock(noop),
+  debug: mock(debugLogger),
   setFailed: mock(noop),
   warning: mock(noop),
 }));
+
+// Create a test CoreAdapter
+const testCoreAdapter = {
+  debug: (msg: string): void => {
+    mockDebugLog.push(msg);
+  },
+  getInput: mockGetInput,
+  setFailed: mock(noop),
+  notice: mock(noop),
+  info: mock(noop),
+  warning: mock(noop),
+};
 
 // Mock @actions/github context
 const mockContext = {
@@ -44,17 +60,36 @@ const mockContext = {
   },
   serverUrl: 'https://github.com',
   runId: 123456789,
-  payload: {},
+  payload: {} as Record<string, unknown>,
 };
 mock.module('@actions/github', () => ({
   context: mockContext,
 }));
 
 // Mock the octokit module before importing comments.ts
+const mockCreateIssueComment = mock(() =>
+  Promise.resolve({
+    data: { id: 123 },
+    headers: {},
+    status: 201,
+    url: '',
+  })
+);
+const mockCreateReviewCommentReply = mock(() =>
+  Promise.resolve({
+    data: { id: 456 },
+    headers: {},
+    status: 201,
+    url: '',
+  })
+);
 const mockOctokit = {
   rest: {
     issues: {
-      createComment: mock(() => Promise.resolve({ data: { id: 123 } })),
+      createComment: mockCreateIssueComment,
+    },
+    pulls: {
+      createReplyForReviewComment: mockCreateReviewCommentReply,
     },
   },
 };
@@ -69,6 +104,9 @@ process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), 'gh-event-${Date.now()}.j
 fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 
 import { Temporal } from '@js-temporal/polyfill';
+
+// Initialize the github module context with test adapter
+const githubModulePromise = import('../../src/github/index.js');
 
 // Dynamic import to ensure mocks are set up before module loads
 const { formatExecutionTime, formatNumber, createFinalComment } =
@@ -188,9 +226,17 @@ describe('formatNumber', () => {
 });
 
 describe('createFinalComment', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     // Clear mock calls before each test
-    (mockOctokit.rest.issues.createComment as any).mockClear();
+    mockCreateIssueComment.mockClear();
+    mockCreateReviewCommentReply.mockClear();
+    mockDebugLog.length = 0;
+    // Reset to default context without comment (top-level comment)
+    mockContext.payload.comment = undefined;
+
+    // Initialize the github module context with test adapter
+    const githubExports = await githubModulePromise;
+    githubExports.setCoreAdapter(testCoreAdapter);
   });
 
   test('returns undefined for empty body', async () => {
@@ -378,5 +424,66 @@ describe('createFinalComment', () => {
     const result = await createFinalComment(body, {});
 
     expect(result).toBeDefined();
+  });
+
+  test('creates reply to PR review comment (inline comment)', async () => {
+    const body = 'Here is a response to your inline comment';
+
+    // Set up PR review comment context
+    mockContext.payload.comment = {
+      id: 789,
+      body: 'inline comment on code',
+      pull_request_review_id: 456,
+    } as any;
+
+    await createFinalComment(body, {});
+
+    expect(mockCreateReviewCommentReply).toHaveBeenCalled();
+    expect(mockCreateIssueComment).not.toHaveBeenCalled();
+    const call = mockCreateReviewCommentReply.mock.calls[0] as unknown[];
+    expect(call[0]).toMatchObject({
+      pull_number: 123,
+      comment_id: 789,
+      body: expect.stringContaining(body),
+    });
+  });
+
+  test('creates top-level issue comment when not PR review comment', async () => {
+    const body = 'Top-level comment';
+
+    // Set up regular issue comment context
+    mockContext.payload.comment = {
+      id: 789,
+      body: 'regular comment',
+    };
+
+    await createFinalComment(body, {});
+
+    expect(mockCreateIssueComment).toHaveBeenCalled();
+    expect(mockCreateReviewCommentReply).not.toHaveBeenCalled();
+    const call = mockCreateIssueComment.mock.calls[0] as unknown[];
+    expect(call[0]).toMatchObject({
+      issue_number: 123,
+      body: expect.stringContaining(body),
+    });
+  });
+
+  test('appends action run link to PR review comment reply', async () => {
+    const body = 'Result for inline comment';
+
+    // Set up PR review comment context
+    mockContext.payload.comment = {
+      id: 789,
+      body: 'inline comment',
+      pull_request_review_id: 456,
+    } as any;
+
+    await createFinalComment(body, {});
+
+    expect(mockCreateReviewCommentReply).toHaveBeenCalled();
+    const call = mockCreateReviewCommentReply.mock.calls[0] as unknown[];
+    const commentBody = (call[0] as { body: string }).body;
+    // The body should be modified with metadata (even if the URL is not fully formed in test)
+    expect(commentBody).toContain(body);
   });
 });
