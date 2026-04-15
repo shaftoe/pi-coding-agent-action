@@ -38,15 +38,15 @@ export class Agent {
   /**
    * Create a new Pi agent.
    *
-   * @param modelStr   - Model identifier (e.g. `"claude-sonnet-4-20250514"`).
-   * @param provider   - Provider name as expected by the model registry
-   *                      (e.g. `"anthropic"`, `"openai"`).
-   * @param token      - API key for the provider. When non-empty it is stored in
-   *                      the auth storage automatically.
-   * @param level      - Thinking/reasoning level for the model
-   *                      (default `'off'`).
-   * @param core       - The CoreAdapter for logging and debug output.
-   * @param extensions - Optional array of extension sources (npm, git, or local paths).
+   * @param modelStr              - Model identifier (e.g. `"claude-sonnet-4-20250514"`).
+   * @param provider              - Provider name as expected by the model registry
+   *                                (e.g. `"anthropic"`, `"openai"`).
+   * @param token                 - API key for the provider. When non-empty it is stored in
+   *                                the auth storage automatically.
+   * @param level                 - Thinking/reasoning level for the model
+   *                                (default `'off'`).
+   * @param core                  - The CoreAdapter for logging and debug output.
+   * @param extensions            - Optional array of extension sources (npm, git, or local paths).
    * @param loadBuiltinExtensions - Whether to load built-in GitHub extensions (default true).
    * @throws {Error}   If the requested model cannot be found in the registry.
    */
