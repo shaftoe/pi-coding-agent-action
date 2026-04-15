@@ -104,6 +104,23 @@ Supported extension sources:
 - **git repositories**: `git:github.com/user/repo` (supports branches with `#branch`)
 - **local files**: Relative paths to `.ts` extension files
 
+### Disabling Built-in Extensions
+
+By default the action loads three built-in GitHub related tools (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`) to help Pi better interact with GitHub action environment without relying on external tools like `gh` nor need special skills setup for that. If you want Pi to use only your own custom extensions (or none at all), set `load_builtin_extensions` to `false`:
+
+```yaml
+      - name: Run Pi agent
+        uses: shaftoe/pi-coding-agent-action@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          provider: anthropic
+          model: claude-sonnet-4-5
+          token: ${{ secrets.ANTHROPIC_API_KEY }}
+          load_builtin_extensions: false
+          extensions: |
+            npm:my-custom-github-tools
+```
+
 ### Quick Start
 
 Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interactive](./.github/workflows/pi.yml) and [non-interactive](./.github/workflows/pr.yml) workflows in this repository to get started.
@@ -120,6 +137,7 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | `trigger` | Trigger phrase used to invoke the action | No | /pi |
 | `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
 | `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
+| `load_builtin_extensions` | Whether to load built-in GitHub extensions (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`) | No | `true` |
 
 Refer to [Pi documentation](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) for the current list of supported providers / models / etc.
 
