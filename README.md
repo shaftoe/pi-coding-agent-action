@@ -74,7 +74,7 @@ You can use the `prompt` input to run the agent without requiring a comment trig
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           provider: anthropic
-          model: claude-sonnet-4-5
+          model: claude-sonnet-4-5  # or claude-opus-4-7
           token: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: 'Review this pull request for security issues' # or e.g. ${{ steps.generate-prompt.outputs.prompt }}
 ```
@@ -91,7 +91,7 @@ You can load custom Pi extensions to add additional tools, custom tools, or modi
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           provider: anthropic
-          model: claude-sonnet-4-5
+          model: claude-sonnet-4-5  # or claude-opus-4-7
           token: ${{ secrets.ANTHROPIC_API_KEY }}
           extensions: |
             npm:pi-subagents
@@ -114,7 +114,7 @@ By default the action loads three built-in GitHub related tools (`create_pull_re
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           provider: anthropic
-          model: claude-sonnet-4-5
+          model: claude-sonnet-4-5  # or claude-opus-4-7
           token: ${{ secrets.ANTHROPIC_API_KEY }}
           load_builtin_extensions: false
           extensions: |
@@ -131,7 +131,7 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 |-------|-------------|----------|---------|
 | `github_token` | GitHub token for API access | Yes | - |
 | `provider` | LLM provider (anthropic, openai, google, etc.) | Yes | - |
-| `model` | Model to use (e.g., claude-sonnet-4-5, gpt-4o, gemini-2.5-pro) | Yes | - |
+| `model` | Model to use (e.g., claude-sonnet-4-5, claude-opus-4-7, gpt-4o, gemini-2.5-pro) | Yes | - |
 | `token` | Provider API token | Yes | - |
 | `thinking_level` | Model thinking level (off|low|medium|high) | No | off |
 | `trigger` | Trigger phrase used to invoke the action | No | /pi |

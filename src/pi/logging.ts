@@ -127,6 +127,44 @@ export const loggingFactory = (
     core.info('✅ Agent session completed');
     core.info('════════════════════════════════════════════════════════════════');
   });
+
+  // Hook to inspect provider responses for monitoring and debugging
+  // Check if the method exists (added in v0.67.4) for backward compatibility
+  const piWithAfterHook = pi as ExtensionAPI & {
+    afterProviderResponse?: (
+      callback: (response: { status: number; headers: Record<string, string> }) => void
+    ) => void;
+  };
+
+  if (piWithAfterHook.afterProviderResponse) {
+    piWithAfterHook.afterProviderResponse(
+      (response: { status: number; headers: Record<string, string> }) => {
+        core.debug(`[provider] Response status: ${response.status}`);
+
+        // Log rate limit information if available
+        const rateLimitRemaining = response.headers['x-ratelimit-remaining'];
+        if (rateLimitRemaining !== undefined) {
+          core.debug(`[provider] Rate limit remaining: ${rateLimitRemaining}`);
+        }
+
+        const rateLimitReset = response.headers['x-ratelimit-reset'];
+        if (rateLimitReset !== undefined) {
+          core.debug(`[provider] Rate limit resets at: ${rateLimitReset}`);
+        }
+
+        // Log request ID for debugging
+        const requestId = response.headers['x-request-id'] ?? response.headers['request-id'];
+        if (requestId !== undefined) {
+          core.debug(`[provider] Request ID: ${requestId}`);
+        }
+
+        // Warn about non-2xx responses
+        if (response.status >= 400) {
+          core.warning(`[provider] Non-success response status: ${response.status}`);
+        }
+      }
+    );
+  }
 };
 
 /**
