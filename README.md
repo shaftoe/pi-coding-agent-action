@@ -354,6 +354,52 @@ bun test tests/e2e/pi-agent.spec.ts
 
 Automated release flow handled by `semantic-release` in [release.yml](./.github/workflows/release.yml)
 
+## Roadmap
+
+### Planned Enhancements
+
+- **Improved Context Awareness**: Enhance the agent's ability to understand project-specific context by adding support for:
+  - Custom system prompts from repository files
+  - Project documentation ingestion
+  - Codebase analysis for better context understanding
+
+- **Enhanced Git Operations**:
+  - Support for multiple files in a single commit
+  - Better handling of merge conflicts
+  - Support for reverting changes made by the agent
+
+- **Advanced PR Features**:
+  - Automated PR description generation with diff summaries
+  - Support for PR templates and custom checklists
+  - Integration with CI/CD status checks
+
+- **Security Improvements**:
+  - User/role-based access control (beyond simple filtering)
+  - Approval workflows for sensitive changes
+  - Audit logging for all agent actions
+
+- **Tool Extensions**:
+  - Additional built-in tools for common GitHub operations
+  - Support for custom tool development with better APIs
+  - Marketplace for community-contributed extensions
+
+- **Performance Optimizations**:
+  - Caching for repeated context queries
+  - Parallel processing for multi-file operations
+  - Reduced latency for large codebases
+
+### Under Consideration
+
+- **Multi-Agent Collaboration**: Support for multiple agents working together on complex tasks
+- **Interactive Mode**: Two-way communication where the agent can ask clarifying questions
+- **Learning from History**: Agent learns from previous successful/failed operations in the repository
+- **Support for Additional Event Types**: Extend beyond issues and PRs to workflows, releases, etc.
+- **Self-Correction**: Agent ability to detect and fix its own mistakes automatically
+
+### Contributing
+
+Suggestions and contributions for roadmap items are welcome! Feel free to open an issue or pull request to discuss potential improvements.
+
 ## License
 
 See [LICENSE](./LICENSE)
