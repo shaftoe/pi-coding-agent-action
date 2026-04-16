@@ -74,7 +74,7 @@ You can use the `prompt` input to run the agent without requiring a comment trig
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           provider: anthropic
-          model: claude-sonnet-4-5  # or claude-opus-4-7
+          model: claude-opus-4-7
           token: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: 'Review this pull request for security issues' # or e.g. ${{ steps.generate-prompt.outputs.prompt }}
 ```
@@ -91,7 +91,7 @@ You can load custom Pi extensions to add additional tools, custom tools, or modi
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           provider: anthropic
-          model: claude-sonnet-4-5  # or claude-opus-4-7
+          model: claude-opus-4-7
           token: ${{ secrets.ANTHROPIC_API_KEY }}
           extensions: |
             npm:pi-subagents
@@ -114,7 +114,7 @@ By default the action loads three built-in GitHub related tools (`create_pull_re
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           provider: anthropic
-          model: claude-sonnet-4-5  # or claude-opus-4-7
+          model: claude-opus-4-7
           token: ${{ secrets.ANTHROPIC_API_KEY }}
           load_builtin_extensions: false
           extensions: |
