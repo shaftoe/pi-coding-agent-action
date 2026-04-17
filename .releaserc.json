@@ -6,7 +6,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "bun run scripts/bump-readme-version.ts ${nextRelease.version}"
+        "prepareCmd": "bun run scripts/bump-version.ts ${nextRelease.version}"
       }
     ],
     [
