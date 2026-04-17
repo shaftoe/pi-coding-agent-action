@@ -51,6 +51,16 @@ export function getStartTimeFromContext(): Temporal.Instant | undefined {
     return Temporal.Instant.from(payload.comment.created_at);
   }
 
+  // For pull_request_review_comment events, use the comment's created_at timestamp
+  if (eventName === 'pull_request_review_comment' && payload.comment?.created_at) {
+    return Temporal.Instant.from(payload.comment.created_at);
+  }
+
+  // For pull_request_review events, use the review's submitted_at timestamp
+  if (eventName === 'pull_request_review' && payload.review?.submitted_at) {
+    return Temporal.Instant.from(payload.review.submitted_at);
+  }
+
   // For issues events (opened/edited), use the issue's updated_at timestamp
   // (updated_at matches created_at on first creation, and reflects most recent edit time)
   if (eventName === 'issues' && payload.issue?.updated_at) {
@@ -220,15 +230,37 @@ export async function getPrompt(promptInput?: string): Promise<string | undefine
   return enrichWithContext(prompt, 'Comment/Instruction');
 }
 
-async function getComment(): Promise<typeof github.context.payload.comment | undefined> {
+/**
+ * Minimal shape returned by {@link getComment}.
+ *
+ * Covers both `payload.comment` (issue_comment, pull_request_review_comment)
+ * and `payload.review` (pull_request_review) — both carry `id` and `body`.
+ */
+interface TriggeringComment {
+  id: number;
+  body: string;
+}
+
+async function getComment(): Promise<TriggeringComment | undefined> {
   const comment = github.context.payload.comment;
+  const review = github.context.payload.review;
+
+  // For pull_request_review events, the body is on the review object, not comment
+  if (!comment && review) {
+    if (!review.body) {
+      return;
+    }
+
+    const body = (review.body as string).replace(getTrigger(), '').trim();
+    return { id: review.id, body };
+  }
+
   if (!comment) {
     return;
   }
 
-  comment.body = comment.body.replace(getTrigger(), '').trim();
-
-  return comment;
+  const body = comment.body.replace(getTrigger(), '').trim();
+  return { id: comment.id, body };
 }
 
 function resolveThreadParams(
@@ -302,7 +334,8 @@ function transformComment(comment: {
   updated_at: string | null;
   body?: string | null;
 }): ThreadComment {
-  const triggeringCommentId = github.context.payload.comment?.id;
+  const triggeringCommentId =
+    github.context.payload.comment?.id ?? github.context.payload.review?.id;
 
   const baseComment: ThreadComment = {
     id: comment.id,

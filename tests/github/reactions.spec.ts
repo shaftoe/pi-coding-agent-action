@@ -244,6 +244,24 @@ describe('addReaction', () => {
     });
     expect(mockCreateIssueReaction).not.toHaveBeenCalled();
   });
+
+  test('returns undefined for pull_request_review event (no comment in payload)', async () => {
+    const module = await reactionsModule;
+    const { addReaction } = module;
+
+    // Simulate pull_request_review event: no comment, has review
+    (mockContext as any).payload = {
+      review: { id: 42, body: '/pi review this' },
+    };
+
+    const result = await addReaction();
+
+    expect(result).toBeUndefined();
+    expect(mockCreateIssueReaction).not.toHaveBeenCalled();
+    expect(mockCreatePRReviewReaction).not.toHaveBeenCalled();
+    expect(mockDebugLog.length).toBeGreaterThan(0);
+    expect(mockDebugLog[0]).toContain('[reactions] no comment found');
+  });
 });
 
 describe('deleteReaction', () => {
@@ -391,5 +409,28 @@ describe('deleteReaction', () => {
       reaction_id: 12345,
     });
     expect(mockDeleteIssueReaction).not.toHaveBeenCalled();
+  });
+
+  test('returns undefined for pull_request_review event deleteReaction (no comment)', async () => {
+    const module = await reactionsModule;
+    const { deleteReaction } = module;
+
+    // Simulate pull_request_review event: no comment, has review
+    (mockContext as any).payload = {
+      review: { id: 42, body: '/pi review this' },
+    };
+
+    const reaction = {
+      data: { id: 12345, content: 'eyes' },
+      headers: {},
+      status: 200,
+      url: '',
+    } as any;
+
+    const result = await deleteReaction(reaction);
+
+    expect(result).toBeUndefined();
+    expect(mockDeleteIssueReaction).not.toHaveBeenCalled();
+    expect(mockDeletePRReviewReaction).not.toHaveBeenCalled();
   });
 });

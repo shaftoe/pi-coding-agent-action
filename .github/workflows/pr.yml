@@ -10,9 +10,31 @@ permissions:
 
 jobs:
   pi-agent:
-    uses: ./.github/workflows/pi.yml
-    with:
-      prompt: This is a GitHub PR (#${{ github.event.pull_request.number }}) that needs code review. Focus on identifying issues, bugs, security concerns, and improvements.
-    secrets:
-      gh_token: ${{ secrets.GITHUB_TOKEN }}
-      token: ${{ secrets.API_KEY }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || '' }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Run Pi agent
+        uses: shaftoe/pi-coding-agent-action@v2
+        with:
+          github_token: ${{ secrets.gh_token }}
+          provider: ${{ vars.PROVIDER }}
+          model: ${{ vars.MODEL }}
+          token: ${{ secrets.token }}
+          thinking_level: ${{ vars.THINKING_LEVEL }}
+          prompt: This is a GitHub PR (#${{ github.event.pull_request.number }}) that needs code review. Focus on identifying issues, bugs, security concerns, and improvements.
+          extensions: |
+            npm:pi-librarian

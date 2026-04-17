@@ -145,6 +145,111 @@ describe('getPrompt', () => {
     expect(result).toContain('This PR fixes the bug');
   });
 
+  test('returns enriched prompt from pull_request_review event', async () => {
+    github.context.eventName = 'pull_request_review';
+    github.context.payload = {
+      review: { id: 99, body: '/pi Review this please' },
+      pull_request: {
+        number: 55,
+        title: 'Add feature',
+        body: 'Feature description',
+      },
+    };
+
+    const result = await getPrompt();
+    expect(result).toBeDefined();
+    expect(result).toContain('Issue/PR #55: Add feature');
+    expect(result).toContain('Feature description');
+    expect(result).toContain('Review this please');
+  });
+
+  test('strips trigger from pull_request_review body', async () => {
+    github.context.eventName = 'pull_request_review';
+    github.context.payload = {
+      review: { id: 99, body: '/pi Review this please' },
+      pull_request: {
+        number: 55,
+        title: 'Add feature',
+      },
+    };
+
+    const result = await getPrompt();
+    expect(result).toBeDefined();
+    expect(result).not.toContain('/pi');
+    expect(result).toContain('Review this please');
+  });
+
+  test('returns undefined for pull_request_review with null body (approve-only)', async () => {
+    github.context.eventName = 'pull_request_review';
+    github.context.payload = {
+      review: { id: 99, body: null },
+      pull_request: {
+        number: 55,
+        title: 'Add feature',
+      },
+    };
+
+    const result = await getPrompt();
+    expect(result).toBeUndefined();
+  });
+
+  test('returns undefined for pull_request_review with empty string body', async () => {
+    github.context.eventName = 'pull_request_review';
+    github.context.payload = {
+      review: { id: 99, body: '' },
+      pull_request: {
+        number: 55,
+        title: 'Add feature',
+      },
+    };
+
+    const result = await getPrompt();
+    expect(result).toBeUndefined();
+  });
+
+  test('returns enriched prompt from pull_request_review_comment event', async () => {
+    github.context.eventName = 'pull_request_review_comment';
+    github.context.payload = {
+      comment: { id: 200, body: '/pi Fix this line', pull_request_review_id: 99 },
+      pull_request: {
+        number: 77,
+        title: 'Bugfix PR',
+        body: 'Fixes a bug',
+      },
+    };
+
+    const result = await getPrompt();
+    expect(result).toBeDefined();
+    expect(result).toContain('Issue/PR #77: Bugfix PR');
+    expect(result).toContain('Fix this line');
+  });
+
+  test('strips trigger from pull_request_review_comment body', async () => {
+    github.context.eventName = 'pull_request_review_comment';
+    github.context.payload = {
+      comment: { id: 200, body: '/pi Fix this line', pull_request_review_id: 99 },
+      pull_request: {
+        number: 77,
+        title: 'Bugfix PR',
+      },
+    };
+
+    const result = await getPrompt();
+    expect(result).toBeDefined();
+    expect(result).not.toContain('/pi');
+    expect(result).toContain('Fix this line');
+  });
+
+  test('returns undefined for pull_request_review without PR context', async () => {
+    github.context.eventName = 'pull_request_review';
+    github.context.payload = {
+      review: { id: 99, body: '/pi Do something' },
+    };
+
+    const result = await getPrompt();
+    expect(result).toBe('Do something');
+  });
+
   test('returns undefined when comment is empty', async () => {
     github.context.payload = {
       comment: { id: 1, body: '/pi' },
@@ -295,6 +400,22 @@ describe('isPR', () => {
     github.context.eventName = 'push';
     expect(isPR()).toBe(false);
   });
+
+  test('returns true for pull_request_review event (has pull_request in payload)', () => {
+    github.context.eventName = 'pull_request_review';
+    github.context.payload = {
+      pull_request: { number: 10 },
+    };
+    expect(isPR()).toBe(true);
+  });
+
+  test('returns true for pull_request_review_comment event (has pull_request in payload)', () => {
+    github.context.eventName = 'pull_request_review_comment';
+    github.context.payload = {
+      pull_request: { number: 10 },
+    };
+    expect(isPR()).toBe(true);
+  });
 });
 
 describe('getContextType', () => {
@@ -329,6 +450,22 @@ describe('getContextType', () => {
   test('returns undefined for unknown event type', () => {
     github.context.eventName = 'push';
     expect(getContextType()).toBeUndefined();
+  });
+
+  test('returns pull_request for pull_request_review event', () => {
+    github.context.eventName = 'pull_request_review';
+    github.context.payload = {
+      pull_request: { number: 10 },
+    };
+    expect(getContextType()).toBe('pull_request');
+  });
+
+  test('returns pull_request for pull_request_review_comment event', () => {
+    github.context.eventName = 'pull_request_review_comment';
+    github.context.payload = {
+      pull_request: { number: 10 },
+    };
+    expect(getContextType()).toBe('pull_request');
   });
 });
 
@@ -449,6 +586,42 @@ describe('getIssueOrPullRequestContext', () => {
     expect(result).toEqual({
       number: 888,
       title: 'PR title only',
+    });
+  });
+
+  test('returns PR context for pull_request_review event', () => {
+    github.context.eventName = 'pull_request_review';
+    github.context.payload = {
+      review: { id: 1, body: 'LGTM' },
+      pull_request: {
+        number: 50,
+        title: 'Review PR',
+        body: 'Please review',
+      },
+    };
+    const result = getIssueOrPullRequestContext();
+    expect(result).toEqual({
+      number: 50,
+      title: 'Review PR',
+      body: 'Please review',
+    });
+  });
+
+  test('returns PR context for pull_request_review_comment event', () => {
+    github.context.eventName = 'pull_request_review_comment';
+    github.context.payload = {
+      comment: { id: 1, body: 'nit', pull_request_review_id: 99 },
+      pull_request: {
+        number: 60,
+        title: 'Diff comment PR',
+        body: 'Fix typo',
+      },
+    };
+    const result = getIssueOrPullRequestContext();
+    expect(result).toEqual({
+      number: 60,
+      title: 'Diff comment PR',
+      body: 'Fix typo',
     });
   });
 });
@@ -572,6 +745,76 @@ describe('getStartTimeFromContext', () => {
     test('returns undefined when pull_request is missing', () => {
       github.context.eventName = 'pull_request';
       github.context.payload = {};
+
+      const result = getStartTimeFromContext();
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('pull_request_review events', () => {
+    test('returns review submitted_at timestamp for pull_request_review events', () => {
+      github.context.eventName = 'pull_request_review';
+      github.context.payload = {
+        review: { id: 1, submitted_at: '2024-06-01T12:00:00Z' },
+        pull_request: { number: 10 },
+      };
+
+      const result = getStartTimeFromContext();
+      expect(result).toBeDefined();
+      expect(result?.toString()).toBe('2024-06-01T12:00:00Z');
+    });
+
+    test('returns undefined when review has no submitted_at', () => {
+      github.context.eventName = 'pull_request_review';
+      github.context.payload = {
+        review: { id: 1 },
+        pull_request: { number: 10 },
+      };
+
+      const result = getStartTimeFromContext();
+      expect(result).toBeUndefined();
+    });
+
+    test('returns undefined when review is missing', () => {
+      github.context.eventName = 'pull_request_review';
+      github.context.payload = {
+        pull_request: { number: 10 },
+      };
+
+      const result = getStartTimeFromContext();
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('pull_request_review_comment events', () => {
+    test('returns comment created_at timestamp for pull_request_review_comment events', () => {
+      github.context.eventName = 'pull_request_review_comment';
+      github.context.payload = {
+        comment: { id: 1, created_at: '2024-07-15T08:30:00Z', pull_request_review_id: 99 },
+        pull_request: { number: 20 },
+      };
+
+      const result = getStartTimeFromContext();
+      expect(result).toBeDefined();
+      expect(result?.toString()).toBe('2024-07-15T08:30:00Z');
+    });
+
+    test('returns undefined when comment has no created_at', () => {
+      github.context.eventName = 'pull_request_review_comment';
+      github.context.payload = {
+        comment: { id: 1 },
+        pull_request: { number: 20 },
+      };
+
+      const result = getStartTimeFromContext();
+      expect(result).toBeUndefined();
+    });
+
+    test('returns undefined when comment is missing', () => {
+      github.context.eventName = 'pull_request_review_comment';
+      github.context.payload = {
+        pull_request: { number: 20 },
+      };
 
       const result = getStartTimeFromContext();
       expect(result).toBeUndefined();

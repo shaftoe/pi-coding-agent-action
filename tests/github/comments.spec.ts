@@ -468,6 +468,26 @@ describe('createFinalComment', () => {
     });
   });
 
+  test('creates top-level comment for pull_request_review event (no comment in payload)', async () => {
+    const body = 'Result for review';
+
+    // Simulate pull_request_review event: no comment, has review
+    mockContext.payload = {
+      review: { id: 42, body: '/pi review this' },
+    } as any;
+
+    await createFinalComment(body, {});
+
+    // Should fall through to top-level issue comment (not a review comment reply)
+    expect(mockCreateIssueComment).toHaveBeenCalled();
+    expect(mockCreateReviewCommentReply).not.toHaveBeenCalled();
+    const call = mockCreateIssueComment.mock.calls[0] as unknown[];
+    expect(call[0]).toMatchObject({
+      issue_number: 123,
+      body: expect.stringContaining(body),
+    });
+  });
+
   test('appends action run link to PR review comment reply', async () => {
     const body = 'Result for inline comment';
 

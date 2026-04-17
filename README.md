@@ -292,6 +292,11 @@ bun test tests/e2e/pi-agent.spec.ts
 
 Automated release flow handled by `semantic-release` in [release.yml](./.github/workflows/release.yml)
 
+### Refereneces
+
+- Events that trigger workflows: <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows>
+- Webhook schema source: <https://github.com/octokit/webhooks/tree/main/payload-schemas/api.github.com>
+
 ## License
 
 See [LICENSE](./LICENSE)
