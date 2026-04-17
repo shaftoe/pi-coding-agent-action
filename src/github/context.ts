@@ -22,6 +22,20 @@ function debug(msg: string): void {
 }
 
 /**
+ * Maps GitHub event names to functions that extract the relevant timestamp
+ * from the event payload. Each extractor returns a timestamp string suitable
+ * for `Temporal.Instant.from()`, or `undefined` if unavailable.
+ */
+const TIMESTAMP_SOURCES: Record<string, (p: typeof github.context.payload) => string | undefined> =
+  {
+    issue_comment: p => p.comment?.created_at,
+    pull_request_review_comment: p => p.comment?.created_at,
+    pull_request_review: p => p.review?.submitted_at,
+    issues: p => p.issue?.updated_at,
+    pull_request: p => p.pull_request?.updated_at,
+  };
+
+/**
  * Get the trigger command for stripping from comments.
  *
  * Lazily retrieves the trigger input to avoid module-level evaluation issues.
@@ -46,35 +60,19 @@ function getTrigger(): string {
 export function getStartTimeFromContext(): Temporal.Instant | undefined {
   const { eventName, payload } = github.context;
 
-  // For issue_comment events, use the comment's created_at timestamp
-  if (eventName === 'issue_comment' && payload.comment?.created_at) {
-    return Temporal.Instant.from(payload.comment.created_at);
+  // Record-based dispatch: event name → timestamp field extractor
+  const extractor = TIMESTAMP_SOURCES[eventName];
+  if (!extractor) {
+    debug(`[getStartTimeFromContext] No timestamp source for event type: ${eventName}`);
+    return undefined;
   }
 
-  // For pull_request_review_comment events, use the comment's created_at timestamp
-  if (eventName === 'pull_request_review_comment' && payload.comment?.created_at) {
-    return Temporal.Instant.from(payload.comment.created_at);
+  const timestamp = extractor(payload);
+  if (!timestamp) {
+    return undefined;
   }
 
-  // For pull_request_review events, use the review's submitted_at timestamp
-  if (eventName === 'pull_request_review' && payload.review?.submitted_at) {
-    return Temporal.Instant.from(payload.review.submitted_at);
-  }
-
-  // For issues events (opened/edited), use the issue's updated_at timestamp
-  // (updated_at matches created_at on first creation, and reflects most recent edit time)
-  if (eventName === 'issues' && payload.issue?.updated_at) {
-    return Temporal.Instant.from(payload.issue.updated_at);
-  }
-
-  // For pull_request events, use the PR's updated_at timestamp
-  // (updated_at matches created_at on first creation, and reflects most recent commit/action time)
-  if (eventName === 'pull_request' && payload.pull_request?.updated_at) {
-    return Temporal.Instant.from(payload.pull_request.updated_at);
-  }
-
-  debug(`[getStartTimeFromContext] Could not determine start time from event type: ${eventName}`);
-  return undefined;
+  return Temporal.Instant.from(timestamp);
 }
 
 export interface IssueOrPullRequestContext {
@@ -127,43 +125,49 @@ export interface GetIssueOrPRThreadParams {
 export { isPR, getContextType };
 
 /**
- * Extract a lightweight context object (title, body, number) from the current
- * GitHub issue or pull request.
- *
- * @returns The context data, or `undefined` if the payload does not contain a
- *          recognised issue or PR.
+ * Extracts an {@link IssueOrPullRequestContext} from a GitHub event payload
+ * keyed by context type ('issue' or 'pull_request').
  */
+const CONTEXT_EXTRACTORS: Record<
+  'issue' | 'pull_request',
+  (payload: typeof github.context.payload) => IssueOrPullRequestContext | undefined
+> = {
+  issue: payload => {
+    const issue = payload.issue;
+    if (!issue?.title) {
+      return undefined;
+    }
+    return {
+      title: issue.title,
+      number: issue.number,
+      ...(issue.body !== undefined ? { body: issue.body } : {}),
+    };
+  },
+  pull_request: payload => {
+    const pr = payload.pull_request;
+    if (!pr?.title) {
+      return undefined;
+    }
+    return {
+      title: pr.title,
+      number: pr.number,
+      ...(pr.body !== undefined ? { body: pr.body } : {}),
+    };
+  },
+};
+
 export function getIssueOrPullRequestContext(): IssueOrPullRequestContext | undefined {
   const contextType = getContextType();
-  const payload = github.context.payload;
-
-  if (contextType === 'issue') {
-    const issue = payload.issue;
-    if (issue?.title) {
-      const result: IssueOrPullRequestContext = {
-        title: issue.title,
-        number: issue.number,
-      };
-      if (issue.body !== undefined) {
-        result.body = issue.body;
-      }
-      return result;
-    }
-  } else if (contextType === 'pull_request') {
-    const pullRequest = payload.pull_request;
-    if (pullRequest?.title) {
-      const result: IssueOrPullRequestContext = {
-        title: pullRequest.title,
-        number: pullRequest.number,
-      };
-      if (pullRequest.body !== undefined) {
-        result.body = pullRequest.body;
-      }
-      return result;
-    }
+  if (!contextType) {
+    return undefined;
   }
 
-  return undefined;
+  const extractor = CONTEXT_EXTRACTORS[contextType];
+  if (!extractor) {
+    return undefined;
+  }
+
+  return extractor(github.context.payload);
 }
 
 /**

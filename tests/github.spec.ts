@@ -589,6 +589,18 @@ describe('getIssueOrPullRequestContext', () => {
     });
   });
 
+  test('returns undefined when pull_request has no title', () => {
+    github.context.eventName = 'pull_request';
+    github.context.payload = {
+      pull_request: {
+        number: 888,
+        body: 'No title on PR',
+      },
+    };
+    const result = getIssueOrPullRequestContext();
+    expect(result).toBeUndefined();
+  });
+
   test('returns PR context for pull_request_review event', () => {
     github.context.eventName = 'pull_request_review';
     github.context.payload = {
