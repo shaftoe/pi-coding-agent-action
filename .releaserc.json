@@ -4,9 +4,15 @@
     "@semantic-release/commit-analyzer",
     "@alexanderfortin/semantic-release-keep-a-changelog",
     [
+      "@semantic-release/npm",
+      {
+        "npmPublish": false
+      }
+    ],
+    [
       "@semantic-release/exec",
       {
-        "prepareCmd": "bun run scripts/bump-version.ts ${nextRelease.version}"
+        "prepareCmd": "bun run scripts/bump-readme-version.ts ${nextRelease.version}"
       }
     ],
     [

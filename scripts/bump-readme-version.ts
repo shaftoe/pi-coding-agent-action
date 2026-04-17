@@ -1,14 +1,17 @@
 /**
- * CLI script — bumps version references in package.json and README.md to
- * match the version being released by semantic-release.
+ * CLI script — updates version references in README.md to match the
+ * version being released by semantic-release.
  *
  * Called by the @semantic-release/exec plugin during the release process.
  * The next version is read from the `npm_package_version` env var set by
  * semantic-release (via the `--package-manager bun` / `execCwd` option)
  * or can be passed as the first CLI argument.
  *
+ * Note: package.json version bumping is handled by @semantic-release/npm
+ * with npmPublish:false, so this script only needs to handle README.md.
+ *
  * Usage:
- *   bun run scripts/bump-version.ts [version]
+ *   bun run scripts/bump-readme-version.ts [version]
  */
 
 import { readFileSync, writeFileSync } from "node:fs"
