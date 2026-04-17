@@ -1,6 +1,6 @@
 /**
- * CLI script — updates version references in README.md to match the
- * version being released by semantic-release.
+ * CLI script — updates version references in README.md and package.json
+ * to match the version being released by semantic-release.
  *
  * Called by the @semantic-release/exec plugin during the release process.
  * The next version is read from the `npm_package_version` env var set by
@@ -18,6 +18,7 @@ const __dirname = dirname(resolve(process.argv[1]!))
 const cwd = resolve(__dirname, "..")
 
 const README_FILE = resolve(cwd, "README.md")
+const PACKAGE_FILE = resolve(cwd, "package.json")
 
 function main() {
   // Version comes from the CLI arg or from the env set by semantic-release
@@ -28,6 +29,17 @@ function main() {
     process.exit(1)
   }
 
+  // --- Bump package.json ---
+  const pkg = JSON.parse(readFileSync(PACKAGE_FILE, "utf-8"))
+  if (pkg.version === version) {
+    console.log(`package.json already at v${version}`)
+  } else {
+    pkg.version = version
+    writeFileSync(PACKAGE_FILE, JSON.stringify(pkg, null, 2) + "\n", "utf-8")
+    console.log(`Updated package.json version to ${version}`)
+  }
+
+  // --- Bump README.md pinned reference ---
   const readme = readFileSync(README_FILE, "utf-8")
 
   // Replace the pinned version reference in the "Securing your workflows" section
@@ -39,11 +51,10 @@ function main() {
 
   if (updated === readme) {
     console.log("No pinned version reference found to update in README.md")
-    return
+  } else {
+    writeFileSync(README_FILE, updated, "utf-8")
+    console.log(`Updated README.md pinned version reference to v${version}`)
   }
-
-  writeFileSync(README_FILE, updated, "utf-8")
-  console.log(`Updated README.md pinned version reference to v${version}`)
 }
 
 main()

@@ -1,6 +1,6 @@
 {
   "name": "pi-coding-agent-action",
-  "version": "2.7.2",
+  "version": "2.8.0",
   "description": "GitHub Action that runs the pi coding agent on issues and pull requests",
   "main": "dist/index.js",
   "scripts": {
