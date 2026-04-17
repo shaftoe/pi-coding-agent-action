@@ -50,10 +50,7 @@ function getTrigger(): string {
  * Extract the start timestamp from the GitHub event payload.
  *
  * Uses the timestamp of the triggering event to measure the total time from
- * user action to completion:
- * - For issue_comment: uses comment's created_at (when the comment was made)
- * - For issues: uses issue's updated_at (when the issue was last edited)
- * - For pull_request: uses PR's updated_at (when the PR was last synchronized)
+ * user action to completion.
  *
  * @returns The start instant, or `undefined` if it cannot be determined.
  */
