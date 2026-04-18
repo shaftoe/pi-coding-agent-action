@@ -212,10 +212,82 @@ export interface ScanDirectoryParams {
 }
 
 /**
+ * Transform `.gitignore` patterns from a subdirectory so they are expressed
+ * as repo-root-relative patterns understood by the root-level `ignore` instance.
+ *
+ * Git scoping rules (see `gitignore` docs):
+ * - If the pattern contains a `/` at the **beginning or middle** (not just
+ *   trailing), it is anchored to the directory containing the `.gitignore`.
+ * - Otherwise it is a shell glob that matches at **any depth** below that
+ *   directory.
+ *
+ * Negation prefixes (`!`) are preserved after transforming the inner pattern.
+ *
+ * @param content - Raw `.gitignore` file content.
+ * @param dirPath - Repo-root-relative path of the directory that contains the
+ *                  `.gitignore` (e.g. `"src/utils"`).
+ * @returns Transformed pattern lines ready to be fed to the root `ignore`
+ *          instance.
+ */
+function transformGitignoreContent(content: string, dirPath: string): string {
+  return content
+    .split('\n')
+    .map(line => {
+      const trimmed = line.trim();
+      // Preserve empty lines and comments as-is (they are harmless)
+      if (!trimmed || trimmed.startsWith('#')) {
+        return '';
+      }
+      return transformPattern(trimmed, dirPath);
+    })
+    .filter(line => line !== '')
+    .join('\n');
+}
+
+/**
+ * Transform a single gitignore pattern for a subdirectory context.
+ *
+ * @param pattern - A single non-empty, non-comment gitignore pattern.
+ * @param dirPath - Repo-root-relative directory path.
+ * @returns Pattern adjusted to be repo-root-relative.
+ */
+function transformPattern(pattern: string, dirPath: string): string {
+  const isNegation = pattern.startsWith('!');
+  const rawPattern = isNegation ? pattern.slice(1) : pattern;
+
+  // Remove leading `/` (anchoring marker) – it will be re-anchored via dirPath
+  const unanchored = rawPattern.startsWith('/') ? rawPattern.slice(1) : rawPattern;
+
+  // Determine whether the original pattern had a separator at beginning or middle.
+  // A trailing `/` (directory marker) does NOT count as a separator for anchoring.
+  const withoutTrailing = rawPattern.endsWith('/') ? rawPattern.slice(0, -1) : rawPattern;
+  const hasSeparator =
+    withoutTrailing.startsWith('/') || withoutTrailing.slice(1).includes('/');
+
+  let transformed: string;
+  if (hasSeparator) {
+    // Pattern is relative to the .gitignore directory → prefix with dirPath
+    transformed = `${dirPath}/${unanchored}`;
+  } else {
+    // Pattern is a glob matching at any depth below the .gitignore directory
+    transformed = `${dirPath}/**/${rawPattern}`;
+  }
+
+  return isNegation ? `!${transformed}` : transformed;
+}
+
+/**
  * Recursively scan a directory for files and determine changes.
  *
+ * As the scan descends into subdirectories, any `.gitignore` files found are
+ * loaded and their patterns are transformed to repo-root-relative form and
+ * added to the shared `ignore` instance.  This correctly handles nested
+ * `.gitignore` files including negation patterns (e.g. `!keep/this/file.md`).
+ *
  * @param params - Parameters controlling the scan operation.
- * @returns Changed files and all encountered files.
+ * @returns Changed files and all encountered files (including gitignored ones
+ *          that exist on disk, so deletion detection can distinguish between
+ *          "file was deleted" and "file is gitignored but still present").
  */
 export async function scanDirectory(params: ScanDirectoryParams): Promise<{
   changedFiles: { path: string; content: string; mode: FileMode }[];
@@ -224,6 +296,19 @@ export async function scanDirectory(params: ScanDirectoryParams): Promise<{
   const { dir, relativePath, referenceFiles, ig, log } = params;
   const changedFiles: { path: string; content: string; mode: FileMode }[] = [];
   const encounteredFiles = new Set<string>();
+
+  // Load nested .gitignore if present (root .gitignore is loaded in scanForChanges)
+  if (relativePath) {
+    try {
+      const subGitignorePath = path.join(dir, '.gitignore');
+      const subGitignoreContent = await fs.readFile(subGitignorePath, 'utf-8');
+      const transformed = transformGitignoreContent(subGitignoreContent, relativePath);
+      ig.add(transformed);
+      log.debug(`loaded nested .gitignore: ${path.join(relativePath, '.gitignore')}`);
+    } catch (_e) {
+      // No .gitignore in this subdirectory – that's fine
+    }
+  }
 
   const entries = await fs.readdir(dir, { withFileTypes: true });
 
@@ -297,11 +382,25 @@ export async function scanForChanges(
     log,
   });
 
-  // Detect deleted files by comparing reference files with what we found locally
+  // Detect deleted files by comparing reference files with what we found locally.
+  // A file is only considered deleted if it is NOT present on disk.  Files that
+  // are matched by a .gitignore pattern but still exist on disk must NOT be
+  // removed from the tree – they were simply skipped during scanning.
   const deletedFiles: string[] = [];
   for (const refFilePath of referenceFiles.keys()) {
     if (!localFilesEncountered.has(refFilePath)) {
-      // This file exists in the reference but wasn't found locally - it was deleted
+      // Double-check: is the file actually missing from disk?
+      const absolutePath = path.join(repoRoot, refFilePath);
+      try {
+        await fs.access(absolutePath);
+        // File exists on disk but was skipped (e.g. gitignored) – do NOT delete
+        log.debug(
+          `skipping deletion of gitignored file that still exists: ${refFilePath}`
+        );
+        continue;
+      } catch (_e) {
+        // File truly does not exist – it was deleted
+      }
       deletedFiles.push(refFilePath);
       log.debug(`deleted file: ${refFilePath}`);
     }
