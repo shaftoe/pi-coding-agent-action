@@ -12,6 +12,7 @@
  * - Anything else → throws an error (unsupported platform)
  */
 
+import { context } from '@actions/github';
 import type { PlatformProvider, PlatformType, PlatformContext } from './types';
 import { addReaction, deleteReaction, createFinalComment, getPrompt } from '../git';
 import { getStartTimeFromContext } from '../git/context';
@@ -69,12 +70,6 @@ export function createGitHubPlatformProvider(): PlatformProvider {
     type,
 
     getContext(): PlatformContext {
-      // Use dynamic import to avoid top-level dependency on @actions/github
-      // This module is only used in the GitHub Actions runner where @actions/github is available
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const github = require('@actions/github') as typeof import('@actions/github');
-      const context = github.context;
-
       return {
         repo: context.repo,
         issue: context.issue,
