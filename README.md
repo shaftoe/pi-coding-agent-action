@@ -170,6 +170,19 @@ The action extends Pi with three custom tools:
 | `update_pull_request` | Updates an existing pull request by pushing new commits to the PR branch and optionally updating the title and/or description. Supports `dry_run` mode for testing without actual modifications. |
 | `get_issue_or_pr_thread` | Retrieves the full thread of an issue or pull request including title, body, state, labels, branch info (for PRs), and all comments. Useful for understanding the full context before making changes. |
 
+### Data Flow via comment trigger
+
+1. **Trigger Detection**: Action reads GitHub event payload to determine if triggered by comment or direct prompt
+2. **Context Extraction**: `github/context.ts` extracts issue/PR metadata and enriches prompt
+3. **Reaction Management**: `github/reactions.ts` adds "eyes" reaction for visual feedback
+4. **Session Initialization**: `pi/agent.ts` creates Pi agent session with model, auth, and resource loader
+5. **Prompt Execution**: User prompt sent to agent with streaming output
+6. **Tool Invocations**: Custom tools invoked via `pi/tools/` extensions:
+   - `get_issue_or_pr_thread` for context
+   - `create_pull_request` / `update_pull_request` for making changes
+7. **Git Operations**: `github/git/` module handles all Git operations via GitHub API:
+8. **Finalization**: Reaction removed, final comment posted with metadata footer by `github/comments.ts`
+
 ## Development
 
 ### Prerequisites

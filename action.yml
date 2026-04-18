@@ -1,12 +1,12 @@
-name: 'pi GitHub Action'
-description: 'Run the pi coding agent (pi.dev) in GitHub Actions workflows'
+name: 'pi Action'
+description: 'Run the pi coding agent (pi.dev) in CI/CD workflows. Supports GitHub, Codeberg, and Forgejo.'
 branding:
   icon: 'terminal'
   color: 'purple'
 
 inputs:
   github_token:
-    description: 'GitHub token for API access'
+    description: 'Token for Git hosting platform API access (GitHub token, Codeberg token, or Forgejo token)'
     required: true
 
   provider:
@@ -41,7 +41,7 @@ inputs:
     default: ''
 
   load_builtin_extensions:
-    description: 'Whether to load built-in GitHub extensions (create_pull_request, update_pull_request, get_issue_or_pr_thread)'
+    description: 'Whether to load built-in extensions (create_pull_request, update_pull_request, get_issue_or_pr_thread)'
     required: false
     default: 'true'
 

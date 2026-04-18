@@ -7,7 +7,7 @@
  */
 
 import * as github from '@actions/github';
-import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
+import type { Octokit } from '@octokit/rest';
 import { Temporal } from '@js-temporal/polyfill';
 import { getOctokit } from './octokit';
 import { getCoreAdapter } from './index';
@@ -34,8 +34,8 @@ export interface CommentMetadata {
 }
 
 export type CreateCommentType =
-  | RestEndpointMethodTypes.RestEndpointMethodTypes['issues']['createComment']['response']
-  | RestEndpointMethodTypes.RestEndpointMethodTypes['pulls']['createReplyForReviewComment']['response'];
+  | Awaited<ReturnType<Octokit['rest']['issues']['createComment']>>
+  | Awaited<ReturnType<Octokit['rest']['pulls']['createReplyForReviewComment']>>;
 
 /**
  * Debug logging helper.

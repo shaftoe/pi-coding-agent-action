@@ -1,7 +1,7 @@
 {
   "name": "pi-coding-agent-action",
   "version": "2.8.1",
-  "description": "GitHub Action that runs the pi coding agent on issues and pull requests",
+  "description": "CI/CD runner for the pi coding agent (pi.dev). Supports GitHub, Codeberg, and Forgejo.",
   "main": "dist/index.js",
   "scripts": {
     "package": "bun scripts/package.ts",
@@ -20,10 +20,13 @@
     "semantic-release": "semantic-release"
   },
   "keywords": [
-    "github-action",
     "pi",
     "coding-agent",
-    "ai"
+    "ai",
+    "github",
+    "codeberg",
+    "forgejo",
+    "ci-cd"
   ],
   "author": "Alexander Fortin",
   "license": "MIT",
@@ -32,6 +35,7 @@
     "@actions/github": "^9.1.0",
     "@js-temporal/polyfill": "^0.5.1",
     "@mariozechner/pi-coding-agent": "^0.67.68",
+    "@octokit/rest": "^21.0.0",
     "@sinclair/typebox": "^0.34.49",
     "ignore": "^7.0.5"
   },

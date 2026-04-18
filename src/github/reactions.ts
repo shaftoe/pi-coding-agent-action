@@ -10,18 +10,18 @@
  */
 
 import * as github from '@actions/github';
-import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
+import type { Octokit } from '@octokit/rest';
 import { getOctokit } from './octokit';
 import { REACTION_TYPE_EYES } from './constants';
 import { getCoreAdapter } from './index';
 
 export type CreateReactionType =
-  | RestEndpointMethodTypes.RestEndpointMethodTypes['reactions']['createForIssueComment']['response']
-  | RestEndpointMethodTypes.RestEndpointMethodTypes['reactions']['createForPullRequestReviewComment']['response'];
+  | Awaited<ReturnType<Octokit['rest']['reactions']['createForIssueComment']>>
+  | Awaited<ReturnType<Octokit['rest']['reactions']['createForPullRequestReviewComment']>>;
 
 export type DeleteReactionType =
-  | RestEndpointMethodTypes.RestEndpointMethodTypes['reactions']['deleteForIssueComment']['response']
-  | RestEndpointMethodTypes.RestEndpointMethodTypes['reactions']['deleteForPullRequestComment']['response'];
+  | Awaited<ReturnType<Octokit['rest']['reactions']['deleteForIssueComment']>>
+  | Awaited<ReturnType<Octokit['rest']['reactions']['deleteForPullRequestComment']>>;
 
 /**
  * Debug logging helper.

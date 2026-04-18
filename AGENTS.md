@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a GitHub Action that integrates the [Pi coding agent](https://pi.dev) with GitHub workflows. Users can invoke the agent by commenting `/pi` in issues or pull requests to get AI assistance with code analysis, fixes, and reviews.
+This is a CI/CD runner that integrates the [Pi coding agent](https://pi.dev) with Git hosting platforms. It currently supports **GitHub**, **Codeberg**, and **Forgejo** (including self-hosted instances). Users can invoke the agent by commenting `/pi` in issues or pull requests to get AI assistance with code analysis, fixes, and reviews.
 
 **Key Features:**
 
@@ -18,11 +18,12 @@ This is a GitHub Action that integrates the [Pi coding agent](https://pi.dev) wi
   - `orchestrator.ts` - Business logic orchestration with testable adapter pattern
   - `types.ts` - Shared type definitions and adapter interfaces
   - `adapters/` - Production implementations of adapter interfaces
-    - `core-adapter.ts` - GitHub Actions Core operations
-    - `github-adapter.ts` - GitHub API operations
+    - `core-adapter.ts` - CI/CD Core operations (`RealCoreAdapter` for CI, `ConsoleCoreAdapter` for standalone)
+    - `github-adapter.ts` - Git hosting platform API operations
     - `pi-agent-adapter.ts` - Pi agent factory
   - `pi/` - Pi agent library and tool definitions
-  - `github/` - GitHub API interactions and context enrichment
+  - `platform/` - Platform detection and configuration (GitHub, Codeberg, Forgejo)
+  - `github/` - Git hosting platform API interactions and context enrichment
 - `tests/` - Bun test files (following Bun convention)
   - `*.spec.ts` - Test files named with `.spec.ts` extension
   - `github/` - Tests for GitHub-related modules
@@ -41,8 +42,8 @@ The action uses a **testable adapter pattern** to separate business logic from e
    - Error handling and finalization
 
 2. **Adapters** - Abstract external dependencies:
-   - `CoreAdapter` - Wraps `@actions/core` operations
-   - `GitHubAdapter` - Wraps GitHub API operations
+   - `CoreAdapter` - Wraps CI/CD operations (supports `@actions/core` and console fallback)
+   - `GitHubAdapter` - Wraps Git hosting platform API operations
    - `PiAgentFactory` - Creates Pi agent instances
 
 3. **Testability** - The orchestrator can be tested with mock adapters, enabling:
@@ -62,7 +63,7 @@ The action uses a **testable adapter pattern** to separate business logic from e
 
 3. **Orchestrator Testing**: Business logic is tested in `tests/orchestrator.spec.ts`. When modifying orchestration behavior, update these tests. Do **not** test mocks directly—test the actual business logic flow.
 
-4. **Extension Pattern**: The action extends Pi with custom tools (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`) via the `ExtensionAPI` in `src/pi/tools/index.ts`.
+4. **Platform Support**: The runner detects the Git hosting platform from `GITHUB_SERVER_URL` environment variable (set by all supported CI systems). The API client (`src/github/octokit.ts`) automatically configures the correct base URL for GitHub (`api.github.com`), Codeberg (`codeberg.org/api/v1`), or Forgejo (`{server}/api/v1`).
 
 5. **Centralized Logging**: Tool execution logging is centralized in `src/pi/logging.ts` using SDK events (`tool_execution_start`, `tool_execution_end`). Tools check `signal?.aborted` directly and return `details.cancelled: true` for cancellations.
 

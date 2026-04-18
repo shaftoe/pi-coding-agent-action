@@ -94,7 +94,7 @@ export async function buildFileMap(
       if (fetchContents) {
         content = await fetchBlobContent(owner, repo, item.sha, log);
       }
-      fileMap.set(item.path, { sha: item.sha, content });
+      fileMap.set(item.path!, { sha: item.sha, content });
     }
   }
 

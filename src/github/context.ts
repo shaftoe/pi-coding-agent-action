@@ -12,7 +12,7 @@ import { getOctokit } from './octokit';
 import { DEFAULT_TRIGGER, MAX_COMMENTS } from './constants';
 import { isPR, getContextType } from './context-utils';
 import { getCoreAdapter } from './index';
-import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
+import type { Octokit } from '@octokit/rest';
 
 /**
  * Debug logging helper.
@@ -286,12 +286,18 @@ function resolveThreadParams(
   };
 }
 
+/** Data returned by `octokit.rest.issues.get()`. */
+type IssueData = Awaited<ReturnType<Octokit['rest']['issues']['get']>>['data'];
+
+/** Data returned by `octokit.rest.pulls.get()`. */
+type PullRequestData = Awaited<ReturnType<Octokit['rest']['pulls']['get']>>['data'];
+
 async function fetchIssueData(
   owner: string,
   repo: string,
   issueNumber: number
 ): Promise<{
-  issue: RestEndpointMethodTypes.RestEndpointMethodTypes['issues']['get']['response']['data'];
+  issue: IssueData;
   isPullRequest: boolean;
 }> {
   const octokit = getOctokit();
@@ -311,9 +317,7 @@ async function fetchPRData(
   owner: string,
   repo: string,
   issueNumber: number
-): Promise<
-  RestEndpointMethodTypes.RestEndpointMethodTypes['pulls']['get']['response']['data'] | undefined
-> {
+): Promise<PullRequestData | undefined> {
   try {
     const octokit = getOctokit();
     const prData = await octokit.rest.pulls.get({
@@ -407,7 +411,7 @@ async function fetchThreadComments(
  */
 function determineThreadState(
   issueState: string,
-  prData?: RestEndpointMethodTypes.RestEndpointMethodTypes['pulls']['get']['response']['data']
+  prData?: PullRequestData
 ): 'open' | 'closed' | 'merged' {
   if (issueState === 'closed' && prData?.merged_at) {
     return 'merged';
@@ -416,9 +420,9 @@ function determineThreadState(
 }
 
 function buildThreadResult(
-  issue: RestEndpointMethodTypes.RestEndpointMethodTypes['issues']['get']['response']['data'],
+  issue: IssueData,
   isPullRequest: boolean,
-  prData?: RestEndpointMethodTypes.RestEndpointMethodTypes['pulls']['get']['response']['data'],
+  prData?: PullRequestData,
   comments?: ThreadComment[]
 ): IssueOrPRThread {
   return {

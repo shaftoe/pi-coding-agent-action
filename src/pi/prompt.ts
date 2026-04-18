@@ -7,7 +7,7 @@
  */
 
 export const SYSTEM_PROMPT =
-  'You are a non-interactive assistant running in GitHub Actions CI/CD environment. You are usually tasked with code reviews and generating code changes. You will not interact with the user directly. The output (or error) you generate will be sent back as comment to the user. Avoid if possible long preambles about what you are going to do to achieve the goal, focus on the final result instead, remember that the user is reading the output as comment in a GitHub PR or issue. IMPORTANT: Do NOT add any footer, signature, metadata, "View action run" text, or similar closing to your response. A footer will be appended automatically - only output your actual response content.';
+  'You are a non-interactive assistant running in a CI/CD environment. You are usually tasked with code reviews and generating code changes. You will not interact with the user directly. The output (or error) you generate will be sent back as comment to the user. Avoid if possible long preambles about what you are going to do to achieve the goal, focus on the final result instead, remember that the user is reading the output as comment in a PR or issue. IMPORTANT: Do NOT add any footer, signature, metadata, "View action run" text, or similar closing to your response. A footer will be appended automatically - only output your actual response content.';
 
 //
 // Create Pull Request
@@ -24,7 +24,7 @@ export const CREATE_PULL_REQUEST_PROMPT_GUIDELINES = [
 ];
 
 export const CREATE_PULL_REQUEST_DESCRIPTION =
-  'Create a new pull request on GitHub. This tool handles everything: automatically determines the default base branch, creates a new branch, pushes changes, and creates the PR. The branch name is auto-generated following the pi/issue{number}-{timestamp} pattern.';
+  'Create a new pull request. This tool handles everything: automatically determines the default base branch, creates a new branch, pushes changes, and creates the PR. The branch name is auto-generated following the pi/issue{number}-{timestamp} pattern.';
 
 export const CREATE_PULL_REQUEST_PARAM_TITLE_DESCRIPTION =
   'Pull request title (should be descriptive and follow conventional commit format)';
@@ -51,13 +51,13 @@ export const GET_ISSUE_PR_THREAD_PROMPT_GUIDELINES = [
 ];
 
 export const GET_ISSUE_PR_THREAD_DESCRIPTION =
-  'Retrieve the complete comment thread for a GitHub issue or pull request. Returns the title, description, labels, state, author, timestamps, and all comments. For pull requests, also includes branch names and merge status. Does NOT fetch code changes - use read/grep tools for that.';
+  'Retrieve the complete comment thread for an issue or pull request. Returns the title, description, labels, state, author, timestamps, and all comments. For pull requests, also includes branch names and merge status. Does NOT fetch code changes - use read/grep tools for that.';
 
 export const GET_ISSUE_PR_THREAD_PARAM_OWNER_DESCRIPTION =
-  'Repository owner (e.g., "octocat"). If not provided, uses the current repository from context.';
+  'Repository owner. If not provided, uses the current repository from context.';
 
 export const GET_ISSUE_PR_THREAD_PARAM_REPO_DESCRIPTION =
-  'Repository name (e.g., "hello-world"). If not provided, uses the current repository from context.';
+  'Repository name. If not provided, uses the current repository from context.';
 
 export const GET_ISSUE_PR_THREAD_PARAM_ISSUE_NUMBER_DESCRIPTION =
   'Issue or pull request number. If not provided, uses the current issue/PR from context.';
