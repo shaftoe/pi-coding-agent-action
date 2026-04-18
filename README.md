@@ -1,8 +1,8 @@
-# Pi Coding Agent GitHub Action
+# Pi Coding Agent Action
 
 [![Codecov](https://codecov.io/gh/shaftoe/pi-coding-agent-action/branch/v2/graph/badge.svg)](https://app.codecov.io/gh/shaftoe/pi-coding-agent-action/)
 
-This is a GitHub action that integrates [Pi coding agent](https://pi.dev) with GitHub workflows (issues, pull requests, etc.).
+A CI/CD action that integrates [Pi coding agent](https://pi.dev) with git hosting platform workflows. Works with **GitHub**, **Codeberg**, and self-hosted **Forgejo** instances — any platform that provides GitHub-compatible APIs and CI/CD environment variables.
 
 Inspired by OpenCode's [GitHub action](https://opencode.ai/docs/github/).
 
