@@ -49,8 +49,7 @@ export function detectPlatform(): PlatformType {
   // Unknown server URL - cannot determine the platform
   throw new Error(
     `Unsupported platform server URL: ${serverUrl}. ` +
-      `Expected one of: github.com, codeberg.org, or a URL containing 'forgejo'/'gitea'. ` +
-      `Please set GITHUB_SERVER_URL to a recognized platform.`
+      `Expected one of: github.com, codeberg.org, or a URL containing 'forgejo'/'gitea'.`
   );
 }
 
