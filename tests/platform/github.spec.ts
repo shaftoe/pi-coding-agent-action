@@ -45,14 +45,14 @@ describe('detectPlatform', () => {
     expect(detectPlatform()).toBe('forgejo');
   });
 
-  test('returns forgejo for unknown non-github.com server URL', () => {
+  test('throws for unknown non-github.com server URL', () => {
     process.env.GITHUB_SERVER_URL = 'https://git.mycompany.com';
-    expect(detectPlatform()).toBe('forgejo');
+    expect(() => detectPlatform()).toThrow(/Unsupported platform server URL/);
   });
 
-  test('returns forgejo for GitHub Enterprise-like URL (custom domain)', () => {
+  test('throws for GitHub Enterprise-like URL (custom domain)', () => {
     process.env.GITHUB_SERVER_URL = 'https://github.mycompany.com';
-    expect(detectPlatform()).toBe('forgejo');
+    expect(() => detectPlatform()).toThrow(/Unsupported platform server URL/);
   });
 });
 

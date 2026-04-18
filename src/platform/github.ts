@@ -9,7 +9,7 @@
  * Platform detection is based on the GITHUB_SERVER_URL environment variable:
  * - https://github.com → 'github'
  * - https://codeberg.org → 'codeberg'
- * - Anything else → 'forgejo' (assumed to be a self-hosted Forgejo/Gitea instance)
+ * - Anything else → throws an error (unsupported platform)
  */
 
 import type { PlatformProvider, PlatformType, PlatformContext } from './types';
@@ -46,9 +46,12 @@ export function detectPlatform(): PlatformType {
     return 'github';
   }
 
-  // Non-github.com server without forgejo/gitea indicators - treat as forgejo
-  // since Forgejo is the most common self-hosted option
-  return 'forgejo';
+  // Unknown server URL - cannot determine the platform
+  throw new Error(
+    `Unsupported platform server URL: ${serverUrl}. ` +
+      `Expected one of: github.com, codeberg.org, or a URL containing 'forgejo'/'gitea'. `
+      + `Please set GITHUB_SERVER_URL to a recognized platform.`
+  );
 }
 
 /**
