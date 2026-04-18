@@ -3,7 +3,7 @@
  */
 
 import { Temporal } from '@js-temporal/polyfill';
-import type { IssueOrPRThread } from '../../github/index';
+import type { IssueOrPRThread } from '../../git/index';
 
 /**
  * Format an {@link IssueOrPRThread} into a human-readable text summary.

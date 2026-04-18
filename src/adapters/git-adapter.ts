@@ -1,25 +1,23 @@
 /**
- * @file Real implementation of GitHubAdapter using github module.
+ * @file Real implementation of GitAdapter using git hosting platform module.
  *
  * Provides the production implementation for GitHub operations.
  */
 
 import { Temporal } from '@js-temporal/polyfill';
-import {
-  addReaction,
-  deleteReaction,
-  createFinalComment,
-  getPrompt,
-  setCoreAdapter,
-} from '../github';
-import { getStartTimeFromContext } from '../github/context';
-import type { GitHubAdapter, CommentMetadata, CoreAdapter } from '../types';
-import type { CreateReactionType } from '../github/reactions';
+import { addReaction, deleteReaction, createFinalComment, getPrompt, setCoreAdapter } from '../git';
+import { getStartTimeFromContext } from '../git/context';
+import type { GitAdapter, CommentMetadata, CoreAdapter } from '../types';
+import type { CreateReactionType } from '../git/reactions';
 
 /**
- * Production adapter for GitHub operations.
+ * Production adapter for git hosting platform operations.
+ *
+ * Wraps the git module to provide a testable interface for platform
+ * operations (reactions, comments, prompts). Supports GitHub, Codeberg,
+ * and self-hosted Forgejo instances.
  */
-export class RealGitHubAdapter implements GitHubAdapter {
+export class RealGitAdapter implements GitAdapter {
   constructor(private readonly core: CoreAdapter) {
     // Set the module-level CoreAdapter for use by github functions and Pi tools
     setCoreAdapter(core);

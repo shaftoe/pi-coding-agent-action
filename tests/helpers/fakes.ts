@@ -9,7 +9,7 @@
  * manually constructing test data in each test.
  */
 
-import type { IssueOrPRThread, ThreadComment } from '../../src/github/context';
+import type { IssueOrPRThread, ThreadComment } from '../../src/git/context';
 
 // ============================================================================
 // GitHub Context & Event Payloads

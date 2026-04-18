@@ -48,7 +48,7 @@ const mockOctokit = {
     },
   },
 };
-mock.module('../../src/github/octokit', () => ({
+mock.module('../../src/git/octokit', () => ({
   getOctokit: mock(() => mockOctokit),
 }));
 
@@ -77,7 +77,7 @@ mock.module('@actions/github', () => ({
 }));
 
 // Dynamic import to ensure mocks are set before module loads
-const pullRequestModulePromise = import('../../src/github/pull-request.js');
+const pullRequestModulePromise = import('../../src/git/pull-request.js');
 
 // Cache the module after first import
 let pullRequestModule: any | null = null;

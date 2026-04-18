@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, test } from 'bun:test';
 import { getIssueOrPRThreadTool } from '../../../src/pi/tools/get-thread';
-import * as githubIndex from '../../../src/github/index';
+import * as githubIndex from '../../../src/git/index';
 
 describe('get_issue_or_pr_thread tool - execution', () => {
   test('has correct tool name and label', () => {

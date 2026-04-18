@@ -11,12 +11,12 @@ import { Temporal } from '@js-temporal/polyfill';
 import {
   type CommentMetadata,
   type CoreAdapter,
-  type GitHubAdapter,
+  type GitAdapter,
   type PiAgentFactory,
   type PiConfig,
   type SessionStats,
 } from './types';
-import type { CreateReactionType } from './github/reactions';
+import type { CreateReactionType } from './git/reactions';
 
 declare const __VERSION__: string;
 
@@ -29,7 +29,7 @@ declare const __VERSION__: string;
 export class ActionOrchestrator {
   constructor(
     private readonly core: CoreAdapter,
-    private readonly github: GitHubAdapter,
+    private readonly git: GitAdapter,
     private readonly piAgentFactory: PiAgentFactory
   ) {}
 
@@ -41,20 +41,20 @@ export class ActionOrchestrator {
    */
   async execute(): Promise<void> {
     this.core.info(`running action v${__VERSION__}`);
-    const startTime = this.github.getStartTime() ?? Temporal.Now.instant();
+    const startTime = this.git.getStartTime() ?? Temporal.Now.instant();
     const config = this.gatherConfig();
     let reaction: CreateReactionType | undefined;
     let prompt: string | undefined;
 
     try {
-      prompt = await this.github.getPrompt(config.promptInput);
+      prompt = await this.git.getPrompt(config.promptInput);
 
       if (!prompt) {
         throw new Error('No prompt found - cannot proceed');
       }
 
       try {
-        reaction = await this.github.addReaction();
+        reaction = await this.git.addReaction();
       } catch (e) {
         const errorMessage = e instanceof Error ? e.message : String(e);
         this.core.notice(`failed to add reaction: ${errorMessage}`);
@@ -117,7 +117,7 @@ export class ActionOrchestrator {
   ): Promise<void> {
     try {
       if (reaction) {
-        await this.github.deleteReaction(reaction);
+        await this.git.deleteReaction(reaction);
       }
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
@@ -136,6 +136,6 @@ export class ActionOrchestrator {
       metadata.sessionStats = sessionStats;
     }
 
-    await this.github.createFinalComment(body, metadata);
+    await this.git.createFinalComment(body, metadata);
   }
 }

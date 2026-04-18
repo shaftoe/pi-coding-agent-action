@@ -1,5 +1,5 @@
 /**
- * @file Shared constants used across the GitHub module.
+ * @file Shared constants used across the git hosting platform module.
  */
 
 // Reaction types

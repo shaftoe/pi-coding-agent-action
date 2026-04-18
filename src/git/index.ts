@@ -1,21 +1,23 @@
 /**
- * @file GitHub module barrel export.
+ * @file Git hosting platform module barrel export.
  *
- * Re-exports public symbols used by consumers outside the github/ module.
+ * Re-exports public symbols used by consumers outside the git/ module.
  * Internal implementation details are not exported from this barrel file.
+ *
+ * Supports GitHub, Codeberg, and self-hosted Forgejo instances.
  */
 
 import type { CoreAdapter } from '../types';
 
 /**
- * GitHub module context manager.
+ * Git hosting platform module context manager.
  *
- * Encapsulates the CoreAdapter instance used throughout the github module.
+ * Encapsulates the CoreAdapter instance used throughout the git module.
  * This class provides a centralized, explicit way to manage the module's
  * dependencies with proper initialization validation.
  *
  * Design rationale:
- * - The github module functions are called by Pi tools, which don't have
+ * - The git module functions are called by Pi tools, which don't have
  *   access to the CoreAdapter through normal DI chains
  * - Setting the context once at initialization is simpler than threading
  *   CoreAdapter through every function call
@@ -27,9 +29,9 @@ class GitHubModuleContext {
   private _coreAdapter: CoreAdapter | undefined;
 
   /**
-   * Set the CoreAdapter for the github module.
+   * Set the CoreAdapter for the git module.
    *
-   * Must be called before any github functions that require logging or
+   * Must be called before any git functions that require logging or
    * input retrieval. Typically called once during Action initialization.
    *
    * @param core - The CoreAdapter instance to use.
@@ -43,7 +45,7 @@ class GitHubModuleContext {
   }
 
   /**
-   * Get the CoreAdapter for the github module.
+   * Get the CoreAdapter for the git module.
    *
    * @returns The CoreAdapter instance.
    * @throws {Error} If the context has not been initialized.
@@ -51,8 +53,8 @@ class GitHubModuleContext {
   getCoreAdapter(): CoreAdapter {
     if (!this._coreAdapter) {
       throw new Error(
-        'GitHub module context not initialized. ' +
-          'Call setCoreAdapter() before using github functions. ' +
+        'Git module context not initialized. ' +
+          'Call setCoreAdapter() before using git functions. ' +
           'In tests, use resetModuleContext() to set a test adapter.'
       );
     }
@@ -84,14 +86,14 @@ class GitHubModuleContext {
 }
 
 /**
- * Singleton instance of the GitHub module context.
+ * Singleton instance of the git module context.
  */
 const moduleContext = new GitHubModuleContext();
 
 /**
- * Set the CoreAdapter for the github module.
+ * Set the CoreAdapter for the git module.
  *
- * Called by RealGitHubAdapter constructor during Action initialization.
+ * Called by RealGitAdapter constructor during Action initialization.
  * Tests can inject a mock CoreAdapter for unit testing.
  *
  * @param core - The CoreAdapter instance to use.
@@ -102,18 +104,18 @@ export function setCoreAdapter(core: CoreAdapter): void {
 }
 
 /**
- * Get the CoreAdapter for the github module.
+ * Get the CoreAdapter for the git module.
  *
  * @returns The CoreAdapter instance.
  * @throws {Error} If the module context has not been initialized.
- * @internal Exported for internal use within the github module.
+ * @internal Exported for internal use within the git module.
  */
 export function getCoreAdapter(): CoreAdapter {
   return moduleContext.getCoreAdapter();
 }
 
 /**
- * Reset the GitHub module context.
+ * Reset the git module context.
  *
  * Clears the module-level CoreAdapter. Used in tests to ensure clean
  * isolation between test cases. After resetting, you should either:
@@ -128,7 +130,7 @@ export function resetModuleContext(core?: CoreAdapter): void {
 }
 
 /**
- * Check if the GitHub module context has been initialized.
+ * Check if the git module context has been initialized.
  *
  * @returns True if setCoreAdapter() has been called.
  * @internal Exported for testing purposes only.

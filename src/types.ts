@@ -6,7 +6,7 @@
  */
 
 import type { Temporal } from '@js-temporal/polyfill';
-import type { CreateReactionType } from './github/reactions';
+import type { CreateReactionType } from './git/reactions';
 
 /**
  * Adapter interface for @actions/core operations.
@@ -30,11 +30,12 @@ export interface CoreAdapter {
 }
 
 /**
- * Adapter interface for GitHub operations.
+ * Adapter interface for git hosting platform operations.
  *
- * Provides a testable wrapper around the github module functions.
+ * Provides a testable wrapper around the git module functions.
+ * Supports GitHub, Codeberg, and self-hosted Forgejo instances.
  */
-export interface GitHubAdapter {
+export interface GitAdapter {
   /** Add an "eyes" reaction to the triggering comment. */
   addReaction(): Promise<CreateReactionType | undefined>;
   /** Remove a previously added reaction. */
@@ -43,7 +44,7 @@ export interface GitHubAdapter {
   createFinalComment(body: string, metadata: CommentMetadata): Promise<void>;
   /** Get the prompt from input or comment context. */
   getPrompt(inputPrompt?: string): Promise<string | undefined>;
-  /** Get the start time from the GitHub event payload. */
+  /** Get the start time from the platform event payload. */
   getStartTime(): Temporal.Instant | undefined;
 }
 

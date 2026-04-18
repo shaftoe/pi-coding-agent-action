@@ -13,8 +13,8 @@ import {
   CREATE_PULL_REQUEST_PARAM_BASE_DESCRIPTION,
   CREATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from '../prompt';
-import { createPullRequest, CANCELLATION_MESSAGE_CREATE_PR } from '../../github/index';
-import type { CreatePullRequestParams } from '../../github/index';
+import { createPullRequest, CANCELLATION_MESSAGE_CREATE_PR } from '../../git/index';
+import type { CreatePullRequestParams } from '../../git/index';
 import { withCancellation } from './tool-execution';
 
 /**

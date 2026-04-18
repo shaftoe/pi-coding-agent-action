@@ -14,8 +14,8 @@ import {
   UPDATE_PULL_REQUEST_PARAM_MESSAGE_DESCRIPTION,
   UPDATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from '../prompt';
-import { updatePullRequest, CANCELLATION_MESSAGE_UPDATE_PR } from '../../github/index';
-import type { UpdatePullRequestParams } from '../../github/index';
+import { updatePullRequest, CANCELLATION_MESSAGE_UPDATE_PR } from '../../git/index';
+import type { UpdatePullRequestParams } from '../../git/index';
 import { withCancellation } from './tool-execution';
 
 /**

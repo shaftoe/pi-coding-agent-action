@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, test } from 'bun:test';
 import { updatePullRequestTool } from '../../../src/pi/tools/update-pr';
-import * as githubIndex from '../../../src/github/index';
+import * as githubIndex from '../../../src/git/index';
 
 describe('update_pull_request tool - execution', () => {
   test('has correct tool name and label', () => {
