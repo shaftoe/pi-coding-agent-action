@@ -76,9 +76,9 @@ describe('detectPlatform', () => {
     expect(detectPlatform()).toBe('github');
   });
 
-  test('returns github when GITHUB_SERVER_URL is not set', () => {
+  test('throws when GITHUB_SERVER_URL is not set', () => {
     delete process.env.GITHUB_SERVER_URL;
-    expect(detectPlatform()).toBe('github');
+    expect(() => detectPlatform()).toThrow(/GITHUB_SERVER_URL environment variable is not set/);
   });
 
   test('returns codeberg for codeberg.org server URL', () => {

@@ -13,15 +13,14 @@
  */
 
 import { context } from '@actions/github';
-import type { PlatformProvider, PlatformType, PlatformContext } from './types';
 import { addReaction, deleteReaction, createFinalComment, getPrompt } from '../git';
-import { getStartTimeFromContext } from '../git/context';
+import { getStartTimeFromContext, getIssueOrPRThread } from '../git/context';
 import { createPullRequest } from '../git/pull-request';
 import { updatePullRequest } from '../git/pull-request-update';
-import { getIssueOrPRThread } from '../git/context';
-import type { CreateReactionType } from '../git/reactions';
-import type { CommentMetadata } from '../types';
 import type { Temporal } from '@js-temporal/polyfill';
+import type { PlatformProvider, PlatformType, PlatformContext } from './types';
+import type { CommentMetadata } from '../types';
+import type { CreateReactionType } from '../git/reactions';
 import type { IssueOrPRThread, GetIssueOrPRThreadParams } from '../git/context';
 import type { CreatePullRequestParams, CreatePullRequestDetails } from '../git/pull-request';
 import type { UpdatePullRequestParams, UpdatePullRequestDetails } from '../git/pull-request-update';
@@ -32,7 +31,10 @@ import type { UpdatePullRequestParams, UpdatePullRequestDetails } from '../git/p
  * @returns The detected platform type.
  */
 export function detectPlatform(): PlatformType {
-  const serverUrl = process.env.GITHUB_SERVER_URL ?? 'https://github.com';
+  const serverUrl = process.env.GITHUB_SERVER_URL;
+  if (!serverUrl) {
+    throw new Error('GITHUB_SERVER_URL environment variable is not set. Cannot detect platform.');
+  }
 
   // Check for known Forgejo/Gitea indicators
   if (serverUrl.includes('codeberg')) {
