@@ -1,7 +1,7 @@
 {
   "name": "pi-coding-agent-action",
   "version": "2.8.2",
-  "description": "GitHub Action that runs the pi coding agent on issues and pull requests",
+  "description": "CI/CD Action to integrate Pi coding agent in workflows",
   "main": "dist/index.js",
   "scripts": {
     "package": "bun scripts/package.ts",
