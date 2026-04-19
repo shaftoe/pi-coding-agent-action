@@ -16,7 +16,7 @@ import {
   type PiConfig,
   type SessionStats,
 } from './types';
-import type { CreateReactionType } from './platform/github';
+import type { CreateReactionType, PlatformProvider } from './platform';
 
 declare const __VERSION__: string;
 
@@ -30,7 +30,8 @@ export class ActionOrchestrator {
   constructor(
     private readonly core: CoreAdapter,
     private readonly git: GitAdapter,
-    private readonly piAgentFactory: PiAgentFactory
+    private readonly piAgentFactory: PiAgentFactory,
+    private readonly platformProvider: PlatformProvider
   ) {}
 
   /**
@@ -60,7 +61,7 @@ export class ActionOrchestrator {
         this.core.notice(`failed to add reaction: ${errorMessage}`);
       }
 
-      const pi = this.piAgentFactory(config, this.core);
+      const pi = this.piAgentFactory(config, this.core, this.platformProvider);
       const { result, sessionStats } = await pi.run(prompt);
 
       await this.finalize(result, config, startTime, reaction, sessionStats);

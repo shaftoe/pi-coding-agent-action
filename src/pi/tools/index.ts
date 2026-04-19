@@ -14,10 +14,11 @@
  * loader so that the tools are available during agent sessions.
  */
 
-import { createPRTool } from './create-pr';
-import { getIssueOrPRThreadTool } from './get-thread';
-import { updatePullRequestTool } from './update-pr';
+import { createPRToolFactory } from './create-pr';
+import { getIssueOrPRThreadToolFactory } from './get-thread';
+import { updatePullRequestToolFactory } from './update-pr';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import type { PlatformProvider } from '../../platform';
 
 // Re-export tool execution utilities for use in custom tools
 export {
@@ -34,11 +35,18 @@ export {
  * Called by the Pi SDK resource loader during session initialisation. Registers
  * the `create_pull_request`, `update_pull_request`, and `get_issue_or_pr_thread` tools.
  *
- * @param pi - The Pi extension API used to register tools.
+ * @param provider - The platform provider for tool operations.
+ * @returns An extension factory function compatible with the Pi SDK.
  */
-export const toolsFactory = (pi: ExtensionAPI): void => {
-  const tools = [createPRTool, updatePullRequestTool, getIssueOrPRThreadTool];
-  tools.forEach(tool => {
-    pi.registerTool(tool);
-  });
-};
+export function createToolsFactory(provider: PlatformProvider): (pi: ExtensionAPI) => void {
+  return (pi: ExtensionAPI): void => {
+    const tools = [
+      createPRToolFactory(provider),
+      updatePullRequestToolFactory(provider),
+      getIssueOrPRThreadToolFactory(provider),
+    ];
+    tools.forEach(tool => {
+      pi.registerTool(tool);
+    });
+  };
+}

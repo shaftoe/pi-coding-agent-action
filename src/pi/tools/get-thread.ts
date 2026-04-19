@@ -13,12 +13,13 @@ import {
   GET_ISSUE_PR_THREAD_PARAM_ISSUE_NUMBER_DESCRIPTION,
   GET_ISSUE_PR_THREAD_PARAM_MAX_COMMENTS_DESCRIPTION,
 } from '../prompt';
+import { CANCELLATION_MESSAGE_GET_THREAD } from './constants';
 import { formatThreadAsText } from './common';
-import {
-  getIssueOrPRThread,
-  CANCELLATION_MESSAGE_GET_THREAD,
-  type IssueOrPRThread,
-} from '../../platform/github';
+import type {
+  IssueOrPRThread,
+  GetIssueOrPRThreadParams,
+  PlatformProvider,
+} from '../../platform';
 import type { AgentToolResult } from '@mariozechner/pi-coding-agent';
 import { withCancellation } from './tool-execution';
 
@@ -78,50 +79,55 @@ function createNotFoundResult(): AgentToolResult<IssueOrPRThread> {
 }
 
 /**
- * Tool definition for fetching issue or PR thread.
+ * Create the get_issue_or_pr_thread tool definition bound to a platform provider.
+ *
+ * @param provider - The platform provider for thread retrieval operations.
+ * @returns The tool definition.
  */
-export const getIssueOrPRThreadTool = defineTool({
-  name: 'get_issue_or_pr_thread',
-  label: 'Get Issue/PR Thread',
-  description: GET_ISSUE_PR_THREAD_DESCRIPTION,
-  promptSnippet: GET_ISSUE_PR_THREAD_PROMPT_SNIPPET,
-  promptGuidelines: GET_ISSUE_PR_THREAD_PROMPT_GUIDELINES,
-  // @ts-expect-error - TypeBox Symbol property not recognized by TypeScript
-  parameters: getIssueOrPRThreadSchema,
-  execute: withCancellation({
-    cancellationMessage: CANCELLATION_MESSAGE_GET_THREAD,
-    cancellationDetails: {
-      number: 0,
-      title: 'Cancelled',
-      body: CANCELLATION_MESSAGE_GET_THREAD,
-      state: 'closed',
-      author: 'unknown',
-      author_type: 'user',
-      created_at: undefined,
-      updated_at: undefined,
-      closed_at: undefined,
-      merged_at: undefined,
-      labels: [],
-      is_pull_request: false,
-      head_branch: undefined,
-      base_branch: undefined,
-      head_sha: undefined,
-      comments: [],
-    },
-    prepareParams: (params: GetIssueOrPRThreadToolParams) => params,
-    execute: async (params) => {
-      const result = await getIssueOrPRThread(params);
+export function getIssueOrPRThreadToolFactory(provider: PlatformProvider) {
+  return defineTool({
+    name: 'get_issue_or_pr_thread',
+    label: 'Get Issue/PR Thread',
+    description: GET_ISSUE_PR_THREAD_DESCRIPTION,
+    promptSnippet: GET_ISSUE_PR_THREAD_PROMPT_SNIPPET,
+    promptGuidelines: GET_ISSUE_PR_THREAD_PROMPT_GUIDELINES,
+    // @ts-expect-error - TypeBox Symbol property not recognized by TypeScript
+    parameters: getIssueOrPRThreadSchema,
+    execute: withCancellation({
+      cancellationMessage: CANCELLATION_MESSAGE_GET_THREAD,
+      cancellationDetails: {
+        number: 0,
+        title: 'Cancelled',
+        body: CANCELLATION_MESSAGE_GET_THREAD,
+        state: 'closed',
+        author: 'unknown',
+        author_type: 'user',
+        created_at: undefined,
+        updated_at: undefined,
+        closed_at: undefined,
+        merged_at: undefined,
+        labels: [],
+        is_pull_request: false,
+        head_branch: undefined,
+        base_branch: undefined,
+        head_sha: undefined,
+        comments: [],
+      },
+      prepareParams: (params: GetIssueOrPRThreadToolParams) => params,
+      execute: async (params: GetIssueOrPRThreadParams) => {
+        const result = await provider.getIssueOrPRThread(params);
 
-      if (!result) {
-        return createNotFoundResult();
-      }
+        if (!result) {
+          return createNotFoundResult();
+        }
 
-      const threadSummary = formatThreadAsText(result);
+        const threadSummary = formatThreadAsText(result);
 
-      return {
-        content: [{ type: 'text' as const, text: threadSummary }],
-        details: result,
-      };
-    },
-  }),
-});
+        return {
+          content: [{ type: 'text' as const, text: threadSummary }],
+          details: result,
+        };
+      },
+    }),
+  });
+}

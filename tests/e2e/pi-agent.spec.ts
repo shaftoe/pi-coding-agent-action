@@ -75,6 +75,28 @@ const mockCoreAdapter: CoreAdapter = {
   warning: mockWarning,
 };
 
+// Mock platform provider for Agent constructor
+const mockPlatformProvider: any = {
+  type: 'github',
+  getContext: () => ({
+    repo: { owner: 'test-owner', repo: 'test-repo' },
+    issue: { number: 1 },
+    eventName: 'issue_comment',
+    payload: {},
+    serverUrl: 'https://github.com',
+    runId: 123,
+    workspace: '/tmp',
+  }),
+  addReaction: async () => undefined,
+  deleteReaction: async () => {},
+  createFinalComment: async () => {},
+  getPrompt: async () => undefined,
+  getStartTime: () => undefined,
+  createPullRequest: async () => ({ content: [], details: {} }),
+  updatePullRequest: async () => ({ content: [], details: {} }),
+  getIssueOrPRThread: async () => undefined,
+};
+
 mock.module('@actions/core', () => ({
   getInput: mockGetInput,
   notice: mockNotice,
@@ -170,7 +192,7 @@ function validateE2EEnvVars() {
 async function createAgent(): Promise<Agent> {
   const { provider, model, token } = validateE2EEnvVars();
   const { Agent } = await import('../../src/pi/agent.js');
-  return new Agent(model, provider, token, 'off', mockCoreAdapter);
+  return new Agent(model, provider, token, 'off', mockCoreAdapter, mockPlatformProvider);
 }
 
 // ============================================================================
@@ -243,7 +265,14 @@ describe('E2E: Real Pi Agent with Mocked GitHub', () => {
         const { Agent } = await import('../../src/pi/agent.js');
 
         expect(() => {
-          new Agent('invalid-model-xyz', provider, token, 'off', mockCoreAdapter);
+          new Agent(
+            'invalid-model-xyz',
+            provider,
+            token,
+            'off',
+            mockCoreAdapter,
+            mockPlatformProvider
+          );
         }).toThrow('Model not found');
       },
       E2E_TIMEOUT

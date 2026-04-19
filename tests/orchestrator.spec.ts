@@ -18,11 +18,12 @@ import { describe, expect, test, mock, beforeEach } from 'bun:test';
 import { Temporal } from '@js-temporal/polyfill';
 import { ActionOrchestrator } from '../src/orchestrator';
 import type { CoreAdapter, GitAdapter, PiAgent } from '../src/types';
-import type { CreateReactionType } from '../src/platform/github';
+import type { CreateReactionType, PlatformProvider } from '../src/platform';
 
 describe('ActionOrchestrator', () => {
   let mockCore: CoreAdapter;
   let mockGit: GitAdapter;
+  let mockProvider: PlatformProvider;
   let mockPiAgent: PiAgent;
   let mockPiFactory: ReturnType<typeof mock>;
 
@@ -78,11 +79,39 @@ describe('ActionOrchestrator', () => {
     };
 
     mockPiFactory = mock(() => mockPiAgent);
+
+    // Create mock platform provider
+    mockProvider = {
+      type: 'github',
+      getContext: mock(() => ({
+        repo: { owner: 'test-owner', repo: 'test-repo' },
+        issue: { number: 1 },
+        eventName: 'issue_comment',
+        payload: {},
+        serverUrl: 'https://github.com',
+        runId: 123,
+        workspace: '/tmp',
+      })),
+      addReaction: mock(async () => undefined),
+      deleteReaction: mock(async () => {}),
+      createFinalComment: mock(async () => {}),
+      getPrompt: mock(async () => 'test prompt'),
+      getStartTime: mock(() => undefined),
+      createPullRequest: mock(async () => ({
+        content: [{ type: 'text', text: 'PR created' }],
+        details: { pullRequestNumber: 1, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+      })),
+      updatePullRequest: mock(async () => ({
+        content: [{ type: 'text', text: 'PR updated' }],
+        details: { pullRequestNumber: 1, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+      })),
+      getIssueOrPRThread: mock(async () => undefined),
+    } as any;
   });
 
   describe('successful execution flow', () => {
     test('gathers config from core inputs', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockCore.getInput).toHaveBeenCalledWith('provider');
@@ -93,7 +122,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('retrieves prompt from git platform', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockGit.getPrompt).toHaveBeenCalledWith('');
@@ -112,7 +141,7 @@ describe('ActionOrchestrator', () => {
       });
       mockCore.getInput = getInputMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockGit.getPrompt).toHaveBeenCalledWith('Review this code');
@@ -122,12 +151,12 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           promptInput: 'Review this code',
         }),
-        mockCore
+        mockCore, mockProvider
       );
     });
 
     test('adds reaction before Pi execution', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockGit.addReaction).toHaveBeenCalled();
@@ -146,7 +175,7 @@ describe('ActionOrchestrator', () => {
       });
       mockCore.getInput = getInputMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -158,7 +187,7 @@ describe('ActionOrchestrator', () => {
           promptInput: '',
           loadBuiltinExtensions: true, // default value
         },
-        mockCore
+        mockCore, mockProvider
       );
     });
 
@@ -177,7 +206,7 @@ describe('ActionOrchestrator', () => {
       });
       mockCore.getInput = getInputMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       // Note: The original code uses ?? 'off', which only applies when input is null/undefined
@@ -191,7 +220,7 @@ describe('ActionOrchestrator', () => {
           promptInput: '',
           loadBuiltinExtensions: true, // default value
         },
-        mockCore
+        mockCore, mockProvider
       );
     });
 
@@ -199,7 +228,7 @@ describe('ActionOrchestrator', () => {
       const getPromptMock = mock(async () => 'Write unit tests for this function');
       mockGit.getPrompt = getPromptMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiAgent.run).toHaveBeenCalledWith('Write unit tests for this function');
@@ -210,7 +239,7 @@ describe('ActionOrchestrator', () => {
       const addReactionMock = mock(async () => mockReaction);
       mockGit.addReaction = addReactionMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockGit.deleteReaction).toHaveBeenCalledWith(mockReaction);
@@ -223,7 +252,7 @@ describe('ActionOrchestrator', () => {
       }));
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       const calls = (mockGit.createFinalComment as any).mock.calls;
@@ -243,7 +272,7 @@ describe('ActionOrchestrator', () => {
       const getStartTimeMock = mock(() => startTime);
       mockGit.getStartTime = getStartTimeMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       const calls = (mockGit.createFinalComment as any).mock.calls;
@@ -259,7 +288,7 @@ describe('ActionOrchestrator', () => {
       const getStartTimeMock = mock(() => githubStartTime);
       mockGit.getStartTime = getStartTimeMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockGit.getStartTime).toHaveBeenCalled();
@@ -269,7 +298,7 @@ describe('ActionOrchestrator', () => {
       const getStartTimeMock = mock(() => undefined);
       mockGit.getStartTime = getStartTimeMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       const calls = (mockGit.createFinalComment as any).mock.calls;
@@ -289,7 +318,7 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       await expect(orchestrator.execute()).rejects.toThrow('API quota exceeded');
 
@@ -310,7 +339,7 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       await expect(orchestrator.execute()).rejects.toThrow('Network timeout');
 
@@ -327,7 +356,7 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       await expect(orchestrator.execute()).rejects.toThrow('Failed');
 
@@ -340,7 +369,7 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       await expect(orchestrator.execute()).rejects.toThrow('String error');
 
@@ -357,7 +386,7 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       await expect(orchestrator.execute()).rejects.toBe(error);
     });
@@ -368,7 +397,7 @@ describe('ActionOrchestrator', () => {
       });
       mockGit.addReaction = addReactionMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       // Should not throw - execution continues
       await expect(orchestrator.execute()).resolves.toBeUndefined();
@@ -387,7 +416,7 @@ describe('ActionOrchestrator', () => {
       const getPromptMock = mock(async () => undefined);
       mockGit.getPrompt = getPromptMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       await expect(orchestrator.execute()).rejects.toThrow('No prompt found - cannot proceed');
     });
@@ -396,7 +425,7 @@ describe('ActionOrchestrator', () => {
       const getPromptMock = mock(async () => undefined);
       mockGit.getPrompt = getPromptMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       await expect(orchestrator.execute()).rejects.toThrow();
 
@@ -409,7 +438,7 @@ describe('ActionOrchestrator', () => {
       const getPromptMock = mock(async () => undefined);
       mockGit.getPrompt = getPromptMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       await expect(orchestrator.execute()).rejects.toThrow();
 
@@ -427,7 +456,7 @@ describe('ActionOrchestrator', () => {
       const getPromptMock = mock(async () => undefined);
       mockGit.getPrompt = getPromptMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       await expect(orchestrator.execute()).rejects.toThrow();
 
@@ -451,14 +480,14 @@ describe('ActionOrchestrator', () => {
       });
       mockCore.getInput = getInputMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({
           extensions: ['npm:package-one', 'git:github.com/user/repo', './local-path.ts'],
         }),
-        mockCore
+        mockCore, mockProvider
       );
     });
 
@@ -476,14 +505,14 @@ describe('ActionOrchestrator', () => {
       });
       mockCore.getInput = getInputMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.not.objectContaining({
           extensions: expect.any(Array),
         }),
-        mockCore
+        mockCore, mockProvider
       );
     });
 
@@ -500,19 +529,19 @@ describe('ActionOrchestrator', () => {
       });
       mockCore.getInput = getInputMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.not.objectContaining({
           extensions: expect.any(Array),
         }),
-        mockCore
+        mockCore, mockProvider
       );
     });
 
     test('calls getInput for extensions', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockCore.getInput).toHaveBeenCalledWith('extensions');
@@ -521,14 +550,14 @@ describe('ActionOrchestrator', () => {
 
   describe('load_builtin_extensions configuration', () => {
     test('defaults to true when not provided', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({
           loadBuiltinExtensions: true,
         }),
-        mockCore
+        mockCore, mockProvider
       );
     });
 
@@ -546,14 +575,14 @@ describe('ActionOrchestrator', () => {
       });
       mockCore.getInput = getInputMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({
           loadBuiltinExtensions: true,
         }),
-        mockCore
+        mockCore, mockProvider
       );
     });
 
@@ -571,19 +600,19 @@ describe('ActionOrchestrator', () => {
       });
       mockCore.getInput = getInputMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({
           loadBuiltinExtensions: false,
         }),
-        mockCore
+        mockCore, mockProvider
       );
     });
 
     test('calls getInput for load_builtin_extensions', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockCore.getInput).toHaveBeenCalledWith('load_builtin_extensions');
@@ -603,14 +632,14 @@ describe('ActionOrchestrator', () => {
       });
       mockCore.getInput = getInputMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({
           loadBuiltinExtensions: true,
         }),
-        mockCore
+        mockCore, mockProvider
       );
     });
 
@@ -628,14 +657,14 @@ describe('ActionOrchestrator', () => {
       });
       mockCore.getInput = getInputMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({
           loadBuiltinExtensions: false,
         }),
-        mockCore
+        mockCore, mockProvider
       );
     });
   });
@@ -645,7 +674,7 @@ describe('ActionOrchestrator', () => {
       const getPromptMock = mock(async () => '');
       mockGit.getPrompt = getPromptMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       await expect(orchestrator.execute()).rejects.toThrow('No prompt found - cannot proceed');
 
@@ -662,7 +691,7 @@ describe('ActionOrchestrator', () => {
       const addReactionMock = mock(async () => undefined);
       mockGit.addReaction = addReactionMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockGit.deleteReaction).not.toHaveBeenCalled();
@@ -682,12 +711,12 @@ describe('ActionOrchestrator', () => {
       });
       mockCore.getInput = getInputMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({ thinkingLevel: '   ' }),
-        mockCore
+        mockCore, mockProvider
       );
     });
   });
@@ -700,7 +729,7 @@ describe('ActionOrchestrator', () => {
       }));
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       // Should not throw - execution continues without stats
       await expect(orchestrator.execute()).resolves.toBeUndefined();
@@ -729,7 +758,7 @@ describe('ActionOrchestrator', () => {
       }));
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       await expect(orchestrator.execute()).resolves.toBeUndefined();
 
@@ -749,7 +778,7 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       await expect(orchestrator.execute()).rejects.toBe(error);
 
@@ -773,7 +802,7 @@ describe('ActionOrchestrator', () => {
       });
       mockGit.createFinalComment = createFinalCommentMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       await expect(orchestrator.execute()).rejects.toThrow('Failed to post comment');
 
@@ -794,7 +823,7 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory);
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
       await expect(orchestrator.execute()).rejects.toThrow(error);
 

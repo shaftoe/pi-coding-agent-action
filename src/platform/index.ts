@@ -6,6 +6,18 @@
  * added here.
  */
 
-export { type PlatformType, type PlatformContext, type PlatformProvider } from './types';
+export {
+  type PlatformType,
+  type PlatformContext,
+  type PlatformProvider,
+  type IssueOrPRThread,
+  type ThreadComment,
+  type GetIssueOrPRThreadParams,
+  type CreatePullRequestParams,
+  type CreatePullRequestDetails,
+  type UpdatePullRequestParams,
+  type UpdatePullRequestDetails,
+  type CreateReactionType,
+} from './types';
 
 export { detectPlatform, createGitHubPlatformProvider } from './github/index';

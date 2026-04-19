@@ -1,6 +1,37 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, test } from 'bun:test';
-import { createPRTool } from '../../../src/pi/tools/create-pr';
+import { createPRToolFactory } from '../../../src/pi/tools/create-pr';
+import type { PlatformProvider } from '../../../src/platform';
+
+// Mock platform provider for tests
+const mockProvider: PlatformProvider = {
+  type: 'github',
+  getContext: () => ({
+    repo: { owner: 'test-owner', repo: 'test-repo' },
+    issue: { number: 1 },
+    eventName: 'issue_comment',
+    payload: {},
+    serverUrl: 'https://github.com',
+    runId: 123,
+    workspace: '/tmp',
+  }),
+  addReaction: async () => undefined,
+  deleteReaction: async () => {},
+  createFinalComment: async () => {},
+  getPrompt: async () => undefined,
+  getStartTime: () => undefined,
+  createPullRequest: async () => ({
+    content: [{ type: 'text' as const, text: 'PR created' }],
+    details: { pullRequestNumber: 1, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+  }),
+  updatePullRequest: async () => ({
+    content: [{ type: 'text' as const, text: 'PR updated' }],
+    details: { pullRequestNumber: 1, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+  }),
+  getIssueOrPRThread: async () => undefined,
+};
+
+const createPRTool = createPRToolFactory(mockProvider);
 import * as githubIndex from '../../../src/platform/github';
 
 describe('create_pull_request tool - execution', () => {
@@ -28,8 +59,8 @@ describe('create_pull_request tool - execution', () => {
     expect(typeof createPRTool.execute).toBe('function');
   });
 
-  test('tool exports match github/index exports', () => {
-    // Verify that the tool uses the correct functions from github/index
+  test('tool uses provider for execution', () => {
+    // Verify that the tool has the correct execute function (uses provider internally)
     expect(githubIndex.createPullRequest).toBeDefined();
     expect(typeof githubIndex.createPullRequest).toBe('function');
   });

@@ -14,11 +14,12 @@ import {
   UPDATE_PULL_REQUEST_PARAM_MESSAGE_DESCRIPTION,
   UPDATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from '../prompt';
-import {
-  updatePullRequest,
-  CANCELLATION_MESSAGE_UPDATE_PR,
-  type UpdatePullRequestParams,
-} from '../../platform/github';
+import { CANCELLATION_MESSAGE_UPDATE_PR } from './constants';
+import type {
+  UpdatePullRequestParams,
+  UpdatePullRequestDetails,
+  PlatformProvider,
+} from '../../platform';
 import { withCancellation } from './tool-execution';
 
 /**
@@ -55,45 +56,54 @@ const updatePullRequestSchema = Type.Object({
 type UpdatePullRequestToolParams = Static<typeof updatePullRequestSchema>;
 
 /**
- * Tool definition for updating a pull request.
+ * Create the update_pull_request tool definition bound to a platform provider.
+ *
+ * @param provider - The platform provider for PR update operations.
+ * @returns The tool definition.
  */
-export const updatePullRequestTool = defineTool({
-  name: 'update_pull_request',
-  label: 'Update Pull Request',
-  description: UPDATE_PULL_REQUEST_DESCRIPTION,
-  promptSnippet: UPDATE_PULL_REQUEST_PROMPT_SNIPPET,
-  promptGuidelines: UPDATE_PULL_REQUEST_PROMPT_GUIDELINES,
-  // @ts-expect-error - TypeBox Symbol property not recognized by TypeScript
-  parameters: updatePullRequestSchema,
-  execute: withCancellation({
-    cancellationMessage: CANCELLATION_MESSAGE_UPDATE_PR,
-    cancellationDetails: {
-      pullRequestNumber: 0,
-      pullRequestUrl: '',
-      headBranch: '',
-      baseBranch: '',
-      dryRun: false,
-    },
-    prepareParams: (params: UpdatePullRequestToolParams) => {
-      const { pull_number, title, body, message, dryRun } = params;
-      const updateParams: UpdatePullRequestParams = {};
-      if (pull_number !== undefined) {
-        updateParams.pull_number = pull_number;
-      }
-      if (title !== undefined) {
-        updateParams.title = title;
-      }
-      if (body !== undefined) {
-        updateParams.body = body;
-      }
-      if (message !== undefined) {
-        updateParams.message = message;
-      }
-      if (dryRun !== undefined) {
-        updateParams.dryRun = dryRun;
-      }
-      return updateParams;
-    },
-    execute: updatePullRequest,
-  }),
-});
+export function updatePullRequestToolFactory(provider: PlatformProvider) {
+  return defineTool({
+    name: 'update_pull_request',
+    label: 'Update Pull Request',
+    description: UPDATE_PULL_REQUEST_DESCRIPTION,
+    promptSnippet: UPDATE_PULL_REQUEST_PROMPT_SNIPPET,
+    promptGuidelines: UPDATE_PULL_REQUEST_PROMPT_GUIDELINES,
+    // @ts-expect-error - TypeBox Symbol property not recognized by TypeScript
+    parameters: updatePullRequestSchema,
+    execute: withCancellation({
+      cancellationMessage: CANCELLATION_MESSAGE_UPDATE_PR,
+      cancellationDetails: {
+        pullRequestNumber: 0,
+        pullRequestUrl: '',
+        headBranch: '',
+        baseBranch: '',
+        dryRun: false,
+      },
+      prepareParams: (params: UpdatePullRequestToolParams) => {
+        const { pull_number, title, body, message, dryRun } = params;
+        const updateParams: UpdatePullRequestParams = {};
+        if (pull_number !== undefined) {
+          updateParams.pull_number = pull_number;
+        }
+        if (title !== undefined) {
+          updateParams.title = title;
+        }
+        if (body !== undefined) {
+          updateParams.body = body;
+        }
+        if (message !== undefined) {
+          updateParams.message = message;
+        }
+        if (dryRun !== undefined) {
+          updateParams.dryRun = dryRun;
+        }
+        return updateParams;
+      },
+      execute: (params) =>
+        provider.updatePullRequest(params) as Promise<{
+          content: { type: 'text'; text: string }[];
+          details: UpdatePullRequestDetails;
+        }>,
+    }),
+  });
+}

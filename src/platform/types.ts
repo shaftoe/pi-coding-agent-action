@@ -20,6 +20,19 @@ import type {
   UpdatePullRequestDetails,
   CreateReactionType,
 } from './github';
+
+// Re-export types used by consumers (pi tools, adapters, etc.) so they
+// depend on the platform abstraction, not the implementation.
+export type {
+  IssueOrPRThread,
+  ThreadComment,
+  GetIssueOrPRThreadParams,
+  CreatePullRequestParams,
+  CreatePullRequestDetails,
+  UpdatePullRequestParams,
+  UpdatePullRequestDetails,
+  CreateReactionType,
+} from './github';
 import type { CommentMetadata } from '../types';
 
 /**

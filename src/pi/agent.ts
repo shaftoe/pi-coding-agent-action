@@ -14,6 +14,7 @@ import type { AgentSession } from '@mariozechner/pi-coding-agent';
 import type { Api, Model } from '@mariozechner/pi-ai';
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
 import type { PromptResult, SessionStats, CoreAdapter } from '../types';
+import type { PlatformProvider } from '../platform';
 
 /**
  * Pi coding agent for headless execution inside GitHub Actions.
@@ -32,6 +33,7 @@ export class Agent {
   private thinkingLevel: ThinkingLevel;
   private outputChunks: string[] = [];
   private core: CoreAdapter;
+  private platformProvider: PlatformProvider;
   private extensions?: string[];
   private loadBuiltinExtensions?: boolean;
 
@@ -46,6 +48,7 @@ export class Agent {
    * @param level                 - Thinking/reasoning level for the model
    *                                (default `'off'`).
    * @param core                  - The CoreAdapter for logging and debug output.
+   * @param platformProvider      - The platform provider for custom tool operations.
    * @param extensions            - Optional array of extension sources (npm, git, or local paths).
    * @param loadBuiltinExtensions - Whether to load built-in GitHub extensions (default true).
    * @throws {Error}   If the requested model cannot be found in the registry.
@@ -56,6 +59,7 @@ export class Agent {
     token: string,
     level = 'off',
     core: CoreAdapter,
+    platformProvider: PlatformProvider,
     extensions?: string[],
     loadBuiltinExtensions?: boolean
   ) {
@@ -64,6 +68,7 @@ export class Agent {
     this.token = token;
     this.thinkingLevel = level as ThinkingLevel;
     this.core = core;
+    this.platformProvider = platformProvider;
     if (extensions !== undefined) {
       this.extensions = extensions;
     }
@@ -105,6 +110,7 @@ export class Agent {
       modelRegistry: this.modelRegistry,
       resourceLoader: await getResourceLoader(
         this.core,
+        this.platformProvider,
         this.extensions,
         this.loadBuiltinExtensions
       ),

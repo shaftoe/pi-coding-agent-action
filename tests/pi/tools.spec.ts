@@ -38,10 +38,11 @@ mock.module('@actions/core', () => ({
 }));
 
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import type { PlatformProvider } from '../../src/platform';
 
 // Dynamic import to ensure env vars and mocks are set before module loads
 const toolsModule = import('../../src/pi/tools/index.js');
-const { toolsFactory: extFactory } =
+const { createToolsFactory } =
   // @ts-expect-error TS1309 -- Top-level await not supported in CommonJS, but Bun test runner handles it
   await toolsModule;
 
@@ -63,6 +64,46 @@ interface TestTool {
   ) => Promise<{ content: { text: string }[]; details: Record<string, unknown> }>;
 }
 
+// Mock platform provider for tools
+const mockProvider: PlatformProvider = {
+  type: 'github',
+  getContext: () => ({
+    repo: { owner: 'test-owner', repo: 'test-repo' },
+    issue: { number: 1 },
+    eventName: 'issue_comment',
+    payload: {},
+    serverUrl: 'https://github.com',
+    runId: 123,
+    workspace: '/tmp',
+  }),
+  addReaction: async () => undefined,
+  deleteReaction: async () => {},
+  createFinalComment: async () => {},
+  getPrompt: async () => undefined,
+  getStartTime: () => undefined,
+  createPullRequest: async () => ({
+    content: [{ type: 'text' as const, text: 'PR created' }],
+    details: {
+      pullRequestNumber: 1,
+      pullRequestUrl: '',
+      headBranch: '',
+      baseBranch: '',
+      dryRun: false,
+    },
+  }),
+  updatePullRequest: async () => ({
+    content: [{ type: 'text' as const, text: 'PR updated' }],
+    details: {
+      pullRequestNumber: 1,
+      pullRequestUrl: '',
+      headBranch: '',
+      baseBranch: '',
+      dryRun: false,
+    },
+  }),
+  getIssueOrPRThread: async () => undefined,
+};
+
 function captureRegisteredTools() {
   const tools: unknown[] = [];
   const api = {
@@ -71,6 +112,7 @@ function captureRegisteredTools() {
     }),
   } as unknown as ExtensionAPI;
 
+  const extFactory = createToolsFactory(mockProvider);
   extFactory(api);
   return tools as TestTool[];
 }

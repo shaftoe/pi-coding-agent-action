@@ -9,6 +9,7 @@ import { ActionOrchestrator } from './orchestrator';
 import { RealCoreAdapter } from './adapters/core-adapter';
 import { RealGitAdapter } from './adapters/git-adapter';
 import { createRealPiAgent } from './adapters/pi-agent-adapter';
+import { createGitHubPlatformProvider } from './platform';
 
 /**
  * Run the Pi coding agent end-to-end.
@@ -21,7 +22,13 @@ import { createRealPiAgent } from './adapters/pi-agent-adapter';
 export async function run() {
   const coreAdapter = new RealCoreAdapter();
   const gitAdapter = new RealGitAdapter(coreAdapter);
-  const orchestrator = new ActionOrchestrator(coreAdapter, gitAdapter, createRealPiAgent);
+  const platformProvider = createGitHubPlatformProvider();
+  const orchestrator = new ActionOrchestrator(
+    coreAdapter,
+    gitAdapter,
+    createRealPiAgent,
+    platformProvider
+  );
 
   await orchestrator.execute();
 }

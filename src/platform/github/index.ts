@@ -159,26 +159,19 @@ export { addReaction, deleteReaction, type CreateReactionType } from './reaction
 // Comment creation functions (used by run.ts)
 export { createFinalComment } from './comments';
 
-// Pull request creation functions (used by pi/tools/create-pr.ts)
+// Pull request creation functions (used by git-adapter and provider)
 export {
   createPullRequest,
   type CreatePullRequestParams,
   type CreatePullRequestDetails,
 } from './pull-request';
 
-// Pull request update functions (used by pi/tools/update-pr.ts)
+// Pull request update functions (used by git-adapter and provider)
 export {
   updatePullRequest,
   type UpdatePullRequestParams,
   type UpdatePullRequestDetails,
 } from './pull-request-update';
-
-// Cancellation messages (used by pi/tools)
-export {
-  CANCELLATION_MESSAGE_CREATE_PR,
-  CANCELLATION_MESSAGE_GET_THREAD,
-  CANCELLATION_MESSAGE_UPDATE_PR,
-} from './constants';
 
 // Platform provider (used by platform/index.ts)
 export { detectPlatform, createGitHubPlatformProvider } from './provider';

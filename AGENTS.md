@@ -64,7 +64,7 @@ The action uses a **testable adapter pattern** to separate business logic from e
 2. **Adapters** - Abstract external dependencies:
    - `CoreAdapter` - Wraps `@actions/core` operations
    - `GitAdapter` - Wraps git hosting platform API operations
-   - `PiAgentFactory` - Creates Pi agent instances
+   - `PiAgentFactory` - Creates Pi agent instances (receives `PlatformProvider` for tool DI)
 
 3. **Platform Abstraction** (`src/platform/`) - Multi-platform support:
    - `PlatformProvider` interface - Abstracts platform-specific operations
@@ -91,7 +91,7 @@ The action uses a **testable adapter pattern** to separate business logic from e
 
 3. **Orchestrator Testing**: Business logic is tested in `tests/orchestrator.spec.ts`. When modifying orchestration behavior, update these tests. Do **not** test mocks directly—test the actual business logic flow.
 
-4. **Extension Pattern**: The action extends Pi with custom tools (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`) via the `ExtensionAPI` in `src/pi/tools/index.ts`.
+4. **Extension Pattern**: The action extends Pi with custom tools (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`) via the `ExtensionAPI` in `src/pi/tools/index.ts`. Tools receive a `PlatformProvider` through dependency injection (via `createToolsFactory(provider)`), keeping the Pi module decoupled from the platform implementation.
 
 5. **Centralized Logging**: Tool execution logging is centralized in `src/pi/logging.ts` using SDK events (`tool_execution_start`, `tool_execution_end`). Tools check `signal?.aborted` directly and return `details.cancelled: true` for cancellations.
 

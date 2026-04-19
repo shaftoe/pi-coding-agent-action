@@ -6,7 +6,7 @@
  */
 
 import type { Temporal } from '@js-temporal/polyfill';
-import type { CreateReactionType } from './platform/github';
+import type { CreateReactionType, PlatformProvider } from './platform';
 
 /**
  * Adapter interface for @actions/core operations.
@@ -83,9 +83,10 @@ export interface PromptResult {
 /**
  * Factory function for creating Pi agents with the given configuration.
  *
- * Accepts CoreAdapter for logging within the Pi agent session.
+ * Accepts CoreAdapter for logging within the Pi agent session, and
+ * PlatformProvider for platform operations used by custom tools.
  */
-export type PiAgentFactory = (config: PiConfig, core: CoreAdapter) => PiAgent;
+export type PiAgentFactory = (config: PiConfig, core: CoreAdapter, provider: PlatformProvider) => PiAgent;
 
 /**
  * Configuration for the Pi agent.

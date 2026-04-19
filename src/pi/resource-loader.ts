@@ -18,8 +18,9 @@ import {
 import { SYSTEM_PROMPT } from './prompt';
 import { createLoggingFactory } from './logging';
 import type { ExtensionLoadingInfo } from './logging';
-import { toolsFactory } from './tools/index';
+import { createToolsFactory } from './tools/index';
 import type { CoreAdapter } from '../types';
+import type { PlatformProvider } from '../platform';
 
 /**
  * Result of resolving extension sources.
@@ -79,12 +80,14 @@ export async function resolveExtensions(extensions?: string[]): Promise<Extensio
  * Create and configure the resource loader used by the agent session.
  *
  * @param core - The CoreAdapter to use for logging within the Pi agent.
+ * @param provider - The platform provider for custom tool operations.
  * @param extensions - Optional array of extension sources (npm packages, git repos, or local paths).
  * @param loadBuiltinExtensions - Whether to load built-in GitHub extensions (default true).
  * @returns A fully loaded {@link DefaultResourceLoader} instance.
  */
 export async function getResourceLoader(
   core: CoreAdapter,
+  provider: PlatformProvider,
   extensions?: string[],
   loadBuiltinExtensions = true
 ): Promise<DefaultResourceLoader> {
@@ -93,7 +96,7 @@ export async function getResourceLoader(
 
   const extensionFactories = [createLoggingFactory(core, extensionInfo)];
   if (loadBuiltinExtensions) {
-    extensionFactories.unshift(toolsFactory);
+    extensionFactories.unshift(createToolsFactory(provider));
   }
 
   const loader = new DefaultResourceLoader({

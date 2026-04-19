@@ -13,11 +13,12 @@ import {
   CREATE_PULL_REQUEST_PARAM_BASE_DESCRIPTION,
   CREATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from '../prompt';
-import {
-  createPullRequest,
-  CANCELLATION_MESSAGE_CREATE_PR,
-  type CreatePullRequestParams,
-} from '../../platform/github';
+import { CANCELLATION_MESSAGE_CREATE_PR } from './constants';
+import type {
+  CreatePullRequestParams,
+  CreatePullRequestDetails,
+  PlatformProvider,
+} from '../../platform';
 import { withCancellation } from './tool-execution';
 
 /**
@@ -47,39 +48,48 @@ const createPullRequestSchema = Type.Object({
 type CreatePullRequestToolParams = Static<typeof createPullRequestSchema>;
 
 /**
- * Tool definition for creating a pull request.
+ * Create the create_pull_request tool definition bound to a platform provider.
+ *
+ * @param provider - The platform provider for PR creation operations.
+ * @returns The tool definition.
  */
-export const createPRTool = defineTool({
-  name: 'create_pull_request',
-  label: 'Create Pull Request',
-  description: CREATE_PULL_REQUEST_DESCRIPTION,
-  promptSnippet: CREATE_PULL_REQUEST_PROMPT_SNIPPET,
-  promptGuidelines: CREATE_PULL_REQUEST_PROMPT_GUIDELINES,
-  // @ts-expect-error - TypeBox Symbol property not recognized by TypeScript
-  parameters: createPullRequestSchema,
-  execute: withCancellation({
-    cancellationMessage: CANCELLATION_MESSAGE_CREATE_PR,
-    cancellationDetails: {
-      pullRequestNumber: 0,
-      pullRequestUrl: '',
-      headBranch: '',
-      baseBranch: '',
-      dryRun: false,
-    },
-    prepareParams: (params: CreatePullRequestToolParams) => {
-      const { title, body, base, dryRun } = params;
-      const prParams: CreatePullRequestParams = { title };
-      if (body !== undefined) {
-        prParams.body = body;
-      }
-      if (base !== undefined) {
-        prParams.base = base;
-      }
-      if (dryRun !== undefined) {
-        prParams.dryRun = dryRun;
-      }
-      return prParams;
-    },
-    execute: createPullRequest,
-  }),
-});
+export function createPRToolFactory(provider: PlatformProvider) {
+  return defineTool({
+    name: 'create_pull_request',
+    label: 'Create Pull Request',
+    description: CREATE_PULL_REQUEST_DESCRIPTION,
+    promptSnippet: CREATE_PULL_REQUEST_PROMPT_SNIPPET,
+    promptGuidelines: CREATE_PULL_REQUEST_PROMPT_GUIDELINES,
+    // @ts-expect-error - TypeBox Symbol property not recognized by TypeScript
+    parameters: createPullRequestSchema,
+    execute: withCancellation({
+      cancellationMessage: CANCELLATION_MESSAGE_CREATE_PR,
+      cancellationDetails: {
+        pullRequestNumber: 0,
+        pullRequestUrl: '',
+        headBranch: '',
+        baseBranch: '',
+        dryRun: false,
+      },
+      prepareParams: (params: CreatePullRequestToolParams) => {
+        const { title, body, base, dryRun } = params;
+        const prParams: CreatePullRequestParams = { title };
+        if (body !== undefined) {
+          prParams.body = body;
+        }
+        if (base !== undefined) {
+          prParams.base = base;
+        }
+        if (dryRun !== undefined) {
+          prParams.dryRun = dryRun;
+        }
+        return prParams;
+      },
+      execute: (params) =>
+        provider.createPullRequest(params) as Promise<{
+          content: { type: 'text'; text: string }[];
+          details: CreatePullRequestDetails;
+        }>,
+    }),
+  });
+}

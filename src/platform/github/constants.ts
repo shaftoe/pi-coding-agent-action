@@ -16,11 +16,6 @@ export const MAX_TITLE_LENGTH = 255;
 // Branch naming patterns
 export const BRANCH_PREFIX = 'pi/issue' as const;
 
-// Cancellation messages
-export const CANCELLATION_MESSAGE_CREATE_PR = 'Pull request creation was cancelled';
-export const CANCELLATION_MESSAGE_GET_THREAD = 'Thread retrieval was cancelled';
-export const CANCELLATION_MESSAGE_UPDATE_PR = 'Pull request update was cancelled';
-
 // GitHub-specific ignore patterns (appended to the universal defaults)
 export const GITHUB_IGNORE_PATTERNS = [
   '.github/workflows/*/pi.yml', // Don't include the workflow that runs this action

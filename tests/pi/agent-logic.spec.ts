@@ -51,6 +51,28 @@ const mockCoreAdapter = {
   warning: mock(noop),
 };
 
+// Create a mock PlatformProvider for tests
+const mockPlatformProvider: any = {
+  type: 'github',
+  getContext: () => ({
+    repo: { owner: 'test-owner', repo: 'test-repo' },
+    issue: { number: 1 },
+    eventName: 'issue_comment',
+    payload: {},
+    serverUrl: 'https://github.com',
+    runId: 123,
+    workspace: '/tmp',
+  }),
+  addReaction: async () => undefined,
+  deleteReaction: async () => {},
+  createFinalComment: async () => {},
+  getPrompt: async () => undefined,
+  getStartTime: () => undefined,
+  createPullRequest: async () => ({ content: [], details: {} }),
+  updatePullRequest: async () => ({ content: [], details: {} }),
+  getIssueOrPRThread: async () => undefined,
+};
+
 describe('Agent', () => {
   describe('constructor', () => {
     test('throws error for non-existent model', () => {
@@ -61,7 +83,8 @@ describe('Agent', () => {
           'fake-provider',
           'test-token',
           'off',
-          mockCoreAdapter as any
+          mockCoreAdapter as any,
+          mockPlatformProvider
         );
       }).toThrow('Model not found');
     });
@@ -72,7 +95,8 @@ describe('Agent', () => {
         'anthropic',
         'sk-12345',
         'off',
-        mockCoreAdapter as any
+        mockCoreAdapter as any,
+        mockPlatformProvider
       );
       // Agent is created without error
       expect(agent).toBeDefined();
@@ -85,7 +109,7 @@ describe('Agent', () => {
       };
       const adapter = { ...mockCoreAdapter, debug: mock(debugLogger) };
 
-      new Agent('claude-sonnet-4-5', 'anthropic', '', 'off', adapter as any);
+      new Agent('claude-sonnet-4-5', 'anthropic', '', 'off', adapter as any, mockPlatformProvider);
 
       // Should not log auth debug message
       expect(mockDebug).not.toContain('[auth] Setting api_key token');
@@ -97,7 +121,8 @@ describe('Agent', () => {
         'anthropic',
         'test-token',
         'medium',
-        mockCoreAdapter as any
+        mockCoreAdapter as any,
+        mockPlatformProvider
       );
       // Agent is created without error
       expect(agent).toBeDefined();
@@ -112,7 +137,8 @@ describe('Agent', () => {
         'anthropic',
         'test-token',
         'off',
-        mockCoreAdapter as any
+        mockCoreAdapter as any,
+        mockPlatformProvider
       );
       const result = await agent.ready();
       expect(result).toBe(agent);
@@ -124,7 +150,8 @@ describe('Agent', () => {
         'anthropic',
         'test-token',
         'off',
-        mockCoreAdapter as any
+        mockCoreAdapter as any,
+        mockPlatformProvider
       );
 
       // The real session subscribe will be called during ready()
@@ -141,7 +168,8 @@ describe('Agent', () => {
         'anthropic',
         'test-token',
         'off',
-        mockCoreAdapter as any
+        mockCoreAdapter as any,
+        mockPlatformProvider
       );
       await agent.ready();
 
@@ -154,7 +182,8 @@ describe('Agent', () => {
         'anthropic',
         'test-token',
         'off',
-        mockCoreAdapter as any
+        mockCoreAdapter as any,
+        mockPlatformProvider
       );
       await agent.ready();
 
@@ -169,7 +198,8 @@ describe('Agent', () => {
         'anthropic',
         'test-token',
         'off',
-        mockCoreAdapter as any
+        mockCoreAdapter as any,
+        mockPlatformProvider
       );
       await agent.ready();
 
@@ -203,7 +233,8 @@ describe('Agent', () => {
         'anthropic',
         'test-token',
         'off',
-        mockCoreAdapter as any
+        mockCoreAdapter as any,
+        mockPlatformProvider
       );
       await agent.ready();
 
@@ -230,7 +261,8 @@ describe('Agent', () => {
         'anthropic',
         'test-token',
         'off',
-        mockCoreAdapter as any
+        mockCoreAdapter as any,
+        mockPlatformProvider
       );
       await agent.ready();
 
@@ -264,7 +296,8 @@ describe('Agent', () => {
         'anthropic',
         'test-token',
         'off',
-        mockCoreAdapter as any
+        mockCoreAdapter as any,
+        mockPlatformProvider
       );
       await agent.ready();
 
