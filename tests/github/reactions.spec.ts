@@ -36,6 +36,7 @@ mock.module('@actions/core', () => ({
   debug: mock(debugLogger),
   setFailed: mock(noop),
   warning: mock(noop),
+  setOutput: mock(noop),
 }));
 
 // Set env vars BEFORE importing reactions.ts
@@ -101,6 +102,7 @@ const testCoreAdapter = {
   notice: mock(noop),
   info: mock(noop),
   warning: mock(noop),
+  setOutput: mock(noop),
 };
 
 const githubModulePromise = import('../../src/github/index.js');

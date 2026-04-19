@@ -19,6 +19,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import { ActionOrchestrator } from '../src/orchestrator';
 import type { CoreAdapter, GitHubAdapter, PiAgent } from '../src/types';
 import type { CreateReactionType } from '../src/github/reactions';
+import { createMockCoreAdapter } from './test-helpers';
 
 describe('ActionOrchestrator', () => {
   let mockCore: CoreAdapter;
@@ -28,7 +29,7 @@ describe('ActionOrchestrator', () => {
 
   beforeEach(() => {
     // Create mock core adapter
-    const getInputMock = mock((name: string) => {
+    const getInputMock = mock((name: string): string => {
       const defaults: Record<string, string> = {
         provider: 'anthropic',
         model: 'claude-sonnet-4-5',
@@ -36,22 +37,12 @@ describe('ActionOrchestrator', () => {
         thinking_level: '',
         prompt: '',
       };
-      return defaults[name];
+      return defaults[name] ?? '';
     });
 
-    const setFailedMock = mock();
-    const noticeMock = mock();
-    const infoMock = mock();
-    const debugMock = mock();
-    const warningMock = mock();
-    mockCore = {
+    mockCore = createMockCoreAdapter({
       getInput: getInputMock,
-      setFailed: setFailedMock,
-      notice: noticeMock,
-      info: infoMock,
-      debug: debugMock,
-      warning: warningMock,
-    } as any;
+    });
 
     // Create mock github adapter
     const addReactionMock = mock(async () => ({ data: { id: 123 } }) as CreateReactionType);
@@ -157,6 +148,7 @@ describe('ActionOrchestrator', () => {
           thinkingLevel: 'medium',
           promptInput: '',
           loadBuiltinExtensions: true, // default value
+          outputOnly: false, // default value
         },
         mockCore
       );
@@ -190,6 +182,7 @@ describe('ActionOrchestrator', () => {
           thinkingLevel: '', // Empty string, because ?? doesn't apply to empty strings
           promptInput: '',
           loadBuiltinExtensions: true, // default value
+          outputOnly: false, // default value
         },
         mockCore
       );
@@ -800,6 +793,85 @@ describe('ActionOrchestrator', () => {
 
       expect(mockCore.setFailed).toHaveBeenCalledWith(error);
       expect(mockCore.setFailed).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('output_only mode', () => {
+    test('sets output instead of posting comment when output_only is true', async () => {
+      const getInputMock = mock((name: string): string => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          output_only: 'true',
+        };
+        return inputs[name] ?? '';
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+      await orchestrator.execute();
+
+      expect(mockCore.setOutput).toHaveBeenCalledWith('response', 'Here are your tests!');
+      expect(mockGithub.createFinalComment).not.toHaveBeenCalled();
+    });
+
+    test('posts comment when output_only is false', async () => {
+      const getInputMock = mock((name: string): string => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          output_only: 'false',
+        };
+        return inputs[name] ?? '';
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+      await orchestrator.execute();
+
+      expect(mockCore.setOutput).not.toHaveBeenCalled();
+      expect(mockGithub.createFinalComment).toHaveBeenCalled();
+    });
+
+    test('defaults to posting comment when output_only not provided', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+      await orchestrator.execute();
+
+      expect(mockCore.setOutput).not.toHaveBeenCalled();
+      expect(mockGithub.createFinalComment).toHaveBeenCalled();
+    });
+
+    test('sets output with error message when output_only is true and execution fails', async () => {
+      const getInputMock = mock((name: string): string => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          output_only: 'true',
+        };
+        return inputs[name] ?? '';
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const error = new Error('API failed');
+      const runMock = mock(async () => {
+        throw error;
+      });
+      mockPiAgent.run = runMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+      await expect(orchestrator.execute()).rejects.toThrow('API failed');
+
+      expect(mockCore.setOutput).toHaveBeenCalledWith('response', 'API failed');
+      expect(mockGithub.createFinalComment).not.toHaveBeenCalled();
     });
   });
 });

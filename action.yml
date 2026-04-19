@@ -45,6 +45,15 @@ inputs:
     required: false
     default: 'true'
 
+  output_only:
+    description: 'When true, outputs the response text instead of posting a comment'
+    required: false
+    default: 'false'
+
+outputs:
+  response:
+    description: 'The agent response text (only populated when output_only is true)'
+
 runs:
   using: 'node24'
   main: 'dist/index.js'

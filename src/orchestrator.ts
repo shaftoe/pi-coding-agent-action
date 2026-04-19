@@ -94,6 +94,11 @@ export class ActionOrchestrator {
       ? loadBuiltinExtensionsInput.toLowerCase() === 'true'
       : true; // default to true
 
+    const outputOnlyInput = this.core.getInput('output_only');
+    const outputOnly = outputOnlyInput
+      ? outputOnlyInput.toLowerCase() === 'true'
+      : false;
+
     return {
       provider: this.core.getInput('provider'),
       model: this.core.getInput('model'),
@@ -102,11 +107,12 @@ export class ActionOrchestrator {
       promptInput: this.core.getInput('prompt'),
       ...(extensions?.length ? { extensions } : {}),
       loadBuiltinExtensions,
+      outputOnly,
     };
   }
 
   /**
-   * Finalize execution by posting the result/error as a comment.
+   * Finalize execution by posting the result/error as a comment or setting output.
    */
   private async finalize(
     body: string,
@@ -122,6 +128,11 @@ export class ActionOrchestrator {
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
       this.core.notice(`failed to delete reaction: ${errorMessage}`);
+    }
+
+    if (config.outputOnly) {
+      this.core.setOutput('response', body);
+      return;
     }
 
     const metadata: CommentMetadata = {

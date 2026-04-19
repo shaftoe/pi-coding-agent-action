@@ -37,6 +37,7 @@ mock.module('@actions/core', () => ({
   debug: mock(noop),
   setFailed: mock(noop),
   warning: mock(noop),
+  setOutput: mock(noop),
 }));
 
 // Set env vars BEFORE importing modules
@@ -83,6 +84,7 @@ const mockCoreAdapter = {
   info: mock(noop),
   debug: mock(noop),
   warning: mock(noop),
+  setOutput: mock(noop),
 };
 
 describe('nested .gitignore support', () => {

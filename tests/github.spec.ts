@@ -40,6 +40,7 @@ const testCoreAdapter = {
   info: mock(noop),
   debug: mock(noop),
   warning: mock(noop),
+  setOutput: mock(noop),
 };
 
 mock.module('@actions/core', () => ({
@@ -49,6 +50,7 @@ mock.module('@actions/core', () => ({
   debug: mock(noop),
   setFailed: mock(noop),
   warning: mock(noop),
+  setOutput: mock(noop),
 }));
 
 import * as github from '@actions/github';

@@ -60,7 +60,7 @@ export default [
     },
   },
   {
-    files: ["tests/**/*.spec.ts"],
+    files: ["tests/**/*.spec.ts", "tests/**/*.ts"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {

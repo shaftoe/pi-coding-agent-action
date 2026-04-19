@@ -27,6 +27,8 @@ export interface CoreAdapter {
   info(message: string): void;
   /** Log a warning message. */
   warning(message: string): void;
+  /** Set an action output. */
+  setOutput(name: string, value: string): void;
 }
 
 /**
@@ -97,6 +99,7 @@ export interface PiConfig {
   promptInput: string;
   extensions?: string[];
   loadBuiltinExtensions?: boolean;
+  outputOnly?: boolean;
 }
 
 /**

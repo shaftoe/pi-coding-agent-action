@@ -34,4 +34,8 @@ export class RealCoreAdapter implements CoreAdapter {
   warning(message: string): void {
     core.warning(message);
   }
+
+  setOutput(name: string, value: string): void {
+    core.setOutput(name, value);
+  }
 }

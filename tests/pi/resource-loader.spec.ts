@@ -23,6 +23,7 @@ const mockCoreAdapter = {
   debug: mock(),
   info: mock(),
   warning: mock(),
+  setOutput: mock(),
 };
 
 // Set env vars before importing

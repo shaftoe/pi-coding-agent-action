@@ -63,6 +63,7 @@ const mockNotice = mock();
 const mockInfo = mock();
 const mockDebug = mock();
 const mockWarning = mock();
+const mockSetOutput = mock();
 
 import type { CoreAdapter } from '../../src/types.ts';
 
@@ -73,6 +74,7 @@ const mockCoreAdapter: CoreAdapter = {
   debug: mockDebug,
   info: mockInfo,
   warning: mockWarning,
+  setOutput: mockSetOutput,
 };
 
 mock.module('@actions/core', () => ({
@@ -82,6 +84,7 @@ mock.module('@actions/core', () => ({
   debug: mockDebug,
   setFailed: mockSetFailed,
   warning: mockWarning,
+  setOutput: mockSetOutput,
 }));
 
 // Mock @actions/github context

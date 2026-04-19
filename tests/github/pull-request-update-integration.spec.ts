@@ -31,6 +31,7 @@ mock.module('@actions/core', () => ({
   debug: mock(noop),
   setFailed: mock(noop),
   warning: mock(noop),
+  setOutput: mock(noop),
 }));
 
 // Set env vars BEFORE importing pull-request-update.ts
@@ -134,6 +135,7 @@ const testCoreAdapter = {
   info: mock(noop),
   debug: mock(noop),
   warning: mock(noop),
+  setOutput: mock(noop),
 };
 
 // Dynamic import to ensure mocks are set before module loads
