@@ -11,7 +11,7 @@ import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
 import { Temporal } from '@js-temporal/polyfill';
 import { getOctokit } from './octokit';
 import { getCoreAdapter } from './index';
-import type { SessionStats } from '../types';
+import type { SessionStats } from '../../types';
 
 /**
  * Metadata to include in the comment footer.

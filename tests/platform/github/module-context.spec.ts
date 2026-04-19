@@ -11,8 +11,8 @@ import {
   getCoreAdapter,
   resetModuleContext,
   isModuleContextInitialized,
-} from '../../src/git';
-import type { CoreAdapter } from '../../src/types';
+} from '../../../src/platform/github';
+import type { CoreAdapter } from '../../../src/types';
 
 function createMockCoreAdapter(overrides?: Partial<CoreAdapter>): CoreAdapter {
   return {

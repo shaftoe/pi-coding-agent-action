@@ -13,17 +13,18 @@
  */
 
 import { context } from '@actions/github';
-import { addReaction, deleteReaction, createFinalComment, getPrompt } from '../git';
-import { getStartTimeFromContext, getIssueOrPRThread } from '../git/context';
-import { createPullRequest } from '../git/pull-request';
-import { updatePullRequest } from '../git/pull-request-update';
+import { addReaction, deleteReaction } from './reactions';
+import { createFinalComment } from './comments';
+import { getPrompt, getStartTimeFromContext, getIssueOrPRThread } from './context';
+import { createPullRequest } from './pull-request';
+import { updatePullRequest } from './pull-request-update';
 import type { Temporal } from '@js-temporal/polyfill';
-import type { PlatformProvider, PlatformType, PlatformContext } from './types';
-import type { CommentMetadata } from '../types';
-import type { CreateReactionType } from '../git/reactions';
-import type { IssueOrPRThread, GetIssueOrPRThreadParams } from '../git/context';
-import type { CreatePullRequestParams, CreatePullRequestDetails } from '../git/pull-request';
-import type { UpdatePullRequestParams, UpdatePullRequestDetails } from '../git/pull-request-update';
+import type { PlatformProvider, PlatformType, PlatformContext } from '../types';
+import type { CommentMetadata } from '../../types';
+import type { CreateReactionType } from './reactions';
+import type { IssueOrPRThread, GetIssueOrPRThreadParams } from './context';
+import type { CreatePullRequestParams, CreatePullRequestDetails } from './pull-request';
+import type { UpdatePullRequestParams, UpdatePullRequestDetails } from './pull-request-update';
 
 /**
  * Detect the current platform based on the server URL.

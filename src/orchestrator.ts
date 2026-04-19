@@ -16,7 +16,7 @@ import {
   type PiConfig,
   type SessionStats,
 } from './types';
-import type { CreateReactionType } from './git/reactions';
+import type { CreateReactionType } from './platform/github';
 
 declare const __VERSION__: string;
 

@@ -87,7 +87,7 @@ const mockOctokit = {
     },
   },
 };
-mock.module('../../src/git/octokit', () => ({
+mock.module('../../../src/platform/github/octokit', () => ({
   getOctokit: mock(() => mockOctokit),
 }));
 
@@ -103,7 +103,7 @@ const testCoreAdapter = {
   warning: mock(noop),
 };
 
-const githubModulePromise = import('../../src/git/index.js');
+const githubModulePromise = import('../../../src/platform/github/index.js');
 
 // Setup default GitHub context
 const mockContext = {
@@ -130,7 +130,7 @@ mock.module('@actions/github', () => ({
 }));
 
 // Dynamic import to ensure mocks are set before module loads
-const reactionsModule = import('../../src/git/reactions.js');
+const reactionsModule = import('../../../src/platform/github/reactions.js');
 
 describe('addReaction', () => {
   beforeEach(async () => {

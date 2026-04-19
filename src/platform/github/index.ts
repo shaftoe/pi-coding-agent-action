@@ -1,23 +1,23 @@
 /**
- * @file Git hosting platform module barrel export.
+ * @file GitHub/Codeberg/Forgejo module barrel export.
  *
- * Re-exports public symbols used by consumers outside the git/ module.
+ * Re-exports public symbols used by consumers outside the github/ module.
  * Internal implementation details are not exported from this barrel file.
  *
  * Supports GitHub, Codeberg, and self-hosted Forgejo instances.
  */
 
-import type { CoreAdapter } from '../types';
+import type { CoreAdapter } from '../../types';
 
 /**
- * Git hosting platform module context manager.
+ * GitHub module context manager.
  *
- * Encapsulates the CoreAdapter instance used throughout the git module.
+ * Encapsulates the CoreAdapter instance used throughout the github module.
  * This class provides a centralized, explicit way to manage the module's
  * dependencies with proper initialization validation.
  *
  * Design rationale:
- * - The git module functions are called by Pi tools, which don't have
+ * - The github module functions are called by Pi tools, which don't have
  *   access to the CoreAdapter through normal DI chains
  * - Setting the context once at initialization is simpler than threading
  *   CoreAdapter through every function call
@@ -29,9 +29,9 @@ class GitHubModuleContext {
   private _coreAdapter: CoreAdapter | undefined;
 
   /**
-   * Set the CoreAdapter for the git module.
+   * Set the CoreAdapter for the github module.
    *
-   * Must be called before any git functions that require logging or
+   * Must be called before any github functions that require logging or
    * input retrieval. Typically called once during Action initialization.
    *
    * @param core - The CoreAdapter instance to use.
@@ -45,7 +45,7 @@ class GitHubModuleContext {
   }
 
   /**
-   * Get the CoreAdapter for the git module.
+   * Get the CoreAdapter for the github module.
    *
    * @returns The CoreAdapter instance.
    * @throws {Error} If the context has not been initialized.
@@ -53,8 +53,8 @@ class GitHubModuleContext {
   getCoreAdapter(): CoreAdapter {
     if (!this._coreAdapter) {
       throw new Error(
-        'Git module context not initialized. ' +
-          'Call setCoreAdapter() before using git functions. ' +
+        'GitHub module context not initialized. ' +
+          'Call setCoreAdapter() before using github functions. ' +
           'In tests, use resetModuleContext() to set a test adapter.'
       );
     }
@@ -86,12 +86,12 @@ class GitHubModuleContext {
 }
 
 /**
- * Singleton instance of the git module context.
+ * Singleton instance of the github module context.
  */
 const moduleContext = new GitHubModuleContext();
 
 /**
- * Set the CoreAdapter for the git module.
+ * Set the CoreAdapter for the github module.
  *
  * Called by RealGitAdapter constructor during Action initialization.
  * Tests can inject a mock CoreAdapter for unit testing.
@@ -104,18 +104,18 @@ export function setCoreAdapter(core: CoreAdapter): void {
 }
 
 /**
- * Get the CoreAdapter for the git module.
+ * Get the CoreAdapter for the github module.
  *
  * @returns The CoreAdapter instance.
  * @throws {Error} If the module context has not been initialized.
- * @internal Exported for internal use within the git module.
+ * @internal Exported for internal use within the github module.
  */
 export function getCoreAdapter(): CoreAdapter {
   return moduleContext.getCoreAdapter();
 }
 
 /**
- * Reset the git module context.
+ * Reset the github module context.
  *
  * Clears the module-level CoreAdapter. Used in tests to ensure clean
  * isolation between test cases. After resetting, you should either:
@@ -130,7 +130,7 @@ export function resetModuleContext(core?: CoreAdapter): void {
 }
 
 /**
- * Check if the git module context has been initialized.
+ * Check if the github module context has been initialized.
  *
  * @returns True if setCoreAdapter() has been called.
  * @internal Exported for testing purposes only.
@@ -144,7 +144,13 @@ export {
   getPrompt,
   getIssueOrPRThread,
   getStartTimeFromContext,
+  getIssueOrPullRequestContext,
   type IssueOrPRThread,
+  type IssueOrPullRequestContext,
+  type ThreadComment,
+  type GetIssueOrPRThreadParams,
+  isPR,
+  getContextType,
 } from './context';
 
 // Reaction management functions (used by run.ts)
@@ -173,3 +179,6 @@ export {
   CANCELLATION_MESSAGE_GET_THREAD,
   CANCELLATION_MESSAGE_UPDATE_PR,
 } from './constants';
+
+// Platform provider (used by platform/index.ts)
+export { detectPlatform, createGitHubPlatformProvider } from './provider';

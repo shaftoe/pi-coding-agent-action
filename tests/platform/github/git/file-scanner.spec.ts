@@ -47,7 +47,7 @@ process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-scanner-${Date.
 fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 
 // Mock octokit (not used by scanForChanges but needed for module loading)
-mock.module('../../../src/git/octokit', () => ({
+mock.module('../../../../src/platform/github/octokit', () => ({
   getOctokit: mock(() => ({
     rest: {
       git: {
@@ -70,9 +70,9 @@ mock.module('@actions/github', () => ({
 }));
 
 // Import the module context reset function and git utilities
-import { resetModuleContext } from '../../../src/git/index';
-import { scanForChanges, scanDirectory } from '../../../src/git/git/file-scanner';
-import { createLogger } from '../../../src/git/git/types';
+import { resetModuleContext } from '../../../../src/platform/github';
+import { scanForChanges, scanDirectory } from '../../../../src/platform/github/git/file-scanner';
+import { createLogger } from '../../../../src/platform/github/git/types';
 import ignore from 'ignore';
 
 // Set up mock CoreAdapter for all tests

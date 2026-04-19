@@ -93,7 +93,7 @@ const mockOctokit = {
     },
   },
 };
-mock.module('../../src/git/octokit', () => ({
+mock.module('../../../src/platform/github/octokit', () => ({
   getOctokit: mock(() => mockOctokit),
 }));
 
@@ -106,12 +106,12 @@ fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 import { Temporal } from '@js-temporal/polyfill';
 
 // Initialize the github module context with test adapter
-const githubModulePromise = import('../../src/git/index.js');
+const githubModulePromise = import('../../../src/platform/github/index.js');
 
 // Dynamic import to ensure mocks are set up before module loads
 const { formatExecutionTime, formatNumber, createFinalComment } =
   // @ts-expect-error TS1309 -- Top-level await not supported in CommonJS, but Bun test runner handles it
-  await import('../../src/git/comments.js');
+  await import('../../../src/platform/github/comments.js');
 
 describe('formatExecutionTime', () => {
   test('formats seconds only', () => {

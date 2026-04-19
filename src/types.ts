@@ -6,7 +6,7 @@
  */
 
 import type { Temporal } from '@js-temporal/polyfill';
-import type { CreateReactionType } from './git/reactions';
+import type { CreateReactionType } from './platform/github';
 
 /**
  * Adapter interface for @actions/core operations.

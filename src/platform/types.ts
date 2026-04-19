@@ -11,10 +11,15 @@
  */
 
 import type { Temporal } from '@js-temporal/polyfill';
-import type { IssueOrPRThread, GetIssueOrPRThreadParams } from '../git/context';
-import type { CreatePullRequestParams, CreatePullRequestDetails } from '../git/pull-request';
-import type { UpdatePullRequestParams, UpdatePullRequestDetails } from '../git/pull-request-update';
-import type { CreateReactionType } from '../git/reactions';
+import type {
+  IssueOrPRThread,
+  GetIssueOrPRThreadParams,
+  CreatePullRequestParams,
+  CreatePullRequestDetails,
+  UpdatePullRequestParams,
+  UpdatePullRequestDetails,
+  CreateReactionType,
+} from './github';
 import type { CommentMetadata } from '../types';
 
 /**

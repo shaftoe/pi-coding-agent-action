@@ -58,7 +58,7 @@ const mockOctokit = {
     },
   },
 };
-mock.module('../../../src/git/octokit', () => ({
+mock.module('../../../../src/platform/github/octokit', () => ({
   getOctokit: mock(() => mockOctokit),
 }));
 
@@ -82,7 +82,7 @@ mock.module('@actions/github', () => ({
 }));
 
 // Dynamic import to ensure mocks are set before module loads
-const commitCreatorModule = import('../../../src/git/git/commit-creator.js');
+const commitCreatorModule = import('../../../../src/platform/github/git/commit-creator.js');
 
 describe('createCommitAndUpdateBranch', () => {
   beforeEach(() => {

@@ -14,9 +14,12 @@ import {
   GET_ISSUE_PR_THREAD_PARAM_MAX_COMMENTS_DESCRIPTION,
 } from '../prompt';
 import { formatThreadAsText } from './common';
-import { getIssueOrPRThread, CANCELLATION_MESSAGE_GET_THREAD } from '../../git/index';
+import {
+  getIssueOrPRThread,
+  CANCELLATION_MESSAGE_GET_THREAD,
+  type IssueOrPRThread,
+} from '../../platform/github';
 import type { AgentToolResult } from '@mariozechner/pi-coding-agent';
-import type { IssueOrPRThread } from '../../git/index';
 import { withCancellation } from './tool-execution';
 
 /**

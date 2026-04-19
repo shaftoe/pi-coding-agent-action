@@ -20,18 +20,27 @@ This is a CI/CD action that integrates the [Pi coding agent](https://pi.dev) wit
   - `types.ts` - Shared type definitions and adapter interfaces
   - `platform/` - Platform abstraction for multi-platform support
     - `types.ts` - Platform provider interface (`PlatformProvider`, `PlatformContext`)
-    - `github.ts` - GitHub/Codeberg/Forgejo provider implementation
     - `index.ts` - Barrel exports
+    - `github/` - GitHub/Codeberg/Forgejo implementation
+      - `index.ts` - Module barrel (context management + re-exports)
+      - `provider.ts` - Platform provider implementation (`detectPlatform`, `createGitHubPlatformProvider`)
+      - `comments.ts` - Comment creation utilities
+      - `context.ts` - GitHub context extraction and issue/PR thread retrieval
+      - `context-utils.ts` - Shared context utility functions
+      - `constants.ts` - Shared constants
+      - `octokit.ts` - Shared Octokit client singleton
+      - `reactions.ts` - Reaction management (add/remove)
+      - `pull-request.ts` - Pull request creation tool implementation
+      - `pull-request-update.ts` - Pull request update tool implementation
+      - `git/` - Git Data API operations (blobs, trees, commits)
   - `adapters/` - Production implementations of adapter interfaces
     - `core-adapter.ts` - CI/CD Core operations
     - `git-adapter.ts` - Git hosting platform API operations
     - `pi-agent-adapter.ts` - Pi agent factory
   - `pi/` - Pi agent library and tool definitions
-  - `git/` - Git hosting platform API interactions and context enrichment
 - `tests/` - Bun test files (following Bun convention)
   - `*.spec.ts` - Test files named with `.spec.ts` extension
-  - `platform/` - Tests for platform abstraction
-  - `git/` - Tests for git platform-related modules
+  - `platform/` - Tests for platform abstraction and GitHub module
   - `pi/` - Tests for Pi agent integration
 - `scripts/` - Utilities, helpers, etc.
 
@@ -55,6 +64,7 @@ The action uses a **testable adapter pattern** to separate business logic from e
    - `PlatformProvider` interface - Abstracts platform-specific operations
    - `PlatformContext` - Platform-agnostic context (repo, event, payload)
    - `PlatformType` - Enum of supported platforms (github, codeberg, forgejo)
+   - `src/platform/github/` - GitHub/Codeberg/Forgejo implementation (API client, reactions, comments, PR operations)
    - `createGitHubPlatformProvider()` - Default provider for GitHub/Codeberg/Forgejo
    - Platform detection via `detectPlatform()` (uses `GITHUB_SERVER_URL` env var)
 
@@ -71,7 +81,7 @@ The action uses a **testable adapter pattern** to separate business logic from e
    ```
    This runs: ESLint, TypeScript type checking, and Prettier formatting.
 
-2. **Test Convention**: All test files are located under `./tests` and follow the Bun naming convention `*.spec.ts`. When adding new tests, create them in the appropriate subdirectory under `tests/` (e.g., `tests/git/`, `tests/pi/`, `tests/platform/`) and use the `.spec.ts` extension.
+2. **Test Convention**: All test files are located under `./tests` and follow the Bun naming convention `*.spec.ts`. When adding new tests, create them in the appropriate subdirectory under `tests/` (e.g., `tests/platform/github/`, `tests/pi/`, `tests/platform/`) and use the `.spec.ts` extension.
 
 3. **Orchestrator Testing**: Business logic is tested in `tests/orchestrator.spec.ts`. When modifying orchestration behavior, update these tests. Do **not** test mocks directly—test the actual business logic flow.
 

@@ -46,7 +46,7 @@ process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-${Date.now()}.j
 fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 
 // Dynamic import to ensure mocks are set before module loads
-const gitUtilsModule = import('../../src/git/git/index.js');
+const gitUtilsModule = import('../../../src/platform/github/git/index.js');
 
 // Extract functions for convenience (using top-level await pattern)
 const [{ createLogger, scanDirectory, scanForChanges }] = // @ts-expect-error TS1309 -- Top-level await not supported in CommonJS, but Bun test runner handles it

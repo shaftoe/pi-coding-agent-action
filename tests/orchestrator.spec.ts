@@ -18,7 +18,7 @@ import { describe, expect, test, mock, beforeEach } from 'bun:test';
 import { Temporal } from '@js-temporal/polyfill';
 import { ActionOrchestrator } from '../src/orchestrator';
 import type { CoreAdapter, GitAdapter, PiAgent } from '../src/types';
-import type { CreateReactionType } from '../src/git/reactions';
+import type { CreateReactionType } from '../src/platform/github';
 
 describe('ActionOrchestrator', () => {
   let mockCore: CoreAdapter;

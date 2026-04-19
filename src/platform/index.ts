@@ -8,4 +8,4 @@
 
 export { type PlatformType, type PlatformContext, type PlatformProvider } from './types';
 
-export { detectPlatform, createGitHubPlatformProvider } from './github';
+export { detectPlatform, createGitHubPlatformProvider } from './github/index';

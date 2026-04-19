@@ -57,8 +57,8 @@ process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-platform-${Date
 fs.writeFileSync(process.env.GITHUB_EVENT_PATH, JSON.stringify({}));
 
 // Import after mocks are set up
-import type { PlatformProvider } from '../../src/platform/types';
-import { detectPlatform, createGitHubPlatformProvider } from '../../src/platform/github';
+import type { PlatformProvider } from '../../../src/platform/types';
+import { detectPlatform, createGitHubPlatformProvider } from '../../../src/platform/github/provider';
 
 describe('detectPlatform', () => {
   const originalServerUrl = process.env.GITHUB_SERVER_URL;

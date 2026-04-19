@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, test } from 'bun:test';
 import { createPRTool } from '../../../src/pi/tools/create-pr';
-import * as githubIndex from '../../../src/git/index';
+import * as githubIndex from '../../../src/platform/github';
 
 describe('create_pull_request tool - execution', () => {
   test('has correct tool name and label', () => {

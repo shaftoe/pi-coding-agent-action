@@ -7,7 +7,7 @@
 
 import { describe, expect, test, beforeEach } from 'bun:test';
 import { RealGitAdapter } from '../../src/adapters/git-adapter';
-import { isModuleContextInitialized, resetModuleContext } from '../../src/git';
+import { isModuleContextInitialized, resetModuleContext } from '../../src/platform/github';
 import type { CoreAdapter } from '../../src/types';
 
 function createMockCoreAdapter(overrides?: Partial<CoreAdapter>): CoreAdapter {

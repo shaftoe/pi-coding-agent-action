@@ -62,8 +62,8 @@ fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 
 // Dynamic import to ensure env vars are set before module loads
 // Also initialize the github module context with test adapter
-const githubModule = import('../src/git/index.js');
-const contextModule = import('../src/git/context.js');
+const githubModule = import('../../../src/platform/github/index.js');
+const contextModule = import('../../../src/platform/github/context.js');
 const [
   githubExports,
   contextExports,

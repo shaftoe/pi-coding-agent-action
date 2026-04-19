@@ -5,10 +5,16 @@
  */
 
 import { Temporal } from '@js-temporal/polyfill';
-import { addReaction, deleteReaction, createFinalComment, getPrompt, setCoreAdapter } from '../git';
-import { getStartTimeFromContext } from '../git/context';
+import {
+  addReaction,
+  deleteReaction,
+  createFinalComment,
+  getPrompt,
+  setCoreAdapter,
+  getStartTimeFromContext,
+  type CreateReactionType,
+} from '../platform/github';
 import type { GitAdapter, CommentMetadata, CoreAdapter } from '../types';
-import type { CreateReactionType } from '../git/reactions';
 
 /**
  * Production adapter for git hosting platform operations.
