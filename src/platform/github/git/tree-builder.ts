@@ -6,8 +6,9 @@
 
 import * as github from '@actions/github';
 import { getOctokit } from '../octokit';
-import { FILE_MODE_REGULAR } from '../constants';
-import { createLogger, FileMode, TreeEntry } from './types';
+import { FILE_MODE_REGULAR } from '../../../git/constants';
+import { createLogger } from './types';
+import type { FileMode, TreeEntry, Logger } from '../../../git/types';
 
 /**
  * Parameters for blob and tree creation operation.
@@ -24,7 +25,7 @@ export interface CreateBlobsAndTreeParams {
   /** SHA of the parent commit to use as the tree's parent. */
   parentSha: string;
   /** Logger instance for debug output. */
-  log: ReturnType<typeof createLogger>;
+  log: Logger;
 }
 
 /**

@@ -1,14 +1,16 @@
 /**
- * @file Git utilities barrel export.
+ * @file Git utilities barrel export for the GitHub platform.
  *
- * Re-exports all public APIs for backward compatibility and convenience.
+ * Re-exports all public APIs including the platform-agnostic scanner
+ * (via the GitHub-aware wrapper) and GitHub-specific blob/tree/commit
+ * operations.
  */
 
 // Types and utilities
-export type { FileMode } from './types';
+export type { FileMode, TreeEntry } from './types';
 export { createLogger } from './types';
 
-// File scanner
+// File scanner (GitHub-aware wrapper around shared scanner)
 export type { ChangeScanResult, ScanDirectoryParams } from './file-scanner';
 export { buildFileMap, scanForChanges, scanDirectory } from './file-scanner';
 

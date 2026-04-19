@@ -1,32 +1,16 @@
 /**
- * @file Shared types and utilities for Git operations.
+ * @file Shared types and utilities for GitHub Git operations.
+ *
+ * Re-exports platform-agnostic types from the shared git module and
+ * provides the GitHub-specific logger factory.
  */
 
-import { FILE_MODE_DIRECTORY, FILE_MODE_EXECUTABLE, FILE_MODE_REGULAR } from '../constants';
 import { getCoreAdapter } from '../index';
+import type { FileMode, TreeEntry, Logger } from '../../../git/types';
 
-/**
- * Git file mode types
- */
-export type FileMode =
-  | typeof FILE_MODE_REGULAR
-  | typeof FILE_MODE_EXECUTABLE
-  | typeof FILE_MODE_DIRECTORY;
-
-/**
- * Tree entry for creating Git trees.
- * Setting `sha` to `null` indicates the file should be deleted.
- */
-export interface TreeEntry {
-  /** Path to the file or directory */
-  path: string;
-  /** File mode (permissions) */
-  mode: FileMode;
-  /** Type of tree entry */
-  type: 'blob' | 'tree';
-  /** SHA of the blob/tree, or `null` to delete the file */
-  sha: string | null;
-}
+// Re-export shared types so consumers within the GitHub module can import
+// them from a single location.
+export type { FileMode, TreeEntry, Logger };
 
 /**
  * Create a logger with a custom emoji prefix.
@@ -34,7 +18,7 @@ export interface TreeEntry {
  * The logger lazily fetches the CoreAdapter on first call to avoid
  * initialization order issues when modules are loaded.
  */
-export function createLogger(emoji = '🔀') {
+export function createLogger(emoji = '🔀'): Logger {
   return {
     debug: (msg: string): void => getCoreAdapter().debug(`${emoji} ${msg}`),
     info: (msg: string): void => getCoreAdapter().info(`${emoji} ${msg}`),

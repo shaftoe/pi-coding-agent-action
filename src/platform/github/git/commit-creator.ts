@@ -7,6 +7,7 @@
 import * as github from '@actions/github';
 import { getOctokit } from '../octokit';
 import { createLogger } from './types';
+import type { Logger } from '../../../git/types';
 
 /**
  * Parameters for commit creation and branch update operation.
@@ -21,7 +22,7 @@ export interface CreateCommitAndUpdateBranchParams {
   /** Commit message. */
   message: string;
   /** Logger instance for debug output. */
-  log?: ReturnType<typeof createLogger>;
+  log?: Logger;
 }
 
 /**
