@@ -94,6 +94,8 @@ export class ActionOrchestrator {
       ? loadBuiltinExtensionsInput.toLowerCase() === 'true'
       : true; // default to true
 
+    const modelsJsonInput = this.core.getInput('pi_models_json');
+
     return {
       provider: this.core.getInput('provider'),
       model: this.core.getInput('model'),
@@ -102,6 +104,7 @@ export class ActionOrchestrator {
       promptInput: this.core.getInput('prompt'),
       ...(extensions?.length ? { extensions } : {}),
       loadBuiltinExtensions,
+      ...(modelsJsonInput ? { modelsJson: modelsJsonInput } : {}),
     };
   }
 

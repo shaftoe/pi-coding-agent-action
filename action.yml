@@ -45,6 +45,11 @@ inputs:
     required: false
     default: 'true'
 
+  pi_models_json:
+    description: 'Contents of ~/.pi/agent/models.json for custom model definitions. When provided, overrides or merges with the built-in model registry.'
+    required: false
+    default: ''
+
 runs:
   using: 'node24'
   main: 'dist/index.js'

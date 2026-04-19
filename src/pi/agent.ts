@@ -6,7 +6,14 @@
  * headless / non-interactive use inside GitHub Actions.
  */
 
-import { AuthStorage, createAgentSession, ModelRegistry } from '@mariozechner/pi-coding-agent';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  AuthStorage,
+  createAgentSession,
+  getAgentDir,
+  ModelRegistry,
+} from '@mariozechner/pi-coding-agent';
 import { getResourceLoader } from './resource-loader';
 import { getVersion } from './logging';
 
@@ -34,6 +41,7 @@ export class Agent {
   private core: CoreAdapter;
   private extensions?: string[];
   private loadBuiltinExtensions?: boolean;
+  private modelsJson?: string;
 
   /**
    * Create a new Pi agent.
@@ -48,6 +56,7 @@ export class Agent {
    * @param core                  - The CoreAdapter for logging and debug output.
    * @param extensions            - Optional array of extension sources (npm, git, or local paths).
    * @param loadBuiltinExtensions - Whether to load built-in GitHub extensions (default true).
+   * @param modelsJson            - Optional contents of ~/.pi/agent/models.json for custom model definitions.
    * @throws {Error}   If the requested model cannot be found in the registry.
    */
   constructor(
@@ -57,7 +66,8 @@ export class Agent {
     level = 'off',
     core: CoreAdapter,
     extensions?: string[],
-    loadBuiltinExtensions?: boolean
+    loadBuiltinExtensions?: boolean,
+    modelsJson?: string
   ) {
     this.modelStr = modelStr;
     this.provider = provider;
@@ -70,7 +80,18 @@ export class Agent {
     if (loadBuiltinExtensions !== undefined) {
       this.loadBuiltinExtensions = loadBuiltinExtensions;
     }
-    this.modelRegistry = ModelRegistry.inMemory(this.authStorage);
+    if (modelsJson !== undefined) {
+      this.modelsJson = modelsJson;
+    }
+
+    // If modelsJson is provided, write it to disk and use ModelRegistry.create()
+    // which loads built-in models + custom models from models.json
+    if (this.modelsJson) {
+      this.writeModelsJson(this.modelsJson);
+      this.modelRegistry = ModelRegistry.create(this.authStorage);
+    } else {
+      this.modelRegistry = ModelRegistry.inMemory(this.authStorage);
+    }
 
     if (this.token) {
       this.core.debug(`[auth] Setting api_key token for ${this.provider} provider`);
@@ -87,6 +108,22 @@ export class Agent {
     } else {
       throw new Error('Model not found: ' + this.provider + '/' + this.modelStr);
     }
+  }
+
+  /**
+   * Write models.json content to disk so ModelRegistry.create() can load it.
+   *
+   * Creates the ~/.pi/agent directory if needed and writes the JSON content
+   * to the models.json file. This allows custom model definitions to be
+   * merged with or override the built-in model registry.
+   *
+   * @param content - The JSON string content for models.json.
+   */
+  private writeModelsJson(content: string): void {
+    const agentDir = getAgentDir();
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(join(agentDir, 'models.json'), content);
+    this.core.debug(`[models] Wrote custom models.json to ${join(agentDir, 'models.json')}`);
   }
 
   /**

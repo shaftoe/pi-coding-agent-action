@@ -97,6 +97,8 @@ export interface PiConfig {
   promptInput: string;
   extensions?: string[];
   loadBuiltinExtensions?: boolean;
+  /** Contents of ~/.pi/agent/models.json for custom model definitions */
+  modelsJson?: string;
 }
 
 /**

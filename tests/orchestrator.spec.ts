@@ -90,6 +90,7 @@ describe('ActionOrchestrator', () => {
       expect(mockCore.getInput).toHaveBeenCalledWith('token');
       expect(mockCore.getInput).toHaveBeenCalledWith('thinking_level');
       expect(mockCore.getInput).toHaveBeenCalledWith('prompt');
+      expect(mockCore.getInput).toHaveBeenCalledWith('pi_models_json');
     });
 
     test('retrieves prompt from github', async () => {
@@ -637,6 +638,70 @@ describe('ActionOrchestrator', () => {
         }),
         mockCore
       );
+    });
+  });
+
+  describe('pi_models_json configuration', () => {
+    test('passes modelsJson to Pi agent when provided', async () => {
+      const modelsJson = JSON.stringify({
+        providers: {
+          openai: { apiKey: 'test-key' },
+        },
+      });
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          pi_models_json: modelsJson,
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modelsJson,
+        }),
+        mockCore
+      );
+    });
+
+    test('omits modelsJson when input is empty', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          pi_models_json: '',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          modelsJson: expect.any(String),
+        }),
+        mockCore
+      );
+    });
+
+    test('calls getInput for pi_models_json', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGithub, mockPiFactory);
+      await orchestrator.execute();
+
+      expect(mockCore.getInput).toHaveBeenCalledWith('pi_models_json');
     });
   });
 
