@@ -13,6 +13,11 @@ Inspired by OpenCode's [GitHub action](https://opencode.ai/docs/github/).
 - **Automated code reviews**: Have Pi review every new pull request automatically
 - **Add Pi to your own pipelines**: (Optionally) generate prompt from upstream actions/workflows and have Pi do the work in background for you anywhere you like in your workflows
 
+## Disclaimer
+
+> [!NOTE]
+> Codeberg/Forgejo compatibility _should_ work but hasn't been tested yet.
+
 ## Securing your workflows
 
 > [!WARNING]
