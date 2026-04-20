@@ -35,7 +35,7 @@ export function formatThreadAsText(thread: IssueOrPRThread): string {
   }
 
   if (thread.labels.length > 0) {
-    lines.push(`Labels: ${thread.labels.map((l) => `"${l}"`).join(', ')}`);
+    lines.push(`Labels: ${thread.labels.map(l => `"${l}"`).join(', ')}`);
   }
 
   if (thread.is_pull_request) {

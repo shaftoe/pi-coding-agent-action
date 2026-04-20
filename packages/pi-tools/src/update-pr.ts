@@ -15,11 +15,7 @@ import {
   UPDATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from './prompt';
 import { CANCELLATION_MESSAGE_UPDATE_PR } from './constants';
-import type {
-  UpdatePullRequestParams,
-  UpdatePullRequestDetails,
-  ToolProvider,
-} from './types';
+import type { UpdatePullRequestParams, UpdatePullRequestDetails, ToolProvider } from './types';
 import { withCancellation } from './tool-execution';
 
 /**
@@ -99,7 +95,7 @@ export function updatePullRequestToolFactory(provider: ToolProvider) {
         }
         return updateParams;
       },
-      execute: (params) =>
+      execute: params =>
         provider.updatePullRequest(params) as Promise<{
           content: { type: 'text'; text: string }[];
           details: UpdatePullRequestDetails;

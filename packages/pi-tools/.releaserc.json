@@ -1,0 +1,27 @@
+{
+  "branches": ["v2"],
+  "plugins": [
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "preset": "conventionalcommits"
+      }
+    ],
+    "@alexanderfortin/semantic-release-keep-a-changelog",
+    "@semantic-release/npm",
+    [
+      "@semantic-release/git",
+      {
+        "assets": ["packages/pi-tools/package.json", "packages/pi-tools/CHANGELOG.md"],
+        "message": "chore(release/tools): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+      }
+    ],
+    [
+      "@semantic-release/github",
+      {
+        "successComment": false
+      }
+    ]
+  ],
+  "tagFormat": "tools-v${version}"
+}

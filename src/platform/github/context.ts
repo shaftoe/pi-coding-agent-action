@@ -432,7 +432,9 @@ function buildThreadResult(
     updated_at: issue.updated_at,
     closed_at: issue.closed_at,
     merged_at: prData?.merged_at ?? undefined,
-    labels: issue.labels.map(l => (typeof l === 'string' ? l : (l.name ?? ''))),
+    labels: issue.labels.map((l: string | { name?: string | null }) =>
+      (typeof l === 'string' ? l : (l.name ?? ''))
+    ),
     is_pull_request: isPullRequest,
     head_branch: prData?.head.ref,
     base_branch: prData?.base.ref,

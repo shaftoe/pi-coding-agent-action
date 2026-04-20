@@ -15,11 +15,7 @@ import {
 } from './prompt';
 import { CANCELLATION_MESSAGE_GET_THREAD } from './constants';
 import { formatThreadAsText } from './common';
-import type {
-  IssueOrPRThread,
-  GetIssueOrPRThreadParams,
-  ToolProvider,
-} from './types';
+import type { IssueOrPRThread, GetIssueOrPRThreadParams, ToolProvider } from './types';
 import { withCancellation } from './tool-execution';
 
 /**

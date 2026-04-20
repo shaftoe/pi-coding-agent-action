@@ -41,6 +41,9 @@
   },
   "devDependencies": {
     "@alexanderfortin/semantic-release-keep-a-changelog": "^0.2.0",
+    "@mariozechner/pi-agent-core": "^0.67.68",
+    "@mariozechner/pi-ai": "^0.67.68",
+    "@octokit/plugin-rest-endpoint-methods": "^17.0.0",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^10.0.1",

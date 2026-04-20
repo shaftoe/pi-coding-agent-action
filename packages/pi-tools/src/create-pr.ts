@@ -14,11 +14,7 @@ import {
   CREATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from './prompt';
 import { CANCELLATION_MESSAGE_CREATE_PR } from './constants';
-import type {
-  CreatePullRequestParams,
-  CreatePullRequestDetails,
-  ToolProvider,
-} from './types';
+import type { CreatePullRequestParams, CreatePullRequestDetails, ToolProvider } from './types';
 import { withCancellation } from './tool-execution';
 
 /**
@@ -85,7 +81,7 @@ export function createPRToolFactory(provider: ToolProvider) {
         }
         return prParams;
       },
-      execute: (params) =>
+      execute: params =>
         provider.createPullRequest(params) as Promise<{
           content: { type: 'text'; text: string }[];
           details: CreatePullRequestDetails;

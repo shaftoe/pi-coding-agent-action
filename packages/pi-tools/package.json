@@ -2,25 +2,27 @@
   "name": "@alexanderfortin/pi-coding-agent-action-tools",
   "version": "0.1.0",
   "description": "Reusable tool definitions for the Pi coding agent – create/update PRs and fetch issue/PR threads",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./src/index.ts",
-      "types": "./src/index.ts"
+      "bun": "./src/index.ts",
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
     }
   },
   "files": [
-    "src"
+    "dist"
   ],
   "scripts": {
     "build": "tsc",
     "test": "bun test",
-    "lint": "eslint src --ext .ts",
     "type-check": "tsc --noEmit",
-    "format": "prettier --check src/**/*.ts",
-    "format:fix": "prettier --write src/**/*.ts",
-    "validate": "bun run lint && bun run type-check && bun run format",
+    "format": "prettier --check 'src/**/*.ts'",
+    "format:fix": "prettier --write 'src/**/*.ts'",
+    "validate": "bun run type-check && bun run format",
     "prepublishOnly": "bun run build"
   },
   "keywords": [
@@ -32,6 +34,15 @@
   ],
   "author": "Alexander Fortin",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shaftoe/pi-coding-agent-action.git",
+    "directory": "packages/pi-tools"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
     "@mariozechner/pi-coding-agent": "^0.67.68",
