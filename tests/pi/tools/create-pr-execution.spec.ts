@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, test } from 'bun:test';
-import { createPRToolFactory } from 'pi-coding-agent-tools';
-import type { ToolProvider } from 'pi-coding-agent-tools';
+import { createPRToolFactory } from '@alexanderfortin/pi-coding-agent-action-tools';
+import type { ToolProvider } from '@alexanderfortin/pi-coding-agent-action-tools';
 import * as githubIndex from '../../../src/platform/github';
 
 // Mock tool provider for tests

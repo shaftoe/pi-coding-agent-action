@@ -1,7 +1,7 @@
 /**
  * @file Pi extension factory – registers custom tools with the agent.
  *
- * Re-exports the tool factory from `pi-coding-agent-tools` and adapts the
+ * Re-exports the tool factory from `@alexanderfortin/pi-coding-agent-action-tools` and adapts the
  * action's {@link PlatformProvider} to the package's minimal
  * {@link ToolProvider} interface.
  *
@@ -12,7 +12,7 @@
 import {
   createToolsFactory as createToolsFactoryCore,
   type ToolProvider,
-} from 'pi-coding-agent-tools';
+} from '@alexanderfortin/pi-coding-agent-action-tools';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import type { PlatformProvider } from '../../platform';
 
@@ -23,7 +23,7 @@ export {
   buildParams,
   type ToolExecutionConfig,
   type CancellationResult,
-} from 'pi-coding-agent-tools';
+} from '@alexanderfortin/pi-coding-agent-action-tools';
 
 /**
  * Adapt the action's {@link PlatformProvider} to the package's
@@ -35,9 +35,12 @@ export {
  */
 function adaptProvider(provider: PlatformProvider): ToolProvider {
   return {
-    createPullRequest: params => provider.createPullRequest(params),
-    updatePullRequest: params => provider.updatePullRequest(params),
-    getIssueOrPRThread: params => provider.getIssueOrPRThread(params),
+    createPullRequest: (params: Parameters<ToolProvider['createPullRequest']>[0]) =>
+      provider.createPullRequest(params),
+    updatePullRequest: (params: Parameters<ToolProvider['updatePullRequest']>[0]) =>
+      provider.updatePullRequest(params),
+    getIssueOrPRThread: (params?: Parameters<ToolProvider['getIssueOrPRThread']>[0]) =>
+      provider.getIssueOrPRThread(params),
   };
 }
 

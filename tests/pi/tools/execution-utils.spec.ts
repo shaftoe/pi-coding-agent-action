@@ -6,8 +6,8 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-// Import directly from the pi-coding-agent-tools package
-import * as ToolExecution from 'pi-coding-agent-tools';
+// Import directly from the @alexanderfortin/pi-coding-agent-action-tools package
+import * as ToolExecution from '@alexanderfortin/pi-coding-agent-action-tools';
 
 const { withCancellation, createCancellationResult, buildParams } = ToolExecution;
 

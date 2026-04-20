@@ -1,5 +1,5 @@
 {
-  "name": "pi-coding-agent-tools",
+  "name": "@alexanderfortin/pi-coding-agent-action-tools",
   "version": "0.1.0",
   "description": "Reusable tool definitions for the Pi coding agent – create/update PRs and fetch issue/PR threads",
   "main": "./src/index.ts",

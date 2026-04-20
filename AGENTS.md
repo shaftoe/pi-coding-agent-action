@@ -14,7 +14,7 @@ This is a CI/CD action that integrates the [Pi coding agent](https://pi.dev) wit
 
 ## Codebase Structure
 
-- `pi-coding-agent-tools/` - **Independent npm package** with reusable Pi tool definitions
+- `packages/pi-tools/` - **`@alexanderfortin/pi-coding-agent-action-tools`** – Bun workspace subpackage with reusable Pi tool definitions
   - `src/types.ts` - Minimal `ToolProvider` interface and all shared types
   - `src/prompt.ts` - Prompt strings (descriptions, guidelines, parameter descriptions)
   - `src/create-pr.ts` - `create_pull_request` tool definition
@@ -54,8 +54,8 @@ This is a CI/CD action that integrates the [Pi coding agent](https://pi.dev) wit
     - `git-adapter.ts` - Git hosting platform API operations
     - `pi-agent-adapter.ts` - Pi agent factory
   - `pi/` - Pi agent library and tool definitions
-    - `tools/index.ts` - Tool factory adapter (delegates to `pi-coding-agent-tools`, adapts `PlatformProvider` → `ToolProvider`)
-    - `prompt.ts` - System prompt (action-specific; tool prompts are in the npm package)
+    - `tools/index.ts` - Tool factory adapter (delegates to `@alexanderfortin/pi-coding-agent-action-tools`, adapts `PlatformProvider` → `ToolProvider`)
+    - `prompt.ts` - System prompt (action-specific; tool prompts are in `@alexanderfortin/pi-coding-agent-action-tools`)
     - `agent.ts` - Pi agent wrapper (model resolution, session lifecycle)
     - `logging.ts` - Centralized tool execution logging
     - `resource-loader.ts` - Resource loader configuration
@@ -107,7 +107,7 @@ The action uses a **testable adapter pattern** to separate business logic from e
 
 3. **Orchestrator Testing**: Business logic is tested in `tests/orchestrator.spec.ts`. When modifying orchestration behavior, update these tests. Do **not** test mocks directly—test the actual business logic flow.
 
-4. **Extension Pattern**: The action extends Pi with custom tools (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`) via the `ExtensionAPI` in `src/pi/tools/index.ts`. The tool definitions live in the independent `pi-coding-agent-tools` package (which defines the minimal `ToolProvider` interface). The action's `src/pi/tools/index.ts` adapts the action's full `PlatformProvider` to the package's `ToolProvider` interface, keeping the Pi module decoupled from the platform implementation.
+4. **Extension Pattern**: The action extends Pi with custom tools (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`) via the `ExtensionAPI` in `src/pi/tools/index.ts`. The tool definitions live in the `@alexanderfortin/pi-coding-agent-action-tools` workspace package (which defines the minimal `ToolProvider` interface). The action's `src/pi/tools/index.ts` adapts the action's full `PlatformProvider` to the package's `ToolProvider` interface, keeping the Pi module decoupled from the platform implementation.
 
 5. **Centralized Logging**: Tool execution logging is centralized in `src/pi/logging.ts` using SDK events (`tool_execution_start`, `tool_execution_end`). Tools check `signal?.aborted` directly and return `details.cancelled: true` for cancellations.
 

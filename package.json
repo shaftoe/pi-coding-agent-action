@@ -1,5 +1,5 @@
 {
-  "name": "pi-coding-agent-action",
+  "name": "@alexanderfortin/pi-coding-agent-action",
   "version": "2.9.1",
   "description": "CI/CD Action to integrate Pi coding agent in workflows",
   "main": "dist/index.js",
@@ -27,8 +27,11 @@
   ],
   "author": "Alexander Fortin",
   "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
   "dependencies": {
-    "pi-coding-agent-tools": "file:./pi-coding-agent-tools",
+    "@alexanderfortin/pi-coding-agent-action-tools": "*",
     "@actions/core": "^3.0.0",
     "@actions/github": "^9.1.0",
     "@js-temporal/polyfill": "^0.5.1",

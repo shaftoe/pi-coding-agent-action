@@ -3,7 +3,7 @@
  *
  * Contains the system prompt sent to the LLM. Tool-related prompt constants
  * (descriptions, guidelines, parameter descriptions) are now provided by the
- * `pi-coding-agent-tools` package.
+ * `@alexanderfortin/pi-coding-agent-action-tools` package.
  */
 
 export const SYSTEM_PROMPT =

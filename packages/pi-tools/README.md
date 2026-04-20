@@ -1,4 +1,4 @@
-# pi-coding-agent-tools
+# @alexanderfortin/pi-coding-agent-action-tools
 
 Reusable tool definitions for the [Pi coding agent](https://pi.dev) — create/update pull requests and fetch issue/PR threads.
 
@@ -15,13 +15,13 @@ These tools are designed to be platform-agnostic. Consumers implement the minima
 ## Installation
 
 ```bash
-npm install pi-coding-agent-tools
+npm install @alexanderfortin/pi-coding-agent-action-tools
 ```
 
 ## Quick Start
 
 ```typescript
-import { createToolsFactory, type ToolProvider } from 'pi-coding-agent-tools';
+import { createToolsFactory, type ToolProvider } from '@alexanderfortin/pi-coding-agent-action-tools';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 
 // 1. Implement the ToolProvider interface
@@ -93,7 +93,7 @@ import {
   createPRToolFactory,
   updatePullRequestToolFactory,
   getIssueOrPRThreadToolFactory,
-} from 'pi-coding-agent-tools';
+} from '@alexanderfortin/pi-coding-agent-action-tools';
 
 // Create only the tools you need
 const createPRTool = createPRToolFactory(myProvider);
@@ -111,7 +111,7 @@ import {
   createCancellationResult,
   buildParams,
   formatThreadAsText,
-} from 'pi-coding-agent-tools';
+} from '@alexanderfortin/pi-coding-agent-action-tools';
 ```
 
 - **`withCancellation`** – Wraps tool execution with abort signal handling
@@ -133,8 +133,12 @@ import type {
   GetIssueOrPRThreadParams,
   IssueOrPRThread,
   ThreadComment,
-} from 'pi-coding-agent-tools';
+} from '@alexanderfortin/pi-coding-agent-action-tools';
 ```
+
+## Monorepo Workspace
+
+This package lives in `packages/pi-tools/` as part of a Bun workspace monorepo. During development it's consumed via source imports. When published to npm, the `prepublishOnly` script builds to `dist/` and the `main`/`exports` fields should be updated to point there.
 
 ## License
 
