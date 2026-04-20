@@ -5,6 +5,7 @@
  * ActionOrchestrator, which handles the complete execution flow.
  */
 
+import * as core from '@actions/core';
 import { ActionOrchestrator } from './orchestrator';
 import { RealCoreAdapter } from './adapters/core-adapter';
 import { RealGitAdapter } from './adapters/git-adapter';
@@ -34,6 +35,8 @@ export async function run() {
 }
 
 run().catch(error => {
-  // This catch block is a safety net; the orchestrator already calls core.setFailed
+  // Safety net – the orchestrator should have already called core.setFailed,
+  // but ensure the action is always marked as failed on any unhandled error.
   console.error('Unhandled error in run():', error);
+  core.setFailed(`Unhandled error: ${error instanceof Error ? error.message : String(error)}`);
 });

@@ -22,7 +22,7 @@
         "@types/node": "^25.6.0",
         "@typescript-eslint/eslint-plugin": "^8.58.2",
         "@typescript-eslint/parser": "^8.58.2",
-        "bun-types": "^1.3.12",
+        "bun-types": "^1.3.13",
         "esbuild": "^0.28.0",
         "eslint": "^10.2.1",
         "isomorphic-git": "^1.37.5",

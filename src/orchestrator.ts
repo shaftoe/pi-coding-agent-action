@@ -38,7 +38,8 @@ export class ActionOrchestrator {
    * Execute the complete action flow.
    *
    * @throws Rethrows any error from the Pi session after reporting it via core.setFailed.
-   * @throws Rethrows any error from finalize when posting final comment fails.
+   *         Finalization errors (posting comment, deleting reaction) are caught and logged
+   *         so they never prevent setFailed from running.
    */
   async execute(): Promise<void> {
     this.core.info(`running action v${__VERSION__}`);
@@ -68,9 +69,17 @@ export class ActionOrchestrator {
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
 
-      // Try to post error as comment. If this fails, the action will fail without
-      // a user-facing comment (acceptable - we can't communicate).
-      await this.finalize(errorMessage, config, startTime, reaction, undefined);
+      // Try to post error as comment. Wrap in its own try-catch so that
+      // a failure to finalize (e.g. network/API down after a timeout) does
+      // NOT prevent setFailed from running. The action must always signal
+      // failure to the CI runner, even when we cannot leave a comment.
+      try {
+        await this.finalize(errorMessage, config, startTime, reaction, undefined);
+      } catch (finalizeError) {
+        const finalizeErrorMessage =
+          finalizeError instanceof Error ? finalizeError.message : String(finalizeError);
+        this.core.notice(`failed to finalize after error: ${finalizeErrorMessage}`);
+      }
 
       // Mark the action as failed and re-throw the original error
       this.core.setFailed(e as Error);

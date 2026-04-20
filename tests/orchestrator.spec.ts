@@ -804,10 +804,11 @@ describe('ActionOrchestrator', () => {
 
       const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
-      await expect(orchestrator.execute()).rejects.toThrow('Failed to post comment');
+      // The original error should still be re-thrown
+      await expect(orchestrator.execute()).rejects.toThrow('Prompt failed');
 
-      // setFailed should NOT have been called (error thrown before it)
-      expect(mockCore.setFailed).not.toHaveBeenCalled();
+      // setFailed should STILL have been called even though finalize failed
+      expect(mockCore.setFailed).toHaveBeenCalledWith(error);
 
       // Final comment creation was attempted in catch block
       expect(mockGit.createFinalComment).toHaveBeenCalledWith(
