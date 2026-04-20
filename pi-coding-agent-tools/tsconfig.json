@@ -5,7 +5,7 @@
     "lib": ["ESNext"],
     "types": ["bun-types", "node"],
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -18,8 +18,8 @@
     "isolatedModules": true,
     "useDefineForClassFields": true,
     "exactOptionalPropertyTypes": true,
-    "noUncheckedIndexedAccess": true,
+    "noUncheckedIndexedAccess": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts"],
-  "exclude": ["node_modules", "dist", "pi-coding-agent-tools"],
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

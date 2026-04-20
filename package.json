@@ -28,6 +28,7 @@
   "author": "Alexander Fortin",
   "license": "MIT",
   "dependencies": {
+    "pi-coding-agent-tools": "file:./pi-coding-agent-tools",
     "@actions/core": "^3.0.0",
     "@actions/github": "^9.1.0",
     "@js-temporal/polyfill": "^0.5.1",

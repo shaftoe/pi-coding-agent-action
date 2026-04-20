@@ -6,8 +6,8 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-// Import directly from source file using namespace import to work around bun test module resolution
-import * as ToolExecution from '../../../src/pi/tools/tool-execution';
+// Import directly from the pi-coding-agent-tools package
+import * as ToolExecution from 'pi-coding-agent-tools';
 
 const { withCancellation, createCancellationResult, buildParams } = ToolExecution;
 

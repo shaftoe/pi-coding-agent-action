@@ -154,25 +154,6 @@ By default the action loads three built-in GitHub related tools (`create_pull_re
             npm:my-custom-github-tools
 ```
 
-### Injecting Environment Variables
-
-Pi extensions often require environment variables for authentication or configuration. Use the native `env:` step key to pass variables from your workflow's secrets or configuration into the Pi session:
-
-```yaml
-      - name: Run Pi agent with custom env vars
-        uses: shaftoe/pi-coding-agent-action@v2
-        env:
-          MY_API_KEY: ${{ secrets.MY_API_KEY }}
-          ANOTHER_SERVICE_TOKEN: ${{ secrets.ANOTHER_SERVICE_TOKEN }}
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          provider: anthropic
-          model: claude-opus-4-7
-          token: ${{ secrets.ANTHROPIC_API_KEY }}
-```
-
-Since the action runs as a single Node.js process, these environment variables are available in `process.env` and accessible to all Pi extensions.
-
 ### Quick Start
 
 Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interactive](./.github/workflows/pi.yml) and [non-interactive](./.github/workflows/pr.yml) workflows in this repository to get started.
@@ -181,15 +162,15 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
 | `github_token` | GitHub token for API access | Yes | - |
-| `load_builtin_extensions` | Whether to load built-in GitHub extensions (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`) | No | `true` |
-| `model` | Model to use (e.g., claude-sonnet-4-5, claude-opus-4-7, gpt-4o, gemini-2.5-pro) | Yes | - |
-| `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
 | `provider` | LLM provider (anthropic, openai, google, etc.) | Yes | - |
-| `thinking_level` | Model thinking level (off|low|medium|high) | No | off |
+| `model` | Model to use (e.g., claude-sonnet-4-5, claude-opus-4-7, gpt-4o, gemini-2.5-pro) | Yes | - |
 | `token` | Provider API token | Yes | - |
+| `thinking_level` | Model thinking level (off|low|medium|high) | No | off |
 | `trigger` | Trigger phrase used to invoke the action | No | /pi |
+| `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
+| `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
+| `load_builtin_extensions` | Whether to load built-in GitHub extensions (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`) | No | `true` |
 
 Refer to [Pi documentation](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) for the current list of supported providers / models / etc.
 

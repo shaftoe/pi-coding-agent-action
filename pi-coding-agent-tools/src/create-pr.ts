@@ -12,13 +12,13 @@ import {
   CREATE_PULL_REQUEST_PARAM_BODY_DESCRIPTION,
   CREATE_PULL_REQUEST_PARAM_BASE_DESCRIPTION,
   CREATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
-} from '../prompt';
+} from './prompt';
 import { CANCELLATION_MESSAGE_CREATE_PR } from './constants';
 import type {
   CreatePullRequestParams,
   CreatePullRequestDetails,
-  PlatformProvider,
-} from '../../platform';
+  ToolProvider,
+} from './types';
 import { withCancellation } from './tool-execution';
 
 /**
@@ -48,12 +48,12 @@ const createPullRequestSchema = Type.Object({
 type CreatePullRequestToolParams = Static<typeof createPullRequestSchema>;
 
 /**
- * Create the create_pull_request tool definition bound to a platform provider.
+ * Create the create_pull_request tool definition bound to a tool provider.
  *
- * @param provider - The platform provider for PR creation operations.
+ * @param provider - The tool provider for PR creation operations.
  * @returns The tool definition.
  */
-export function createPRToolFactory(provider: PlatformProvider) {
+export function createPRToolFactory(provider: ToolProvider) {
   return defineTool({
     name: 'create_pull_request',
     label: 'Create Pull Request',

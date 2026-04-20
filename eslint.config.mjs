@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 
 export default [
   {
-    ignores: ["dist/**", "node_modules/**", "*.js"],
+    ignores: ["dist/**", "node_modules/**", "*.js", "pi-coding-agent-tools/**"],
   },
   {
     files: ["src/**/*.ts"],

@@ -1,22 +1,18 @@
 /**
  * @file Pi extension factory – registers custom tools with the agent.
  *
- * Defines three tools that extend Pi's built-in capabilities:
+ * Re-exports the tool factory from `pi-coding-agent-tools` and adapts the
+ * action's {@link PlatformProvider} to the package's minimal
+ * {@link ToolProvider} interface.
  *
- * - **`create_pull_request`** – creates a GitHub pull request with the current
- *   working-tree changes.
- * - **`update_pull_request`** – updates an existing pull request by pushing
- *   new commits to the PR branch and optionally updating the title and/or body.
- * - **`get_issue_or_pr_thread`** – fetches the full comment thread of an issue
- *   or pull request for context.
- *
- * The exported {@link toolsFactory} function is passed to the Pi SDK resource
- * loader so that the tools are available during agent sessions.
+ * The exported {@link createToolsFactory} function is passed to the Pi SDK
+ * resource loader so that the tools are available during agent sessions.
  */
 
-import { createPRToolFactory } from './create-pr';
-import { getIssueOrPRThreadToolFactory } from './get-thread';
-import { updatePullRequestToolFactory } from './update-pr';
+import {
+  createToolsFactory as createToolsFactoryCore,
+  type ToolProvider,
+} from 'pi-coding-agent-tools';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import type { PlatformProvider } from '../../platform';
 
@@ -27,7 +23,23 @@ export {
   buildParams,
   type ToolExecutionConfig,
   type CancellationResult,
-} from './tool-execution';
+} from 'pi-coding-agent-tools';
+
+/**
+ * Adapt the action's {@link PlatformProvider} to the package's
+ * {@link ToolProvider} interface.
+ *
+ * The `PlatformProvider` is a superset – it includes reactions, comments,
+ * prompt extraction, etc. – but the tool definitions only need the three
+ * methods defined in `ToolProvider`. This adapter narrows the interface.
+ */
+function adaptProvider(provider: PlatformProvider): ToolProvider {
+  return {
+    createPullRequest: params => provider.createPullRequest(params),
+    updatePullRequest: params => provider.updatePullRequest(params),
+    getIssueOrPRThread: params => provider.getIssueOrPRThread(params),
+  };
+}
 
 /**
  * Extension factory that registers all custom tools with the Pi agent.
@@ -39,14 +51,5 @@ export {
  * @returns An extension factory function compatible with the Pi SDK.
  */
 export function createToolsFactory(provider: PlatformProvider): (pi: ExtensionAPI) => void {
-  return (pi: ExtensionAPI): void => {
-    const tools = [
-      createPRToolFactory(provider),
-      updatePullRequestToolFactory(provider),
-      getIssueOrPRThreadToolFactory(provider),
-    ];
-    tools.forEach(tool => {
-      pi.registerTool(tool);
-    });
-  };
+  return createToolsFactoryCore(adaptProvider(provider));
 }

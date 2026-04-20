@@ -1,26 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, test } from 'bun:test';
-import { updatePullRequestToolFactory } from '../../../src/pi/tools/update-pr';
-import type { PlatformProvider } from '../../../src/platform';
+import { updatePullRequestToolFactory } from 'pi-coding-agent-tools';
+import type { ToolProvider } from 'pi-coding-agent-tools';
 import * as githubIndex from '../../../src/platform/github';
 
-// Mock platform provider for tests
-const mockProvider: PlatformProvider = {
-  type: 'github',
-  getContext: () => ({
-    repo: { owner: 'test-owner', repo: 'test-repo' },
-    issue: { number: 1 },
-    eventName: 'issue_comment',
-    payload: {},
-    serverUrl: 'https://github.com',
-    runId: 123,
-    workspace: '/tmp',
-  }),
-  addReaction: async () => undefined,
-  deleteReaction: async () => {},
-  createFinalComment: async () => {},
-  getPrompt: async () => undefined,
-  getStartTime: () => undefined,
+// Mock tool provider for tests
+const mockProvider: ToolProvider = {
   createPullRequest: async () => ({
     content: [{ type: 'text' as const, text: 'PR created' }],
     details: { pullRequestNumber: 1, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },

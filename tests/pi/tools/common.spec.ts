@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { formatThreadAsText } from '../../../src/pi/tools/common';
-import type { IssueOrPRThread } from '../../../src/platform';
+import { formatThreadAsText } from 'pi-coding-agent-tools';
+import type { IssueOrPRThread } from 'pi-coding-agent-tools';
 
 function createMockIssue(overrides?: Partial<IssueOrPRThread>): IssueOrPRThread {
   return {

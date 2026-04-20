@@ -3,7 +3,7 @@
  */
 
 import { Type, Static } from '@sinclair/typebox';
-import { defineTool } from '@mariozechner/pi-coding-agent';
+import { defineTool, type AgentToolResult } from '@mariozechner/pi-coding-agent';
 import {
   GET_ISSUE_PR_THREAD_PROMPT_SNIPPET,
   GET_ISSUE_PR_THREAD_PROMPT_GUIDELINES,
@@ -12,15 +12,14 @@ import {
   GET_ISSUE_PR_THREAD_PARAM_REPO_DESCRIPTION,
   GET_ISSUE_PR_THREAD_PARAM_ISSUE_NUMBER_DESCRIPTION,
   GET_ISSUE_PR_THREAD_PARAM_MAX_COMMENTS_DESCRIPTION,
-} from '../prompt';
+} from './prompt';
 import { CANCELLATION_MESSAGE_GET_THREAD } from './constants';
 import { formatThreadAsText } from './common';
 import type {
   IssueOrPRThread,
   GetIssueOrPRThreadParams,
-  PlatformProvider,
-} from '../../platform';
-import type { AgentToolResult } from '@mariozechner/pi-coding-agent';
+  ToolProvider,
+} from './types';
 import { withCancellation } from './tool-execution';
 
 /**
@@ -79,12 +78,12 @@ function createNotFoundResult(): AgentToolResult<IssueOrPRThread> {
 }
 
 /**
- * Create the get_issue_or_pr_thread tool definition bound to a platform provider.
+ * Create the get_issue_or_pr_thread tool definition bound to a tool provider.
  *
- * @param provider - The platform provider for thread retrieval operations.
+ * @param provider - The tool provider for thread retrieval operations.
  * @returns The tool definition.
  */
-export function getIssueOrPRThreadToolFactory(provider: PlatformProvider) {
+export function getIssueOrPRThreadToolFactory(provider: ToolProvider) {
   return defineTool({
     name: 'get_issue_or_pr_thread',
     label: 'Get Issue/PR Thread',
