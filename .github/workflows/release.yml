@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - v2
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'dist/**'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/release.yml'
 
 permissions:
   id-token: write
