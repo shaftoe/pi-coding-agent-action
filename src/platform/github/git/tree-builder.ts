@@ -6,9 +6,9 @@
 
 import * as github from '@actions/github';
 import { getOctokit } from '../octokit';
-import { FILE_MODE_REGULAR } from '../../../git/constants';
+import { FILE_MODE_REGULAR } from './constants';
 import { createLogger } from './types';
-import type { FileMode, TreeEntry, Logger } from '../../../git/types';
+import type { FileMode, TreeEntry, Logger } from './types';
 
 /**
  * Parameters for blob and tree creation operation.

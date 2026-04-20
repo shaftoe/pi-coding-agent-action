@@ -18,11 +18,6 @@ This is a CI/CD action that integrates the [Pi coding agent](https://pi.dev) wit
   - `run.ts` - Main entry point for the action (simplified orchestrator creation)
   - `orchestrator.ts` - Business logic orchestration with testable adapter pattern
   - `types.ts` - Shared type definitions and adapter interfaces
-  - `git/` - Platform-agnostic git utilities (shared across all platforms)
-    - `types.ts` - Shared git types (`FileMode`, `TreeEntry`, `Logger`)
-    - `constants.ts` - Shared git constants (`FILE_MODE_*`, `DEFAULT_IGNORE_PATTERNS`)
-    - `file-scanner.ts` - File change scanning (directory walking, gitignore, comparison)
-    - `index.ts` - Barrel exports
   - `platform/` - Platform abstraction for multi-platform support
     - `types.ts` - Platform provider interface (`PlatformProvider`, `PlatformContext`)
     - `index.ts` - Barrel exports
@@ -38,6 +33,13 @@ This is a CI/CD action that integrates the [Pi coding agent](https://pi.dev) wit
       - `pull-request.ts` - Pull request creation tool implementation
       - `pull-request-update.ts` - Pull request update tool implementation
       - `git/` - Git Data API operations (blobs, trees, commits, file map building)
+        - `types.ts` - Git types (`FileMode`, `TreeEntry`, `Logger`) and logger factory
+        - `constants.ts` - Git constants (`FILE_MODE_*`, `DEFAULT_IGNORE_PATTERNS`)
+        - `scanner.ts` - Platform-agnostic file change scanning (directory walking, gitignore, comparison)
+        - `file-scanner.ts` - GitHub-specific file map building and scanning wrapper
+        - `tree-builder.ts` - Blob and tree creation via Git Data API
+        - `commit-creator.ts` - Commit creation and branch update via Git Data API
+        - `index.ts` - Barrel exports
   - `adapters/` - Production implementations of adapter interfaces
     - `core-adapter.ts` - CI/CD Core operations
     - `git-adapter.ts` - Git hosting platform API operations
@@ -45,7 +47,6 @@ This is a CI/CD action that integrates the [Pi coding agent](https://pi.dev) wit
   - `pi/` - Pi agent library and tool definitions
 - `tests/` - Bun test files (following Bun convention)
   - `*.spec.ts` - Test files named with `.spec.ts` extension
-  - `git/` - Tests for platform-agnostic git utilities
   - `platform/` - Tests for platform abstraction and GitHub module
   - `pi/` - Tests for Pi agent integration
 - `scripts/` - Utilities, helpers, etc.

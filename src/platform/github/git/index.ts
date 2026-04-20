@@ -7,8 +7,16 @@
  */
 
 // Types and utilities
-export type { FileMode, TreeEntry } from './types';
+export type { FileMode, TreeEntry, Logger } from './types';
 export { createLogger } from './types';
+
+// Constants
+export {
+  FILE_MODE_REGULAR,
+  FILE_MODE_EXECUTABLE,
+  FILE_MODE_DIRECTORY,
+  DEFAULT_IGNORE_PATTERNS,
+} from './constants';
 
 // File scanner (GitHub-aware wrapper around shared scanner)
 export type { ChangeScanResult, ScanDirectoryParams } from './file-scanner';

@@ -1,7 +1,5 @@
 /**
- * @file Platform-agnostic git constants.
- *
- * Defines constants shared across all git hosting platform implementations.
+ * @file Git constants used across the GitHub platform module.
  */
 
 // Git file modes (standard Unix file modes used by git)

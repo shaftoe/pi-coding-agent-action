@@ -3,7 +3,7 @@
  *
  * Provides `buildFileMap` which fetches a Git tree via the GitHub REST API
  * and returns a reference file map suitable for use with the shared
- * `scanForChanges` function from `src/git/file-scanner`.
+ * `scanForChanges` function from `./scanner`.
  *
  * Re-exports the shared scanner functions with GitHub-specific defaults
  * (workspace root, platform ignore patterns) applied.
@@ -13,12 +13,12 @@ import * as github from '@actions/github';
 import { getOctokit } from '../octokit';
 import { GITHUB_IGNORE_PATTERNS } from '../constants';
 import { createLogger } from './types';
-import type { Logger } from '../../../git/types';
+import type { Logger } from './types';
 import {
   scanForChanges as sharedScanForChanges,
   scanDirectory,
-} from '../../../git/file-scanner';
-import type { ChangeScanResult, ScanDirectoryParams } from '../../../git/file-scanner';
+} from './scanner';
+import type { ChangeScanResult, ScanDirectoryParams } from './scanner';
 
 // Re-export shared types and scanDirectory for direct use within the GitHub module
 export type { ChangeScanResult, ScanDirectoryParams };

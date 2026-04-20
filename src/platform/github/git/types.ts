@@ -1,16 +1,43 @@
 /**
  * @file Shared types and utilities for GitHub Git operations.
  *
- * Re-exports platform-agnostic types from the shared git module and
- * provides the GitHub-specific logger factory.
+ * Defines git types (Logger, FileMode, TreeEntry) used across the GitHub
+ * platform module and provides the GitHub-specific logger factory.
  */
 
 import { getCoreAdapter } from '../index';
-import type { FileMode, TreeEntry, Logger } from '../../../git/types';
 
-// Re-export shared types so consumers within the GitHub module can import
-// them from a single location.
-export type { FileMode, TreeEntry, Logger };
+/**
+ * Logger interface for git operations.
+ *
+ * Abstracts logging so platform-specific implementations can provide their
+ * own adapters without coupling the scanner to any particular logging system.
+ */
+export interface Logger {
+  debug: (msg: string) => void;
+  info: (msg: string) => void;
+}
+
+/**
+ * Git file mode types (standard Unix file modes used by git).
+ */
+export type FileMode = '100644' | '100755' | '040000';
+
+/**
+ * Tree entry for creating Git trees.
+ *
+ * Setting `sha` to `null` indicates the file should be deleted.
+ */
+export interface TreeEntry {
+  /** Path to the file or directory */
+  path: string;
+  /** File mode (permissions) */
+  mode: FileMode;
+  /** Type of tree entry */
+  type: 'blob' | 'tree';
+  /** SHA of the blob/tree, or `null` to delete the file */
+  sha: string | null;
+}
 
 /**
  * Create a logger with a custom emoji prefix.

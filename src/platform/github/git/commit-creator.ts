@@ -7,7 +7,7 @@
 import * as github from '@actions/github';
 import { getOctokit } from '../octokit';
 import { createLogger } from './types';
-import type { Logger } from '../../../git/types';
+import type { Logger } from './types';
 
 /**
  * Parameters for commit creation and branch update operation.

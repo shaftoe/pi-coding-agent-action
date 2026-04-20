@@ -2,7 +2,7 @@
  * @file Shared constants used across the GitHub/Codeberg/Forgejo platform module.
  */
 
-import { FILE_MODE_DIRECTORY, FILE_MODE_EXECUTABLE, FILE_MODE_REGULAR } from '../../git/constants';
+import { FILE_MODE_DIRECTORY, FILE_MODE_EXECUTABLE, FILE_MODE_REGULAR } from './git/constants';
 
 // Re-export git file modes for use within the platform module
 export { FILE_MODE_REGULAR, FILE_MODE_EXECUTABLE, FILE_MODE_DIRECTORY };

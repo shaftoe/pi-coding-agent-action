@@ -1,8 +1,9 @@
 /**
  * @file Tests for the platform-agnostic file scanner.
  *
- * Tests the shared scanning logic directly without any GitHub mocks,
- * demonstrating that the module is truly platform-independent.
+ * Tests the platform-agnostic scanning logic (now co-located within the
+ * GitHub git module). The scanner uses only Node.js fs APIs and is
+ * independent of any GitHub-specific code.
  */
 
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
@@ -10,8 +11,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import ignore from 'ignore';
-import { scanForChanges, scanDirectory } from '../../src/git/file-scanner';
-import type { Logger } from '../../src/git/types';
+import { scanForChanges, scanDirectory } from '../../../../src/platform/github/git/scanner';
+import type { Logger } from '../../../../src/platform/github/git/types';
 
 /**
  * A simple console-capturing logger for tests.
