@@ -20,6 +20,7 @@
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import type { Agent } from '../../src/pi/agent.js';
+import type { PlatformProvider } from '../../src/platform';
 
 // E2E tests involve real LLM API calls — give them a generous timeout.
 const E2E_TIMEOUT = 10_000;
@@ -76,7 +77,7 @@ const mockCoreAdapter: CoreAdapter = {
 };
 
 // Mock platform provider for Agent constructor
-const mockPlatformProvider: any = {
+const mockPlatformProvider: PlatformProvider = {
   type: 'github',
   getContext: () => ({
     repo: { owner: 'test-owner', repo: 'test-repo' },
@@ -92,8 +93,26 @@ const mockPlatformProvider: any = {
   createFinalComment: async () => {},
   getPrompt: async () => undefined,
   getStartTime: () => undefined,
-  createPullRequest: async () => ({ content: [], details: {} }),
-  updatePullRequest: async () => ({ content: [], details: {} }),
+  createPullRequest: async () => ({
+    content: [],
+    details: {
+      pullRequestNumber: 1,
+      pullRequestUrl: '',
+      headBranch: 'main',
+      baseBranch: 'main',
+      dryRun: false,
+    },
+  }),
+  updatePullRequest: async () => ({
+    content: [],
+    details: {
+      pullRequestNumber: 1,
+      pullRequestUrl: '',
+      headBranch: 'main',
+      baseBranch: 'main',
+      dryRun: false,
+    },
+  }),
   getIssueOrPRThread: async () => undefined,
 };
 

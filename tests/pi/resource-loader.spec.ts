@@ -6,6 +6,7 @@
 
 import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
 import { resolveExtensions, getResourceLoader } from '../../src/pi/resource-loader';
+import type { PlatformProvider } from '../../src/platform';
 import { DefaultPackageManager, DefaultResourceLoader } from '@mariozechner/pi-coding-agent';
 
 // Mock CoreAdapter for testing
@@ -26,7 +27,7 @@ const mockCoreAdapter = {
 };
 
 // Mock platform provider for getResourceLoader
-const mockPlatformProvider: any = {
+const mockPlatformProvider: PlatformProvider = {
   type: 'github',
   getContext: () => ({
     repo: { owner: 'test-owner', repo: 'test-repo' },
@@ -42,8 +43,26 @@ const mockPlatformProvider: any = {
   createFinalComment: async () => {},
   getPrompt: async () => undefined,
   getStartTime: () => undefined,
-  createPullRequest: async () => ({ content: [], details: {} }),
-  updatePullRequest: async () => ({ content: [], details: {} }),
+  createPullRequest: async () => ({
+    content: [],
+    details: {
+      pullRequestNumber: 1,
+      pullRequestUrl: '',
+      headBranch: 'main',
+      baseBranch: 'main',
+      dryRun: false,
+    },
+  }),
+  updatePullRequest: async () => ({
+    content: [],
+    details: {
+      pullRequestNumber: 1,
+      pullRequestUrl: '',
+      headBranch: 'main',
+      baseBranch: 'main',
+      dryRun: false,
+    },
+  }),
   getIssueOrPRThread: async () => undefined,
 };
 
