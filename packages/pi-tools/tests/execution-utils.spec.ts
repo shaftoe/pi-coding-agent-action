@@ -1,3 +1,10 @@
+/**
+ * Tests for tool execution utilities.
+ *
+ * Tests the shared utilities used across tool definitions for cancellation
+ * handling and parameter building.
+ */
+
 import { describe, expect, test } from 'bun:test';
 // Import directly from the @alexanderfortin/pi-coding-agent-action-tools package
 import * as ToolExecution from '@alexanderfortin/pi-coding-agent-action-tools';

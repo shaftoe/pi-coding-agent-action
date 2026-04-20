@@ -38,7 +38,10 @@ jobs:
         working-directory: packages/pi-tools
         run: bun run format
 
-      - name: Test
+      - name: Test (subpackage)
+        run: bun test packages/pi-tools/tests/
+
+      - name: Test (integration)
         run: bun test tests/pi/tools/
 
   release:
