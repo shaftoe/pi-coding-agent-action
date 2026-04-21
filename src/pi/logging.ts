@@ -36,7 +36,6 @@ export const loggingFactory = (
     core.info(`::group::🔧 Tool started: ${event.toolName} (${event.toolCallId})`);
     core.info(`  Args: ${truncateText(JSON.stringify(event.args, null, 2), 500)}`);
     core.info('::endgroup::');
-    core.debug(`🔧 Tool Execution started: ${event.toolName} (${event.toolCallId})`);
   });
 
   pi.on('tool_execution_end', async event => {
