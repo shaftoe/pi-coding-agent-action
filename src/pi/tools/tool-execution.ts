@@ -5,7 +5,7 @@
  * validation to reduce duplication across tool definitions.
  */
 
-import type { AgentToolResult } from '@mariozechner/pi-coding-agent';
+import type { AgentToolResult, AgentToolUpdateCallback, ExtensionContext } from '@mariozechner/pi-coding-agent';
 
 /**
  * Result of a cancelled tool execution.
@@ -90,7 +90,9 @@ export function withCancellation<TParams, TDetails, TResult>(
   return async (
     _toolCallId: string,
     params: TParams,
-    signal: AbortSignal | undefined
+    signal: AbortSignal | undefined,
+    _onUpdate: AgentToolUpdateCallback<TDetails> | undefined,
+    _ctx: ExtensionContext
   ): Promise<AgentToolResult<TDetails>> => {
     if (signal?.aborted) {
       return createCancellationResult(config.cancellationMessage, config.cancellationDetails);

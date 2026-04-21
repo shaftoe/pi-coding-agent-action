@@ -6,10 +6,29 @@
  */
 
 import { describe, expect, test } from 'bun:test';
+import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
 // Import directly from source file using namespace import to work around bun test module resolution
 import * as ToolExecution from '../../../src/pi/tools/tool-execution';
 
 const { withCancellation, createCancellationResult, buildParams } = ToolExecution;
+
+// Minimal mock ExtensionContext for tool execute signature (v0.68.0+)
+const mockCtx = {
+  ui: {},
+  hasUI: false,
+  cwd: '/tmp',
+  sessionManager: {},
+  modelRegistry: {},
+  model: undefined,
+  isIdle: () => true,
+  signal: undefined,
+  abort: () => {},
+  hasPendingMessages: () => false,
+  shutdown: () => {},
+  getContextUsage: () => undefined,
+  compact: () => {},
+  getSystemPrompt: () => '',
+} as unknown as ExtensionContext;
 
 describe('tool-execution utilities', () => {
   describe('createCancellationResult', () => {
@@ -38,7 +57,7 @@ describe('tool-execution utilities', () => {
         }
       );
 
-      const result = await execute('tool-call-id', {}, mockSignal.signal);
+      const result = await execute('tool-call-id', {}, mockSignal.signal, undefined, mockCtx);
 
       expect(result.content).toEqual([{ type: 'text', text: 'Test cancelled' }]);
       expect(result.details).toEqual({
@@ -65,7 +84,7 @@ describe('tool-execution utilities', () => {
         execute: mockExecute,
       });
 
-      const result = await execute('tool-call-id', { value: 21 }, undefined);
+      const result = await execute('tool-call-id', { value: 21 }, undefined, undefined, mockCtx);
 
       expect(result.content).toEqual([{ type: 'text', text: 'Result: 42' }]);
       expect(result.details).toEqual({ result: 42 });
@@ -88,7 +107,7 @@ describe('tool-execution utilities', () => {
         execute: mockExecute,
       });
 
-      const result = await execute('tool-call-id', { value: 'hello' }, undefined);
+      const result = await execute('tool-call-id', { value: 'hello' }, undefined, undefined, mockCtx);
 
       expect(result.content).toEqual([{ type: 'text', text: 'HELLO' }]);
       expect(result.details).toEqual({ output: 'HELLO' });
@@ -112,7 +131,7 @@ describe('tool-execution utilities', () => {
       });
 
       // Should not throw and should execute normally
-      const result = await execute('tool-call-id', {}, undefined);
+      const result = await execute('tool-call-id', {}, undefined, undefined, mockCtx);
 
       expect(result.content).toEqual([{ type: 'text', text: 'Success' }]);
     });
@@ -133,7 +152,7 @@ describe('tool-execution utilities', () => {
         execute: mockExecute,
       });
 
-      await expect(execute('tool-call-id', {}, undefined)).rejects.toThrow('Execution failed');
+      await expect(execute('tool-call-id', {}, undefined, undefined, mockCtx)).rejects.toThrow('Execution failed');
     });
 
     test('signal.aborted check happens before prepareParams', async () => {
@@ -160,7 +179,7 @@ describe('tool-execution utilities', () => {
       });
 
       // Should return cancellation result without calling prepareParams or execute
-      const result = await execute('tool-call-id', {}, mockSignal.signal);
+      const result = await execute('tool-call-id', {}, mockSignal.signal, undefined, mockCtx);
 
       expect((result.details as { cancelled: boolean }).cancelled).toBe(true);
     });

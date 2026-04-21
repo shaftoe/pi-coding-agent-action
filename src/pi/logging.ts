@@ -33,6 +33,9 @@ export const loggingFactory = (
 ) => {
   pi.on('tool_execution_start', async event => {
     core.info('');
+    core.info(`::group::🔧 Tool started: ${event.toolName} (${event.toolCallId})`);
+    core.info(`  Args: ${truncateText(JSON.stringify(event.args, null, 2), 500)}`);
+    core.info('::endgroup::');
     core.debug(`🔧 Tool Execution started: ${event.toolName} (${event.toolCallId})`);
   });
 
@@ -51,6 +54,25 @@ export const loggingFactory = (
       core.info(`  ✅ execution succeeded`);
     }
     core.info('::endgroup::');
+  });
+
+  pi.on('tool_execution_update', async event => {
+    core.debug(
+      `🔧 Tool ${event.toolName} (${event.toolCallId}) update: ${truncateText(JSON.stringify(event.partialResult), 200)}`
+    );
+  });
+
+  pi.on('turn_start', async event => {
+    core.debug(`🔄 Turn ${event.turnIndex} started`);
+  });
+
+  pi.on('turn_end', async event => {
+    const toolCount = event.toolResults.length;
+    core.debug(`🔄 Turn ${event.turnIndex} completed (${toolCount} tool result(s))`);
+  });
+
+  pi.on('after_provider_response', async event => {
+    core.debug(`📡 Provider response: status ${event.status}`);
   });
 
   pi.on('before_agent_start', async (event, ctx) => {

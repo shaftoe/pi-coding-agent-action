@@ -60,7 +60,9 @@ interface TestTool {
   execute: (
     _toolCallId: string,
     params: Record<string, unknown>,
-    signal: AbortSignal | undefined
+    signal: AbortSignal | undefined,
+    _onUpdate: unknown,
+    _ctx: unknown
   ) => Promise<{ content: { text: string }[]; details: Record<string, unknown> }>;
 }
 
@@ -316,7 +318,13 @@ describe('extFactory', () => {
       const controller = new AbortController();
       controller.abort();
 
-      const result = await createPRTool.execute('id', { title: 'Nope' }, controller.signal);
+      const result = await createPRTool.execute(
+        'id',
+        { title: 'Nope' },
+        controller.signal,
+        undefined,
+        undefined as unknown as Parameters<typeof createPRTool.execute>[4]
+      );
 
       expect(result.content[0]?.text).toContain('cancelled');
       expect(result.details.cancelled).toBe(true);
@@ -330,7 +338,13 @@ describe('extFactory', () => {
       const controller = new AbortController();
       controller.abort();
 
-      const result = await getIssuePRThreadTool.execute('id', {}, controller.signal);
+      const result = await getIssuePRThreadTool.execute(
+        'id',
+        {},
+        controller.signal,
+        undefined,
+        undefined as unknown as Parameters<typeof getIssuePRThreadTool.execute>[4]
+      );
 
       expect(result.content[0]?.text).toContain('cancelled');
       expect(result.details.cancelled).toBe(true);
@@ -343,7 +357,13 @@ describe('extFactory', () => {
       const controller = new AbortController();
       controller.abort();
 
-      const result = await updatePRTool.execute('id', {}, controller.signal);
+      const result = await updatePRTool.execute(
+        'id',
+        {},
+        controller.signal,
+        undefined,
+        undefined as unknown as Parameters<typeof updatePRTool.execute>[4]
+      );
 
       expect(result.content[0]?.text).toContain('cancelled');
       expect(result.details.cancelled).toBe(true);

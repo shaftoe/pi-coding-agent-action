@@ -31,7 +31,7 @@
     "@actions/core": "^3.0.0",
     "@actions/github": "^9.1.0",
     "@js-temporal/polyfill": "^0.5.1",
-    "@mariozechner/pi-coding-agent": "^0.67.68",
+    "@mariozechner/pi-coding-agent": "^0.68.0",
     "@sinclair/typebox": "^0.34.49",
     "ignore": "^7.0.5"
   },

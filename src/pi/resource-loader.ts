@@ -100,6 +100,8 @@ export async function getResourceLoader(
   }
 
   const loader = new DefaultResourceLoader({
+    cwd: process.cwd(),
+    agentDir: getAgentDir(),
     extensionFactories,
     additionalExtensionPaths,
     systemPromptOverride: () => SYSTEM_PROMPT,
