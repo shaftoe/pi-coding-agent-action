@@ -2,7 +2,7 @@
  * @file get_issue_or_pr_thread tool definition.
  */
 
-import { Type, Static } from '@sinclair/typebox';
+import { Type, Static } from 'typebox';
 import { defineTool } from '@mariozechner/pi-coding-agent';
 import {
   GET_ISSUE_PR_THREAD_PROMPT_SNIPPET,
@@ -91,7 +91,6 @@ export function getIssueOrPRThreadToolFactory(provider: PlatformProvider) {
     description: GET_ISSUE_PR_THREAD_DESCRIPTION,
     promptSnippet: GET_ISSUE_PR_THREAD_PROMPT_SNIPPET,
     promptGuidelines: GET_ISSUE_PR_THREAD_PROMPT_GUIDELINES,
-    // @ts-expect-error - TypeBox Symbol property not recognized by TypeScript
     parameters: getIssueOrPRThreadSchema,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_GET_THREAD,

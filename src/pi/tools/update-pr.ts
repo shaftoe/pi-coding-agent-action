@@ -2,7 +2,7 @@
  * @file update_pull_request tool definition.
  */
 
-import { Type, Static } from '@sinclair/typebox';
+import { Type, Static } from 'typebox';
 import { defineTool } from '@mariozechner/pi-coding-agent';
 import {
   UPDATE_PULL_REQUEST_PROMPT_SNIPPET,
@@ -68,7 +68,6 @@ export function updatePullRequestToolFactory(provider: PlatformProvider) {
     description: UPDATE_PULL_REQUEST_DESCRIPTION,
     promptSnippet: UPDATE_PULL_REQUEST_PROMPT_SNIPPET,
     promptGuidelines: UPDATE_PULL_REQUEST_PROMPT_GUIDELINES,
-    // @ts-expect-error - TypeBox Symbol property not recognized by TypeScript
     parameters: updatePullRequestSchema,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_UPDATE_PR,

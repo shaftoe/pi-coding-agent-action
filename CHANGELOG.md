@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.2] - 2026-04-22
+
+### Changed
+
+- **deps**: upgrade `@mariozechner/pi-coding-agent` from v0.68.1 to v0.69.0 (#121)
+- Migrate TypeBox imports from `@sinclair/typebox` 0.34.x to `typebox` 1.x (following upstream breaking change)
+- Remove direct `@sinclair/typebox` dependency (now provided transitively via the Pi SDK)
+- Remove stale `@ts-expect-error` comments on tool parameter schemas (fixed by TypeBox 1.x migration)
+
 ## [2.11.1] - 2026-04-22
 
 ### Changed
