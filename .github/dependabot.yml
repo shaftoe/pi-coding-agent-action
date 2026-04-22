@@ -11,7 +11,7 @@ updates:
           - '@actions/*'
           - '@js-temporal/*'
           - '@mariozechner/*'
-          - '@sinclair/typebox'
+          - 'typebox'
           - 'ignore'
       development-dependencies:
         patterns:
