@@ -508,4 +508,35 @@ describe('createFinalComment', () => {
     // The body should be modified with metadata (even if the URL is not fully formed in test)
     expect(commentBody).toContain(body);
   });
+
+  test('returns undefined when no issue/PR number in context (unattended mode)', async () => {
+    const body = 'Test result from unattended pipeline';
+
+    // Simulate unattended mode: no issue number in context
+    // @ts-expect-error -- Setting read-only issue property to test unattended mode
+    github.context.issue = { number: undefined };
+
+    const result = await createFinalComment(body, {});
+
+    expect(result).toBeUndefined();
+    // No API calls should be made
+    expect(mockCreateIssueComment).not.toHaveBeenCalled();
+    expect(mockCreateReviewCommentReply).not.toHaveBeenCalled();
+    // Debug log should explain why
+    expect(mockDebugLog).toContain('[comments] no issue/PR number in context, skipping comment creation');
+  });
+
+  test('returns undefined when issue number is 0 (unattended mode)', async () => {
+    const body = 'Test result from unattended pipeline';
+
+    // Simulate unattended mode: issue number is 0
+    // @ts-expect-error -- Setting read-only issue property to test unattended mode
+    github.context.issue = { number: 0 };
+
+    const result = await createFinalComment(body, {});
+
+    expect(result).toBeUndefined();
+    expect(mockCreateIssueComment).not.toHaveBeenCalled();
+    expect(mockCreateReviewCommentReply).not.toHaveBeenCalled();
+  });
 });

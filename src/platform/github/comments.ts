@@ -101,6 +101,12 @@ async function createComment(body: string): Promise<CreateCommentType | undefine
     return;
   }
 
+  const issueNumber = github.context.issue.number;
+  if (!issueNumber) {
+    debug('[comments] no issue/PR number in context, skipping comment creation');
+    return undefined;
+  }
+
   const octokit = getOctokit();
 
   // Check if this is a reply to a PR review comment (inline comment)
@@ -115,7 +121,7 @@ async function createComment(body: string): Promise<CreateCommentType | undefine
     return octokit.rest.pulls.createReplyForReviewComment({
       owner: github.context.repo.owner,
       repo: github.context.repo.repo,
-      pull_number: github.context.issue.number,
+      pull_number: issueNumber,
       comment_id: comment.id,
       body,
     });
@@ -124,7 +130,7 @@ async function createComment(body: string): Promise<CreateCommentType | undefine
     return octokit.rest.issues.createComment({
       owner: github.context.repo.owner,
       repo: github.context.repo.repo,
-      issue_number: github.context.issue.number,
+      issue_number: issueNumber,
       body,
     });
   }
