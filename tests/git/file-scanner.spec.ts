@@ -233,6 +233,51 @@ describe('shared file scanner (platform-agnostic)', () => {
     });
   });
 
+  describe('binary and unreadable files', () => {
+    test('skips binary files that cannot be read as utf-8', async () => {
+      // Create a file with invalid UTF-8 sequences that will cause readFileSync to fail
+      // We use a file with no read permissions to simulate a read error
+      const binaryPath = path.join(tempDir, 'binary.bin');
+      fs.writeFileSync(binaryPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]));
+      fs.chmodSync(binaryPath, 0o000);
+
+      try {
+        const result = await scanDirectory({
+          dir: tempDir,
+          relativePath: '',
+          referenceFiles: new Map(),
+          ig: ignore(),
+          log,
+        });
+
+        // Binary/unreadable file should be skipped, not included in changed files
+        expect(result.changedFiles.every(f => f.path !== 'binary.bin')).toBe(true);
+        // The file was encountered but skipped
+        expect(
+          log.messages.some(m => m.includes('skipping file (likely binary): binary.bin'))
+        ).toBe(true);
+      } finally {
+        // Restore permissions so cleanup can delete the file
+        fs.chmodSync(binaryPath, 0o644);
+      }
+    });
+
+    test('skips binary files via scanForChanges', async () => {
+      const binaryPath = path.join(tempDir, 'unreadable.dat');
+      fs.writeFileSync(binaryPath, Buffer.from([0xff, 0xfe, 0x00, 0x01]));
+      fs.chmodSync(binaryPath, 0o000);
+
+      try {
+        const result = await scanForChanges(new Map(), log, { repoRoot: tempDir });
+
+        expect(result.changedFiles.every(f => f.path !== 'unreadable.dat')).toBe(true);
+        expect(log.messages.some(m => m.includes('skipping file'))).toBe(true);
+      } finally {
+        fs.chmodSync(binaryPath, 0o644);
+      }
+    });
+  });
+
   describe('platform independence', () => {
     test('scanForChanges works without any GitHub dependencies', async () => {
       // This test proves the scanner is platform-agnostic:
