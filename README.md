@@ -94,6 +94,7 @@ jobs:
           provider: my-provider
           model: some-model
           token: ${{ secrets.MODEL_API_KEY }}
+          base_url: https://my-gateway.example.com/v1
           thinking_level: medium
 ```
 
@@ -219,6 +220,7 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
+| `base_url` | Optional override for the provider base URL (e.g., to route traffic through a proxy or use an OpenAI-compatible gateway) | No | - |
 | `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
 | `github_token` | GitHub token for API access | Yes | - |
 | `load_builtin_extensions` | Whether to load built-in GitHub extensions (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`) | No | `true` |
