@@ -45,6 +45,11 @@ inputs:
     required: false
     default: 'true'
 
+  base_url:
+    description: 'Optional override for the provider base URL (e.g. to route OpenAI traffic through a proxy or use an OpenAI-compatible gateway).'
+    required: false
+    default: ''
+
 runs:
   using: 'node24'
   main: 'dist/index.js'

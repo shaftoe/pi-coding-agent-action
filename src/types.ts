@@ -101,6 +101,7 @@ export interface PiConfig {
   promptInput: string;
   extensions?: string[];
   loadBuiltinExtensions?: boolean;
+  baseUrl?: string;
 }
 
 /**

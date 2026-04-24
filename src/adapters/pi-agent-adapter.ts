@@ -24,7 +24,8 @@ export const createRealPiAgent: PiAgentFactory = (
     core,
     provider,
     config.extensions,
-    config.loadBuiltinExtensions
+    config.loadBuiltinExtensions,
+    config.baseUrl
   );
 
   return {

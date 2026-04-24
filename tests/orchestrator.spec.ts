@@ -941,4 +941,63 @@ describe('ActionOrchestrator', () => {
       expect(mockCore.setOutput).toHaveBeenCalledWith('duration_seconds', expect.any(Number));
     });
   });
+
+  describe('base_url configuration', () => {
+    test('passes baseUrl when provided', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'openai',
+          model: 'gpt-4o',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          base_url: 'https://my-proxy.example.com/v1',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseUrl: 'https://my-proxy.example.com/v1',
+        }),
+        mockCore, mockProvider
+      );
+    });
+
+    test('omits baseUrl when input is empty', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          base_url: '',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          baseUrl: expect.any(String),
+        }),
+        mockCore, mockProvider
+      );
+    });
+
+    test('calls getInput for base_url', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockCore.getInput).toHaveBeenCalledWith('base_url');
+    });
+  });
 });

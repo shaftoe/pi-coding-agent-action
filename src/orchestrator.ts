@@ -104,6 +104,8 @@ export class ActionOrchestrator {
       ? loadBuiltinExtensionsInput.toLowerCase() === 'true'
       : true; // default to true
 
+    const baseUrl = this.core.getInput('base_url') || undefined;
+
     return {
       provider: this.core.getInput('provider'),
       model: this.core.getInput('model'),
@@ -112,6 +114,7 @@ export class ActionOrchestrator {
       promptInput: this.core.getInput('prompt'),
       ...(extensions?.length ? { extensions } : {}),
       loadBuiltinExtensions,
+      ...(baseUrl ? { baseUrl } : {}),
     };
   }
 

@@ -36,6 +36,7 @@ export class Agent {
   private platformProvider: PlatformProvider;
   private extensions?: string[];
   private loadBuiltinExtensions?: boolean;
+  private baseUrl?: string;
 
   /**
    * Create a new Pi agent.
@@ -51,6 +52,7 @@ export class Agent {
    * @param platformProvider      - The platform provider for custom tool operations.
    * @param extensions            - Optional array of extension sources (npm, git, or local paths).
    * @param loadBuiltinExtensions - Whether to load built-in GitHub extensions (default true).
+   * @param baseUrl               - Optional base URL override for the provider.
    * @throws {Error}   If the requested model cannot be found in the registry.
    */
   constructor(
@@ -61,7 +63,8 @@ export class Agent {
     core: CoreAdapter,
     platformProvider: PlatformProvider,
     extensions?: string[],
-    loadBuiltinExtensions?: boolean
+    loadBuiltinExtensions?: boolean,
+    baseUrl?: string
   ) {
     this.modelStr = modelStr;
     this.provider = provider;
@@ -75,6 +78,9 @@ export class Agent {
     if (loadBuiltinExtensions !== undefined) {
       this.loadBuiltinExtensions = loadBuiltinExtensions;
     }
+    if (baseUrl !== undefined) {
+      this.baseUrl = baseUrl;
+    }
     this.modelRegistry = ModelRegistry.inMemory(this.authStorage);
 
     if (this.token) {
@@ -83,6 +89,11 @@ export class Agent {
         type: 'api_key',
         key: this.token,
       });
+    }
+
+    if (this.baseUrl) {
+      this.core.debug(`[provider] Overriding base URL for ${this.provider}: ${this.baseUrl}`);
+      this.modelRegistry.registerProvider(this.provider, { baseUrl: this.baseUrl });
     }
 
     const foundModel = this.modelRegistry.find(this.provider, this.modelStr);
