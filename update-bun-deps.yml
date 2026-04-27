@@ -5,11 +5,21 @@ name: Update Bun Dependencies
 #
 # USAGE – from any bun-based repository:
 #
+#   # Safe updates only (within semver ranges):
 #   jobs:
 #     update-deps:
 #       uses: shaftoe/pi-coding-agent-action/.github/workflows/update-bun-deps.yml@v2
 #       secrets:
 #         github_token: ${{ secrets.GITHUB_TOKEN }}   # optional, defaults to GITHUB_TOKEN
+#
+#   # Major updates (bumps package.json across semver ranges):
+#   jobs:
+#     update-deps-latest:
+#       uses: shaftoe/pi-coding-agent-action/.github/workflows/update-bun-deps.yml@v2
+#       with:
+#         latest: true
+#       secrets:
+#         github_token: ${{ secrets.GITHUB_TOKEN }}
 #
 # The workflow can also be dispatched manually from the Actions tab.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -29,8 +39,14 @@ on:
         type: string
         default: "latest"
 
+      latest:
+        description: "Update to the latest versions regardless of semver ranges (i.e. `bun update --latest`). This modifies package.json and is required for major-version bumps."
+        required: false
+        type: boolean
+        default: false
+
       update-args:
-        description: "Extra flags for `bun update`. Use `--latest` to bump across semver ranges."
+        description: "Extra flags for `bun update` (in addition to `--latest` when the `latest` input is set)."
         required: false
         type: string
         default: ""
@@ -95,6 +111,11 @@ on:
         required: false
         type: string
         default: ""
+      latest:
+        description: "Update to latest versions (major bumps)."
+        required: false
+        type: boolean
+        default: false
       update-args:
         description: "Extra flags for `bun update` (e.g. --latest)."
         required: false
@@ -132,7 +153,11 @@ jobs:
       - name: Update dependencies
         id: update
         run: |
-          ARGS="${{ inputs.update-args }}"
+          ARGS=""
+          if [ "${{ inputs.latest }}" = "true" ]; then
+            ARGS="$ARGS --latest"
+          fi
+          ARGS="$ARGS ${{ inputs.update-args }}"
           echo "::group::bun update $ARGS"
           bun update $ARGS
           echo "::endgroup::"
@@ -140,13 +165,27 @@ jobs:
       - name: Check for changes
         id: changes
         run: |
-          if git diff --quiet bun.lock; then
+          CHANGED=false
+          FILES=""
+          # bun.lock always changes on dependency updates
+          if ! git diff --quiet bun.lock 2>/dev/null; then
+            CHANGED=true
+            FILES="bun.lock"
+          fi
+          # package.json changes when --latest bumps semver ranges
+          if ! git diff --quiet package.json 2>/dev/null; then
+            CHANGED=true
+            FILES="$FILES package.json"
+          fi
+
+          if [ "$CHANGED" = "false" ]; then
             echo "detected=false" >> "$GITHUB_OUTPUT"
             echo "::notice::No dependency updates available."
           else
             echo "detected=true" >> "$GITHUB_OUTPUT"
-            echo "::group::Changed packages"
-            git diff --stat bun.lock
+            echo "files=$FILES" >> "$GITHUB_OUTPUT"
+            echo "::group::Changed files"
+            git diff --stat $FILES
             echo "::endgroup::"
           fi
 
@@ -198,14 +237,22 @@ jobs:
         run: |
           {
             echo "content<<EOF"
-            echo "## 📦 Automated Bun Dependency Update"
+            if [ "${{ inputs.latest }}" = "true" ]; then
+              echo "## 📦 Automated Bun Dependency Update (latest / major)"
+            else
+              echo "## 📦 Automated Bun Dependency Update"
+            fi
             echo ""
             echo "This PR was created automatically by the **Update Bun Dependencies** workflow."
             echo ""
             echo "### Changes"
             echo ""
-            echo "\`\`\`"
-            git diff bun.lock | head -200
+            CHANGED_FILES="${{ steps.changes.outputs.files }}"
+            echo "\`\`\`diff"
+            for f in $CHANGED_FILES; do
+              echo "--- $f ---"
+              git diff "$f" | head -300
+            done
             echo "\`\`\`"
             echo ""
             VALIDATE="${{ steps.validate.outputs.result || 'skipped' }}"
