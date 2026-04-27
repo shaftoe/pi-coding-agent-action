@@ -19,7 +19,7 @@ name: Update Bun Dependencies
 #         extra-prompt: "Run bun run validate and bun test after updating"
 #       secrets:
 #         token: ${{ secrets.API_KEY }}
-#         github_token: ${{ secrets.GITHUB_TOKEN }}
+#         gh_token: ${{ secrets.GITHUB_TOKEN }}
 #
 # The workflow can also be dispatched manually from the Actions tab.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ on:
         description: "API token for the LLM provider."
         required: true
 
-      github_token:
+      gh_token:
         description: "GitHub token for the Pi agent. Falls back to the automatic GITHUB_TOKEN when not provided."
         required: false
 
@@ -177,7 +177,7 @@ jobs:
       - name: Run Pi agent
         uses: shaftoe/pi-coding-agent-action@v2
         with:
-          github_token: "${{ secrets.github_token || secrets.GITHUB_TOKEN }}"
+          github_token: "${{ secrets.gh_token || secrets.GITHUB_TOKEN }}"
           provider: "${{ inputs.provider }}"
           model: "${{ inputs.model }}"
           token: "${{ secrets.token }}"
