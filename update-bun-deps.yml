@@ -232,50 +232,84 @@ jobs:
           echo "result=passed" >> "$GITHUB_OUTPUT"
 
       - name: Generate PR body
-        if: "steps.changes.outputs.detected == 'true' && inputs.pr-body == '' && inputs.dry-run != true"
+        if: "steps.changes.outputs.detected == 'true' && inputs.dry-run != true"
         id: body
         run: |
-          {
-            echo "content<<EOF"
-            if [ "${{ inputs.latest }}" = "true" ]; then
-              echo "## 📦 Automated Bun Dependency Update (latest / major)"
-            else
-              echo "## 📦 Automated Bun Dependency Update"
-            fi
-            echo ""
-            echo "This PR was created automatically by the **Update Bun Dependencies** workflow."
-            echo ""
-            echo "### Changes"
-            echo ""
-            CHANGED_FILES="${{ steps.changes.outputs.files }}"
-            echo "\`\`\`diff"
-            for f in $CHANGED_FILES; do
-              echo "--- $f ---"
-              git diff "$f" | head -300
-            done
-            echo "\`\`\`"
-            echo ""
-            VALIDATE="${{ steps.validate.outputs.result || 'skipped' }}"
-            TEST="${{ steps.test.outputs.result || 'skipped' }}"
-            echo "| Step | Result |"
-            echo "|------|--------|"
-            echo "| Validation | ${VALIDATE} |"
-            echo "| Tests | ${TEST} |"
-            echo ""
-            echo "---"
-            echo "_Triggered by workflow run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          BODY_FILE=/tmp/pr-body.md
+
+          # If user provided a custom body, use it directly
+          if [ -n "${{ inputs.pr-body }}" ]; then
+            printf '%s\n' '${{ inputs.pr-body }}' > "$BODY_FILE"
+          else
+            {
+              if [ "${{ inputs.latest }}" = "true" ]; then
+                echo "## 📦 Automated Bun Dependency Update (latest / major)"
+              else
+                echo "## 📦 Automated Bun Dependency Update"
+              fi
+              echo ""
+              echo "This PR was created automatically by the **Update Bun Dependencies** workflow."
+              echo ""
+              echo "### Changes"
+              echo ""
+              CHANGED_FILES="${{ steps.changes.outputs.files }}"
+              echo '```diff'
+              for f in $CHANGED_FILES; do
+                echo "--- $f ---"
+                git diff "$f" | head -300
+              done
+              echo '```'
+              echo ""
+              VALIDATE="${{ steps.validate.outputs.result || 'skipped' }}"
+              TEST="${{ steps.test.outputs.result || 'skipped' }}"
+              echo "| Step | Result |"
+              echo "|------|--------|"
+              echo "| Validation | ${VALIDATE} |"
+              echo "| Tests | ${TEST} |"
+              echo ""
+              echo "---"
+              echo "_Triggered by workflow run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
+            } > "$BODY_FILE"
+          fi
+
+      - name: Configure git
+        if: "steps.changes.outputs.detected == 'true' && inputs.dry-run != true"
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Create Pull Request
         if: "steps.changes.outputs.detected == 'true' && inputs.dry-run != true"
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: "${{ secrets.github_token || github.token }}"
-          commit-message: "${{ inputs.pr-title || 'chore(deps): update bun dependencies' }}"
-          title: "${{ inputs.pr-title || 'chore(deps): update bun dependencies' }}"
-          body: "${{ inputs.pr-body || steps.body.outputs.content }}"
-          branch: "${{ inputs.pr-branch-prefix || 'deps/bun-update-' }}${{ github.run_number }}"
-          base: "${{ inputs.base-branch || '' }}"
-          labels: "${{ inputs.pr-labels || 'dependencies' }}"
-          delete-branch: true
+        env:
+          GH_TOKEN: "${{ secrets.github_token || github.token }}"
+        run: |
+          BRANCH="${{ inputs.pr-branch-prefix || 'deps/bun-update-' }}${{ github.run_number }}"
+          BASE="${{ inputs.base-branch }}"
+          TITLE="${{ inputs.pr-title || 'chore(deps): update bun dependencies' }}"
+
+          # Commit all changed dependency files
+          git checkout -b "$BRANCH"
+          git add ${{ steps.changes.outputs.files }}
+          git commit -m "$TITLE"
+          git push origin "$BRANCH"
+
+          # Create the PR
+          PR_ARGS=(
+            pr create
+            --title "$TITLE"
+            --body-file /tmp/pr-body.md
+            --head "$BRANCH"
+          )
+          if [ -n "$BASE" ]; then
+            PR_ARGS+=(--base "$BASE")
+          fi
+
+          PR_URL=$(gh "${PR_ARGS[@]}")
+          echo "Created PR: $PR_URL"
+
+          # Apply labels
+          LABELS="${{ inputs.pr-labels || 'dependencies' }}"
+          if [ -n "$LABELS" ]; then
+            NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+            gh pr edit "$NUMBER" --add-label "$LABELS"
+          fi
