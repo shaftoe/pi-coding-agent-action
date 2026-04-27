@@ -10,7 +10,7 @@ name: Update Bun Dependencies
 #     update-deps:
 #       uses: shaftoe/pi-coding-agent-action/.github/workflows/update-bun-deps.yml@v2
 #       secrets:
-#         github_token: ${{ secrets.GITHUB_TOKEN }}   # optional, defaults to GITHUB_TOKEN
+#         token: ${{ secrets.GITHUB_TOKEN }}   # optional, defaults to GITHUB_TOKEN
 #
 #   # Major updates (bumps package.json across semver ranges):
 #   jobs:
@@ -19,7 +19,7 @@ name: Update Bun Dependencies
 #       with:
 #         latest: true
 #       secrets:
-#         github_token: ${{ secrets.GITHUB_TOKEN }}
+#         token: ${{ secrets.GITHUB_TOKEN }}
 #
 # The workflow can also be dispatched manually from the Actions tab.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ on:
         default: false
 
     secrets:
-      github_token:
+      token:
         description: "Token used to create the pull request. Falls back to the automatic GITHUB_TOKEN when not provided."
         required: false
 
@@ -281,7 +281,7 @@ jobs:
       - name: Create Pull Request
         if: "steps.changes.outputs.detected == 'true' && inputs.dry-run != true"
         env:
-          GH_TOKEN: "${{ secrets.github_token || github.token }}"
+          GH_TOKEN: "${{ inputs.token }}"
         run: |
           BRANCH="${{ inputs.pr-branch-prefix || 'deps/bun-update-' }}${{ github.run_number }}"
           BASE="${{ inputs.base-branch }}"
