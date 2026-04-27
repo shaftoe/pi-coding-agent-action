@@ -1,0 +1,234 @@
+name: Update Bun Dependencies
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reusable workflow: update bun dependencies and open a PR
+#
+# USAGE – from any bun-based repository:
+#
+#   jobs:
+#     update-deps:
+#       uses: shaftoe/pi-coding-agent-action/.github/workflows/update-bun-deps.yml@v2
+#       secrets:
+#         github_token: ${{ secrets.GITHUB_TOKEN }}   # optional, defaults to GITHUB_TOKEN
+#
+# The workflow can also be dispatched manually from the Actions tab.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_call:
+    inputs:
+      base-branch:
+        description: "Branch to checkout and target for the PR. Defaults to the repository default branch."
+        required: false
+        type: string
+        default: ""
+
+      bun-version:
+        description: "Bun version to install (passed to oven-sh/setup-bun)."
+        required: false
+        type: string
+        default: "latest"
+
+      update-args:
+        description: "Extra flags for `bun update`. Use `--latest` to bump across semver ranges."
+        required: false
+        type: string
+        default: ""
+
+      validate-script:
+        description: "package.json script for linting/type-checking/formatting. Set to empty string to skip."
+        required: false
+        type: string
+        default: "validate"
+
+      test-script:
+        description: "package.json script for running tests. Set to empty string to skip."
+        required: false
+        type: string
+        default: "test"
+
+      fail-on-error:
+        description: "Fail the workflow when validation or tests fail after the update. When false the PR is still created."
+        required: false
+        type: boolean
+        default: true
+
+      pr-title:
+        description: "Title of the pull request."
+        required: false
+        type: string
+        default: "chore(deps): update bun dependencies"
+
+      pr-body:
+        description: "Pull-request body. Leave empty for auto-generated summary including the bun update diff and test results."
+        required: false
+        type: string
+        default: ""
+
+      pr-branch-prefix:
+        description: "Prefix for the update branch name."
+        required: false
+        type: string
+        default: "deps/bun-update-"
+
+      pr-labels:
+        description: "Comma-separated list of labels to add to the PR (the repository must already have them)."
+        required: false
+        type: string
+        default: "dependencies"
+
+      dry-run:
+        description: "Run the update and tests but skip PR creation. Useful for testing the workflow."
+        required: false
+        type: boolean
+        default: false
+
+    secrets:
+      github_token:
+        description: "Token used to create the pull request. Falls back to the automatic GITHUB_TOKEN when not provided."
+        required: false
+
+  workflow_dispatch:
+    inputs:
+      base-branch:
+        description: "Branch to target (default: repo default branch)."
+        required: false
+        type: string
+        default: ""
+      update-args:
+        description: "Extra flags for `bun update` (e.g. --latest)."
+        required: false
+        type: string
+        default: ""
+      dry-run:
+        description: "Skip PR creation."
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-dependencies:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: "${{ inputs.base-branch || '' }}"
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "${{ inputs.bun-version || 'latest' }}"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Update dependencies
+        id: update
+        run: |
+          ARGS="${{ inputs.update-args }}"
+          echo "::group::bun update $ARGS"
+          bun update $ARGS
+          echo "::endgroup::"
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet bun.lock; then
+            echo "detected=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No dependency updates available."
+          else
+            echo "detected=true" >> "$GITHUB_OUTPUT"
+            echo "::group::Changed packages"
+            git diff --stat bun.lock
+            echo "::endgroup::"
+          fi
+
+      - name: Run validation
+        if: steps.changes.outputs.detected == 'true'
+        id: validate
+        continue-on-error: "${{ !inputs.fail-on-error }}"
+        run: |
+          SCRIPT="${{ inputs.validate-script }}"
+          if [ -z "$SCRIPT" ]; then
+            echo "::notice::No validate-script configured, skipping."
+            exit 0
+          fi
+
+          if ! jq -e ".scripts.\"$SCRIPT\"" package.json > /dev/null 2>&1; then
+            echo "::notice::Script '$SCRIPT' not found in package.json, skipping validation."
+            exit 0
+          fi
+
+          echo "::group::bun run $SCRIPT"
+          bun run "$SCRIPT"
+          echo "::endgroup::"
+          echo "result=passed" >> "$GITHUB_OUTPUT"
+
+      - name: Run tests
+        if: steps.changes.outputs.detected == 'true'
+        id: test
+        continue-on-error: "${{ !inputs.fail-on-error }}"
+        run: |
+          SCRIPT="${{ inputs.test-script }}"
+          if [ -z "$SCRIPT" ]; then
+            echo "::notice::No test-script configured, skipping."
+            exit 0
+          fi
+
+          if ! jq -e ".scripts.\"$SCRIPT\"" package.json > /dev/null 2>&1; then
+            echo "::notice::Script '$SCRIPT' not found in package.json, skipping tests."
+            exit 0
+          fi
+
+          echo "::group::bun run $SCRIPT"
+          bun run "$SCRIPT"
+          echo "::endgroup::"
+          echo "result=passed" >> "$GITHUB_OUTPUT"
+
+      - name: Generate PR body
+        if: "steps.changes.outputs.detected == 'true' && inputs.pr-body == '' && inputs.dry-run != true"
+        id: body
+        run: |
+          {
+            echo "content<<EOF"
+            echo "## 📦 Automated Bun Dependency Update"
+            echo ""
+            echo "This PR was created automatically by the **Update Bun Dependencies** workflow."
+            echo ""
+            echo "### Changes"
+            echo ""
+            echo "\`\`\`"
+            git diff bun.lock | head -200
+            echo "\`\`\`"
+            echo ""
+            VALIDATE="${{ steps.validate.outputs.result || 'skipped' }}"
+            TEST="${{ steps.test.outputs.result || 'skipped' }}"
+            echo "| Step | Result |"
+            echo "|------|--------|"
+            echo "| Validation | ${VALIDATE} |"
+            echo "| Tests | ${TEST} |"
+            echo ""
+            echo "---"
+            echo "_Triggered by workflow run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create Pull Request
+        if: "steps.changes.outputs.detected == 'true' && inputs.dry-run != true"
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: "${{ secrets.github_token || github.token }}"
+          commit-message: "${{ inputs.pr-title || 'chore(deps): update bun dependencies' }}"
+          title: "${{ inputs.pr-title || 'chore(deps): update bun dependencies' }}"
+          body: "${{ inputs.pr-body || steps.body.outputs.content }}"
+          branch: "${{ inputs.pr-branch-prefix || 'deps/bun-update-' }}${{ github.run_number }}"
+          base: "${{ inputs.base-branch || '' }}"
+          labels: "${{ inputs.pr-labels || 'dependencies' }}"
+          delete-branch: true
