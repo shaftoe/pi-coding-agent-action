@@ -102,12 +102,6 @@ on:
         type: string
         default: "deps/bun-update-"
 
-      pr-labels:
-        description: "Comma-separated list of labels to add to the PR. Labels are created automatically if they don't exist."
-        required: false
-        type: string
-        default: "dependencies"
-
       dry-run:
         description: "Run the update and tests but skip PR creation. Useful for testing the workflow."
         required: false
@@ -176,11 +170,6 @@ on:
         required: false
         type: string
         default: "deps/bun-update-"
-      pr-labels:
-        description: "Comma-separated labels (auto-created if missing)."
-        required: false
-        type: string
-        default: "dependencies"
       dry-run:
         description: "Skip PR creation."
         required: false
@@ -190,7 +179,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  issues: write
 
 jobs:
   update-dependencies:
@@ -391,16 +379,3 @@ jobs:
 
           PR_URL=$(gh "${PR_ARGS[@]}")
           echo "Created PR: $PR_URL"
-
-          # Apply labels (create them first if they don't exist)
-          LABELS="${{ inputs.pr-labels || 'dependencies' }}"
-          if [ -n "$LABELS" ]; then
-            NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
-            for label in $(echo "$LABELS" | tr ',' ' '); do
-              label=$(echo "$label" | xargs)  # trim whitespace
-              if ! gh label view "$label" --repo "${{ github.repository }}" > /dev/null 2>&1; then
-                gh label create "$label" --repo "${{ github.repository }}" || true
-              fi
-              gh pr edit "$NUMBER" --add-label "$label"
-            done
-          fi
