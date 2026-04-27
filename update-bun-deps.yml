@@ -1,34 +1,25 @@
 name: Update Bun Dependencies
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Reusable workflow: update bun dependencies and open a PR
+# Reusable workflow: uses the Pi coding agent to update bun dependencies and
+# open a PR with the changes.
+#
+# NOTE: This file lives at the repository root because the CI token cannot
+# push to .github/workflows/. Move to .github/workflows/ on merge to use as
+# a reusable workflow from external repos.
 #
 # USAGE – from any bun-based repository:
 #
-#   # Safe updates only (within semver ranges):
 #   jobs:
 #     update-deps:
 #       uses: shaftoe/pi-coding-agent-action/.github/workflows/update-bun-deps.yml@v2
-#       secrets:
-#         token: ${{ secrets.GITHUB_TOKEN }}   # optional, defaults to GITHUB_TOKEN
-#
-#   # Major updates (bumps package.json across semver ranges):
-#   jobs:
-#     update-deps-latest:
-#       uses: shaftoe/pi-coding-agent-action/.github/workflows/update-bun-deps.yml@v2
 #       with:
-#         latest: true
+#         provider: anthropic
+#         model: claude-sonnet-4-5
+#         extra-prompt: "Run bun run validate and bun test after updating"
 #       secrets:
-#         token: ${{ secrets.GITHUB_TOKEN }}
-#
-#   # Updates for a subdirectory / monorepo package:
-#   jobs:
-#     update-site-deps:
-#       uses: shaftoe/pi-coding-agent-action/.github/workflows/update-bun-deps.yml@v2
-#       with:
-#         working-directory: site
-#       secrets:
-#         token: ${{ secrets.GITHUB_TOKEN }}
+#         token: ${{ secrets.API_KEY }}
+#         github_token: ${{ secrets.GITHUB_TOKEN }}
 #
 # The workflow can also be dispatched manually from the Actions tab.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -36,145 +27,90 @@ name: Update Bun Dependencies
 on:
   workflow_call:
     inputs:
-      base-branch:
-        description: "Branch to checkout and target for the PR. Defaults to the repository default branch."
+      provider:
+        description: "LLM provider (e.g. anthropic, openai, google)."
+        required: true
+        type: string
+
+      model:
+        description: "Model to use (e.g. claude-sonnet-4-5, gpt-4o, gemini-2.5-pro)."
+        required: true
+        type: string
+
+      thinking_level:
+        description: "Thinking level for the agent (off, low, medium, high)."
         required: false
         type: string
-        default: ""
+        default: "off"
 
-      working-directory:
-        description: "Directory containing package.json (e.g. 'site' for ./site/package.json). Defaults to repo root."
-        required: false
-        type: string
-        default: "."
-
-      bun-version:
-        description: "Bun version to install (passed to oven-sh/setup-bun)."
-        required: false
-        type: string
-        default: "latest"
-
-      latest:
-        description: "Update to the latest versions regardless of semver ranges (i.e. `bun update --latest`). This modifies package.json and is required for major-version bumps."
-        required: false
-        type: boolean
-        default: false
-
-      update-args:
-        description: "Extra flags for `bun update` (in addition to `--latest` when the `latest` input is set)."
-        required: false
-        type: string
-        default: ""
-
-      validate-script:
-        description: "package.json script for linting/type-checking/formatting. Set to empty string to skip."
-        required: false
-        type: string
-        default: "validate"
-
-      test-script:
-        description: "package.json script for running tests. Set to empty string to skip."
-        required: false
-        type: string
-        default: "test"
-
-      fail-on-error:
-        description: "Fail the workflow when validation or tests fail after the update. When false the PR is still created."
-        required: false
-        type: boolean
-        default: true
-
-      pr-title:
-        description: "Title of the pull request."
-        required: false
-        type: string
-        default: "chore(deps): update bun dependencies"
-
-      pr-body:
-        description: "Pull-request body. Leave empty for auto-generated summary including the bun update diff and test results."
-        required: false
-        type: string
-        default: ""
-
-      pr-branch-prefix:
-        description: "Prefix for the update branch name."
-        required: false
-        type: string
-        default: "deps/bun-update-"
-
-      dry-run:
-        description: "Run the update and tests but skip PR creation. Useful for testing the workflow."
-        required: false
-        type: boolean
-        default: false
-
-    secrets:
-      token:
-        description: "Token used to create the pull request. Falls back to the automatic GITHUB_TOKEN when not provided."
-        required: false
-
-  workflow_dispatch:
-    inputs:
-      base-branch:
-        description: "Branch to target (default: repo default branch)."
-        required: false
-        type: string
-        default: ""
-      working-directory:
-        description: "Directory containing package.json (e.g. 'site' for ./site/package.json). Defaults to repo root."
+      package-json-path:
+        description: "Path to the package.json directory to update (e.g. '.' for root, 'site' for a subdirectory)."
         required: false
         type: string
         default: "."
+
+      extra-prompt:
+        description: "Additional instructions for the agent (e.g. 'run bun run validate and bun test after updating')."
+        required: false
+        type: string
+        default: ""
+
       bun-version:
         description: "Bun version to install."
         required: false
         type: string
         default: "latest"
-      latest:
-        description: "Update to latest versions (major bumps)."
-        required: false
-        type: boolean
-        default: false
-      update-args:
-        description: "Extra flags for `bun update`."
+
+      base-url:
+        description: "Optional override for the provider base URL."
         required: false
         type: string
         default: ""
-      validate-script:
-        description: "Validation script name (empty to skip)."
+
+    secrets:
+      token:
+        description: "API token for the LLM provider."
+        required: true
+
+      github_token:
+        description: "GitHub token for the Pi agent. Falls back to the automatic GITHUB_TOKEN when not provided."
+        required: false
+
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: "LLM provider."
+        required: true
+        type: string
+      model:
+        description: "Model to use."
+        required: true
+        type: string
+      thinking_level:
+        description: "Thinking level (off, low, medium, high)."
         required: false
         type: string
-        default: "validate"
-      test-script:
-        description: "Test script name (empty to skip)."
+        default: "off"
+      package-json-path:
+        description: "Path to package.json directory ('.' for root, or a subdirectory)."
         required: false
         type: string
-        default: "test"
-      fail-on-error:
-        description: "Fail workflow on validation/test errors."
-        required: false
-        type: boolean
-        default: true
-      pr-title:
-        description: "PR title."
-        required: false
-        type: string
-        default: "chore(deps): update bun dependencies"
-      pr-body:
-        description: "PR body (empty for auto-generated)."
+        default: "."
+      extra-prompt:
+        description: "Extra instructions for the agent."
         required: false
         type: string
         default: ""
-      pr-branch-prefix:
-        description: "Branch name prefix."
+      bun-version:
+        description: "Bun version."
         required: false
         type: string
-        default: "deps/bun-update-"
-      dry-run:
-        description: "Skip PR creation."
+        default: "latest"
+      base-url:
+        description: "Optional provider base URL override."
         required: false
-        type: boolean
-        default: false
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -184,14 +120,10 @@ jobs:
   update-dependencies:
     runs-on: ubuntu-latest
 
-    env:
-      PKG_DIR: "${{ inputs.working-directory || '.' }}"
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: "${{ inputs.base-branch || '' }}"
           fetch-depth: 0
 
       - name: Setup Bun
@@ -199,183 +131,56 @@ jobs:
         with:
           bun-version: "${{ inputs.bun-version || 'latest' }}"
 
-      - name: Validate working directory
-        run: |
-          PKG_DIR="${PKG_DIR%/}"
-          echo "PKG_DIR=$PKG_DIR" >> "$GITHUB_ENV"
-          if [ ! -f "$PKG_DIR/package.json" ]; then
-            echo "::error::$PKG_DIR/package.json not found."
-            exit 1
-          fi
-
-      - name: Install dependencies
-        working-directory: "${{ inputs.working-directory || '.' }}"
-        run: bun install --frozen-lockfile
-
-      - name: Update dependencies
-        working-directory: "${{ inputs.working-directory || '.' }}"
-        id: update
-        run: |
-          ARGS=""
-          if [ "${{ inputs.latest }}" = "true" ]; then
-            ARGS="$ARGS --latest"
-          fi
-          ARGS="$ARGS ${{ inputs.update-args }}"
-          echo "::group::bun update $ARGS"
-          bun update $ARGS
-          echo "::endgroup::"
-
-      - name: Check for changes
-        id: changes
-        run: |
-          CHANGED=false
-          FILES=""
-          # bun.lock (text, Bun >=1.2) or bun.lockb (binary, older Bun)
-          for lockfile in bun.lock bun.lockb; do
-            if ! git diff --quiet "$PKG_DIR/$lockfile" 2>/dev/null; then
-              CHANGED=true
-              FILES="$FILES $PKG_DIR/$lockfile"
-            fi
-          done
-          # package.json changes when --latest bumps semver ranges
-          if ! git diff --quiet "$PKG_DIR/package.json" 2>/dev/null; then
-            CHANGED=true
-            FILES="$FILES $PKG_DIR/package.json"
-          fi
-
-          FILES="$(echo "$FILES" | sed 's/^ *//')"
-
-          if [ "$CHANGED" = "false" ]; then
-            echo "detected=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No dependency updates available."
-          else
-            echo "detected=true" >> "$GITHUB_OUTPUT"
-            echo "files=$FILES" >> "$GITHUB_OUTPUT"
-            echo "::group::Changed files"
-            git diff --stat $FILES
-            echo "::endgroup::"
-          fi
-
-      - name: Run validation
-        if: steps.changes.outputs.detected == 'true'
-        id: validate
-        continue-on-error: "${{ !inputs.fail-on-error }}"
-        working-directory: "${{ inputs.working-directory || '.' }}"
-        run: |
-          SCRIPT="${{ inputs.validate-script }}"
-          if [ -z "$SCRIPT" ]; then
-            echo "::notice::No validate-script configured, skipping."
-            exit 0
-          fi
-
-          if ! jq -e ".scripts.\"$SCRIPT\"" package.json > /dev/null 2>&1; then
-            echo "::notice::Script '$SCRIPT' not found in package.json, skipping validation."
-            exit 0
-          fi
-
-          echo "::group::bun run $SCRIPT"
-          bun run "$SCRIPT"
-          echo "::endgroup::"
-          echo "result=passed" >> "$GITHUB_OUTPUT"
-
-      - name: Run tests
-        if: steps.changes.outputs.detected == 'true'
-        id: test
-        continue-on-error: "${{ !inputs.fail-on-error }}"
-        working-directory: "${{ inputs.working-directory || '.' }}"
-        run: |
-          SCRIPT="${{ inputs.test-script }}"
-          if [ -z "$SCRIPT" ]; then
-            echo "::notice::No test-script configured, skipping."
-            exit 0
-          fi
-
-          if ! jq -e ".scripts.\"$SCRIPT\"" package.json > /dev/null 2>&1; then
-            echo "::notice::Script '$SCRIPT' not found in package.json, skipping tests."
-            exit 0
-          fi
-
-          echo "::group::bun run $SCRIPT"
-          bun run "$SCRIPT"
-          echo "::endgroup::"
-          echo "result=passed" >> "$GITHUB_OUTPUT"
-
-      - name: Generate PR body
-        if: "steps.changes.outputs.detected == 'true' && inputs.dry-run != true"
-        id: body
-        run: |
-          BODY_FILE=/tmp/pr-body.md
-
-          # If user provided a custom body, use it directly
-          if [ -n "${{ inputs.pr-body }}" ]; then
-            printf '%s\n' '${{ inputs.pr-body }}' > "$BODY_FILE"
-          else
-            {
-              if [ "${{ inputs.latest }}" = "true" ]; then
-                echo "## 📦 Automated Bun Dependency Update (latest / major)"
-              else
-                echo "## 📦 Automated Bun Dependency Update"
-              fi
-              echo ""
-              if [ "$PKG_DIR" != "." ]; then
-                echo "**Working directory:** \`${PKG_DIR}\`"
-                echo ""
-              fi
-              echo "This PR was created automatically by the **Update Bun Dependencies** workflow."
-              echo ""
-              echo "### Changes"
-              echo ""
-              CHANGED_FILES="${{ steps.changes.outputs.files }}"
-              echo '```diff'
-              for f in $CHANGED_FILES; do
-                echo "--- $f ---"
-                git diff "$f" | head -300
-              done
-              echo '```'
-              echo ""
-              VALIDATE="${{ steps.validate.outputs.result || 'skipped' }}"
-              TEST="${{ steps.test.outputs.result || 'skipped' }}"
-              echo "| Step | Result |"
-              echo "|------|--------|"
-              echo "| Validation | ${VALIDATE} |"
-              echo "| Tests | ${TEST} |"
-              echo ""
-              echo "---"
-              echo "_Triggered by workflow run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
-            } > "$BODY_FILE"
-          fi
-
-      - name: Configure git
-        if: "steps.changes.outputs.detected == 'true' && inputs.dry-run != true"
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Create Pull Request
-        if: "steps.changes.outputs.detected == 'true' && inputs.dry-run != true"
+      - name: Build prompt
+        id: prompt
         env:
-          GH_TOKEN: "${{ secrets.token || github.token }}"
+          PKG_PATH: "${{ inputs.package-json-path || '.' }}"
+          EXTRA: "${{ inputs.extra-prompt }}"
         run: |
-          BRANCH="${{ inputs.pr-branch-prefix || 'deps/bun-update-' }}${{ github.run_number }}"
-          BASE="${{ inputs.base-branch }}"
-          TITLE="${{ inputs.pr-title || 'chore(deps): update bun dependencies' }}"
-
-          # Commit all changed dependency files
-          git checkout -b "$BRANCH"
-          git add ${{ steps.changes.outputs.files }}
-          git commit -m "$TITLE"
-          git push origin "$BRANCH"
-
-          # Create the PR
-          PR_ARGS=(
-            pr create
-            --title "$TITLE"
-            --body-file /tmp/pr-body.md
-            --head "$BRANCH"
-          )
-          if [ -n "$BASE" ]; then
-            PR_ARGS+=(--base "$BASE")
+          # Normalize path display for the prompt
+          if [ "$PKG_PATH" = "." ]; then
+            PKG_DISPLAY="the repository root"
+          else
+            PKG_DISPLAY="'$PKG_PATH'"
           fi
 
-          PR_URL=$(gh "${PR_ARGS[@]}")
-          echo "Created PR: $PR_URL"
+          # Compose the agent prompt
+          cat <<PROMPT_EOF > /tmp/prompt.txt
+          You are a dependency update bot. Your task is to update all bun dependencies to their latest versions and create a pull request with the changes.
+
+          ## Steps
+
+          1. Run `bun outdated` in $PKG_DISPLAY to see which packages have available updates.
+          2. For each outdated package, update it to the latest version by running `bun update <package-name>` (one at a time or in batches). Do NOT use the `--latest` flag — instead update each package individually so that package.json ranges are respected naturally.
+          3. After updating, verify the lockfile is consistent by running `bun install`.
+          4. Review the actual changes to package.json and bun.lock to confirm what was updated.
+          5. Create a pull request titled `chore(deps): update bun dependencies` with a clear summary of which packages were updated and to which versions. Use a table format in the PR body.
+          PROMPT_EOF
+
+          # Append extra prompt if provided
+          if [ -n "$EXTRA" ]; then
+            cat <<EXTRA_EOF >> /tmp/prompt.txt
+
+          ## Additional instructions
+
+          $EXTRA
+          EXTRA_EOF
+          fi
+
+          # Set multi-line output
+          {
+            echo "content<<EOF"
+            cat /tmp/prompt.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Pi agent
+        uses: shaftoe/pi-coding-agent-action@v2
+        with:
+          github_token: "${{ secrets.github_token || secrets.GITHUB_TOKEN }}"
+          provider: "${{ inputs.provider }}"
+          model: "${{ inputs.model }}"
+          token: "${{ secrets.token }}"
+          thinking_level: "${{ inputs.thinking_level }}"
+          prompt: "${{ steps.prompt.outputs.content }}"
+          base_url: "${{ inputs.base-url || '' }}"
