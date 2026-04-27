@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.13.1] - 2026-04-27
+
+### Changed
+
+- **deps**: upgrade `@mariozechner/pi-coding-agent` from v0.70.2 to v0.70.5 (#133)
+
+### Fixed
+
+- Inherits upstream fix for API-key environment discovery falling back to `/proc/self/environ` when Bun's sandbox leaves `process.env` empty
+- Inherits upstream fix for Bun sandboxed package-manager commands when `process.env` is empty
+- Inherits upstream fix for symlinked packages/resources/skills being duplicated in loaders
+- Inherits upstream fix for bash executor temp output streams leaking file descriptors when output was truncated by line count
+- Inherits upstream fix for Anthropic SSE parsing ignoring unknown proxy events
+- Inherits upstream fix for long local-LLM SSE streams aborting at 5 minutes with `UND_ERR_BODY_TIMEOUT`
+
 ## [2.13.0] - 2026-04-24
 
 ### Added
