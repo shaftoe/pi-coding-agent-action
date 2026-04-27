@@ -21,6 +21,15 @@ name: Update Bun Dependencies
 #       secrets:
 #         token: ${{ secrets.GITHUB_TOKEN }}
 #
+#   # Updates for a subdirectory / monorepo package:
+#   jobs:
+#     update-site-deps:
+#       uses: shaftoe/pi-coding-agent-action/.github/workflows/update-bun-deps.yml@v2
+#       with:
+#         working-directory: site
+#       secrets:
+#         token: ${{ secrets.GITHUB_TOKEN }}
+#
 # The workflow can also be dispatched manually from the Actions tab.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -32,6 +41,12 @@ on:
         required: false
         type: string
         default: ""
+
+      working-directory:
+        description: "Directory containing package.json (e.g. 'site' for ./site/package.json). Defaults to repo root."
+        required: false
+        type: string
+        default: "."
 
       bun-version:
         description: "Bun version to install (passed to oven-sh/setup-bun)."
@@ -111,16 +126,61 @@ on:
         required: false
         type: string
         default: ""
+      working-directory:
+        description: "Directory containing package.json (e.g. 'site' for ./site/package.json). Defaults to repo root."
+        required: false
+        type: string
+        default: "."
+      bun-version:
+        description: "Bun version to install."
+        required: false
+        type: string
+        default: "latest"
       latest:
         description: "Update to latest versions (major bumps)."
         required: false
         type: boolean
         default: false
       update-args:
-        description: "Extra flags for `bun update` (e.g. --latest)."
+        description: "Extra flags for `bun update`."
         required: false
         type: string
         default: ""
+      validate-script:
+        description: "Validation script name (empty to skip)."
+        required: false
+        type: string
+        default: "validate"
+      test-script:
+        description: "Test script name (empty to skip)."
+        required: false
+        type: string
+        default: "test"
+      fail-on-error:
+        description: "Fail workflow on validation/test errors."
+        required: false
+        type: boolean
+        default: true
+      pr-title:
+        description: "PR title."
+        required: false
+        type: string
+        default: "chore(deps): update bun dependencies"
+      pr-body:
+        description: "PR body (empty for auto-generated)."
+        required: false
+        type: string
+        default: ""
+      pr-branch-prefix:
+        description: "Branch name prefix."
+        required: false
+        type: string
+        default: "deps/bun-update-"
+      pr-labels:
+        description: "Labels to add."
+        required: false
+        type: string
+        default: "dependencies"
       dry-run:
         description: "Skip PR creation."
         required: false
@@ -135,6 +195,9 @@ jobs:
   update-dependencies:
     runs-on: ubuntu-latest
 
+    env:
+      PKG_DIR: "${{ inputs.working-directory || '.' }}"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -147,10 +210,21 @@ jobs:
         with:
           bun-version: "${{ inputs.bun-version || 'latest' }}"
 
+      - name: Validate working directory
+        run: |
+          PKG_DIR="${PKG_DIR%/}"
+          echo "PKG_DIR=$PKG_DIR" >> "$GITHUB_ENV"
+          if [ ! -f "$PKG_DIR/package.json" ]; then
+            echo "::error::$PKG_DIR/package.json not found."
+            exit 1
+          fi
+
       - name: Install dependencies
+        working-directory: "${{ inputs.working-directory || '.' }}"
         run: bun install --frozen-lockfile
 
       - name: Update dependencies
+        working-directory: "${{ inputs.working-directory || '.' }}"
         id: update
         run: |
           ARGS=""
@@ -167,16 +241,20 @@ jobs:
         run: |
           CHANGED=false
           FILES=""
-          # bun.lock always changes on dependency updates
-          if ! git diff --quiet bun.lock 2>/dev/null; then
-            CHANGED=true
-            FILES="bun.lock"
-          fi
+          # bun.lock (text, Bun >=1.2) or bun.lockb (binary, older Bun)
+          for lockfile in bun.lock bun.lockb; do
+            if ! git diff --quiet "$PKG_DIR/$lockfile" 2>/dev/null; then
+              CHANGED=true
+              FILES="$FILES $PKG_DIR/$lockfile"
+            fi
+          done
           # package.json changes when --latest bumps semver ranges
-          if ! git diff --quiet package.json 2>/dev/null; then
+          if ! git diff --quiet "$PKG_DIR/package.json" 2>/dev/null; then
             CHANGED=true
-            FILES="$FILES package.json"
+            FILES="$FILES $PKG_DIR/package.json"
           fi
+
+          FILES="$(echo "$FILES" | sed 's/^ *//')"
 
           if [ "$CHANGED" = "false" ]; then
             echo "detected=false" >> "$GITHUB_OUTPUT"
@@ -193,6 +271,7 @@ jobs:
         if: steps.changes.outputs.detected == 'true'
         id: validate
         continue-on-error: "${{ !inputs.fail-on-error }}"
+        working-directory: "${{ inputs.working-directory || '.' }}"
         run: |
           SCRIPT="${{ inputs.validate-script }}"
           if [ -z "$SCRIPT" ]; then
@@ -214,6 +293,7 @@ jobs:
         if: steps.changes.outputs.detected == 'true'
         id: test
         continue-on-error: "${{ !inputs.fail-on-error }}"
+        working-directory: "${{ inputs.working-directory || '.' }}"
         run: |
           SCRIPT="${{ inputs.test-script }}"
           if [ -z "$SCRIPT" ]; then
@@ -248,6 +328,10 @@ jobs:
                 echo "## 📦 Automated Bun Dependency Update"
               fi
               echo ""
+              if [ "$PKG_DIR" != "." ]; then
+                echo "**Working directory:** \`${PKG_DIR}\`"
+                echo ""
+              fi
               echo "This PR was created automatically by the **Update Bun Dependencies** workflow."
               echo ""
               echo "### Changes"
@@ -281,7 +365,7 @@ jobs:
       - name: Create Pull Request
         if: "steps.changes.outputs.detected == 'true' && inputs.dry-run != true"
         env:
-          GH_TOKEN: "${{ secrets.token }}"
+          GH_TOKEN: "${{ secrets.token || github.token }}"
         run: |
           BRANCH="${{ inputs.pr-branch-prefix || 'deps/bun-update-' }}${{ github.run_number }}"
           BASE="${{ inputs.base-branch }}"
