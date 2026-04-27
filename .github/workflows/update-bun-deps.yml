@@ -43,6 +43,12 @@ on:
         type: string
         default: ""
 
+      node-version:
+        description: "Node.js version to use."
+        required: false
+        type: string
+        default: current
+
       bun-version:
         description: "Bun version to install."
         required: false
@@ -68,6 +74,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.node-version }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
