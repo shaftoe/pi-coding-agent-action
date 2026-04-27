@@ -1,8 +1,7 @@
 name: Update Bun Dependencies
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Reusable workflow: uses the Pi coding agent to update bun dependencies and
-# open a PR with the changes.
+# Reusable workflow: runs `bun update` and opens a PR with the changes.
 #
 # NOTE: This file lives at the repository root because the CI token cannot
 # push to .github/workflows/. Move to .github/workflows/ on merge to use as
@@ -14,12 +13,11 @@ name: Update Bun Dependencies
 #     update-deps:
 #       uses: shaftoe/pi-coding-agent-action/.github/workflows/update-bun-deps.yml@v2
 #       with:
-#         provider: anthropic
-#         model: claude-sonnet-4-5
-#         extra-prompt: "Run bun run validate and bun test after updating"
+#         working-directory: .
+#         latest: false
+#         validate-command: "bun run test && bun run validate"
 #       secrets:
-#         token: ${{ secrets.API_KEY }}
-#         gh_token: ${{ secrets.GITHUB_TOKEN }}
+#         token: ${{ secrets.GITHUB_TOKEN }}
 #
 # The workflow can also be dispatched manually from the Actions tab.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -27,30 +25,20 @@ name: Update Bun Dependencies
 on:
   workflow_call:
     inputs:
-      provider:
-        description: "LLM provider (e.g. anthropic, openai, google)."
-        required: true
-        type: string
-
-      model:
-        description: "Model to use (e.g. claude-sonnet-4-5, gpt-4o, gemini-2.5-pro)."
-        required: true
-        type: string
-
-      thinking_level:
-        description: "Thinking level for the agent (off, low, medium, high)."
-        required: false
-        type: string
-        default: "off"
-
-      package-json-path:
-        description: "Path to the package.json directory to update (e.g. '.' for root, 'site' for a subdirectory)."
+      working-directory:
+        description: "Path to the directory containing package.json (e.g. '.' or 'site')."
         required: false
         type: string
         default: "."
 
-      extra-prompt:
-        description: "Additional instructions for the agent (e.g. 'run bun run validate and bun test after updating')."
+      latest:
+        description: "Use --latest flag to bump across semver ranges (major updates)."
+        required: false
+        type: boolean
+        default: false
+
+      validate-command:
+        description: "Command to run after updating (e.g. 'bun run test && bun run validate'). Skipped if empty."
         required: false
         type: string
         default: ""
@@ -61,43 +49,25 @@ on:
         type: string
         default: "latest"
 
-      base-url:
-        description: "Optional override for the provider base URL."
-        required: false
-        type: string
-        default: ""
-
     secrets:
       token:
-        description: "API token for the LLM provider."
-        required: true
-
-      gh_token:
-        description: "GitHub token for the Pi agent. Falls back to the automatic GITHUB_TOKEN when not provided."
+        description: "GitHub token for PR creation. Falls back to GITHUB_TOKEN."
         required: false
 
   workflow_dispatch:
     inputs:
-      provider:
-        description: "LLM provider."
-        required: true
-        type: string
-      model:
-        description: "Model to use."
-        required: true
-        type: string
-      thinking_level:
-        description: "Thinking level (off, low, medium, high)."
-        required: false
-        type: string
-        default: "off"
-      package-json-path:
-        description: "Path to package.json directory ('.' for root, or a subdirectory)."
+      working-directory:
+        description: "Path to the directory containing package.json."
         required: false
         type: string
         default: "."
-      extra-prompt:
-        description: "Extra instructions for the agent."
+      latest:
+        description: "Use --latest flag (major updates)."
+        required: false
+        type: boolean
+        default: false
+      validate-command:
+        description: "Validation command to run after updating."
         required: false
         type: string
         default: ""
@@ -106,11 +76,6 @@ on:
         required: false
         type: string
         default: "latest"
-      base-url:
-        description: "Optional provider base URL override."
-        required: false
-        type: string
-        default: ""
 
 permissions:
   contents: write
@@ -120,67 +85,89 @@ jobs:
   update-dependencies:
     runs-on: ubuntu-latest
 
+    env:
+      GH_TOKEN: "${{ secrets.token || secrets.GITHUB_TOKEN }}"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "${{ inputs.bun-version || 'latest' }}"
+          bun-version: "${{ inputs.bun-version }}"
 
-      - name: Build prompt
-        id: prompt
-        env:
-          PKG_PATH: "${{ inputs.package-json-path || '.' }}"
-          EXTRA: "${{ inputs.extra-prompt }}"
+      - name: Install dependencies
+        working-directory: "${{ inputs.working-directory }}"
+        run: bun install --frozen-lockfile
+
+      - name: Update dependencies
+        working-directory: "${{ inputs.working-directory }}"
         run: |
-          # Normalize path display for the prompt
-          if [ "$PKG_PATH" = "." ]; then
-            PKG_DISPLAY="the repository root"
+          if [ "${{ inputs.latest }}" = "true" ]; then
+            bun update --latest
           else
-            PKG_DISPLAY="'$PKG_PATH'"
+            bun update
           fi
 
-          # Compose the agent prompt
-          cat <<PROMPT_EOF > /tmp/prompt.txt
-          You are a dependency update bot. Your task is to update all bun dependencies to their latest versions and create a pull request with the changes.
-
-          ## Steps
-
-          1. Run `bun outdated` in $PKG_DISPLAY to see which packages have available updates.
-          2. For each outdated package, update it to the latest version by running `bun update <package-name>` (one at a time or in batches). Do NOT use the `--latest` flag — instead update each package individually so that package.json ranges are respected naturally.
-          3. After updating, verify the lockfile is consistent by running `bun install`.
-          4. Review the actual changes to package.json and bun.lock to confirm what was updated.
-          5. Create a pull request titled `chore(deps): update bun dependencies` with a clear summary of which packages were updated and to which versions. Use a table format in the PR body.
-          PROMPT_EOF
-
-          # Append extra prompt if provided
-          if [ -n "$EXTRA" ]; then
-            cat <<EXTRA_EOF >> /tmp/prompt.txt
-
-          ## Additional instructions
-
-          $EXTRA
-          EXTRA_EOF
+      - name: Check for changes
+        id: changes
+        working-directory: "${{ inputs.working-directory }}"
+        run: |
+          FILES=""
+          for f in bun.lock bun.lockb package.json; do
+            if [ -f "$f" ] && ! git diff --quiet "$f" 2>/dev/null; then
+              FILES="$FILES $f"
+            fi
+          done
+          FILES="$(echo "$FILES" | sed 's/^ *//')"
+          if [ -n "$FILES" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "files=$FILES" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No dependency changes detected."
           fi
 
-          # Set multi-line output
+      - name: Validate
+        if: ${{ steps.changes.outputs.changed == 'true' && inputs.validate-command != '' }}
+        working-directory: "${{ inputs.working-directory }}"
+        run: ${{ inputs.validate-command }}
+
+      - name: Create Pull Request
+        if: ${{ steps.changes.outputs.changed == 'true' }}
+        working-directory: "${{ inputs.working-directory }}"
+        run: |
+          TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+          BRANCH="deps/bun-update-${TIMESTAMP}"
+          TITLE="chore(deps): update bun dependencies"
+
+          git checkout -b "$BRANCH"
+          git add ${{ steps.changes.outputs.files }}
+          git commit -m "$TITLE"
+          git push origin "$BRANCH"
+
+          # Build PR body
           {
-            echo "content<<EOF"
-            cat /tmp/prompt.txt
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+            echo "## Updated dependencies"
+            echo ""
+            echo "\`\`\`"
+            git diff --stat HEAD~1
+            echo "\`\`\`"
+            echo ""
+            echo "<details><summary>Diff</summary>"
+            echo ""
+            echo "\`\`\`diff"
+            git diff HEAD~1 -- ${{ steps.changes.outputs.files }}
+            echo "\`\`\`"
+            echo "</details>"
+          } > /tmp/pr-body.md
 
-      - name: Run Pi agent
-        uses: shaftoe/pi-coding-agent-action@v2
-        with:
-          github_token: "${{ secrets.gh_token || secrets.GITHUB_TOKEN }}"
-          provider: "${{ inputs.provider }}"
-          model: "${{ inputs.model }}"
-          token: "${{ secrets.token }}"
-          thinking_level: "${{ inputs.thinking_level }}"
-          prompt: "${{ steps.prompt.outputs.content }}"
-          base_url: "${{ inputs.base-url || '' }}"
+          PR_ARGS=(
+            pr create
+            --title "$TITLE"
+            --body-file /tmp/pr-body.md
+            --head "$BRANCH"
+          )
+
+          gh "${PR_ARGS[@]}"
