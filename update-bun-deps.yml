@@ -51,31 +51,8 @@ on:
 
     secrets:
       token:
-        description: "GitHub token for PR creation. Falls back to GITHUB_TOKEN."
-        required: false
-
-  workflow_dispatch:
-    inputs:
-      working-directory:
-        description: "Path to the directory containing package.json."
-        required: false
-        type: string
-        default: "."
-      latest:
-        description: "Use --latest flag (major updates)."
-        required: false
-        type: boolean
-        default: false
-      validate-command:
-        description: "Validation command to run after updating."
-        required: false
-        type: string
-        default: ""
-      bun-version:
-        description: "Bun version."
-        required: false
-        type: string
-        default: "latest"
+        description: "GitHub token for PR creation."
+        required: true
 
 permissions:
   contents: write
@@ -86,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      GH_TOKEN: "${{ secrets.token || secrets.GITHUB_TOKEN }}"
+      GH_TOKEN: "${{ secrets.token }}"
 
     steps:
       - name: Checkout repository
