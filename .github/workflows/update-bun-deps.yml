@@ -281,7 +281,7 @@ jobs:
       - name: Create Pull Request
         if: "steps.changes.outputs.detected == 'true' && inputs.dry-run != true"
         env:
-          GH_TOKEN: "${{ inputs.token }}"
+          GH_TOKEN: "${{ secrets.token }}"
         run: |
           BRANCH="${{ inputs.pr-branch-prefix || 'deps/bun-update-' }}${{ github.run_number }}"
           BASE="${{ inputs.base-branch }}"
