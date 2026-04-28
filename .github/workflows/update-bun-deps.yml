@@ -3,9 +3,8 @@ name: Update Bun Dependencies
 # ─────────────────────────────────────────────────────────────────────────────
 # Reusable workflow: runs `bun update` and opens a PR with the changes.
 #
-# NOTE: This file lives at the repository root because the CI token cannot
-# push to .github/workflows/. Move to .github/workflows/ on merge to use as
-# a reusable workflow from external repos.
+# Outputs:
+#   pr-url – The full URL of the created PR (empty when no changes detected).
 #
 # USAGE – from any bun-based repository:
 #
@@ -60,6 +59,11 @@ on:
         description: "GitHub token for PR creation."
         required: true
 
+    outputs:
+      pr-url:
+        description: "The full URL of the created PR (empty when no changes)."
+        value: ${{ jobs.update-dependencies.outputs.pr-url }}
+
 permissions:
   contents: write
   pull-requests: write
@@ -67,6 +71,10 @@ permissions:
 jobs:
   update-dependencies:
     runs-on: ubuntu-latest
+
+    outputs:
+      pr-number: ${{ steps.create-pr.outputs.pr-number }}
+      pr-url: ${{ steps.create-pr.outputs.pr-url }}
 
     env:
       GH_TOKEN: "${{ secrets.token }}"
@@ -123,6 +131,7 @@ jobs:
         run: ${{ inputs.validate-command }}
 
       - name: Create Pull Request
+        id: create-pr
         if: ${{ steps.changes.outputs.changed == 'true' }}
         working-directory: "${{ inputs.working-directory }}"
         run: |
@@ -161,4 +170,5 @@ jobs:
             --head "$BRANCH"
           )
 
-          gh "${PR_ARGS[@]}"
+          PR_URL="$(gh "${PR_ARGS[@]}")"
+          echo "pr-url=$PR_URL" >> "$GITHUB_OUTPUT"
