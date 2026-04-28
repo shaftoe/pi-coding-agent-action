@@ -27,7 +27,7 @@ jobs:
 
   pi-review:
     needs: update-deps
-    if: ${{ needs.update-deps.outputs.pr-number != '' }}
+    if: ${{ needs.update-deps.outputs.pr-url != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Pi dependency review

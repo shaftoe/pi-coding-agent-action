@@ -73,7 +73,6 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
-      pr-number: ${{ steps.create-pr.outputs.pr-number }}
       pr-url: ${{ steps.create-pr.outputs.pr-url }}
 
     env:
