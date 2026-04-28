@@ -34,9 +34,10 @@ jobs:
         uses: shaftoe/pi-coding-agent-action@v2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          provider: ${{ secrets.PI_PROVIDER }}
-          model: ${{ secrets.PI_MODEL }}
-          token: ${{ secrets.PI_TOKEN }}
+          provider: ${{ vars.PROVIDER }}
+          model: ${{ vars.MODEL }}
+          token: ${{ secrets.API_KEY }}
+          thinking_level: ${{ vars.THINKING_LEVEL }}
           prompt: >
             Review PR #${{ needs.update-deps.outputs.pr-url }}
 
