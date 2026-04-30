@@ -413,6 +413,142 @@ describe('ActionOrchestrator', () => {
     });
   });
 
+  describe('error handling for missing required inputs', () => {
+    test('throws descriptive error when provider is missing', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: '',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+
+      await expect(orchestrator.execute()).rejects.toThrow('Missing required input: `provider`');
+      expect(mockCore.setFailed).toHaveBeenCalled();
+    });
+
+    test('throws descriptive error when model is missing', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: '',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+
+      await expect(orchestrator.execute()).rejects.toThrow('Missing required input: `model`');
+      expect(mockCore.setFailed).toHaveBeenCalled();
+    });
+
+    test('throws descriptive error when token is missing', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: '',
+          thinking_level: '',
+          prompt: '',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+
+      await expect(orchestrator.execute()).rejects.toThrow('Missing required input: `token`');
+      expect(mockCore.setFailed).toHaveBeenCalled();
+    });
+
+    test('provider error mentions possible values', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: '',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+
+      await expect(orchestrator.execute()).rejects.toThrow(/anthropic/);
+    });
+
+    test('token error mentions secrets syntax', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: '',
+          thinking_level: '',
+          prompt: '',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+
+      await expect(orchestrator.execute()).rejects.toThrow(/secrets\./);
+    });
+
+    test('missing provider does not call Pi factory', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: '',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+
+      await expect(orchestrator.execute()).rejects.toThrow();
+      expect(mockPiFactory).not.toHaveBeenCalled();
+    });
+
+    test('missing input finalizes with error comment', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: '',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+
+      await expect(orchestrator.execute()).rejects.toThrow();
+      expect(mockGit.createFinalComment).toHaveBeenCalledWith(
+        expect.stringContaining('Missing required input: `provider`'),
+        expect.any(Object)
+      );
+    });
+  });
+
   describe('error handling for missing prompt', () => {
     test('throws error when no prompt found', async () => {
       const getPromptMock = mock(async () => undefined);

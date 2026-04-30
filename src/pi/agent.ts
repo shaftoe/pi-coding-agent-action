@@ -101,7 +101,11 @@ export class Agent {
     if (foundModel) {
       this.model = foundModel;
     } else {
-      throw new Error('Model not found: ' + this.provider + '/' + this.modelStr);
+      throw new Error(
+        `Model not found: ${this.provider}/${this.modelStr}. ` +
+          `Please check that the \`provider\` and \`model\` inputs are correct and that the provider is supported. ` +
+          `See https://github.com/shaftoe/pi-coding-agent-action#usage for details.`
+      );
     }
   }
 

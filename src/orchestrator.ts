@@ -44,11 +44,12 @@ export class ActionOrchestrator {
   async execute(): Promise<void> {
     this.core.info(`running action v${__VERSION__}`);
     const startTime = this.git.getStartTime() ?? Temporal.Now.instant();
-    const config = this.gatherConfig();
+    let config: PiConfig | undefined;
     let reaction: CreateReactionType | undefined;
     let prompt: string | undefined;
 
     try {
+      config = this.gatherConfig();
       prompt = await this.git.getPrompt(config.promptInput);
 
       if (!prompt) {
@@ -74,7 +75,14 @@ export class ActionOrchestrator {
       // NOT prevent setFailed from running. The action must always signal
       // failure to the CI runner, even when we cannot leave a comment.
       try {
-        await this.finalize(errorMessage, config, startTime, reaction, undefined, false);
+        const errorConfig = config ?? {
+          provider: '',
+          model: '',
+          token: '',
+          thinkingLevel: '',
+          promptInput: '',
+        };
+        await this.finalize(errorMessage, errorConfig, startTime, reaction, undefined, false);
       } catch (finalizeError) {
         const finalizeErrorMessage =
           finalizeError instanceof Error ? finalizeError.message : String(finalizeError);
@@ -89,8 +97,40 @@ export class ActionOrchestrator {
 
   /**
    * Gather configuration from core inputs.
+   *
+   * Validates that all required inputs are present and throws descriptive
+   * errors when they are missing, so users see actionable guidance instead
+   * of obscure downstream failures like "Model not found: /".
    */
   private gatherConfig(): PiConfig {
+    const provider = this.core.getInput('provider');
+    const model = this.core.getInput('model');
+    const token = this.core.getInput('token');
+
+    if (!provider) {
+      throw new Error(
+        'Missing required input: `provider`. ' +
+          'Set it to your LLM provider (e.g. "anthropic", "openai", "google"). ' +
+          'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.'
+      );
+    }
+
+    if (!model) {
+      throw new Error(
+        'Missing required input: `model`. ' +
+          'Set it to the desired model (e.g. "claude-sonnet-4-5", "gpt-4o"). ' +
+          'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.'
+      );
+    }
+
+    if (!token) {
+      throw new Error(
+        'Missing required input: `token`. ' +
+          'Set it to your LLM provider API key (e.g. `${{ secrets.ANTHROPIC_API_KEY }}`). ' +
+          'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.'
+      );
+    }
+
     const extensionsInput = this.core.getInput('extensions');
     const extensions = extensionsInput
       ? extensionsInput
@@ -107,9 +147,9 @@ export class ActionOrchestrator {
     const baseUrl = this.core.getInput('base_url') || undefined;
 
     return {
-      provider: this.core.getInput('provider'),
-      model: this.core.getInput('model'),
-      token: this.core.getInput('token'),
+      provider,
+      model,
+      token,
       thinkingLevel: this.core.getInput('thinking_level') ?? 'off',
       promptInput: this.core.getInput('prompt'),
       ...(extensions?.length ? { extensions } : {}),
