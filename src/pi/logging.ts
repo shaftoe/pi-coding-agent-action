@@ -39,8 +39,7 @@ export const loggingFactory = (
   });
 
   pi.on('tool_execution_end', async event => {
-    core.info(`::group::🔧 Tool Execution: ${event.toolName}`);
-    core.info(`  Tool Call ID: ${event.toolCallId}`);
+    core.info(`::group::🔧 Tool ended: ${event.toolName} (${event.toolCallId})`);
 
     // Check for cancellation via details.cancelled pattern
     const cancelled = event.result?.details?.cancelled === true;
