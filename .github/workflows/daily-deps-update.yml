@@ -16,6 +16,11 @@ permissions:
   pull-requests: write
   issues: write
 
+# NOTE: We use PAT_TOKEN instead of GITHUB_TOKEN so that the PR created by
+# update-bun-dependencies-action triggers downstream workflows (e.g. pr.yml).
+# Events triggered by GITHUB_TOKEN do not fire other workflows (GitHub prevents
+# recursive runs). A PAT bypasses this restriction.
+
 jobs:
   update-deps:
     runs-on: ubuntu-latest
@@ -37,7 +42,7 @@ jobs:
         id: update-deps
         uses: shaftoe/update-bun-dependencies-action@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         with:
           latest: 'true'
           create-pr: 'true'
