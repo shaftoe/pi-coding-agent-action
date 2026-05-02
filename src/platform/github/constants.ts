@@ -26,3 +26,7 @@ export const DEFAULT_TRIGGER = '/pi';
 
 // GitHub max comments limit
 export const MAX_COMMENTS = 100;
+
+// PR diff context limits
+export const MAX_DIFF_LINES = 1000;
+export const MAX_REVIEW_COMMENTS = 50;

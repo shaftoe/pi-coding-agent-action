@@ -9,7 +9,7 @@
 import * as github from '@actions/github';
 import { Temporal } from '@js-temporal/polyfill';
 import { getOctokit } from './octokit';
-import { DEFAULT_TRIGGER, MAX_COMMENTS } from './constants';
+import { DEFAULT_TRIGGER, MAX_COMMENTS, MAX_DIFF_LINES, MAX_REVIEW_COMMENTS } from './constants';
 import { isPR, getContextType } from './context-utils';
 import { getCoreAdapter } from './index';
 import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
@@ -174,7 +174,149 @@ export function getIssueOrPullRequestContext(): IssueOrPullRequestContext | unde
  * @param label - Label for the instruction section (e.g. "Comment/Instruction" or "Instruction").
  * @returns The enriched prompt, or the original instruction if no context is available.
  */
-function enrichWithContext(instruction: string, label: string): string {
+/**
+ * A single inline review comment on a pull request.
+ */
+export interface PRReviewComment {
+  path: string | null;
+  line: number | null;
+  author: string;
+  body: string;
+}
+
+/**
+ * Fetch the diff of a pull request.
+ *
+ * Uses `mediaType: { format: 'diff' }` to get the raw diff text.
+ * Returns `undefined` on error so callers can gracefully degrade.
+ *
+ * @param owner - Repository owner.
+ * @param repo - Repository name.
+ * @param pullNumber - Pull request number.
+ * @param maxLines - Maximum number of lines to include (truncation marker appended if exceeded).
+ * @returns The diff string (possibly truncated), or `undefined` on failure.
+ */
+export async function fetchPRDiff(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  maxLines: number = MAX_DIFF_LINES
+): Promise<string | undefined> {
+  try {
+    const octokit = getOctokit();
+    const response = await octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: pullNumber,
+      mediaType: { format: 'diff' },
+    });
+
+    // When mediaType.format is 'diff', the response data is the raw diff string
+    const diff = typeof response.data === 'string' ? response.data : String(response.data);
+    if (!diff) {
+      return undefined;
+    }
+
+    const lines = diff.split('\n');
+    if (lines.length > maxLines) {
+      return lines.slice(0, maxLines).join('\n') + `\n... (truncated at ${maxLines} lines)`;
+    }
+    return diff;
+  } catch (e) {
+    debug(`[fetchPRDiff] Failed to fetch diff: ${e instanceof Error ? e.message : String(e)}`);
+    return undefined;
+  }
+}
+
+/**
+ * Fetch inline review comments for a pull request.
+ *
+ * Returns up to `maxComments` review comments, each with file path, line number,
+ * author, and body.
+ *
+ * @param owner - Repository owner.
+ * @param repo - Repository name.
+ * @param pullNumber - Pull request number.
+ * @param maxComments - Maximum number of comments to return.
+ * @returns Array of formatted review comments, or `undefined` on failure.
+ */
+export async function fetchPRReviewComments(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  maxComments: number = MAX_REVIEW_COMMENTS
+): Promise<PRReviewComment[] | undefined> {
+  try {
+    const octokit = getOctokit();
+    const response = await octokit.rest.pulls.listReviewComments({
+      owner,
+      repo,
+      pull_number: pullNumber,
+      per_page: maxComments,
+    });
+
+    return response.data.map(comment => ({
+      path: comment.path ?? null,
+      line: comment.line ?? comment.original_line ?? null,
+      author: comment.user?.login ?? 'unknown',
+      body: comment.body ?? '',
+    }));
+  } catch (e) {
+    debug(
+      `[fetchPRReviewComments] Failed to fetch review comments: ${e instanceof Error ? e.message : String(e)}`
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Format review comments into a human-readable string.
+ *
+ * @param comments - Array of review comments.
+ * @returns Formatted string, or `undefined` if the array is empty or undefined.
+ */
+export function formatReviewComments(comments: PRReviewComment[] | undefined): string | undefined {
+  if (!comments || comments.length === 0) {
+    return undefined;
+  }
+
+  const lines = comments.map(c => {
+    const location = c.path && c.line ? `**${c.path}** L${c.line}` : c.path ? `**${c.path}**` : '(unknown location)';
+    return `${location} (@${c.author}): ${c.body}`;
+  });
+
+  return `PR Review Comments (${comments.length}):\n${lines.join('\n')}`;
+}
+
+/**
+ * Check whether PR diff inclusion is enabled via action input.
+ */
+function shouldIncludePRDiff(): boolean {
+  const input = getCoreAdapter().getInput('include_pr_diff');
+  // Default to true when not specified
+  return input !== 'false';
+}
+
+/**
+ * Get the max diff lines limit from action input.
+ */
+function getMaxDiffLines(): number {
+  const input = getCoreAdapter().getInput('max_diff_lines');
+  const parsed = parseInt(input, 10);
+  return Number.isNaN(parsed) || parsed <= 0 ? MAX_DIFF_LINES : parsed;
+}
+
+/**
+ * Enrich a prompt string with issue/PR context when available.
+ *
+ * When the context is a pull request and `include_pr_diff` is enabled,
+ * also appends the PR diff and inline review comments.
+ *
+ * @param instruction - The raw instruction text.
+ * @param label - Label for the instruction section (e.g. "Comment/Instruction" or "Instruction").
+ * @returns The enriched prompt, or the original instruction if no context is available.
+ */
+async function enrichWithContext(instruction: string, label: string): Promise<string> {
   const issueOrPrContext = getIssueOrPullRequestContext();
   if (issueOrPrContext) {
     const { title, body, number } = issueOrPrContext;
@@ -182,6 +324,26 @@ function enrichWithContext(instruction: string, label: string): string {
 
     if (body) {
       contextParts.push(`\nDescription:\n${body}`);
+    }
+
+    // For PR context, optionally append diff and review comments
+    if (getContextType() === 'pull_request' && shouldIncludePRDiff()) {
+      const { owner, repo } = github.context.repo;
+      const maxDiffLines = getMaxDiffLines();
+
+      const [diff, reviewComments] = await Promise.all([
+        fetchPRDiff(owner, repo, number, maxDiffLines),
+        fetchPRReviewComments(owner, repo, number),
+      ]);
+
+      if (diff) {
+        contextParts.push(`\n\nPR Diff:\n\`\`\`diff\n${diff}\n\`\`\``);
+      }
+
+      const formattedComments = formatReviewComments(reviewComments);
+      if (formattedComments) {
+        contextParts.push(`\n\n${formattedComments}`);
+      }
     }
 
     contextParts.push(`\n\n${label}:\n${instruction}`);

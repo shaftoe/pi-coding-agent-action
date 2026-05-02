@@ -50,6 +50,16 @@ inputs:
     required: false
     default: ''
 
+  include_pr_diff:
+    description: 'Include the PR diff and inline review comments in the prompt when the action is triggered on a pull request.'
+    required: false
+    default: 'true'
+
+  max_diff_lines:
+    description: 'Maximum number of diff lines to include before truncation. Prevents token overflow on large PRs.'
+    required: false
+    default: '1000'
+
   export_session_html:
     description: 'Export the Pi session as a self-contained HTML file and expose its path via the `session_html_path` output. Set to false to disable.'
     required: false
