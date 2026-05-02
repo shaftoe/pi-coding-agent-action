@@ -1,1 +1,0 @@
-{"version":3,"file":"register-bedrock.d.ts","sourceRoot":"","sources":["../../src/bun/register-bedrock.ts"],"names":[],"mappings":"","sourcesContent":["import { setBedrockProviderModule } from \"@mariozechner/pi-ai\";\nimport { bedrockProviderModule } from \"@mariozechner/pi-ai/bedrock-provider\";\n\nsetBedrockProviderModule(bedrockProviderModule);\n"]}
