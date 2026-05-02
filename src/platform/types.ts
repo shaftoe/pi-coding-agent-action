@@ -26,6 +26,7 @@ import type {
 export type {
   IssueOrPRThread,
   ThreadComment,
+  ReviewComment,
   GetIssueOrPRThreadParams,
   CreatePullRequestParams,
   CreatePullRequestDetails,
@@ -149,8 +150,21 @@ export interface PlatformProvider {
   /**
    * Fetch the complete thread for an issue or pull request.
    *
+   * For pull requests, the thread includes inline review comments
+   * (comments on specific lines of the diff) in addition to issue-level comments.
+   *
    * @param params - Optional parameters to override defaults.
    * @returns The thread data, or undefined if not found.
    */
   getIssueOrPRThread(params?: GetIssueOrPRThreadParams): Promise<IssueOrPRThread | undefined>;
+
+  /**
+   * Fetch the diff for a pull request.
+   *
+   * @param owner - Repository owner.
+   * @param repo - Repository name.
+   * @param pullNumber - Pull request number.
+   * @returns The diff string, or empty string if unavailable.
+   */
+  getPRDiff(owner: string, repo: string, pullNumber: number): Promise<string>;
 }

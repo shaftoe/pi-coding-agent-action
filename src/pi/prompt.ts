@@ -42,16 +42,17 @@ export const CREATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION =
 // Get Issue/PR Thread
 //
 export const GET_ISSUE_PR_THREAD_PROMPT_SNIPPET =
-  'Get the full comment thread for a GitHub issue or pull request, including title, description, labels, and all comments.';
+  'Get the full comment thread for a GitHub issue or pull request, including title, description, labels, and all comments. For PRs, also includes inline review comments.';
 
 export const GET_ISSUE_PR_THREAD_PROMPT_GUIDELINES = [
   'Use get_issue_or_pr_thread to understand the context of an issue or PR before taking action.',
   'By default, the tool fetches the current issue/PR from the GitHub context. Only provide owner/repo/issue_number when you need to fetch a different one.',
   'Use max_comments to limit results for very long threads; defaults to 100 comments.',
+  'For pull requests, the tool also returns inline review comments (comments on specific lines of the diff).',
 ];
 
 export const GET_ISSUE_PR_THREAD_DESCRIPTION =
-  'Retrieve the complete comment thread for a GitHub issue or pull request. Returns the title, description, labels, state, author, timestamps, and all comments. For pull requests, also includes branch names and merge status. Does NOT fetch code changes - use read/grep tools for that.';
+  'Retrieve the complete comment thread for a GitHub issue or pull request. Returns the title, description, labels, state, author, timestamps, and all comments. For pull requests, also includes inline review comments with file path and line information, plus branch names and merge status. Does NOT fetch code changes — use the get_pr_diff tool for that.';
 
 export const GET_ISSUE_PR_THREAD_PARAM_OWNER_DESCRIPTION =
   'Repository owner (e.g., "octocat"). If not provided, uses the current repository from context.';
@@ -97,3 +98,30 @@ export const UPDATE_PULL_REQUEST_PARAM_MESSAGE_DESCRIPTION =
 
 export const UPDATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION =
   'Set to true to simulate the PR update without actually modifying anything (for testing). Set to false to apply the actual changes.';
+
+//
+// Get PR Diff
+//
+export const GET_PR_DIFF_PROMPT_SNIPPET =
+  'Get the diff of a pull request. Use this to understand what code changes a PR introduces.';
+
+export const GET_PR_DIFF_PROMPT_GUIDELINES = [
+  'Use get_pr_diff to fetch the diff of a pull request when you need to understand what changed.',
+  'By default, the tool fetches the diff for the current PR from the GitHub context. Only provide owner/repo/pull_number when you need to fetch a different PR.',
+  'The diff is truncated at 1000 lines by default. Use max_lines to increase or decrease this limit.',
+];
+
+export const GET_PR_DIFF_DESCRIPTION =
+  'Fetch the diff of a GitHub pull request. Returns the diff as a string, truncated if too large. Useful for understanding what code changes a PR introduces before reviewing or modifying them.';
+
+export const GET_PR_DIFF_PARAM_OWNER_DESCRIPTION =
+  'Repository owner (e.g., "octocat"). If not provided, uses the current repository from context.';
+
+export const GET_PR_DIFF_PARAM_REPO_DESCRIPTION =
+  'Repository name (e.g., "hello-world"). If not provided, uses the current repository from context.';
+
+export const GET_PR_DIFF_PARAM_PULL_NUMBER_DESCRIPTION =
+  'Pull request number. If not provided, uses the current PR from context.';
+
+export const GET_PR_DIFF_PARAM_MAX_LINES_DESCRIPTION =
+  'Maximum number of diff lines to return. Defaults to 1000. Use for limiting very large diffs.';

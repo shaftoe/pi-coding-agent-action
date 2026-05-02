@@ -18,7 +18,7 @@ function createMockCoreAdapter(overrides?: Partial<CoreAdapter>): CoreAdapter {
   return {
     getInput: () => '',
     setFailed: () => {},
-  setOutput: () => {},
+    setOutput: () => {},
     notice: () => {},
     debug: () => {},
     info: () => {},

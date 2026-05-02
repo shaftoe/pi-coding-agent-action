@@ -42,13 +42,26 @@ const createMockProvider = (overrides?: Partial<PlatformProvider>): PlatformProv
   getStartTime: () => undefined,
   createPullRequest: async () => ({
     content: [{ type: 'text' as const, text: 'PR created' }],
-    details: { pullRequestNumber: 1, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+    details: {
+      pullRequestNumber: 1,
+      pullRequestUrl: '',
+      headBranch: '',
+      baseBranch: '',
+      dryRun: false,
+    },
   }),
   updatePullRequest: async () => ({
     content: [{ type: 'text' as const, text: 'PR updated' }],
-    details: { pullRequestNumber: 1, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+    details: {
+      pullRequestNumber: 1,
+      pullRequestUrl: '',
+      headBranch: '',
+      baseBranch: '',
+      dryRun: false,
+    },
   }),
   getIssueOrPRThread: async () => undefined,
+  getPRDiff: async () => '',
   ...overrides,
 });
 
@@ -95,7 +108,13 @@ describe('update_pull_request tool - execution', () => {
     const updatePullRequest = mock((_params: any) =>
       Promise.resolve({
         content: [{ type: 'text' as const, text: 'PR updated' }],
-        details: { pullRequestNumber: 1, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+        details: {
+          pullRequestNumber: 1,
+          pullRequestUrl: '',
+          headBranch: '',
+          baseBranch: '',
+          dryRun: false,
+        },
       })
     );
     const provider = createMockProvider({ updatePullRequest });
@@ -112,7 +131,13 @@ describe('update_pull_request tool - execution', () => {
     const updatePullRequest = mock((_params: any) =>
       Promise.resolve({
         content: [{ type: 'text' as const, text: 'PR updated' }],
-        details: { pullRequestNumber: 42, pullRequestUrl: 'https://github.com/test/pr/42', headBranch: 'feature', baseBranch: 'main', dryRun: true },
+        details: {
+          pullRequestNumber: 42,
+          pullRequestUrl: 'https://github.com/test/pr/42',
+          headBranch: 'feature',
+          baseBranch: 'main',
+          dryRun: true,
+        },
       })
     );
     const provider = createMockProvider({ updatePullRequest });
@@ -120,7 +145,13 @@ describe('update_pull_request tool - execution', () => {
 
     const result = await tool.execute(
       'call-2',
-      { pull_number: 42, title: 'New Title', body: 'New Body', message: 'commit msg', dryRun: true },
+      {
+        pull_number: 42,
+        title: 'New Title',
+        body: 'New Body',
+        message: 'commit msg',
+        dryRun: true,
+      },
       undefined,
       undefined,
       mockCtx
@@ -141,7 +172,13 @@ describe('update_pull_request tool - execution', () => {
     const updatePullRequest = mock((_params: any) =>
       Promise.resolve({
         content: [{ type: 'text' as const, text: 'ok' }],
-        details: { pullRequestNumber: 5, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+        details: {
+          pullRequestNumber: 5,
+          pullRequestUrl: '',
+          headBranch: '',
+          baseBranch: '',
+          dryRun: false,
+        },
       })
     );
     const provider = createMockProvider({ updatePullRequest });
@@ -158,17 +195,31 @@ describe('update_pull_request tool - execution', () => {
   });
 
   test('execute returns cancellation result when signal is aborted', async () => {
-    const updatePullRequest = mock((_params: any) => Promise.resolve({
-      content: [{ type: 'text' as const, text: 'should not be called' }],
-      details: { pullRequestNumber: 0, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
-    }));
+    const updatePullRequest = mock((_params: any) =>
+      Promise.resolve({
+        content: [{ type: 'text' as const, text: 'should not be called' }],
+        details: {
+          pullRequestNumber: 0,
+          pullRequestUrl: '',
+          headBranch: '',
+          baseBranch: '',
+          dryRun: false,
+        },
+      })
+    );
     const provider = createMockProvider({ updatePullRequest });
     const tool = updatePullRequestToolFactory(provider);
 
     const controller = new AbortController();
     controller.abort();
 
-    const result = await tool.execute('call-cancel', { title: 'Cancelled' }, controller.signal, undefined, mockCtx);
+    const result = await tool.execute(
+      'call-cancel',
+      { title: 'Cancelled' },
+      controller.signal,
+      undefined,
+      mockCtx
+    );
 
     expect(updatePullRequest).not.toHaveBeenCalled();
     expect((result.content as any)[0].text).toContain('cancelled');

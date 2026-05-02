@@ -14,10 +14,7 @@ import { getOctokit } from '../octokit';
 import { GITHUB_IGNORE_PATTERNS } from '../constants';
 import { createLogger } from './types';
 import type { Logger } from '../../../git/types';
-import {
-  scanForChanges as sharedScanForChanges,
-  scanDirectory,
-} from '../../../git/file-scanner';
+import { scanForChanges as sharedScanForChanges, scanDirectory } from '../../../git/file-scanner';
 import type { ChangeScanResult, ScanDirectoryParams } from '../../../git/file-scanner';
 
 // Re-export shared types and scanDirectory for direct use within the GitHub module

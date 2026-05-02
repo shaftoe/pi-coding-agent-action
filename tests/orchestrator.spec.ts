@@ -103,11 +103,23 @@ describe('ActionOrchestrator', () => {
       getStartTime: mock(() => undefined),
       createPullRequest: mock(async () => ({
         content: [{ type: 'text', text: 'PR created' }],
-        details: { pullRequestNumber: 1, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+        details: {
+          pullRequestNumber: 1,
+          pullRequestUrl: '',
+          headBranch: '',
+          baseBranch: '',
+          dryRun: false,
+        },
       })),
       updatePullRequest: mock(async () => ({
         content: [{ type: 'text', text: 'PR updated' }],
-        details: { pullRequestNumber: 1, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+        details: {
+          pullRequestNumber: 1,
+          pullRequestUrl: '',
+          headBranch: '',
+          baseBranch: '',
+          dryRun: false,
+        },
       })),
       getIssueOrPRThread: mock(async () => undefined),
     } as any;
@@ -155,7 +167,8 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           promptInput: 'Review this code',
         }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -192,7 +205,8 @@ describe('ActionOrchestrator', () => {
           loadBuiltinExtensions: true, // default value
           exportSessionHtml: true, // default value
         },
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -226,7 +240,8 @@ describe('ActionOrchestrator', () => {
           loadBuiltinExtensions: true, // default value
           exportSessionHtml: true, // default value
         },
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -379,10 +394,7 @@ describe('ActionOrchestrator', () => {
 
       await expect(orchestrator.execute()).rejects.toThrow('String error');
 
-      expect(mockGit.createFinalComment).toHaveBeenCalledWith(
-        'String error',
-        expect.any(Object)
-      );
+      expect(mockGit.createFinalComment).toHaveBeenCalledWith('String error', expect.any(Object));
     });
 
     test('re-throws the original error after finalization', async () => {
@@ -629,7 +641,8 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           extensions: ['npm:package-one', 'git:github.com/user/repo', './local-path.ts'],
         }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -654,7 +667,8 @@ describe('ActionOrchestrator', () => {
         expect.not.objectContaining({
           extensions: expect.any(Array),
         }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -678,7 +692,8 @@ describe('ActionOrchestrator', () => {
         expect.not.objectContaining({
           extensions: expect.any(Array),
         }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -699,7 +714,8 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           loadBuiltinExtensions: true,
         }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -724,7 +740,8 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           loadBuiltinExtensions: true,
         }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -749,7 +766,8 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           loadBuiltinExtensions: false,
         }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -781,7 +799,8 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           loadBuiltinExtensions: true,
         }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -806,7 +825,8 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           loadBuiltinExtensions: false,
         }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
   });
@@ -858,7 +878,8 @@ describe('ActionOrchestrator', () => {
 
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({ thinkingLevel: '   ' }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
   });
@@ -925,10 +946,7 @@ describe('ActionOrchestrator', () => {
       await expect(orchestrator.execute()).rejects.toBe(error);
 
       expect(mockCore.setFailed).toHaveBeenCalledWith(error);
-      expect(mockGit.createFinalComment).toHaveBeenCalledWith(
-        'Prompt failed',
-        expect.any(Object)
-      );
+      expect(mockGit.createFinalComment).toHaveBeenCalledWith('Prompt failed', expect.any(Object));
     });
 
     test('fails action when finalize in catch block throws', async () => {
@@ -953,10 +971,7 @@ describe('ActionOrchestrator', () => {
       expect(mockCore.setFailed).toHaveBeenCalledWith(error);
 
       // Final comment creation was attempted in catch block
-      expect(mockGit.createFinalComment).toHaveBeenCalledWith(
-        'Prompt failed',
-        expect.any(Object)
-      );
+      expect(mockGit.createFinalComment).toHaveBeenCalledWith('Prompt failed', expect.any(Object));
     });
 
     test('calls setFailed after finalize succeeds', async () => {
@@ -1104,7 +1119,8 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           baseUrl: 'https://my-proxy.example.com/v1',
         }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -1129,7 +1145,8 @@ describe('ActionOrchestrator', () => {
         expect.not.objectContaining({
           baseUrl: expect.any(String),
         }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -1150,7 +1167,8 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           exportSessionHtml: true,
         }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -1175,7 +1193,8 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           exportSessionHtml: true,
         }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -1200,7 +1219,8 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           exportSessionHtml: false,
         }),
-        mockCore, mockProvider
+        mockCore,
+        mockProvider
       );
     });
 
@@ -1253,7 +1273,5 @@ describe('ActionOrchestrator', () => {
         expect.stringContaining('[session-html] failed to export HTML')
       );
     });
-
-
   });
 });

@@ -105,6 +105,7 @@ const mockProvider: PlatformProvider = {
     },
   }),
   getIssueOrPRThread: async () => undefined,
+  getPRDiff: async () => '',
 };
 
 function captureRegisteredTools() {
@@ -129,16 +130,18 @@ describe('extFactory', () => {
   let createPRTool: TestTool;
   let updatePRTool: TestTool;
   let getIssuePRThreadTool: TestTool;
+  let getPRDiffTool: TestTool;
 
   beforeEach(() => {
     tools = captureRegisteredTools();
     createPRTool = getToolByName(tools, 'create_pull_request')!;
     updatePRTool = getToolByName(tools, 'update_pull_request')!;
     getIssuePRThreadTool = getToolByName(tools, 'get_issue_or_pr_thread')!;
+    getPRDiffTool = getToolByName(tools, 'get_pr_diff')!;
   });
 
-  test('registers three tools', () => {
-    expect(tools.length).toBe(3);
+  test('registers four tools', () => {
+    expect(tools.length).toBe(4);
   });
 
   test('registers a tool named create_pull_request', () => {
@@ -370,6 +373,60 @@ describe('extFactory', () => {
       expect(result.details.cancelled).toBe(true);
       expect(result.details.pullRequestNumber).toBe(0);
       expect(result.details.pullRequestUrl).toBe('');
+    });
+  });
+
+  describe('get_pr_diff', () => {
+    test('registers a tool named get_pr_diff', () => {
+      expect(getPRDiffTool).toBeDefined();
+      expect(getPRDiffTool.name).toBe('get_pr_diff');
+    });
+
+    test('has a label', () => {
+      expect(getPRDiffTool.label).toBe('Get PR Diff');
+    });
+
+    test('has a non-empty description', () => {
+      expect(typeof getPRDiffTool.description).toBe('string');
+      expect(getPRDiffTool.description.length).toBeGreaterThan(0);
+    });
+
+    test('has prompt guidelines', () => {
+      expect(Array.isArray(getPRDiffTool.promptGuidelines)).toBe(true);
+      expect(getPRDiffTool.promptGuidelines.length).toBeGreaterThan(0);
+    });
+
+    test('has a prompt snippet', () => {
+      expect(typeof getPRDiffTool.promptSnippet).toBe('string');
+      expect(getPRDiffTool.promptSnippet.length).toBeGreaterThan(0);
+    });
+
+    test('parameters - all fields are optional', () => {
+      const params = getPRDiffTool.parameters;
+      expect(params.properties.owner).toBeDefined();
+      expect(params.properties.repo).toBeDefined();
+      expect(params.properties.pull_number).toBeDefined();
+      expect(params.properties.max_lines).toBeDefined();
+      if (Array.isArray(params.required)) {
+        expect(params.required.length).toBe(0);
+      }
+    });
+
+    test('returns cancellation message when signal is aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      const result = await getPRDiffTool.execute(
+        'id',
+        {},
+        controller.signal,
+        undefined,
+        undefined as unknown as Parameters<typeof getPRDiffTool.execute>[4]
+      );
+
+      expect(result.content[0]?.text).toContain('cancelled');
+      expect(result.details.cancelled).toBe(true);
+      expect(result.details.pull_number).toBe(0);
     });
   });
 });

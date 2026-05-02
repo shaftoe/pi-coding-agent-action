@@ -90,7 +90,11 @@ export interface PromptResult {
  * Accepts CoreAdapter for logging within the Pi agent session, and
  * PlatformProvider for platform operations used by custom tools.
  */
-export type PiAgentFactory = (config: PiConfig, core: CoreAdapter, provider: PlatformProvider) => PiAgent;
+export type PiAgentFactory = (
+  config: PiConfig,
+  core: CoreAdapter,
+  provider: PlatformProvider
+) => PiAgent;
 
 /**
  * Configuration for the Pi agent.

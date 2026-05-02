@@ -344,6 +344,7 @@ export function createFakeThread(overrides?: Partial<IssueOrPRThread>): IssueOrP
     base_branch: undefined,
     head_sha: undefined,
     comments: [],
+    review_comments: [],
     ...overrides,
   };
 }

@@ -17,7 +17,7 @@ const _mockedWrite = mock((...args: unknown[]) => {
   if (msg.startsWith('::')) {
     return true;
   }
-  return realStdoutWrite(...args as Parameters<typeof process.stdout.write>);
+  return realStdoutWrite(...(args as Parameters<typeof process.stdout.write>));
 });
 process.stdout.write = _mockedWrite as typeof process.stdout.write;
 

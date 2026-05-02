@@ -12,6 +12,7 @@ export {
   type PlatformProvider,
   type IssueOrPRThread,
   type ThreadComment,
+  type ReviewComment,
   type GetIssueOrPRThreadParams,
   type CreatePullRequestParams,
   type CreatePullRequestDetails,

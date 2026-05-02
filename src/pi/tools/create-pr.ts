@@ -84,7 +84,7 @@ export function createPRToolFactory(provider: PlatformProvider) {
         }
         return prParams;
       },
-      execute: (params) =>
+      execute: params =>
         provider.createPullRequest(params) as Promise<{
           content: { type: 'text'; text: string }[];
           details: CreatePullRequestDetails;

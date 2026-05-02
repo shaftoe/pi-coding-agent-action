@@ -20,6 +20,7 @@ function createMockIssue(overrides?: Partial<IssueOrPRThread>): IssueOrPRThread 
     base_branch: undefined,
     head_sha: undefined,
     comments: [],
+    review_comments: [],
     ...overrides,
   };
 }
@@ -42,6 +43,7 @@ function createMockPR(overrides?: Partial<IssueOrPRThread>): IssueOrPRThread {
     head_sha: 'abc123',
     body: 'PR body',
     comments: [],
+    review_comments: [],
     ...overrides,
   };
 }
@@ -83,7 +85,11 @@ describe('formatThreadAsText', () => {
   });
 
   test('formats merged PR with merged_at timestamp', () => {
-    const thread = createMockPR({ state: 'merged', closed_at: '2024-01-03T00:00:00Z', merged_at: '2024-01-03T12:00:00Z' });
+    const thread = createMockPR({
+      state: 'merged',
+      closed_at: '2024-01-03T00:00:00Z',
+      merged_at: '2024-01-03T12:00:00Z',
+    });
     const result = formatThreadAsText(thread);
     expect(result).toContain('State: MERGED');
     expect(result).toContain('Merged: 2024-01-03T12:00:00Z');
@@ -149,10 +155,102 @@ describe('formatThreadAsText', () => {
   });
 
   test('handles PR with unknown branch values', () => {
-    const thread = createMockPR({ head_branch: undefined, base_branch: undefined, head_sha: undefined });
+    const thread = createMockPR({
+      head_branch: undefined,
+      base_branch: undefined,
+      head_sha: undefined,
+    });
     const result = formatThreadAsText(thread);
     expect(result).toContain('Head Branch: unknown');
     expect(result).toContain('Base Branch: unknown');
     expect(result).toContain('Head SHA: unknown');
+  });
+
+  test('formats PR with review comments', () => {
+    const thread = createMockPR({
+      review_comments: [
+        {
+          id: 1,
+          path: 'src/auth.ts',
+          line: 15,
+          side: 'RIGHT' as const,
+          author: 'reviewer1',
+          author_type: 'user',
+          created_at: '2024-01-04T00:00:00Z',
+          body: 'This needs input validation',
+        },
+        {
+          id: 2,
+          path: 'src/auth.ts',
+          line: 23,
+          side: 'LEFT' as const,
+          author: 'reviewer2',
+          author_type: 'user',
+          created_at: '2024-01-05T00:00:00Z',
+          body: 'Add error handling',
+        },
+      ],
+    });
+    const result = formatThreadAsText(thread);
+    expect(result).toContain('Review Comments (2):');
+    expect(result).toContain('**src/auth.ts L15** (@reviewer1):');
+    expect(result).toContain('This needs input validation');
+    expect(result).toContain('**src/auth.ts L23 [old]** (@reviewer2):');
+    expect(result).toContain('Add error handling');
+  });
+
+  test('does not show review comments section for issues', () => {
+    const thread = createMockIssue({
+      review_comments: [],
+    });
+    const result = formatThreadAsText(thread);
+    expect(result).not.toContain('Review Comments');
+  });
+
+  test('does not show review comments section for PRs with no review comments', () => {
+    const thread = createMockPR({
+      review_comments: [],
+    });
+    const result = formatThreadAsText(thread);
+    expect(result).not.toContain('Review Comments');
+  });
+
+  test('formats review comment with bot author', () => {
+    const thread = createMockPR({
+      review_comments: [
+        {
+          id: 1,
+          path: 'src/file.ts',
+          line: 10,
+          side: 'RIGHT' as const,
+          author: 'review-bot',
+          author_type: 'bot',
+          created_at: '2024-01-04T00:00:00Z',
+          body: 'Automated review',
+        },
+      ],
+    });
+    const result = formatThreadAsText(thread);
+    expect(result).toContain('@review-bot (bot)');
+  });
+
+  test('formats review comment with null line', () => {
+    const thread = createMockPR({
+      review_comments: [
+        {
+          id: 1,
+          path: 'src/file.ts',
+          line: null,
+          side: 'RIGHT' as const,
+          author: 'reviewer',
+          author_type: 'user',
+          created_at: '2024-01-04T00:00:00Z',
+          body: 'General comment on file',
+        },
+      ],
+    });
+    const result = formatThreadAsText(thread);
+    expect(result).toContain('**src/file.ts** (@reviewer):');
+    expect(result).not.toContain('Lnull');
   });
 });

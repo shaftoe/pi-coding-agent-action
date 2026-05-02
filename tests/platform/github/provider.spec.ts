@@ -59,7 +59,10 @@ fs.writeFileSync(process.env.GITHUB_EVENT_PATH, JSON.stringify({}));
 
 // Import after mocks are set up
 import type { PlatformProvider } from '../../../src/platform/types';
-import { detectPlatform, createGitHubPlatformProvider } from '../../../src/platform/github/provider';
+import {
+  detectPlatform,
+  createGitHubPlatformProvider,
+} from '../../../src/platform/github/provider';
 
 describe('detectPlatform', () => {
   const originalServerUrl = process.env.GITHUB_SERVER_URL;

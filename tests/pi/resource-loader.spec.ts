@@ -65,6 +65,7 @@ const mockPlatformProvider: PlatformProvider = {
     },
   }),
   getIssueOrPRThread: async () => undefined,
+  getPRDiff: async () => '',
 };
 
 // Set env vars before importing

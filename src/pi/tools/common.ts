@@ -35,7 +35,7 @@ export function formatThreadAsText(thread: IssueOrPRThread): string {
   }
 
   if (thread.labels.length > 0) {
-    lines.push(`Labels: ${thread.labels.map((l) => `"${l}"`).join(', ')}`);
+    lines.push(`Labels: ${thread.labels.map(l => `"${l}"`).join(', ')}`);
   }
 
   if (thread.is_pull_request) {
@@ -62,6 +62,20 @@ export function formatThreadAsText(thread: IssueOrPRThread): string {
       `     ${comment.body}`
     );
   });
+
+  // Include inline review comments for PRs
+  if (thread.is_pull_request && thread.review_comments && thread.review_comments.length > 0) {
+    lines.push('');
+    lines.push(`Review Comments (${thread.review_comments.length}):`);
+    thread.review_comments.forEach((comment, i) => {
+      const lineInfo = comment.line !== null ? ` L${comment.line}` : '';
+      const sideInfo = comment.side === 'LEFT' ? ' [old]' : '';
+      lines.push(
+        `  ${i + 1}. **${comment.path}${lineInfo}${sideInfo}** (@${comment.author}${comment.author_type === 'bot' ? ' (bot)' : ''}):`,
+        `     ${comment.body}`
+      );
+    });
+  }
 
   return lines.join('\n');
 }

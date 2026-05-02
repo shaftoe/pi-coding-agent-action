@@ -9,7 +9,7 @@
 import * as github from '@actions/github';
 import { Temporal } from '@js-temporal/polyfill';
 import { getOctokit } from './octokit';
-import { DEFAULT_TRIGGER, MAX_COMMENTS } from './constants';
+import { DEFAULT_TRIGGER, MAX_COMMENTS, MAX_REVIEW_COMMENTS, MAX_DIFF_LINES } from './constants';
 import { isPR, getContextType } from './context-utils';
 import { getCoreAdapter } from './index';
 import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
@@ -88,6 +88,18 @@ export interface ThreadComment {
   is_triggering_comment?: boolean; // marks the comment that invoked /pi
 }
 
+export interface ReviewComment {
+  id: number;
+  path: string;
+  line: number | null;
+  side: 'LEFT' | 'RIGHT';
+  author: string;
+  author_type: 'user' | 'bot';
+  created_at: string;
+  body: string;
+  in_reply_to_id?: number;
+}
+
 export interface IssueOrPRThread {
   number: number;
   title: string;
@@ -107,6 +119,8 @@ export interface IssueOrPRThread {
   head_sha: string | undefined; // PR only
   // Comments
   comments: ThreadComment[];
+  // PR review comments (inline comments on the diff)
+  review_comments: ReviewComment[];
   // Cancellation flag
   cancelled?: boolean;
 }
@@ -396,6 +410,122 @@ async function fetchThreadComments(
 }
 
 /**
+ * Fetch inline review comments for a pull request.
+ *
+ * Retrieves PR review comments (comments on specific lines of the diff)
+ * via `octokit.rest.pulls.listReviewComments()`. These are distinct from
+ * issue-level comments — they carry file path and line information.
+ *
+ * @param owner - Repository owner.
+ * @param repo - Repository name.
+ * @param pullNumber - Pull request number.
+ * @param maxReviewComments - Maximum number of review comments to return.
+ * @returns Array of review comments, or empty array on error.
+ */
+async function fetchPRReviewComments(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  maxReviewComments: number = MAX_REVIEW_COMMENTS
+): Promise<ReviewComment[]> {
+  try {
+    const octokit = getOctokit();
+    const reviewComments: ReviewComment[] = [];
+    let page = 1;
+    const perPage = Math.min(maxReviewComments, MAX_REVIEW_COMMENTS);
+
+    while (reviewComments.length < maxReviewComments) {
+      const response = await octokit.rest.pulls.listReviewComments({
+        owner,
+        repo,
+        pull_number: pullNumber,
+        per_page: perPage,
+        page,
+      });
+
+      if (response.data.length === 0) {
+        break;
+      }
+
+      for (const comment of response.data) {
+        if (reviewComments.length >= maxReviewComments) {
+          break;
+        }
+        reviewComments.push({
+          id: comment.id,
+          path: comment.path,
+          line: comment.line ?? comment.original_line ?? null,
+          side: (comment.side as 'LEFT' | 'RIGHT') ?? 'RIGHT',
+          author: comment.user?.login ?? 'unknown',
+          author_type: comment.user?.type === 'Bot' ? 'bot' : 'user',
+          created_at: comment.created_at,
+          body: comment.body,
+          ...(comment.in_reply_to_id ? { in_reply_to_id: comment.in_reply_to_id } : {}),
+        });
+      }
+
+      if (response.data.length < perPage) {
+        break;
+      }
+      page++;
+    }
+
+    return reviewComments;
+  } catch (_e) {
+    debug(`[fetchPRReviewComments] Failed to fetch review comments, continuing`);
+    return [];
+  }
+}
+
+/**
+ * Fetch the diff for a pull request.
+ *
+ * Retrieves the PR diff via `octokit.rest.pulls.get()` with
+ * `mediaType: { format: 'diff' }`. The diff is truncated if it exceeds
+ * `maxDiffLines`.
+ *
+ * @param owner - Repository owner.
+ * @param repo - Repository name.
+ * @param pullNumber - Pull request number.
+ * @param maxDiffLines - Maximum number of diff lines before truncation.
+ * @returns The diff string, or empty string on error.
+ */
+export async function fetchPRDiff(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  maxDiffLines: number = MAX_DIFF_LINES
+): Promise<string> {
+  try {
+    const octokit = getOctokit();
+    const response = await octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: pullNumber,
+      mediaType: { format: 'diff' },
+    });
+
+    const diff = response.data as unknown as string;
+    if (!diff) {
+      return '';
+    }
+
+    const lines = diff.split('\n');
+    if (lines.length > maxDiffLines) {
+      return (
+        lines.slice(0, maxDiffLines).join('\n') +
+        `\n... (truncated at ${maxDiffLines} lines, ${lines.length - maxDiffLines} more)`
+      );
+    }
+
+    return diff;
+  } catch (_e) {
+    debug(`[fetchPRDiff] Failed to fetch PR diff, continuing`);
+    return '';
+  }
+}
+
+/**
  * Determine the state of an issue or pull request.
  *
  * Returns 'merged' for closed PRs that have a merged_at timestamp,
@@ -419,7 +549,8 @@ function buildThreadResult(
   issue: RestEndpointMethodTypes.RestEndpointMethodTypes['issues']['get']['response']['data'],
   isPullRequest: boolean,
   prData?: RestEndpointMethodTypes.RestEndpointMethodTypes['pulls']['get']['response']['data'],
-  comments?: ThreadComment[]
+  comments?: ThreadComment[],
+  reviewComments?: ReviewComment[]
 ): IssueOrPRThread {
   return {
     number: issue.number,
@@ -438,11 +569,15 @@ function buildThreadResult(
     base_branch: prData?.base.ref,
     head_sha: prData?.head.sha,
     comments: comments ?? [],
+    review_comments: reviewComments ?? [],
   };
 }
 
 /**
  * Fetch the complete thread (metadata + comments) for a GitHub issue or PR.
+ *
+ * For pull requests, also fetches inline review comments (comments on
+ * specific lines of the diff) in addition to issue-level comments.
  *
  * @param params - Optional parameters to override the default owner, repo,
  *                 issue number, or comment limit.
@@ -464,9 +599,22 @@ export async function getIssueOrPRThread(
 
     const prData = isPullRequest ? await fetchPRData(owner, repo, issueNumber) : undefined;
 
-    const comments = await fetchThreadComments(owner, repo, issueNumber, maxComments);
+    // Fetch issue-level comments and PR review comments in parallel for PRs
+    let reviewComments: ReviewComment[] = [];
+    let comments: ThreadComment[];
 
-    return buildThreadResult(issue, isPullRequest, prData, comments);
+    if (isPullRequest) {
+      const [issueComments, prReviewComments] = await Promise.all([
+        fetchThreadComments(owner, repo, issueNumber, maxComments),
+        fetchPRReviewComments(owner, repo, issueNumber),
+      ]);
+      comments = issueComments;
+      reviewComments = prReviewComments;
+    } else {
+      comments = await fetchThreadComments(owner, repo, issueNumber, maxComments);
+    }
+
+    return buildThreadResult(issue, isPullRequest, prData, comments, reviewComments);
   } catch (error) {
     if (error instanceof Error && 'status' in error && error.status === 404) {
       debug(`[getIssueOrPRThread] Issue/PR #${issueNumber} not found`);

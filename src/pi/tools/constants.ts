@@ -10,3 +10,4 @@
 export const CANCELLATION_MESSAGE_CREATE_PR = 'Pull request creation was cancelled';
 export const CANCELLATION_MESSAGE_GET_THREAD = 'Thread retrieval was cancelled';
 export const CANCELLATION_MESSAGE_UPDATE_PR = 'Pull request update was cancelled';
+export const CANCELLATION_MESSAGE_GET_PR_DIFF = 'PR diff retrieval was cancelled';

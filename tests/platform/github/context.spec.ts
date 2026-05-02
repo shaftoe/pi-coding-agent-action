@@ -66,29 +66,17 @@ fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 // Also initialize the github module context with test adapter
 const githubModule = import('../../../src/platform/github/index.js');
 const contextModule = import('../../../src/platform/github/context.js');
-const [
-  githubExports,
-  contextExports,
-] = // @ts-expect-error TS1309 -- Top-level await not supported in CommonJS, but Bun test runner handles it
+const [githubExports, contextExports] = // @ts-expect-error TS1309 -- Top-level await not supported in CommonJS, but Bun test runner handles it
   await Promise.all([githubModule, contextModule]);
 
 // Initialize the github module context with test adapter
 const { setCoreAdapter } = githubExports;
 setCoreAdapter(testCoreAdapter);
 
-const {
-  getPrompt,
-  createFinalComment,
-  getIssueOrPRThread,
-  updatePullRequest,
-} = githubExports;
+const { getPrompt, createFinalComment, getIssueOrPRThread, updatePullRequest } = githubExports;
 
-const {
-  getIssueOrPullRequestContext,
-  isPR,
-  getContextType,
-  getStartTimeFromContext,
-} = contextExports;
+const { getIssueOrPullRequestContext, isPR, getContextType, getStartTimeFromContext } =
+  contextExports;
 
 describe('getPrompt', () => {
   beforeEach(() => {

@@ -115,6 +115,7 @@ const mockPlatformProvider: PlatformProvider = {
     },
   }),
   getIssueOrPRThread: async () => undefined,
+  getPRDiff: async () => '',
 };
 
 mock.module('@actions/core', () => ({

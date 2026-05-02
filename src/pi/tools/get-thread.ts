@@ -15,11 +15,7 @@ import {
 } from '../prompt';
 import { CANCELLATION_MESSAGE_GET_THREAD } from './constants';
 import { formatThreadAsText } from './common';
-import type {
-  IssueOrPRThread,
-  GetIssueOrPRThreadParams,
-  PlatformProvider,
-} from '../../platform';
+import type { IssueOrPRThread, GetIssueOrPRThreadParams, PlatformProvider } from '../../platform';
 import type { AgentToolResult } from '@mariozechner/pi-coding-agent';
 import { withCancellation } from './tool-execution';
 
@@ -74,6 +70,7 @@ function createNotFoundResult(): AgentToolResult<IssueOrPRThread> {
       base_branch: undefined,
       head_sha: undefined,
       comments: [],
+      review_comments: [],
     },
   };
 }
@@ -111,6 +108,7 @@ export function getIssueOrPRThreadToolFactory(provider: PlatformProvider) {
         base_branch: undefined,
         head_sha: undefined,
         comments: [],
+        review_comments: [],
       },
       prepareParams: (params: GetIssueOrPRThreadToolParams) => params,
       execute: async (params: GetIssueOrPRThreadParams) => {

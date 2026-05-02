@@ -41,13 +41,26 @@ const createMockProvider = (overrides?: Partial<PlatformProvider>): PlatformProv
   getStartTime: () => undefined,
   createPullRequest: async () => ({
     content: [{ type: 'text' as const, text: 'PR created' }],
-    details: { pullRequestNumber: 1, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+    details: {
+      pullRequestNumber: 1,
+      pullRequestUrl: '',
+      headBranch: '',
+      baseBranch: '',
+      dryRun: false,
+    },
   }),
   updatePullRequest: async () => ({
     content: [{ type: 'text' as const, text: 'PR updated' }],
-    details: { pullRequestNumber: 1, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+    details: {
+      pullRequestNumber: 1,
+      pullRequestUrl: '',
+      headBranch: '',
+      baseBranch: '',
+      dryRun: false,
+    },
   }),
   getIssueOrPRThread: async () => undefined,
+  getPRDiff: async () => '',
   ...overrides,
 });
 
@@ -95,7 +108,13 @@ describe('create_pull_request tool - execution', () => {
     const createPullRequest = mock((_params: any) =>
       Promise.resolve({
         content: [{ type: 'text' as const, text: 'PR #1 created' }],
-        details: { pullRequestNumber: 1, pullRequestUrl: 'https://github.com/test/pr/1', headBranch: 'feature', baseBranch: 'main', dryRun: false },
+        details: {
+          pullRequestNumber: 1,
+          pullRequestUrl: 'https://github.com/test/pr/1',
+          headBranch: 'feature',
+          baseBranch: 'main',
+          dryRun: false,
+        },
       })
     );
     const provider = createMockProvider({ createPullRequest });
@@ -112,7 +131,13 @@ describe('create_pull_request tool - execution', () => {
     const createPullRequest = mock((_params: any) =>
       Promise.resolve({
         content: [{ type: 'text' as const, text: 'PR created' }],
-        details: { pullRequestNumber: 2, pullRequestUrl: '', headBranch: 'feature', baseBranch: 'main', dryRun: true },
+        details: {
+          pullRequestNumber: 2,
+          pullRequestUrl: '',
+          headBranch: 'feature',
+          baseBranch: 'main',
+          dryRun: true,
+        },
       })
     );
     const provider = createMockProvider({ createPullRequest });
@@ -140,7 +165,13 @@ describe('create_pull_request tool - execution', () => {
     const createPullRequest = mock((_params: any) =>
       Promise.resolve({
         content: [{ type: 'text' as const, text: 'ok' }],
-        details: { pullRequestNumber: 3, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+        details: {
+          pullRequestNumber: 3,
+          pullRequestUrl: '',
+          headBranch: '',
+          baseBranch: '',
+          dryRun: false,
+        },
       })
     );
     const provider = createMockProvider({ createPullRequest });
@@ -156,17 +187,31 @@ describe('create_pull_request tool - execution', () => {
   });
 
   test('execute returns cancellation result when signal is aborted', async () => {
-    const createPullRequest = mock((_params: any) => Promise.resolve({
-      content: [{ type: 'text' as const, text: 'should not be called' }],
-      details: { pullRequestNumber: 0, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
-    }));
+    const createPullRequest = mock((_params: any) =>
+      Promise.resolve({
+        content: [{ type: 'text' as const, text: 'should not be called' }],
+        details: {
+          pullRequestNumber: 0,
+          pullRequestUrl: '',
+          headBranch: '',
+          baseBranch: '',
+          dryRun: false,
+        },
+      })
+    );
     const provider = createMockProvider({ createPullRequest });
     const tool = createPRToolFactory(provider);
 
     const controller = new AbortController();
     controller.abort();
 
-    const result = await tool.execute('call-cancel', { title: 'Cancelled' }, controller.signal, undefined, mockCtx);
+    const result = await tool.execute(
+      'call-cancel',
+      { title: 'Cancelled' },
+      controller.signal,
+      undefined,
+      mockCtx
+    );
 
     expect(createPullRequest).not.toHaveBeenCalled();
     expect((result.content as any)[0].text).toContain('cancelled');

@@ -46,16 +46,18 @@ describe('tool-execution utilities', () => {
       const mockSignal = new AbortController();
       mockSignal.abort();
 
-      const execute = withCancellation<Record<string, never>, Record<string, unknown>, Record<string, unknown>>(
-        {
-          cancellationMessage: 'Test cancelled',
-          cancellationDetails: { id: 0, name: 'Cancelled' },
-          prepareParams: (params) => params,
-          execute: async () => {
-            throw new Error('Should not be called');
-          },
-        }
-      );
+      const execute = withCancellation<
+        Record<string, never>,
+        Record<string, unknown>,
+        Record<string, unknown>
+      >({
+        cancellationMessage: 'Test cancelled',
+        cancellationDetails: { id: 0, name: 'Cancelled' },
+        prepareParams: params => params,
+        execute: async () => {
+          throw new Error('Should not be called');
+        },
+      });
 
       const result = await execute('tool-call-id', {}, mockSignal.signal, undefined, mockCtx);
 
@@ -77,7 +79,11 @@ describe('tool-execution utilities', () => {
         details: { result: params.processed },
       });
 
-      const execute = withCancellation<{ value: number }, { result: number }, { processed: number }>({
+      const execute = withCancellation<
+        { value: number },
+        { result: number },
+        { processed: number }
+      >({
         cancellationMessage: 'Cancelled',
         cancellationDetails: { result: 0 },
         prepareParams: mockPrepareParams,
@@ -103,11 +109,17 @@ describe('tool-execution utilities', () => {
       >({
         cancellationMessage: 'Cancelled',
         cancellationDetails: { output: '' },
-        prepareParams: (params) => ({ transformed: params.value.toUpperCase() }),
+        prepareParams: params => ({ transformed: params.value.toUpperCase() }),
         execute: mockExecute,
       });
 
-      const result = await execute('tool-call-id', { value: 'hello' }, undefined, undefined, mockCtx);
+      const result = await execute(
+        'tool-call-id',
+        { value: 'hello' },
+        undefined,
+        undefined,
+        mockCtx
+      );
 
       expect(result.content).toEqual([{ type: 'text', text: 'HELLO' }]);
       expect(result.details).toEqual({ output: 'HELLO' });
@@ -126,7 +138,7 @@ describe('tool-execution utilities', () => {
       >({
         cancellationMessage: 'Cancelled',
         cancellationDetails: {},
-        prepareParams: (params) => params,
+        prepareParams: params => params,
         execute: mockExecute,
       });
 
@@ -148,11 +160,13 @@ describe('tool-execution utilities', () => {
       >({
         cancellationMessage: 'Cancelled',
         cancellationDetails: {},
-        prepareParams: (params) => params,
+        prepareParams: params => params,
         execute: mockExecute,
       });
 
-      await expect(execute('tool-call-id', {}, undefined, undefined, mockCtx)).rejects.toThrow('Execution failed');
+      await expect(execute('tool-call-id', {}, undefined, undefined, mockCtx)).rejects.toThrow(
+        'Execution failed'
+      );
     });
 
     test('signal.aborted check happens before prepareParams', async () => {

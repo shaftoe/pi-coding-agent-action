@@ -16,6 +16,7 @@
 
 import { createPRToolFactory } from './create-pr';
 import { getIssueOrPRThreadToolFactory } from './get-thread';
+import { getPRDiffToolFactory } from './get-pr-diff';
 import { updatePullRequestToolFactory } from './update-pr';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import type { PlatformProvider } from '../../platform';
@@ -33,7 +34,8 @@ export {
  * Extension factory that registers all custom tools with the Pi agent.
  *
  * Called by the Pi SDK resource loader during session initialisation. Registers
- * the `create_pull_request`, `update_pull_request`, and `get_issue_or_pr_thread` tools.
+ * the `create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`,
+ * and `get_pr_diff` tools.
  *
  * @param provider - The platform provider for tool operations.
  * @returns An extension factory function compatible with the Pi SDK.
@@ -44,6 +46,7 @@ export function createToolsFactory(provider: PlatformProvider): (pi: ExtensionAP
       createPRToolFactory(provider),
       updatePullRequestToolFactory(provider),
       getIssueOrPRThreadToolFactory(provider),
+      getPRDiffToolFactory(provider),
     ];
     tools.forEach(tool => {
       pi.registerTool(tool);

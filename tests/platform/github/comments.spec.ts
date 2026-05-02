@@ -523,7 +523,9 @@ describe('createFinalComment', () => {
     expect(mockCreateIssueComment).not.toHaveBeenCalled();
     expect(mockCreateReviewCommentReply).not.toHaveBeenCalled();
     // Debug log should explain why
-    expect(mockDebugLog).toContain('[comments] no issue/PR number in context, skipping comment creation');
+    expect(mockDebugLog).toContain(
+      '[comments] no issue/PR number in context, skipping comment creation'
+    );
   });
 
   test('returns undefined when issue number is 0 (unattended mode)', async () => {

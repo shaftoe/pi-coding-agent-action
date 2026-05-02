@@ -42,13 +42,26 @@ const createMockProvider = (overrides?: Partial<PlatformProvider>): PlatformProv
   getStartTime: () => undefined,
   createPullRequest: async () => ({
     content: [{ type: 'text' as const, text: 'PR created' }],
-    details: { pullRequestNumber: 1, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+    details: {
+      pullRequestNumber: 1,
+      pullRequestUrl: '',
+      headBranch: '',
+      baseBranch: '',
+      dryRun: false,
+    },
   }),
   updatePullRequest: async () => ({
     content: [{ type: 'text' as const, text: 'PR updated' }],
-    details: { pullRequestNumber: 1, pullRequestUrl: '', headBranch: '', baseBranch: '', dryRun: false },
+    details: {
+      pullRequestNumber: 1,
+      pullRequestUrl: '',
+      headBranch: '',
+      baseBranch: '',
+      dryRun: false,
+    },
   }),
   getIssueOrPRThread: async () => undefined,
+  getPRDiff: async () => '',
   ...overrides,
 });
 
@@ -81,6 +94,7 @@ const fakeThread: IssueOrPRThread = {
       is_triggering_comment: false,
     },
   ],
+  review_comments: [],
 };
 
 describe('get_issue_or_pr_thread tool - execution', () => {
@@ -123,7 +137,13 @@ describe('get_issue_or_pr_thread tool - execution', () => {
     const provider = createMockProvider({ getIssueOrPRThread });
     const tool = getIssueOrPRThreadToolFactory(provider);
 
-    const result = await tool.execute('call-1', { owner: 'test-owner', repo: 'test-repo', issue_number: 42 }, undefined, undefined, mockCtx);
+    const result = await tool.execute(
+      'call-1',
+      { owner: 'test-owner', repo: 'test-repo', issue_number: 42 },
+      undefined,
+      undefined,
+      mockCtx
+    );
 
     expect(getIssueOrPRThread).toHaveBeenCalledTimes(1);
     expect((getIssueOrPRThread as any).mock.calls[0][0]).toEqual({
@@ -147,7 +167,13 @@ describe('get_issue_or_pr_thread tool - execution', () => {
     const provider = createMockProvider({ getIssueOrPRThread });
     const tool = getIssueOrPRThreadToolFactory(provider);
 
-    const result = await tool.execute('call-2', { owner: 'test-owner', repo: 'test-repo', issue_number: 999 }, undefined, undefined, mockCtx);
+    const result = await tool.execute(
+      'call-2',
+      { owner: 'test-owner', repo: 'test-repo', issue_number: 999 },
+      undefined,
+      undefined,
+      mockCtx
+    );
 
     expect(getIssueOrPRThread).toHaveBeenCalledTimes(1);
     expect(result.content).toHaveLength(1);
@@ -169,6 +195,7 @@ describe('get_issue_or_pr_thread tool - execution', () => {
       base_branch: undefined,
       head_sha: undefined,
       comments: [],
+      review_comments: [],
     });
   });
 
@@ -201,7 +228,13 @@ describe('get_issue_or_pr_thread tool - execution', () => {
     const controller = new AbortController();
     controller.abort();
 
-    const result = await tool.execute('call-cancel', { issue_number: 1 }, controller.signal, undefined, mockCtx);
+    const result = await tool.execute(
+      'call-cancel',
+      { issue_number: 1 },
+      controller.signal,
+      undefined,
+      mockCtx
+    );
 
     expect(getIssueOrPRThread).not.toHaveBeenCalled();
     expect((result.content as any)[0].text).toContain('cancelled');
@@ -222,7 +255,13 @@ describe('get_issue_or_pr_thread tool - execution', () => {
     const provider = createMockProvider({ getIssueOrPRThread });
     const tool = getIssueOrPRThreadToolFactory(provider);
 
-    const result = await tool.execute('call-4', { issue_number: 10 }, undefined, undefined, mockCtx);
+    const result = await tool.execute(
+      'call-4',
+      { issue_number: 10 },
+      undefined,
+      undefined,
+      mockCtx
+    );
 
     const text = (result.content as any)[0].text as string;
     expect(text).toContain('Pull Request #10: Test PR');

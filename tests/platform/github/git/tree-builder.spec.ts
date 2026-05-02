@@ -99,9 +99,7 @@ describe('createBlobsAndTree', () => {
     const mockLog = { debug: mock(() => {}), info: mock(() => {}) };
 
     const result = await createBlobsAndTree({
-      changedFiles: [
-        { path: 'test.txt', content: 'hello world', mode: '100644' as any },
-      ],
+      changedFiles: [{ path: 'test.txt', content: 'hello world', mode: '100644' as any }],
       deletedFiles: [],
       parentSha: 'parent-sha',
       log: mockLog as any,
@@ -238,7 +236,9 @@ describe('createBlobsAndTree', () => {
     const mockLog = { debug: mock(() => {}), info: mock(() => {}) };
 
     await createBlobsAndTree({
-      changedFiles: [{ path: 'path/with spaces/file.txt', content: 'content', mode: '100644' as any }],
+      changedFiles: [
+        { path: 'path/with spaces/file.txt', content: 'content', mode: '100644' as any },
+      ],
       deletedFiles: [],
       parentSha: 'parent-sha',
       log: mockLog as any,

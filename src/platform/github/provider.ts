@@ -15,7 +15,7 @@
 import { context } from '@actions/github';
 import { addReaction, deleteReaction } from './reactions';
 import { createFinalComment } from './comments';
-import { getPrompt, getStartTimeFromContext, getIssueOrPRThread } from './context';
+import { getPrompt, getStartTimeFromContext, getIssueOrPRThread, fetchPRDiff } from './context';
 import { createPullRequest } from './pull-request';
 import { updatePullRequest } from './pull-request-update';
 import type { Temporal } from '@js-temporal/polyfill';
@@ -120,6 +120,10 @@ export function createGitHubPlatformProvider(): PlatformProvider {
       params?: GetIssueOrPRThreadParams
     ): Promise<IssueOrPRThread | undefined> {
       return getIssueOrPRThread(params);
+    },
+
+    async getPRDiff(owner: string, repo: string, pullNumber: number): Promise<string> {
+      return fetchPRDiff(owner, repo, pullNumber);
     },
   };
 }

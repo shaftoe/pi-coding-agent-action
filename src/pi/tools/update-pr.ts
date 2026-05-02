@@ -98,7 +98,7 @@ export function updatePullRequestToolFactory(provider: PlatformProvider) {
         }
         return updateParams;
       },
-      execute: (params) =>
+      execute: params =>
         provider.updatePullRequest(params) as Promise<{
           content: { type: 'text'; text: string }[];
           details: UpdatePullRequestDetails;

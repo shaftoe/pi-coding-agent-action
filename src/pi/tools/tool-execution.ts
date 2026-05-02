@@ -5,7 +5,11 @@
  * validation to reduce duplication across tool definitions.
  */
 
-import type { AgentToolResult, AgentToolUpdateCallback, ExtensionContext } from '@mariozechner/pi-coding-agent';
+import type {
+  AgentToolResult,
+  AgentToolUpdateCallback,
+  ExtensionContext,
+} from '@mariozechner/pi-coding-agent';
 
 /**
  * Result of a cancelled tool execution.
