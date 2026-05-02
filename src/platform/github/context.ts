@@ -9,7 +9,7 @@
 import * as github from '@actions/github';
 import { Temporal } from '@js-temporal/polyfill';
 import { getOctokit } from './octokit';
-import { DEFAULT_TRIGGER, MAX_COMMENTS } from './constants';
+import { DEFAULT_TRIGGER, MAX_COMMENTS, MAX_DIFF_LINES, MAX_REVIEW_COMMENTS } from './constants';
 import { isPR, getContextType } from './context-utils';
 import { getCoreAdapter } from './index';
 import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
@@ -76,6 +76,24 @@ export interface IssueOrPullRequestContext {
   title: string;
   body?: string;
   number: number;
+}
+
+/** A single PR review comment (inline comment on a diff line). */
+export interface PRReviewComment {
+  /** File path the comment was made on */
+  path: string;
+  /** Line number in the diff the comment was made on */
+  line?: number;
+  /** Original line number in the base branch (for deleted lines) */
+  originalLine?: number;
+  /** Comment author login */
+  author: string;
+  /** Comment body in Markdown */
+  body: string;
+  /** Whether this comment is on the "left" (base) side of a diff */
+  side?: string;
+  /** ISO timestamp when the comment was created */
+  createdAt: string;
 }
 
 export interface ThreadComment {
@@ -168,13 +186,178 @@ export function getIssueOrPullRequestContext(): IssueOrPullRequestContext | unde
 }
 
 /**
+ * Fetch the diff of the current pull request.
+ *
+ * Uses the GitHub REST API to retrieve the PR diff in unified format.
+ * The diff is truncated to {@link MAX_DIFF_LINES} lines to limit token usage.
+ *
+ * @param prNumber - The PR number to fetch the diff for.
+ * @param maxLines - Maximum number of diff lines to include.
+ * @returns The diff string, or `undefined` if the fetch fails.
+ */
+export async function fetchPRDiff(
+  prNumber: number,
+  maxLines: number = MAX_DIFF_LINES
+): Promise<string | undefined> {
+  try {
+    const octokit = getOctokit();
+    const { owner, repo } = github.context.repo;
+
+    const response = await octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: prNumber,
+      mediaType: {
+        format: 'diff',
+      },
+    });
+
+    // The response data is the raw diff string when format is 'diff'
+    const diff = String(response.data);
+    if (!diff) {
+      debug(`[fetchPRDiff] Empty diff returned for PR #${prNumber}`);
+      return undefined;
+    }
+
+    const lines = diff.split('\n');
+    if (lines.length > maxLines) {
+      debug(`[fetchPRDiff] Diff has ${lines.length} lines, truncating to ${maxLines}`);
+      return lines.slice(0, maxLines).join('\n') + `\n... (truncated, ${lines.length - maxLines} more lines)`;
+    }
+
+    debug(`[fetchPRDiff] Fetched diff for PR #${prNumber} (${lines.length} lines)`);
+    return diff;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    debug(`[fetchPRDiff] Failed to fetch diff for PR #${prNumber}: ${msg}`);
+    return undefined;
+  }
+}
+
+/**
+ * Fetch review comments (inline comments on the diff) for the current pull request.
+ *
+ * Returns up to {@link MAX_REVIEW_COMMENTS} review comments, each annotated with
+ * file path, line number, author, and body.
+ *
+ * @param prNumber - The PR number to fetch review comments for.
+ * @param maxComments - Maximum number of review comments to include.
+ * @returns Array of review comments, or an empty array if the fetch fails.
+ */
+export async function fetchPRReviewComments(
+  prNumber: number,
+  maxComments: number = MAX_REVIEW_COMMENTS
+): Promise<PRReviewComment[]> {
+  try {
+    const octokit = getOctokit();
+    const { owner, repo } = github.context.repo;
+
+    const response = await octokit.rest.pulls.listReviewComments({
+      owner,
+      repo,
+      pull_number: prNumber,
+      per_page: maxComments,
+    });
+
+    const comments: PRReviewComment[] = response.data.map(comment => {
+      const result: PRReviewComment = {
+        path: comment.path ?? '',
+        author: comment.user?.login ?? 'unknown',
+        body: comment.body ?? '',
+        createdAt: comment.created_at,
+      };
+      if (comment.line !== null && comment.line !== undefined) {
+        result.line = comment.line;
+      }
+      if (comment.original_line !== null && comment.original_line !== undefined) {
+        result.originalLine = comment.original_line;
+      }
+      if (comment.side !== null && comment.side !== undefined) {
+        result.side = comment.side;
+      }
+      return result;
+    });
+
+    debug(`[fetchPRReviewComments] Fetched ${comments.length} review comments for PR #${prNumber}`);
+    return comments;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    debug(`[fetchPRReviewComments] Failed to fetch review comments for PR #${prNumber}: ${msg}`);
+    return [];
+  }
+}
+
+/**
+ * Format review comments into a human-readable string for inclusion in the prompt.
+ *
+ * @param comments - The review comments to format.
+ * @returns Formatted string, or undefined if no comments.
+ */
+export function formatReviewComments(comments: PRReviewComment[]): string | undefined {
+  if (comments.length === 0) {
+    return undefined;
+  }
+
+  const lines = comments.map(comment => {
+    const parts: string[] = [];
+    parts.push(`**${comment.path}**`);
+    if (comment.line !== undefined) {
+      parts.push(`L${comment.line}`);
+    }
+    parts.push(`(@${comment.author}):`);
+    parts.push(comment.body);
+    return parts.join(' ');
+  });
+
+  return lines.join('\n');
+}
+
+/**
+ * Check whether PR diff inclusion is enabled via action input.
+ *
+ * Reads the `include_pr_diff` input and defaults to `true` when not set.
+ *
+ * @returns `true` if PR diff should be included in the prompt.
+ */
+function isPRDiffEnabled(): boolean {
+  const input = getCoreAdapter().getInput('include_pr_diff');
+  if (!input) {
+    return true; // default to enabled
+  }
+  return input.toLowerCase() === 'true';
+}
+
+/**
+ * Get the maximum number of diff lines from action input.
+ *
+ * Reads the `max_diff_lines` input and defaults to {@link MAX_DIFF_LINES}
+ * when not set or invalid.
+ *
+ * @returns The maximum number of diff lines to include.
+ */
+function getMaxDiffLines(): number {
+  const input = getCoreAdapter().getInput('max_diff_lines');
+  if (!input) {
+    return MAX_DIFF_LINES;
+  }
+  const parsed = parseInt(input, 10);
+  if (isNaN(parsed) || parsed <= 0) {
+    return MAX_DIFF_LINES;
+  }
+  return parsed;
+}
+
+/**
  * Enrich a prompt string with issue/PR context when available.
+ *
+ * When the context is a pull request and PR diff inclusion is enabled,
+ * also fetches and appends the PR diff and review comments.
  *
  * @param instruction - The raw instruction text.
  * @param label - Label for the instruction section (e.g. "Comment/Instruction" or "Instruction").
  * @returns The enriched prompt, or the original instruction if no context is available.
  */
-function enrichWithContext(instruction: string, label: string): string {
+async function enrichWithContext(instruction: string, label: string): Promise<string> {
   const issueOrPrContext = getIssueOrPullRequestContext();
   if (issueOrPrContext) {
     const { title, body, number } = issueOrPrContext;
@@ -182,6 +365,27 @@ function enrichWithContext(instruction: string, label: string): string {
 
     if (body) {
       contextParts.push(`\nDescription:\n${body}`);
+    }
+
+    // Fetch PR diff and review comments when in PR context and enabled
+    const contextType = getContextType();
+    if (contextType === 'pull_request' && isPRDiffEnabled()) {
+      const maxDiffLines = getMaxDiffLines();
+      const [diff, reviewComments] = await Promise.all([
+        fetchPRDiff(number, maxDiffLines),
+        fetchPRReviewComments(number),
+      ]);
+
+      if (diff) {
+        contextParts.push(`\n\nPR Diff:\n\`\`\`diff\n${diff}\n\`\`\``);
+      }
+
+      const formattedComments = formatReviewComments(reviewComments);
+      if (formattedComments) {
+        contextParts.push(
+          `\n\nPR Review Comments (${reviewComments.length}):\n${formattedComments}`
+        );
+      }
     }
 
     contextParts.push(`\n\n${label}:\n${instruction}`);

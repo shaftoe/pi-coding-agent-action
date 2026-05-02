@@ -55,6 +55,16 @@ inputs:
     required: false
     default: 'false'
 
+  include_pr_diff:
+    description: 'When triggered on a pull request, include the PR diff and review comments in the prompt sent to the agent. Set to false to disable.'
+    required: false
+    default: 'true'
+
+  max_diff_lines:
+    description: 'Maximum number of diff lines to include in the prompt when include_pr_diff is enabled. Truncates longer diffs with a summary.'
+    required: false
+    default: '1000'
+
 runs:
   using: 'node24'
   main: 'dist/index.js'
