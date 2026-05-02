@@ -29,6 +29,7 @@ jobs:
           bun-version: latest
 
       - name: Run Pi agent
+        id: pi
         uses: shaftoe/pi-coding-agent-action@v2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -42,3 +43,9 @@ jobs:
             If the change involves upgrading dependencies, with special focus on @mariozechner/pi-coding-agent, ensure the version is up-to-date and no breaking changes are introduced. If the change is a new feature, evaluate if it's interesting or useful and suggest a possible implementation to make use of it.
 
             Once you're done, add your findings as comment to the PR.
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ steps.pi.outputs.session_html_path }}
+        with:
+          name: pi-session-html-${{ github.event.issue.number || github.event.pull_request.number || github.run_number }}
+          path: ${{ steps.pi.outputs.session_html_path }}

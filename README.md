@@ -225,6 +225,7 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | `provider` | LLM provider (anthropic, openai, google, etc.) | Yes | - |
 | `thinking_level` | Model thinking level (off|low|medium|high) | No | off |
 | `token` | Provider API token | Yes | - |
+| `export_session_html` | Export the session as a self-contained HTML file | No | `true` |
 | `trigger` | Trigger phrase used to invoke the action | No | /pi |
 
 Refer to [Pi documentation](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) for the current list of supported providers / models / etc.
@@ -241,9 +242,30 @@ The action exposes the following outputs, which can be consumed by downstream st
 | `output_tokens` | Number of output tokens generated (omitted if unavailable) | `800` |
 | `cost` | Cost of the invocation in USD (omitted if unavailable) | `0.042` |
 | `duration_seconds` | Wall-clock duration of agent execution in seconds | `12.7` |
+| `session_html_path` | Path to the exported session HTML file (when `export_session_html` is enabled) | `/tmp/pi-session-html/session.html` |
 
 > [!WARNING]
 > Tokens and cost outputs are only set when the underlying provider returns session statistics. They will be absent for providers that don't report token usage.
+
+### Uploading Session HTML as Artifact
+
+When `export_session_html` is enabled (the default), the action writes a self-contained HTML file and exposes its path via the `session_html_path` output. To upload it as a workflow artifact:
+
+```yaml
+- uses: shaftoe/pi-coding-agent-action@v2
+  id: pi
+  with:
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    provider: anthropic
+    model: claude-sonnet-4-5
+    token: ${{ secrets.ANTHROPIC_API_KEY }}
+
+- uses: actions/upload-artifact@v7
+  if: ${{ steps.pi.outputs.session_html_path }}
+  with:
+    name: pi-session-html-${{ github.event.issue.number || github.event.pull_request.number || github.run_number }}
+    path: ${{ steps.pi.outputs.session_html_path }}
+```
 
 ## How It Works
 

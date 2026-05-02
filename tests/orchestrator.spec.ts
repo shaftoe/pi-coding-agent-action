@@ -76,8 +76,10 @@ describe('ActionOrchestrator', () => {
       result: 'Here are your tests!',
       sessionStats: undefined,
     }));
+    const exportSessionHtmlMock = mock(async (outputPath: string) => outputPath);
     mockPiAgent = {
       run: runMock as any,
+      exportSessionHtml: exportSessionHtmlMock as any,
     };
 
     mockPiFactory = mock(() => mockPiAgent);
@@ -188,6 +190,7 @@ describe('ActionOrchestrator', () => {
           thinkingLevel: 'medium',
           promptInput: '',
           loadBuiltinExtensions: true, // default value
+          exportSessionHtml: true, // default value
         },
         mockCore, mockProvider
       );
@@ -221,6 +224,7 @@ describe('ActionOrchestrator', () => {
           thinkingLevel: '', // Empty string, because ?? doesn't apply to empty strings
           promptInput: '',
           loadBuiltinExtensions: true, // default value
+          exportSessionHtml: true, // default value
         },
         mockCore, mockProvider
       );
@@ -1135,5 +1139,121 @@ describe('ActionOrchestrator', () => {
 
       expect(mockCore.getInput).toHaveBeenCalledWith('base_url');
     });
+  });
+
+  describe('export_session_html configuration', () => {
+    test('defaults to true when not provided', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exportSessionHtml: true,
+        }),
+        mockCore, mockProvider
+      );
+    });
+
+    test('parses true value correctly', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          export_session_html: 'true',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exportSessionHtml: true,
+        }),
+        mockCore, mockProvider
+      );
+    });
+
+    test('parses false value correctly', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          export_session_html: 'false',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exportSessionHtml: false,
+        }),
+        mockCore, mockProvider
+      );
+    });
+
+    test('calls getInput for export_session_html', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockCore.getInput).toHaveBeenCalledWith('export_session_html');
+    });
+
+    test('calls exportSessionHtml on agent when enabled', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiAgent.exportSessionHtml).toHaveBeenCalled();
+    });
+
+    test('does not call exportSessionHtml when disabled', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          export_session_html: 'false',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiAgent.exportSessionHtml).not.toHaveBeenCalled();
+    });
+
+    test('continues execution when exportSessionHtml throws', async () => {
+      const failingExport = mock(async () => {
+        throw new Error('export failed');
+      });
+      mockPiAgent.exportSessionHtml = failingExport as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      // Action still completes successfully
+      expect(mockCore.setOutput).toHaveBeenCalledWith('success', true);
+      expect(mockCore.notice).toHaveBeenCalledWith(
+        expect.stringContaining('[session-html] failed to export HTML')
+      );
+    });
+
+
   });
 });

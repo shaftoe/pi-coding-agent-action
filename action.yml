@@ -50,6 +50,11 @@ inputs:
     required: false
     default: ''
 
+  export_session_html:
+    description: 'Export the Pi session as a self-contained HTML file and upload it as a GitHub Actions artifact. Set to false to disable.'
+    required: false
+    default: 'true'
+
 runs:
   using: 'node24'
   main: 'dist/index.js'
@@ -67,3 +72,5 @@ outputs:
     description: 'Cost of the invocation in USD'
   duration_seconds:
     description: 'Wall-clock duration of agent execution in seconds'
+  session_html_path:
+    description: 'Path to the exported session HTML file (when export_session_html is enabled)'

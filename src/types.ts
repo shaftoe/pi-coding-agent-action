@@ -58,6 +58,8 @@ export interface GitAdapter {
 export interface PiAgent {
   /** Run the agent with the given text prompt and receive the AI response with session statistics. */
   run(text: string): Promise<PromptResult>;
+  /** Export the session as a self-contained HTML file to the given path. */
+  exportSessionHtml(outputPath: string): Promise<string>;
 }
 
 /**
@@ -102,6 +104,7 @@ export interface PiConfig {
   extensions?: string[];
   loadBuiltinExtensions?: boolean;
   baseUrl?: string;
+  exportSessionHtml?: boolean;
 }
 
 /**

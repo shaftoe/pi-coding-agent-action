@@ -327,4 +327,28 @@ describe('Agent', () => {
       });
     });
   });
+
+  describe('exportSessionHtml', () => {
+    test('delegates to session.exportToHtml', async () => {
+      const agent = new Agent(
+        'claude-sonnet-4-5',
+        'anthropic',
+        'test-token',
+        'off',
+        mockCoreAdapter as any,
+        mockPlatformProvider
+      );
+      await agent.ready();
+
+      const mockExportToHtml = mock(async (outputPath: string) => outputPath);
+      agent['session'] = {
+        ...agent['session'],
+        exportToHtml: mockExportToHtml,
+      } as any;
+
+      const result = await agent.exportSessionHtml('/tmp/test-session.html');
+      expect(result).toBe('/tmp/test-session.html');
+      expect(mockExportToHtml).toHaveBeenCalledWith('/tmp/test-session.html');
+    });
+  });
 });

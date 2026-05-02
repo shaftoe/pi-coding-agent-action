@@ -7,6 +7,7 @@
  */
 
 import { AuthStorage, createAgentSession, ModelRegistry } from '@mariozechner/pi-coding-agent';
+import * as path from 'node:path';
 import { getResourceLoader } from './resource-loader';
 import { getVersion } from './logging';
 
@@ -172,6 +173,40 @@ export class Agent {
     const sessionStats = this.getSessionStats();
 
     return { result, sessionStats };
+  }
+
+  /**
+   * Export the session as a self-contained HTML file.
+   *
+   * Uses the Pi SDK's built-in HTML export (same renderer as `/share`).
+   * Must be called after {@link run} so the session has content.
+   *
+   * When the action runs from its bundled `dist/index.js`, the SDK's
+   * `getPackageDir()` walks up from `__dirname` and finds the action's
+   * `package.json` instead of the SDK's. Setting `PI_PACKAGE_DIR` tells
+   * the SDK where its own package root is so it can locate template files
+   * like `dist/core/export-html/template.html`.
+   *
+   * @param outputPath - Path to write the HTML file to.
+   * @returns The path to the written file.
+   */
+  async exportSessionHtml(outputPath: string): Promise<string> {
+    // When the action runs from its bundled dist/index.js, the SDK's
+    // getPackageDir() walks up from __dirname and finds the action's
+    // package.json instead of the SDK's. The build script copies the SDK's
+    // export-html assets into dist/pi-sdk/, and we point the SDK there via
+    // PI_PACKAGE_DIR (its supported escape hatch for bundled deployments).
+    const previousPiPackageDir = process.env.PI_PACKAGE_DIR;
+    try {
+      process.env.PI_PACKAGE_DIR = path.join(__dirname, 'pi-sdk');
+      return this.session.exportToHtml(outputPath);
+    } finally {
+      if (previousPiPackageDir !== undefined) {
+        process.env.PI_PACKAGE_DIR = previousPiPackageDir;
+      } else {
+        delete process.env.PI_PACKAGE_DIR;
+      }
+    }
   }
 
   /**

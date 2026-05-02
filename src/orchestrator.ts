@@ -8,10 +8,14 @@
  */
 
 import { Temporal } from '@js-temporal/polyfill';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import {
   type CommentMetadata,
   type CoreAdapter,
   type GitAdapter,
+  type PiAgent,
   type PiAgentFactory,
   type PiConfig,
   type SessionStats,
@@ -65,6 +69,17 @@ export class ActionOrchestrator {
 
       const pi = this.piAgentFactory(config, this.core, this.platformProvider);
       const { result, sessionStats } = await pi.run(prompt);
+
+      if (config.exportSessionHtml) {
+        try {
+          await this.exportSessionHtml(pi);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          this.core.notice(`failed to export session HTML: ${msg}`);
+        }
+      } else {
+        this.core.debug('[session-html] export disabled by configuration');
+      }
 
       await this.finalize(result, config, startTime, reaction, sessionStats, true);
     } catch (e) {
@@ -146,6 +161,11 @@ export class ActionOrchestrator {
 
     const baseUrl = this.core.getInput('base_url') || undefined;
 
+    const exportSessionHtmlInput = this.core.getInput('export_session_html');
+    const exportSessionHtml = exportSessionHtmlInput
+      ? exportSessionHtmlInput.toLowerCase() === 'true'
+      : true; // default to true
+
     return {
       provider,
       model,
@@ -155,7 +175,37 @@ export class ActionOrchestrator {
       ...(extensions?.length ? { extensions } : {}),
       loadBuiltinExtensions,
       ...(baseUrl ? { baseUrl } : {}),
+      exportSessionHtml,
     };
+  }
+
+  /**
+   * Export session as a self-contained HTML file.
+   *
+   * Writes the HTML to the runner's temp directory and sets the
+   * `session_html_path` action output. Users can upload the file
+   * as an artifact using `actions/upload-artifact` in their workflow:
+   *
+   * ```yaml
+   * - uses: actions/upload-artifact@v4
+   *   with:
+   *     name: pi-session-html
+   *     path: ${{ steps.pi.outputs.session_html_path }}
+   * ```
+   */
+  private async exportSessionHtml(pi: PiAgent): Promise<void> {
+    const outputDir = path.join(process.env.RUNNER_TEMP ?? os.tmpdir(), 'pi-session-html');
+    const htmlPath = path.join(outputDir, 'session.html');
+
+    try {
+      fs.mkdirSync(outputDir, { recursive: true });
+      await pi.exportSessionHtml(htmlPath);
+      this.core.info(`[session-html] exported session HTML to ${htmlPath}`);
+      this.core.setOutput('session_html_path', htmlPath);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.core.notice(`[session-html] failed to export HTML: ${msg}`);
+    }
   }
 
   /**
