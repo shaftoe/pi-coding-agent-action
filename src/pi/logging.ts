@@ -31,6 +31,7 @@ export const loggingFactory = (
   core: CoreAdapter,
   extensionInfo?: ExtensionLoadingInfo
 ) => {
+  let sessionCompleted = false;
   pi.on('tool_execution_start', async event => {
     core.info('');
     core.info(`::group::🔧 Tool started: ${event.toolName} (${event.toolCallId})`);
@@ -142,6 +143,11 @@ export const loggingFactory = (
   });
 
   pi.on('agent_end', async () => {
+    if (sessionCompleted) {
+      core.debug('Ignoring duplicate agent_end event (session already completed)');
+      return;
+    }
+    sessionCompleted = true;
     core.info('\n');
     core.info('════════════════════════════════════════════════════════════════');
     core.info('✅ Agent session completed');
