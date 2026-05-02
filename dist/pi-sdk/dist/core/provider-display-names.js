@@ -24,5 +24,6 @@ export const BUILT_IN_PROVIDER_DISPLAY_NAMES = {
     "vercel-ai-gateway": "Vercel AI Gateway",
     xai: "xAI",
     zai: "ZAI",
+    xiaomi: "Xiaomi MiMo Token Plan",
 };
 //# sourceMappingURL=provider-display-names.js.map

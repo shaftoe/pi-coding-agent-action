@@ -12,8 +12,8 @@ export interface SelfUpdateCommand {
     display: string;
 }
 export declare function detectInstallMethod(): InstallMethod;
-export declare function getSelfUpdateCommand(packageName: string): SelfUpdateCommand | undefined;
-export declare function getSelfUpdateUnavailableInstruction(packageName: string): string;
+export declare function getSelfUpdateCommand(packageName: string, npmCommand?: string[]): SelfUpdateCommand | undefined;
+export declare function getSelfUpdateUnavailableInstruction(packageName: string, npmCommand?: string[]): string;
 export declare function getUpdateInstruction(packageName: string): string;
 /**
  * Get the base directory for resolving package assets (themes, package.json, README.md, CHANGELOG.md).

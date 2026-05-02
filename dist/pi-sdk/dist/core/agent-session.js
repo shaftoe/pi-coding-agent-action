@@ -14,7 +14,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { isContextOverflow, modelsAreEqual, resetApiProviders, supportsXhigh } from "@mariozechner/pi-ai";
+import { clampThinkingLevel, getSupportedThinkingLevels, isContextOverflow, modelsAreEqual, resetApiProviders, } from "@mariozechner/pi-ai";
 import { theme } from "../modes/interactive/theme/theme.js";
 import { stripFrontmatter } from "../utils/frontmatter.js";
 import { sleep } from "../utils/sleep.js";
@@ -53,8 +53,6 @@ export function parseSkillBlock(text) {
 // ============================================================================
 /** Standard thinking levels */
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high"];
-/** Thinking levels including xhigh (for supported models) */
-const THINKING_LEVELS_WITH_XHIGH = ["off", "minimal", "low", "medium", "high", "xhigh"];
 // ============================================================================
 // AgentSession Class
 // ============================================================================
@@ -1194,15 +1192,9 @@ export class AgentSession {
      * The provider will clamp to what the specific model supports internally.
      */
     getAvailableThinkingLevels() {
-        if (!this.supportsThinking())
-            return ["off"];
-        return this.supportsXhighThinking() ? THINKING_LEVELS_WITH_XHIGH : THINKING_LEVELS;
-    }
-    /**
-     * Check if current model supports xhigh thinking level.
-     */
-    supportsXhighThinking() {
-        return this.model ? supportsXhigh(this.model) : false;
+        if (!this.model)
+            return THINKING_LEVELS;
+        return getSupportedThinkingLevels(this.model);
     }
     /**
      * Check if current model supports thinking/reasoning.
@@ -1219,24 +1211,8 @@ export class AgentSession {
         }
         return this.thinkingLevel;
     }
-    _clampThinkingLevel(level, availableLevels) {
-        const ordered = THINKING_LEVELS_WITH_XHIGH;
-        const available = new Set(availableLevels);
-        const requestedIndex = ordered.indexOf(level);
-        if (requestedIndex === -1) {
-            return availableLevels[0] ?? "off";
-        }
-        for (let i = requestedIndex; i < ordered.length; i++) {
-            const candidate = ordered[i];
-            if (available.has(candidate))
-                return candidate;
-        }
-        for (let i = requestedIndex - 1; i >= 0; i--) {
-            const candidate = ordered[i];
-            if (available.has(candidate))
-                return candidate;
-        }
-        return availableLevels[0] ?? "off";
+    _clampThinkingLevel(level, _availableLevels) {
+        return this.model ? clampThinkingLevel(this.model, level) : "off";
     }
     // =========================================================================
     // Queue Mode Management

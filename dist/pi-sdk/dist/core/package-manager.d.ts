@@ -188,7 +188,6 @@ export declare class DefaultPackageManager implements PackageManager {
     private addResource;
     private createAccumulator;
     private toResolvedPaths;
-    private shouldUseWindowsShell;
     private spawnCommand;
     private spawnCaptureCommand;
     private runCommandCapture;

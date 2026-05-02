@@ -426,10 +426,6 @@ export declare class AgentSession {
      */
     getAvailableThinkingLevels(): ThinkingLevel[];
     /**
-     * Check if current model supports xhigh thinking level.
-     */
-    supportsXhighThinking(): boolean;
-    /**
      * Check if current model supports thinking/reasoning.
      */
     supportsThinking(): boolean;

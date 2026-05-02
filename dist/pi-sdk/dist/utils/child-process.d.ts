@@ -1,4 +1,5 @@
 import type { ChildProcess } from "node:child_process";
+export declare function shouldUseWindowsShell(command: string): boolean;
 /**
  * Wait for a child process to terminate without hanging on inherited stdio handles.
  *

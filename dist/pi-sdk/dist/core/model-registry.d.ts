@@ -133,6 +133,7 @@ export interface ProviderConfigInput {
         api?: Api;
         baseUrl?: string;
         reasoning: boolean;
+        thinkingLevelMap?: Model<Api>["thinkingLevelMap"];
         input: ("text" | "image")[];
         cost: {
             input: number;

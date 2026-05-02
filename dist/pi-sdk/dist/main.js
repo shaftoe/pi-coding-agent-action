@@ -6,7 +6,7 @@
  */
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
-import { modelsAreEqual, supportsXhigh } from "@mariozechner/pi-ai";
+import { modelsAreEqual } from "@mariozechner/pi-ai";
 import { ProcessTerminal, setKeybindings, TUI } from "@mariozechner/pi-tui";
 import chalk from "chalk";
 import { parseArgs, printHelp } from "./cli/args.js";
@@ -464,16 +464,7 @@ export async function main(args, options) {
         });
         const cliThinkingOverride = parsed.thinking !== undefined || cliThinkingFromModel;
         if (created.session.model && cliThinkingOverride) {
-            let effectiveThinking = created.session.thinkingLevel;
-            if (!created.session.model.reasoning) {
-                effectiveThinking = "off";
-            }
-            else if (effectiveThinking === "xhigh" && !supportsXhigh(created.session.model)) {
-                effectiveThinking = "high";
-            }
-            if (effectiveThinking !== created.session.thinkingLevel) {
-                created.session.setThinkingLevel(effectiveThinking);
-            }
+            created.session.setThinkingLevel(created.session.thinkingLevel);
         }
         return {
             ...created,

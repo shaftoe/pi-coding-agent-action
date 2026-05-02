@@ -49,19 +49,20 @@ const VercelGatewayRoutingSchema = Type.Object({
     only: Type.Optional(Type.Array(Type.String())),
     order: Type.Optional(Type.Array(Type.String())),
 });
-// Schema for OpenAI compatibility settings
-const ReasoningEffortMapSchema = Type.Object({
-    minimal: Type.Optional(Type.String()),
-    low: Type.Optional(Type.String()),
-    medium: Type.Optional(Type.String()),
-    high: Type.Optional(Type.String()),
-    xhigh: Type.Optional(Type.String()),
+// Schema for thinking level support and provider-specific values
+const ThinkingLevelMapValueSchema = Type.Union([Type.String(), Type.Null()]);
+const ThinkingLevelMapSchema = Type.Object({
+    off: Type.Optional(ThinkingLevelMapValueSchema),
+    minimal: Type.Optional(ThinkingLevelMapValueSchema),
+    low: Type.Optional(ThinkingLevelMapValueSchema),
+    medium: Type.Optional(ThinkingLevelMapValueSchema),
+    high: Type.Optional(ThinkingLevelMapValueSchema),
+    xhigh: Type.Optional(ThinkingLevelMapValueSchema),
 });
 const OpenAICompletionsCompatSchema = Type.Object({
     supportsStore: Type.Optional(Type.Boolean()),
     supportsDeveloperRole: Type.Optional(Type.Boolean()),
     supportsReasoningEffort: Type.Optional(Type.Boolean()),
-    reasoningEffortMap: Type.Optional(ReasoningEffortMapSchema),
     supportsUsageInStreaming: Type.Optional(Type.Boolean()),
     maxTokensField: Type.Optional(Type.Union([Type.Literal("max_completion_tokens"), Type.Literal("max_tokens")])),
     requiresToolResultName: Type.Optional(Type.Boolean()),
@@ -103,6 +104,7 @@ const ModelDefinitionSchema = Type.Object({
     api: Type.Optional(Type.String({ minLength: 1 })),
     baseUrl: Type.Optional(Type.String({ minLength: 1 })),
     reasoning: Type.Optional(Type.Boolean()),
+    thinkingLevelMap: Type.Optional(ThinkingLevelMapSchema),
     input: Type.Optional(Type.Array(Type.Union([Type.Literal("text"), Type.Literal("image")]))),
     cost: Type.Optional(Type.Object({
         input: Type.Number(),
@@ -119,6 +121,7 @@ const ModelDefinitionSchema = Type.Object({
 const ModelOverrideSchema = Type.Object({
     name: Type.Optional(Type.String({ minLength: 1 })),
     reasoning: Type.Optional(Type.Boolean()),
+    thinkingLevelMap: Type.Optional(ThinkingLevelMapSchema),
     input: Type.Optional(Type.Array(Type.Union([Type.Literal("text"), Type.Literal("image")]))),
     cost: Type.Optional(Type.Object({
         input: Type.Optional(Type.Number()),
@@ -195,6 +198,9 @@ function applyModelOverride(model, override) {
         result.name = override.name;
     if (override.reasoning !== undefined)
         result.reasoning = override.reasoning;
+    if (override.thinkingLevelMap !== undefined) {
+        result.thinkingLevelMap = { ...model.thinkingLevelMap, ...override.thinkingLevelMap };
+    }
     if (override.input !== undefined)
         result.input = override.input;
     if (override.contextWindow !== undefined)
@@ -438,6 +444,7 @@ export class ModelRegistry {
                     provider: providerName,
                     baseUrl,
                     reasoning: modelDef.reasoning ?? false,
+                    thinkingLevelMap: modelDef.thinkingLevelMap,
                     input: (modelDef.input ?? ["text"]),
                     cost: modelDef.cost ?? defaultCost,
                     contextWindow: modelDef.contextWindow ?? 128000,
@@ -679,8 +686,9 @@ export class ModelRegistry {
                     name: modelDef.name,
                     api: api,
                     provider: providerName,
-                    baseUrl: config.baseUrl,
+                    baseUrl: modelDef.baseUrl ?? config.baseUrl,
                     reasoning: modelDef.reasoning,
+                    thinkingLevelMap: modelDef.thinkingLevelMap,
                     input: modelDef.input,
                     cost: modelDef.cost,
                     contextWindow: modelDef.contextWindow,
