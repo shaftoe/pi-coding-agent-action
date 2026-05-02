@@ -266,6 +266,28 @@ describe('ActionOrchestrator', () => {
       expect(mockGit.deleteReaction).toHaveBeenCalledWith(mockReaction);
     });
 
+    test('logs agent session completed banner after successful run', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockCore.info).toHaveBeenCalledWith('✅ Agent session completed');
+    });
+
+    test('does not log agent session completed banner when run throws', async () => {
+      const runMock = mock(async () => {
+        throw new Error('API error');
+      });
+      mockPiAgent.run = runMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+
+      await expect(orchestrator.execute()).rejects.toThrow('API error');
+
+      // The completion banner should NOT have been logged
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: string[]) => c[0]);
+      expect(infoCalls).not.toContain('✅ Agent session completed');
+    });
+
     test('creates final comment with result', async () => {
       const runMock = mock(async () => ({
         result: 'Your tests are ready!',

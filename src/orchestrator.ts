@@ -70,6 +70,11 @@ export class ActionOrchestrator {
       const pi = this.piAgentFactory(config, this.core, this.platformProvider);
       const { result, sessionStats } = await pi.run(prompt);
 
+      this.core.info('\n');
+      this.core.info('════════════════════════════════════════════════════════════════');
+      this.core.info('✅ Agent session completed');
+      this.core.info('════════════════════════════════════════════════════════════════');
+
       if (config.exportSessionHtml) {
         await this.exportSessionHtml(pi);
       } else {
