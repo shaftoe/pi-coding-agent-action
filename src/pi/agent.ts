@@ -7,7 +7,6 @@
  */
 
 import { AuthStorage, createAgentSession, ModelRegistry } from '@mariozechner/pi-coding-agent';
-import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { getResourceLoader } from './resource-loader';
 import { getVersion } from './logging';
@@ -83,11 +82,7 @@ export class Agent {
     if (baseUrl !== undefined) {
       this.baseUrl = baseUrl;
     }
-    // Prefer project-local .pi/models.json (version-controlled with the repo),
-    // fall back to the SDK default (~/.pi/agent/models.json).
-    const localModelsJson = path.resolve('.pi', 'models.json');
-    const modelsJsonPath = existsSync(localModelsJson) ? localModelsJson : undefined;
-    this.modelRegistry = ModelRegistry.create(this.authStorage, modelsJsonPath);
+    this.modelRegistry = ModelRegistry.create(this.authStorage);
 
     if (this.token) {
       this.core.debug(`[auth] Setting api_key token for ${this.provider} provider`);
