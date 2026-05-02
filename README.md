@@ -249,7 +249,7 @@ The action exposes the following outputs, which can be consumed by downstream st
 
 ### Uploading Session HTML as Artifact
 
-When `export_session_html` is enabled (the default), the action writes a self-contained HTML file and exposes its path via the `session_html_path` output. To upload it as a workflow artifact:
+When `export_session_html` is enabled (the default), the action writes a self-contained HTML file and exposes its path via the `session_html_path` output. It can be uploaded as a workflow artifact for example:
 
 ```yaml
 - uses: shaftoe/pi-coding-agent-action@v2
@@ -267,20 +267,7 @@ When `export_session_html` is enabled (the default), the action writes a self-co
     path: ${{ steps.pi.outputs.session_html_path }}
 ```
 
-## How It Works
-
-1. User comments `/pi [instructions]` in an issue or PR
-2. Action fetches issue/PR context via GitHub API
-3. Creates a new branch: `pi/issue{number}-{timestamp}`
-4. Runs Pi agent with the issue/PR context
-5. If changes are made:
-   - Stages all modified files via Git Data API
-   - Commits with AI-generated summary
-   - Pushes to remote via GitHub API
-   - Creates a new PR
-6. Posts result as a comment with metadata footer
-
-### Custom Tools
+## Custom Tools
 
 The action extends Pi with three custom tools:
 
