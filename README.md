@@ -136,32 +136,52 @@ Supported extension sources:
 
 ### Custom Providers via `models.json`
 
-The Pi SDK supports custom LLM providers (e.g., local servers, API gateways, OpenAI-compatible endpoints) through a `models.json` configuration file. Drop the file at `~/.pi/agent/models.json` in a previous workflow step:
+The Pi SDK supports custom LLM providers (e.g., local servers, API gateways, OpenAI-compatible endpoints) through a `models.json` configuration file.
+
+**Recommended:** commit `.pi/models.json` to your repo so the configuration is version-controlled and discoverable:
+
+```yaml
+- uses: shaftoe/pi-coding-agent-action@v2
+  with:
+    provider: my-llm
+    model: my-model-v1
+    token: ${{ secrets.LLM_API_KEY }}
+```
+
+with `.pi/models.json` in the repository root:
+
+```json
+{
+  "providers": {
+    "my-llm": {
+      "baseUrl": "https://api.example.com/v1",
+      "apiKey": "${{ secrets.LLM_API_KEY }}",
+      "headers": { "X-Custom-Auth": "bearer" },
+      "models": [{
+        "id": "my-model-v1",
+        "name": "My Model V1",
+        "api": "openai-chat",
+        "reasoning": false,
+        "input": ["text"],
+        "cost": { "input": 0.001, "output": 0.002, "cacheRead": 0, "cacheWrite": 0 },
+        "contextWindow": 128000,
+        "maxTokens": 4096
+      }]
+    }
+  }
+}
+```
+
+> **Tip:** If the `apiKey` value in `models.json` is a plain string it will be used directly. You can also reference an environment variable name (e.g. `"apiKey": "LLM_API_KEY"`) and set the env var in the workflow — the SDK resolves it automatically.
+
+Alternatively, you can generate the file at `~/.pi/agent/models.json` in a previous workflow step:
 
 ```yaml
 - name: Configure custom LLM provider
   run: |
     mkdir -p ~/.pi/agent
     cat > ~/.pi/agent/models.json << 'EOF'
-    {
-      "providers": {
-        "my-llm": {
-          "baseUrl": "https://api.example.com/v1",
-          "apiKey": "${{ secrets.LLM_API_KEY }}",
-          "headers": { "X-Custom-Auth": "bearer" },
-          "models": [{
-            "id": "my-model-v1",
-            "name": "My Model V1",
-            "api": "openai-chat",
-            "reasoning": false,
-            "input": ["text"],
-            "cost": { "input": 0.001, "output": 0.002, "cacheRead": 0, "cacheWrite": 0 },
-            "contextWindow": 128000,
-            "maxTokens": 4096
-          }]
-        }
-      }
-    }
+    { … }
     EOF
 
 - uses: shaftoe/pi-coding-agent-action@v2
@@ -171,6 +191,8 @@ The Pi SDK supports custom LLM providers (e.g., local servers, API gateways, Ope
     token: ${{ secrets.LLM_API_KEY }}
 ```
 
+**Lookup order:** `.pi/models.json` (project-local) → `~/.pi/agent/models.json` (home directory). When neither file exists, behavior is identical to the default (built-in providers only). Set the `PI_CODING_AGENT_DIR` environment variable to use a different config directory.
+
 The `models.json` schema supports:
 
 - **`baseUrl`** — Override the API endpoint URL
@@ -178,8 +200,6 @@ The `models.json` schema supports:
 - **`headers`** — Custom HTTP headers for authentication or routing
 - **`models`** — Array of model definitions with `id`, `name`, `api`, `reasoning`, `input`, `cost`, `contextWindow`, `maxTokens`, `headers`, `compat`
 - **`modelOverrides`** — Per-model property overrides for built-in providers
-
-When `~/.pi/agent/models.json` does not exist, behavior is identical to the default (built-in providers only). Set the `PI_CODING_AGENT_DIR` environment variable to use a different config directory.
 
 Refer to the [Pi documentation](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent#customization) for the full schema reference.
 
