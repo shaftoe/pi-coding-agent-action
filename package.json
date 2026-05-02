@@ -31,7 +31,7 @@
     "@actions/core": "^3.0.1",
     "@actions/github": "^9.1.1",
     "@js-temporal/polyfill": "^0.5.1",
-    "@mariozechner/pi-coding-agent": "0.71.1",
+    "@mariozechner/pi-coding-agent": "0.72.0",
     "ignore": "^7.0.5"
   },
   "devDependencies": {
@@ -46,7 +46,7 @@
     "@typescript-eslint/parser": "8.59.1",
     "bun-types": "^1.3.13",
     "esbuild": "^0.28.0",
-    "eslint": "^10.2.1",
+    "eslint": "10.3.0",
     "isomorphic-git": "1.37.6",
     "prettier": "^3.8.3",
     "semantic-release": "^25.0.3",
