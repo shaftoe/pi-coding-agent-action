@@ -82,7 +82,7 @@ export class Agent {
     if (baseUrl !== undefined) {
       this.baseUrl = baseUrl;
     }
-    this.modelRegistry = ModelRegistry.inMemory(this.authStorage);
+    this.modelRegistry = ModelRegistry.create(this.authStorage);
 
     if (this.token) {
       this.core.debug(`[auth] Setting api_key token for ${this.provider} provider`);

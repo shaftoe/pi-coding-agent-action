@@ -134,6 +134,55 @@ Supported extension sources:
 - **git repositories**: `git:github.com/user/repo` (supports branches with `#branch`)
 - **local files**: Relative paths to `.ts` extension files
 
+### Custom Providers via `models.json`
+
+The Pi SDK supports custom LLM providers (e.g., local servers, API gateways, OpenAI-compatible endpoints) through a `models.json` configuration file. Drop the file at `~/.pi/agent/models.json` in a previous workflow step:
+
+```yaml
+- name: Configure custom LLM provider
+  run: |
+    mkdir -p ~/.pi/agent
+    cat > ~/.pi/agent/models.json << 'EOF'
+    {
+      "providers": {
+        "my-llm": {
+          "baseUrl": "https://api.example.com/v1",
+          "apiKey": "${{ secrets.LLM_API_KEY }}",
+          "headers": { "X-Custom-Auth": "bearer" },
+          "models": [{
+            "id": "my-model-v1",
+            "name": "My Model V1",
+            "api": "openai-chat",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0.001, "output": 0.002, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 128000,
+            "maxTokens": 4096
+          }]
+        }
+      }
+    }
+    EOF
+
+- uses: shaftoe/pi-coding-agent-action@v2
+  with:
+    provider: my-llm
+    model: my-model-v1
+    token: ${{ secrets.LLM_API_KEY }}
+```
+
+The `models.json` schema supports:
+
+- **`baseUrl`** — Override the API endpoint URL
+- **`apiKey`** — Provider API key (falls back to the `token` input)
+- **`headers`** — Custom HTTP headers for authentication or routing
+- **`models`** — Array of model definitions with `id`, `name`, `api`, `reasoning`, `input`, `cost`, `contextWindow`, `maxTokens`, `headers`, `compat`
+- **`modelOverrides`** — Per-model property overrides for built-in providers
+
+When `~/.pi/agent/models.json` does not exist, behavior is identical to the default (built-in providers only). Set the `PI_CODING_AGENT_DIR` environment variable to use a different config directory.
+
+Refer to the [Pi documentation](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent#customization) for the full schema reference.
+
 ### Disabling Built-in Extensions
 
 By default the action loads four built-in GitHub related tools (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`, `get_pr_diff`) to help Pi better interact with GitHub action environment without relying on external tools like `gh` nor need special skills setup for that. If you want Pi to use only your own custom extensions (or none at all), set `load_builtin_extensions` to `false`:
