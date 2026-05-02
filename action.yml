@@ -51,7 +51,7 @@ inputs:
     default: ''
 
   export_session_html:
-    description: 'Export the Pi session as a self-contained HTML file and upload it as a GitHub Actions artifact. Set to false to disable.'
+    description: 'Export the Pi session as a self-contained HTML file and expose its path via the `session_html_path` output. Set to false to disable.'
     required: false
     default: 'false'
 

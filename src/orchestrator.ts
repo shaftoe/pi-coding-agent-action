@@ -71,12 +71,7 @@ export class ActionOrchestrator {
       const { result, sessionStats } = await pi.run(prompt);
 
       if (config.exportSessionHtml) {
-        try {
-          await this.exportSessionHtml(pi);
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          this.core.notice(`failed to export session HTML: ${msg}`);
-        }
+        await this.exportSessionHtml(pi);
       } else {
         this.core.debug('[session-html] export disabled by configuration');
       }
@@ -187,14 +182,17 @@ export class ActionOrchestrator {
    * as an artifact using `actions/upload-artifact` in their workflow:
    *
    * ```yaml
-   * - uses: actions/upload-artifact@v4
+   * - uses: actions/upload-artifact@v7
    *   with:
    *     name: pi-session-html
    *     path: ${{ steps.pi.outputs.session_html_path }}
    * ```
    */
   private async exportSessionHtml(pi: PiAgent): Promise<void> {
-    const outputDir = path.join(process.env.RUNNER_TEMP ?? os.tmpdir(), 'pi-session-html');
+    const outputDir = path.join(
+      process.env.RUNNER_TEMP ?? os.tmpdir(),
+      `pi-session-html-${process.env.GITHUB_RUN_ID ?? 'local'}`
+    );
     const htmlPath = path.join(outputDir, 'session.html');
 
     try {

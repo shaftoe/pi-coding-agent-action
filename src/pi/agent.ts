@@ -199,7 +199,7 @@ export class Agent {
     const previousPiPackageDir = process.env.PI_PACKAGE_DIR;
     try {
       process.env.PI_PACKAGE_DIR = path.join(__dirname, 'pi-sdk');
-      return this.session.exportToHtml(outputPath);
+      return await this.session.exportToHtml(outputPath);
     } finally {
       if (previousPiPackageDir !== undefined) {
         process.env.PI_PACKAGE_DIR = previousPiPackageDir;
