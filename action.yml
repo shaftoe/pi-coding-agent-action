@@ -53,7 +53,7 @@ inputs:
   export_session_html:
     description: 'Export the Pi session as a self-contained HTML file and upload it as a GitHub Actions artifact. Set to false to disable.'
     required: false
-    default: 'true'
+    default: 'false'
 
 runs:
   using: 'node24'

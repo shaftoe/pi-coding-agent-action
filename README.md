@@ -210,7 +210,7 @@ jobs:
 
 ### Uploading Session HTML as Artifact
 
-When `export_session_html` is enabled (the default), the action writes a self-contained HTML file and exposes its path via the `session_html_path` output. It can be uploaded as a workflow artifact for example:
+When `export_session_html` is enabled, the action writes a self-contained HTML file and exposes its path via the `session_html_path` output. It can be uploaded as a workflow artifact for example:
 
 ```yaml
 - uses: shaftoe/pi-coding-agent-action@v2
@@ -237,7 +237,7 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
 | `base_url` | Optional override for the provider base URL (e.g., to route traffic through a proxy or use an OpenAI-compatible gateway) | No | - |
-| `export_session_html` | Export the session as a self-contained HTML file | No | `true` |
+| `export_session_html` | Export the session as a self-contained HTML file | No | `false` |
 | `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
 | `github_token` | GitHub token for API access | Yes | - |
 | `load_builtin_extensions` | Whether to load built-in GitHub extensions (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`) | No | `true` |
