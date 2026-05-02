@@ -7,6 +7,7 @@
 
 import type { Temporal } from '@js-temporal/polyfill';
 import type { CreateReactionType, PlatformProvider } from './platform';
+import type { SessionArtifactsCollector } from './pi/session-artifacts';
 
 /**
  * Adapter interface for @actions/core operations.
@@ -88,7 +89,12 @@ export interface PromptResult {
  * Accepts CoreAdapter for logging within the Pi agent session, and
  * PlatformProvider for platform operations used by custom tools.
  */
-export type PiAgentFactory = (config: PiConfig, core: CoreAdapter, provider: PlatformProvider) => PiAgent;
+export type PiAgentFactory = (
+  config: PiConfig,
+  core: CoreAdapter,
+  provider: PlatformProvider,
+  artifactsCollector?: SessionArtifactsCollector
+) => PiAgent;
 
 /**
  * Configuration for the Pi agent.
@@ -102,6 +108,7 @@ export interface PiConfig {
   extensions?: string[];
   loadBuiltinExtensions?: boolean;
   baseUrl?: string;
+  exportSessionArtifacts?: boolean;
 }
 
 /**

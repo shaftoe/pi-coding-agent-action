@@ -9,6 +9,7 @@
 import { AuthStorage, createAgentSession, ModelRegistry } from '@mariozechner/pi-coding-agent';
 import { getResourceLoader } from './resource-loader';
 import { getVersion } from './logging';
+import type { SessionArtifactsCollector } from './session-artifacts';
 
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
 import type { Api, Model } from '@mariozechner/pi-ai';
@@ -37,6 +38,7 @@ export class Agent {
   private extensions?: string[];
   private loadBuiltinExtensions?: boolean;
   private baseUrl?: string;
+  private artifactsCollector?: SessionArtifactsCollector;
 
   /**
    * Create a new Pi agent.
@@ -64,7 +66,8 @@ export class Agent {
     platformProvider: PlatformProvider,
     extensions?: string[],
     loadBuiltinExtensions?: boolean,
-    baseUrl?: string
+    baseUrl?: string,
+    artifactsCollector?: SessionArtifactsCollector
   ) {
     this.modelStr = modelStr;
     this.provider = provider;
@@ -80,6 +83,9 @@ export class Agent {
     }
     if (baseUrl !== undefined) {
       this.baseUrl = baseUrl;
+    }
+    if (artifactsCollector !== undefined) {
+      this.artifactsCollector = artifactsCollector;
     }
     this.modelRegistry = ModelRegistry.inMemory(this.authStorage);
 
@@ -127,7 +133,8 @@ export class Agent {
         this.core,
         this.platformProvider,
         this.extensions,
-        this.loadBuiltinExtensions
+        this.loadBuiltinExtensions,
+        this.artifactsCollector
       ),
     });
     this.session = session;
@@ -144,6 +151,8 @@ export class Agent {
         case 'thinking_delta':
           // We write the thinking into action logs directly
           process.stdout.write(event.assistantMessageEvent.delta);
+          // Also capture thinking for session artifacts
+          this.artifactsCollector?.recordThinkingDelta(event.assistantMessageEvent.delta);
           break;
         default:
           break;

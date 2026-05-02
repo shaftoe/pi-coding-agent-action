@@ -6,6 +6,7 @@
 
 import type { PiAgent, PiAgentFactory, PiConfig, CoreAdapter } from '../types';
 import type { PlatformProvider } from '../platform';
+import type { SessionArtifactsCollector } from '../pi/session-artifacts';
 import { Agent } from '../pi';
 
 /**
@@ -14,7 +15,8 @@ import { Agent } from '../pi';
 export const createRealPiAgent: PiAgentFactory = (
   config: PiConfig,
   core: CoreAdapter,
-  provider: PlatformProvider
+  provider: PlatformProvider,
+  artifactsCollector?: SessionArtifactsCollector
 ): PiAgent => {
   const agent = new Agent(
     config.model,
@@ -25,7 +27,8 @@ export const createRealPiAgent: PiAgentFactory = (
     provider,
     config.extensions,
     config.loadBuiltinExtensions,
-    config.baseUrl
+    config.baseUrl,
+    artifactsCollector
   );
 
   return {

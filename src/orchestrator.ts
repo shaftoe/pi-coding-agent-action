@@ -17,6 +17,7 @@ import {
   type SessionStats,
 } from './types';
 import type { CreateReactionType, PlatformProvider } from './platform';
+import { SessionArtifactsCollector, exportArtifacts } from './pi/session-artifacts';
 
 declare const __VERSION__: string;
 
@@ -47,6 +48,7 @@ export class ActionOrchestrator {
     let config: PiConfig | undefined;
     let reaction: CreateReactionType | undefined;
     let prompt: string | undefined;
+    let artifactsCollector: SessionArtifactsCollector | undefined;
 
     try {
       config = this.gatherConfig();
@@ -56,6 +58,19 @@ export class ActionOrchestrator {
         throw new Error('No prompt found - cannot proceed');
       }
 
+      // Create session artifacts collector if enabled
+      if (config.exportSessionArtifacts) {
+        artifactsCollector = new SessionArtifactsCollector(
+          {
+            provider: config.provider,
+            model: config.model,
+            thinkingLevel: config.thinkingLevel,
+          },
+          this.core
+        );
+        this.core.info('[artifacts] session artifacts collection enabled');
+      }
+
       try {
         reaction = await this.git.addReaction();
       } catch (e) {
@@ -63,8 +78,18 @@ export class ActionOrchestrator {
         this.core.notice(`failed to add reaction: ${errorMessage}`);
       }
 
-      const pi = this.piAgentFactory(config, this.core, this.platformProvider);
+      const pi = this.piAgentFactory(config, this.core, this.platformProvider, artifactsCollector);
       const { result, sessionStats } = await pi.run(prompt);
+
+      // Finalize and export artifacts
+      if (artifactsCollector) {
+        artifactsCollector.finalize(true);
+        const artifacts = artifactsCollector.getArtifacts(sessionStats, __VERSION__);
+        const artifactsPath = await exportArtifacts(artifacts, this.core);
+        if (artifactsPath) {
+          this.core.setOutput('session_artifacts_path', artifactsPath);
+        }
+      }
 
       await this.finalize(result, config, startTime, reaction, sessionStats, true);
     } catch (e) {
@@ -82,6 +107,20 @@ export class ActionOrchestrator {
           thinkingLevel: '',
           promptInput: '',
         };
+
+        // Export error artifacts
+        if (artifactsCollector) {
+          artifactsCollector.finalize(false, errorMessage);
+          const artifacts = artifactsCollector.getArtifacts(undefined, __VERSION__);
+          try {
+            await exportArtifacts(artifacts, this.core);
+          } catch (artifactError) {
+            const artifactErrorMsg =
+              artifactError instanceof Error ? artifactError.message : String(artifactError);
+            this.core.notice(`failed to export error artifacts: ${artifactErrorMsg}`);
+          }
+        }
+
         await this.finalize(errorMessage, errorConfig, startTime, reaction, undefined, false);
       } catch (finalizeError) {
         const finalizeErrorMessage =
@@ -146,6 +185,11 @@ export class ActionOrchestrator {
 
     const baseUrl = this.core.getInput('base_url') || undefined;
 
+    const exportSessionArtifactsInput = this.core.getInput('export_session_artifacts');
+    const exportSessionArtifacts = exportSessionArtifactsInput
+      ? exportSessionArtifactsInput.toLowerCase() === 'true'
+      : true; // default to true
+
     return {
       provider,
       model,
@@ -155,6 +199,7 @@ export class ActionOrchestrator {
       ...(extensions?.length ? { extensions } : {}),
       loadBuiltinExtensions,
       ...(baseUrl ? { baseUrl } : {}),
+      exportSessionArtifacts,
     };
   }
 

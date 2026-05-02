@@ -36,6 +36,7 @@ describe('ActionOrchestrator', () => {
         token: 'test-token',
         thinking_level: '',
         prompt: '',
+        export_session_artifacts: '',
       };
       return defaults[name];
     });
@@ -153,7 +154,7 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           promptInput: 'Review this code',
         }),
-        mockCore, mockProvider
+        mockCore, mockProvider, expect.anything()
       );
     });
 
@@ -188,8 +189,9 @@ describe('ActionOrchestrator', () => {
           thinkingLevel: 'medium',
           promptInput: '',
           loadBuiltinExtensions: true, // default value
+          exportSessionArtifacts: true,
         },
-        mockCore, mockProvider
+        mockCore, mockProvider, expect.anything()
       );
     });
 
@@ -221,8 +223,9 @@ describe('ActionOrchestrator', () => {
           thinkingLevel: '', // Empty string, because ?? doesn't apply to empty strings
           promptInput: '',
           loadBuiltinExtensions: true, // default value
+          exportSessionArtifacts: true,
         },
-        mockCore, mockProvider
+        mockCore, mockProvider, expect.anything()
       );
     });
 
@@ -625,7 +628,7 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           extensions: ['npm:package-one', 'git:github.com/user/repo', './local-path.ts'],
         }),
-        mockCore, mockProvider
+        mockCore, mockProvider, expect.anything()
       );
     });
 
@@ -650,7 +653,7 @@ describe('ActionOrchestrator', () => {
         expect.not.objectContaining({
           extensions: expect.any(Array),
         }),
-        mockCore, mockProvider
+        mockCore, mockProvider, expect.anything()
       );
     });
 
@@ -674,7 +677,7 @@ describe('ActionOrchestrator', () => {
         expect.not.objectContaining({
           extensions: expect.any(Array),
         }),
-        mockCore, mockProvider
+        mockCore, mockProvider, expect.anything()
       );
     });
 
@@ -695,7 +698,7 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           loadBuiltinExtensions: true,
         }),
-        mockCore, mockProvider
+        mockCore, mockProvider, expect.anything()
       );
     });
 
@@ -720,7 +723,7 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           loadBuiltinExtensions: true,
         }),
-        mockCore, mockProvider
+        mockCore, mockProvider, expect.anything()
       );
     });
 
@@ -745,7 +748,7 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           loadBuiltinExtensions: false,
         }),
-        mockCore, mockProvider
+        mockCore, mockProvider, expect.anything()
       );
     });
 
@@ -777,7 +780,7 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           loadBuiltinExtensions: true,
         }),
-        mockCore, mockProvider
+        mockCore, mockProvider, expect.anything()
       );
     });
 
@@ -802,7 +805,7 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           loadBuiltinExtensions: false,
         }),
-        mockCore, mockProvider
+        mockCore, mockProvider, expect.anything()
       );
     });
   });
@@ -854,7 +857,7 @@ describe('ActionOrchestrator', () => {
 
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({ thinkingLevel: '   ' }),
-        mockCore, mockProvider
+        mockCore, mockProvider, expect.anything()
       );
     });
   });
@@ -1100,7 +1103,7 @@ describe('ActionOrchestrator', () => {
         expect.objectContaining({
           baseUrl: 'https://my-proxy.example.com/v1',
         }),
-        mockCore, mockProvider
+        mockCore, mockProvider, expect.anything()
       );
     });
 
@@ -1125,7 +1128,7 @@ describe('ActionOrchestrator', () => {
         expect.not.objectContaining({
           baseUrl: expect.any(String),
         }),
-        mockCore, mockProvider
+        mockCore, mockProvider, expect.anything()
       );
     });
 
@@ -1134,6 +1137,110 @@ describe('ActionOrchestrator', () => {
       await orchestrator.execute();
 
       expect(mockCore.getInput).toHaveBeenCalledWith('base_url');
+    });
+  });
+
+  describe('export_session_artifacts configuration', () => {
+    test('defaults to true when not provided', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exportSessionArtifacts: true,
+        }),
+        mockCore, mockProvider, expect.anything()
+      );
+    });
+
+    test('parses true value correctly', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          export_session_artifacts: 'true',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exportSessionArtifacts: true,
+        }),
+        mockCore, mockProvider, expect.anything()
+      );
+    });
+
+    test('parses false value correctly', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          export_session_artifacts: 'false',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exportSessionArtifacts: false,
+        }),
+        mockCore, mockProvider, undefined
+      );
+    });
+
+    test('calls getInput for export_session_artifacts', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockCore.getInput).toHaveBeenCalledWith('export_session_artifacts');
+    });
+
+    test('sets session_artifacts_path output when enabled', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockCore.setOutput).toHaveBeenCalledWith(
+        'session_artifacts_path',
+        expect.stringContaining('session-artifacts.json')
+      );
+    });
+
+    test('does not set session_artifacts_path output when disabled', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          export_session_artifacts: 'false',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockCore.setOutput).not.toHaveBeenCalledWith(
+        'session_artifacts_path',
+        expect.anything()
+      );
     });
   });
 });

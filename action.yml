@@ -50,6 +50,11 @@ inputs:
     required: false
     default: ''
 
+  export_session_artifacts:
+    description: 'Export session artifacts (tool executions, thinking output, token usage, timing) as a downloadable GitHub Actions artifact for debugging and transparency.'
+    required: false
+    default: 'true'
+
 runs:
   using: 'node24'
   main: 'dist/index.js'
@@ -67,3 +72,5 @@ outputs:
     description: 'Cost of the invocation in USD'
   duration_seconds:
     description: 'Wall-clock duration of agent execution in seconds'
+  session_artifacts_path:
+    description: 'Path to the exported session artifacts JSON file (when export_session_artifacts is enabled)'

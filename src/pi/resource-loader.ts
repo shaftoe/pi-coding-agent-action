@@ -21,6 +21,8 @@ import type { ExtensionLoadingInfo } from './logging';
 import { createToolsFactory } from './tools/index';
 import type { CoreAdapter } from '../types';
 import type { PlatformProvider } from '../platform';
+import type { SessionArtifactsCollector } from './session-artifacts';
+import { createArtifactsCollectorFactory } from './session-artifacts';
 
 /**
  * Result of resolving extension sources.
@@ -83,13 +85,15 @@ export async function resolveExtensions(extensions?: string[]): Promise<Extensio
  * @param provider - The platform provider for custom tool operations.
  * @param extensions - Optional array of extension sources (npm packages, git repos, or local paths).
  * @param loadBuiltinExtensions - Whether to load built-in GitHub extensions (default true).
+ * @param artifactsCollector - Optional collector to capture session artifacts from Pi events.
  * @returns A fully loaded {@link DefaultResourceLoader} instance.
  */
 export async function getResourceLoader(
   core: CoreAdapter,
   provider: PlatformProvider,
   extensions?: string[],
-  loadBuiltinExtensions = true
+  loadBuiltinExtensions = true,
+  artifactsCollector?: SessionArtifactsCollector
 ): Promise<DefaultResourceLoader> {
   const { paths: additionalExtensionPaths, info: extensionInfo } =
     await resolveExtensions(extensions);
@@ -97,6 +101,9 @@ export async function getResourceLoader(
   const extensionFactories = [createLoggingFactory(core, extensionInfo)];
   if (loadBuiltinExtensions) {
     extensionFactories.unshift(createToolsFactory(provider));
+  }
+  if (artifactsCollector) {
+    extensionFactories.push(createArtifactsCollectorFactory(artifactsCollector));
   }
 
   const loader = new DefaultResourceLoader({
