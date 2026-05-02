@@ -208,45 +208,6 @@ jobs:
           gh release create v1.0.0 --notes-file release-notes.md
 ```
 
-### Quick Start
-
-Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interactive](./.github/workflows/pi.yml) and [non-interactive](./.github/workflows/pr.yml) workflows in this repository to get started.
-
-## Inputs
-
-| Input | Description | Required | Default |
-|-------|-------------|----------|---------|
-| `base_url` | Optional override for the provider base URL (e.g., to route traffic through a proxy or use an OpenAI-compatible gateway) | No | - |
-| `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
-| `github_token` | GitHub token for API access | Yes | - |
-| `load_builtin_extensions` | Whether to load built-in GitHub extensions (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`) | No | `true` |
-| `model` | Model to use (e.g., claude-sonnet-4-5, claude-opus-4-7, gpt-4o, gemini-2.5-pro) | Yes | - |
-| `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
-| `provider` | LLM provider (anthropic, openai, google, etc.) | Yes | - |
-| `thinking_level` | Model thinking level (off|low|medium|high) | No | off |
-| `token` | Provider API token | Yes | - |
-| `export_session_html` | Export the session as a self-contained HTML file | No | `true` |
-| `trigger` | Trigger phrase used to invoke the action | No | /pi |
-
-Refer to [Pi documentation](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) for the current list of supported providers / models / etc.
-
-## Outputs
-
-The action exposes the following outputs, which can be consumed by downstream steps or jobs:
-
-| Output | Description | Example |
-|--------|-------------|----------|
-| `response` | The main agent response text (or error message on failure) | `Here is the fix for the bug...` |
-| `success` | Whether the agent completed successfully (`true` / `false`) | `true` |
-| `input_tokens` | Number of input tokens consumed (omitted if unavailable) | `1500` |
-| `output_tokens` | Number of output tokens generated (omitted if unavailable) | `800` |
-| `cost` | Cost of the invocation in USD (omitted if unavailable) | `0.042` |
-| `duration_seconds` | Wall-clock duration of agent execution in seconds | `12.7` |
-| `session_html_path` | Path to the exported session HTML file (when `export_session_html` is enabled) | `/tmp/pi-session-html/session.html` |
-
-> [!WARNING]
-> Tokens and cost outputs are only set when the underlying provider returns session statistics. They will be absent for providers that don't report token usage.
-
 ### Uploading Session HTML as Artifact
 
 When `export_session_html` is enabled (the default), the action writes a self-contained HTML file and exposes its path via the `session_html_path` output. It can be uploaded as a workflow artifact for example:
@@ -267,6 +228,45 @@ When `export_session_html` is enabled (the default), the action writes a self-co
     path: ${{ steps.pi.outputs.session_html_path }}
 ```
 
+## Quick Start
+
+Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interactive](./.github/workflows/pi.yml) and [non-interactive](./.github/workflows/pr.yml) workflows in this repository to get started.
+
+## Inputs
+
+| Input | Description | Required | Default |
+|-------|-------------|----------|---------|
+| `base_url` | Optional override for the provider base URL (e.g., to route traffic through a proxy or use an OpenAI-compatible gateway) | No | - |
+| `export_session_html` | Export the session as a self-contained HTML file | No | `true` |
+| `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
+| `github_token` | GitHub token for API access | Yes | - |
+| `load_builtin_extensions` | Whether to load built-in GitHub extensions (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`) | No | `true` |
+| `model` | Model to use (e.g., claude-sonnet-4-5, claude-opus-4-7, gpt-4o, gemini-2.5-pro) | Yes | - |
+| `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
+| `provider` | LLM provider (anthropic, openai, google, etc.) | Yes | - |
+| `thinking_level` | Model thinking level (off|low|medium|high) | No | off |
+| `token` | Provider API token | Yes | - |
+| `trigger` | Trigger phrase used to invoke the action | No | /pi |
+
+Refer to [Pi documentation](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) for the current list of supported providers / models / etc.
+
+## Outputs
+
+The action exposes the following outputs, which can be consumed by downstream steps or jobs:
+
+| Output | Description | Example |
+|--------|-------------|----------|
+| `cost` | Cost of the invocation in USD (omitted if unavailable) | `0.042` |
+| `duration_seconds` | Wall-clock duration of agent execution in seconds | `12.7` |
+| `input_tokens` | Number of input tokens consumed (omitted if unavailable) | `1500` |
+| `output_tokens` | Number of output tokens generated (omitted if unavailable) | `800` |
+| `response` | The main agent response text (or error message on failure) | `Here is the fix for the bug...` |
+| `session_html_path` | Path to the exported session HTML file (when `export_session_html` is enabled) | `/tmp/pi-session-html/session.html` |
+| `success` | Whether the agent completed successfully (`true` / `false`) | `true` |
+
+> [!WARNING]
+> Tokens and cost outputs are only set when the underlying provider returns session statistics. They will be absent for providers that don't report token usage.
+
 ## Custom Tools
 
 The action extends Pi with three custom tools:
@@ -274,8 +274,8 @@ The action extends Pi with three custom tools:
 | Tool | Description |
 |------|-------------|
 | `create_pull_request` | Creates a new pull request by detecting file changes, creating a branch, committing changes via GitHub API, and opening the PR. Supports `dry_run` mode for testing without actual PR creation. |
-| `update_pull_request` | Updates an existing pull request by pushing new commits to the PR branch and optionally updating the title and/or description. Supports `dry_run` mode for testing without actual modifications. |
 | `get_issue_or_pr_thread` | Retrieves the full thread of an issue or pull request including title, body, state, labels, branch info (for PRs), and all comments. Useful for understanding the full context before making changes. |
+| `update_pull_request` | Updates an existing pull request by pushing new commits to the PR branch and optionally updating the title and/or description. Supports `dry_run` mode for testing without actual modifications. |
 
 > [!TIP]
 > Set `load_builtin_extensions` input to `false` to disable custom tool auto loading.
