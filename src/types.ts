@@ -95,6 +95,33 @@ export type PiAgentFactory = (config: PiConfig, core: CoreAdapter, provider: Pla
 /**
  * Configuration for the Pi agent.
  */
+/**
+ * A single custom provider registration entry.
+ *
+ * Mirrors the Pi SDK `ProviderConfigInput` but only the subset that makes
+ * sense as a JSON action input (no callbacks like `streamSimple`).
+ */
+export interface CustomProviderConfig {
+  /** Provider identifier (e.g. "my-llm"). */
+  name: string;
+  /** Optional base URL override for the provider API. */
+  baseUrl?: string;
+  /** Optional API key; falls back to the `token` action input when omitted. */
+  apiKey?: string;
+  /** Optional extra HTTP headers to send with every request. */
+  headers?: Record<string, string>;
+  /** Optional list of model definitions for this provider. */
+  models?: {
+    id: string;
+    name: string;
+    reasoning: boolean;
+    input: ('text' | 'image')[];
+    cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
+    contextWindow: number;
+    maxTokens: number;
+  }[];
+}
+
 export interface PiConfig {
   provider: string;
   model: string;
@@ -105,6 +132,8 @@ export interface PiConfig {
   loadBuiltinExtensions?: boolean;
   baseUrl?: string;
   exportSessionHtml?: boolean;
+  /** Custom provider registrations parsed from the `custom_providers` JSON input. */
+  customProviders?: CustomProviderConfig[];
 }
 
 /**

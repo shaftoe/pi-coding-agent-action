@@ -50,6 +50,32 @@ inputs:
     required: false
     default: ''
 
+  custom_providers:
+    description: >
+      JSON array of custom LLM provider registrations. Each entry is an object
+      with a `name` (provider id), optional `baseUrl`, optional `headers` object,
+      optional `apiKey` (falls back to the `token` input), and an optional
+      `models` array. Models entries need: `id`, `name`, `reasoning` (boolean),
+      `input` (array of "text"/"image"), `cost` ({input, output, cacheRead,
+      cacheWrite}), `contextWindow`, and `maxTokens`.
+
+      Example:
+        [{
+          "name": "my-llm",
+          "baseUrl": "https://api.example.com/v1",
+          "models": [{
+            "id": "my-model-v1",
+            "name": "My Model V1",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0.001, "output": 0.002, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 128000,
+            "maxTokens": 4096
+          }]
+        }]
+    required: false
+    default: ''
+
   export_session_html:
     description: 'Export the Pi session as a self-contained HTML file and expose its path via the `session_html_path` output. Set to false to disable.'
     required: false

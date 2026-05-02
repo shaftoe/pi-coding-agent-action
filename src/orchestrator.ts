@@ -14,6 +14,7 @@ import * as path from 'node:path';
 import {
   type CommentMetadata,
   type CoreAdapter,
+  type CustomProviderConfig,
   type GitAdapter,
   type PiAgent,
   type PiAgentFactory,
@@ -161,6 +162,8 @@ export class ActionOrchestrator {
       ? exportSessionHtmlInput.toLowerCase() === 'true'
       : true; // default to true
 
+    const customProviders = this.parseCustomProviders(this.core.getInput('custom_providers'));
+
     return {
       provider,
       model,
@@ -171,7 +174,57 @@ export class ActionOrchestrator {
       loadBuiltinExtensions,
       ...(baseUrl ? { baseUrl } : {}),
       exportSessionHtml,
+      ...(customProviders ? { customProviders } : {}),
     };
+  }
+
+  /**
+   * Parse the `custom_providers` JSON input into typed config objects.
+   *
+   * Returns `undefined` when the input is empty or contains only whitespace.
+   * Throws a descriptive error when the JSON is malformed or not an array.
+   */
+  private parseCustomProviders(input: string | undefined): CustomProviderConfig[] | undefined {
+    const trimmed = (input ?? '').trim();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      throw new Error(
+        'Invalid `custom_providers` input: not valid JSON. ' +
+          'Expected a JSON array of provider definitions. ' +
+          'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.'
+      );
+    }
+
+    if (!Array.isArray(parsed)) {
+      throw new Error(
+        'Invalid `custom_providers` input: expected a JSON array, got ' +
+          `${typeof parsed}. ` +
+          'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.'
+      );
+    }
+
+    // Validate each entry has at least a `name` field
+    for (let i = 0; i < parsed.length; i++) {
+      const entry = parsed[i] as Record<string, unknown>;
+      if (!entry || typeof entry !== 'object') {
+        throw new Error(
+          `Invalid \`custom_providers\` entry at index ${i}: expected an object, got ${typeof entry}.`
+        );
+      }
+      if (!entry.name || typeof entry.name !== 'string') {
+        throw new Error(
+          `Invalid \`custom_providers\` entry at index ${i}: missing or invalid \`name\` field.`
+        );
+      }
+    }
+
+    return parsed as CustomProviderConfig[];
   }
 
   /**

@@ -14,7 +14,7 @@ import { getVersion } from './logging';
 import type { AgentSession } from '@mariozechner/pi-coding-agent';
 import type { Api, Model } from '@mariozechner/pi-ai';
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
-import type { PromptResult, SessionStats, CoreAdapter } from '../types';
+import type { PromptResult, SessionStats, CoreAdapter, CustomProviderConfig } from '../types';
 import type { PlatformProvider } from '../platform';
 
 /**
@@ -38,6 +38,7 @@ export class Agent {
   private extensions?: string[];
   private loadBuiltinExtensions?: boolean;
   private baseUrl?: string;
+  private customProviders?: import('../types').CustomProviderConfig[];
 
   /**
    * Create a new Pi agent.
@@ -54,6 +55,7 @@ export class Agent {
    * @param extensions            - Optional array of extension sources (npm, git, or local paths).
    * @param loadBuiltinExtensions - Whether to load built-in GitHub extensions (default true).
    * @param baseUrl               - Optional base URL override for the provider.
+   * @param customProviders       - Optional custom provider registrations.
    * @throws {Error}   If the requested model cannot be found in the registry.
    */
   constructor(
@@ -65,7 +67,8 @@ export class Agent {
     platformProvider: PlatformProvider,
     extensions?: string[],
     loadBuiltinExtensions?: boolean,
-    baseUrl?: string
+    baseUrl?: string,
+    customProviders?: CustomProviderConfig[]
   ) {
     this.modelStr = modelStr;
     this.provider = provider;
@@ -82,6 +85,9 @@ export class Agent {
     if (baseUrl !== undefined) {
       this.baseUrl = baseUrl;
     }
+    if (customProviders !== undefined) {
+      this.customProviders = customProviders;
+    }
     this.modelRegistry = ModelRegistry.inMemory(this.authStorage);
 
     if (this.token) {
@@ -90,6 +96,35 @@ export class Agent {
         type: 'api_key',
         key: this.token,
       });
+    }
+
+    // Register custom providers BEFORE base_url / model lookup so that custom
+    // models are available for resolution.
+    if (this.customProviders?.length) {
+      for (const cp of this.customProviders) {
+        this.core.info(`[custom-providers] Registering provider "${cp.name}"`);
+        // Use the provider-specific apiKey if provided, otherwise fall back to
+        // the top-level token input.
+        const apiKey = cp.apiKey ?? this.token;
+        this.modelRegistry.registerProvider(cp.name, {
+          ...(cp.baseUrl ? { baseUrl: cp.baseUrl } : {}),
+          ...(apiKey ? { apiKey } : {}),
+          ...(cp.headers ? { headers: cp.headers } : {}),
+          ...(cp.models
+            ? {
+                models: cp.models.map(m => ({
+                  id: m.id,
+                  name: m.name,
+                  reasoning: m.reasoning,
+                  input: m.input,
+                  cost: m.cost,
+                  contextWindow: m.contextWindow,
+                  maxTokens: m.maxTokens,
+                })),
+              }
+            : {}),
+        });
+      }
     }
 
     if (this.baseUrl) {
