@@ -307,7 +307,10 @@ describe('Agent', () => {
       );
     });
 
-    test('throws when session.state.errorMessage is set', async () => {
+    test('session.state.errorMessage alone does NOT cause failure (stale SDK state)', async () => {
+      // The SDK may leave state.errorMessage set after auto-recovery (e.g.
+      // context window exceeded → compaction → retry → success). Only the
+      // event-tracked sessionError should drive the failure decision.
       const agent = createRealAgent();
       await agent.ready();
 
@@ -316,14 +319,17 @@ describe('Agent', () => {
         ...agent['session'],
         prompt: async () => {},
         state: { errorMessage: 'API rate limit exceeded' },
+        getSessionStats: () => ({
+          tokens: { input: 100, output: 50, total: 150 },
+          cost: 0.001,
+        }),
       } as any;
 
-      await expect(agent.run('Hello')).rejects.toThrow(
-        'Pi agent session error: API rate limit exceeded'
-      );
+      const result = await agent.run('Hello');
+      expect(result.sessionStats).toBeDefined();
     });
 
-    test('prefers sessionError from events over state.errorMessage', async () => {
+    test('sessionError from events takes precedence (even with stale state.errorMessage)', async () => {
       const agent = createRealAgent();
       await agent.ready();
 
@@ -385,16 +391,22 @@ describe('Agent', () => {
       );
     });
 
-    test('recovered error does not cause false failure', async () => {
+    test('recovered transient error (stale state.errorMessage) does not cause false failure', async () => {
       const agent = createRealAgent();
       await agent.ready();
 
-      // Simulate: error was set then cleared by a successful message_end
+      // Simulate the exact scenario from the bug report:
+      // - SDK hit model_context_window_exceeded mid-session
+      // - SDK auto-recovered via compaction + retry
+      // - Successful message_end cleared sessionError
+      // - But session.state.errorMessage still holds the stale error
       agent['sessionError'] = undefined;
       agent['session'] = {
         ...agent['session'],
         prompt: async () => {},
-        state: { errorMessage: undefined },
+        state: {
+          errorMessage: 'Provider finish_reason: model_context_window_exceeded',
+        },
         getSessionStats: () => ({
           tokens: { input: 100, output: 50, total: 150 },
           cost: 0.001,

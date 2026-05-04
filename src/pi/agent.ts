@@ -201,9 +201,14 @@ export class Agent {
     // These include context window exceeded, provider API errors, and compaction failures.
     // The prompt() promise resolves successfully even when the session ends in an error
     // state, so we must check explicitly and throw to make the CI workflow fail.
-    const error = this.sessionError ?? this.session.state.errorMessage;
-    if (error) {
-      throw new Error(`Pi agent session error: ${error}`);
+    //
+    // We rely solely on the event-tracked sessionError rather than session.state.errorMessage
+    // because the SDK may set state.errorMessage on transient errors (e.g. context window
+    // exceeded) that it then auto-recovers from via compaction/retry. Our event listener
+    // properly clears sessionError on successful message_end, so only terminal (unrecovered)
+    // errors survive into this check.
+    if (this.sessionError) {
+      throw new Error(`Pi agent session error: ${this.sessionError}`);
     }
 
     const result = this.outputChunks.join('');
