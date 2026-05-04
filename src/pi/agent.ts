@@ -33,7 +33,6 @@ export class Agent {
   private token: string;
   private thinkingLevel: ThinkingLevel;
   private outputChunks: string[] = [];
-  /** Tracks session errors detected via events (e.g. context overflow, provider errors). */
   private sessionError: string | undefined;
   private core: CoreAdapter;
   private platformProvider: PlatformProvider;
