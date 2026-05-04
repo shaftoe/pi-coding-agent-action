@@ -139,10 +139,8 @@ export class ActionOrchestrator {
     }
 
     if (!token) {
-      throw new Error(
-        'Missing required input: `token`. ' +
-          'Set it to your LLM provider API key (e.g. `${{ secrets.ANTHROPIC_API_KEY }}`). ' +
-          'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.'
+      this.core.debug(
+        '[config] No token provided — relying on provider-side auth (e.g. ADC)'
       );
     }
 

@@ -18,8 +18,8 @@ inputs:
     required: true
 
   token:
-    description: 'API token for the LLM provider'
-    required: true
+    description: 'API token for the LLM provider. Required for most providers, but can be omitted when using providers that support alternative auth mechanisms (e.g. google-vertex with Application Default Credentials).'
+    required: false
 
   thinking_level:
     description: 'Thinking level (e.g. off, low, medium, high)'

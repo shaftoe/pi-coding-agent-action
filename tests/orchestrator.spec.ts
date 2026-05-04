@@ -490,23 +490,24 @@ describe('ActionOrchestrator', () => {
       expect(mockCore.setFailed).toHaveBeenCalled();
     });
 
-    test('throws descriptive error when token is missing', async () => {
+    test('allows empty token for provider-side auth (e.g. ADC)', async () => {
       const getInputMock = mock((name: string) => {
         const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
+          provider: 'google-vertex',
+          model: 'gemini-2.5-pro',
           token: '',
           thinking_level: '',
-          prompt: '',
+          prompt: 'Hello',
         };
         return inputs[name];
       });
       mockCore.getInput = getInputMock as any;
+      mockGit.getPrompt = mock(async () => 'Hello');
 
       const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
-      await expect(orchestrator.execute()).rejects.toThrow('Missing required input: `token`');
-      expect(mockCore.setFailed).toHaveBeenCalled();
+      await orchestrator.execute();
+      expect(mockPiFactory).toHaveBeenCalled();
     });
 
     test('provider error mentions possible values', async () => {
@@ -527,22 +528,26 @@ describe('ActionOrchestrator', () => {
       await expect(orchestrator.execute()).rejects.toThrow(/anthropic/);
     });
 
-    test('token error mentions secrets syntax', async () => {
+    test('empty token does not throw, defers auth to provider', async () => {
       const getInputMock = mock((name: string) => {
         const inputs: Record<string, string> = {
           provider: 'anthropic',
           model: 'claude-sonnet-4-5',
           token: '',
           thinking_level: '',
-          prompt: '',
+          prompt: 'Hello',
         };
         return inputs[name];
       });
       mockCore.getInput = getInputMock as any;
+      mockGit.getPrompt = mock(async () => 'Hello');
 
       const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
 
-      await expect(orchestrator.execute()).rejects.toThrow(/secrets\./);
+      await orchestrator.execute();
+      expect(mockCore.debug).toHaveBeenCalledWith(
+        expect.stringContaining('No token provided')
+      );
     });
 
     test('missing provider does not call Pi factory', async () => {
