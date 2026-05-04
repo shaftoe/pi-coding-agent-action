@@ -154,12 +154,17 @@ export class Agent {
         // Track session errors that the Pi SDK handles internally without throwing.
         // When the LLM returns an error (e.g. context_window_exceeded, server errors),
         // the SDK stores it in the agent state and may attempt recovery (compaction,
-        // auto-retry) but never rejects the prompt() promise. We capture these errors
-        // so the action can fail the workflow instead of completing "successfully".
+        // auto-retry) but never rejects the prompt() promise.
+        //
+        // We track the error from events but clear it when the SDK recovers
+        // (a subsequent successful message_end). This way we only fail the workflow
+        // when the session truly ends with an unrecovered error.
         case 'message_end':
           if (event.message.role === 'assistant') {
             if (event.message.stopReason === 'error') {
-              this.sessionError = event.message.errorMessage ?? 'Unknown session error';
+              const errMsg = event.message.errorMessage ?? 'Unknown session error';
+              this.core.warning(`[pi] Session error (may recover): ${errMsg}`);
+              this.sessionError = errMsg;
             } else {
               // SDK recovered successfully (auto-retry or compaction + retry)
               // so clear any stale error from a previous failed turn.
@@ -170,6 +175,7 @@ export class Agent {
 
         case 'compaction_end':
           if (event.errorMessage) {
+            this.core.warning(`[pi] Compaction error: ${event.errorMessage}`);
             this.sessionError = event.errorMessage;
           }
           break;
@@ -201,9 +207,13 @@ export class Agent {
     // These include context window exceeded, provider API errors, and compaction failures.
     // The prompt() promise resolves successfully even when the session ends in an error
     // state, so we must check explicitly and throw to make the CI workflow fail.
-    const error = this.sessionError ?? this.session.state.errorMessage;
-    if (error) {
-      throw new Error(`Pi agent session error: ${error}`);
+    //
+    // NOTE: We only check the event-tracked sessionError, which is cleared when the SDK
+    // recovers (successful retry/compaction). We deliberately do NOT check
+    // session.state.errorMessage because it can persist after successful recovery,
+    // causing false failures.
+    if (this.sessionError) {
+      throw new Error(`Pi agent session error: ${this.sessionError}`);
     }
 
     const result = this.outputChunks.join('');

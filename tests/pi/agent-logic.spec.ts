@@ -307,7 +307,7 @@ describe('Agent', () => {
       );
     });
 
-    test('throws when session.state.errorMessage is set', async () => {
+    test('session.state.errorMessage does NOT cause failure (SDK may have recovered)', async () => {
       const agent = createRealAgent();
       await agent.ready();
 
@@ -316,27 +316,39 @@ describe('Agent', () => {
         ...agent['session'],
         prompt: async () => {},
         state: { errorMessage: 'API rate limit exceeded' },
+        getSessionStats: () => ({
+          tokens: { input: 100, output: 50, total: 150 },
+          cost: 0.001,
+        }),
       } as any;
 
-      await expect(agent.run('Hello')).rejects.toThrow(
-        'Pi agent session error: API rate limit exceeded'
-      );
+      // Should succeed despite stale state.errorMessage from a recovered error
+      const result = await agent.run('Hello');
+      expect(result.result).toBe('');
+      expect(result.sessionStats).toBeDefined();
     });
 
-    test('prefers sessionError from events over state.errorMessage', async () => {
+    test('succeeds when sessionError cleared after recovery despite stale state.errorMessage', async () => {
       const agent = createRealAgent();
       await agent.ready();
 
-      agent['sessionError'] = 'Event-tracked error';
+      // Simulates the real bug scenario: SDK hit an error, set sessionError and
+      // state.errorMessage, then recovered (successful retry/compaction), which
+      // cleared sessionError but left state.errorMessage stale.
+      agent['sessionError'] = undefined;
       agent['session'] = {
         ...agent['session'],
         prompt: async () => {},
-        state: { errorMessage: 'State-level error' },
+        state: { errorMessage: 'model_context_window_exceeded (stale)' },
+        getSessionStats: () => ({
+          tokens: { input: 100, output: 50, total: 150 },
+          cost: 0.001,
+        }),
       } as any;
 
-      await expect(agent.run('Hello')).rejects.toThrow(
-        'Pi agent session error: Event-tracked error'
-      );
+      const result = await agent.run('Hello');
+      expect(result.result).toBe('');
+      expect(result.sessionStats).toBeDefined();
     });
 
     test('succeeds when no session error is present', async () => {
