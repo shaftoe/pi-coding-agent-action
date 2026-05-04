@@ -157,15 +157,14 @@ export class Agent {
         // auto-retry) but never rejects the prompt() promise. We capture these errors
         // so the action can fail the workflow instead of completing "successfully".
         case 'message_end':
-          if (
-            event.message.role === 'assistant' &&
-            'stopReason' in event.message &&
-            event.message.stopReason === 'error'
-          ) {
-            this.sessionError =
-              'errorMessage' in event.message
-                ? (event.message.errorMessage ?? 'Unknown session error')
-                : 'Unknown session error';
+          if (event.message.role === 'assistant') {
+            if (event.message.stopReason === 'error') {
+              this.sessionError = event.message.errorMessage ?? 'Unknown session error';
+            } else {
+              // SDK recovered successfully (auto-retry or compaction + retry)
+              // so clear any stale error from a previous failed turn.
+              this.sessionError = undefined;
+            }
           }
           break;
 
