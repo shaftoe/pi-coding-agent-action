@@ -213,6 +213,7 @@ describe('Agent', () => {
         }),
         prompt: async () => {},
         subscribe: () => {},
+        state: { errorMessage: undefined },
       };
       agent['session'] = mockStats as any;
 
@@ -247,6 +248,7 @@ describe('Agent', () => {
         },
         prompt: async () => {},
         subscribe: () => {},
+        state: { errorMessage: undefined },
       };
       agent['session'] = mockSession as any;
 
@@ -276,6 +278,7 @@ describe('Agent', () => {
         }),
         prompt: async () => {},
         subscribe: () => {},
+        state: { errorMessage: undefined },
       };
       agent['session'] = mockStats as any;
 
@@ -311,6 +314,7 @@ describe('Agent', () => {
         }),
         prompt: async () => {},
         subscribe: () => {},
+        state: { errorMessage: undefined },
       };
       agent['session'] = mockStats as any;
 
@@ -325,6 +329,142 @@ describe('Agent', () => {
           version: expect.any(String),
         },
       });
+    });
+  });
+
+  describe('session error detection', () => {
+    test('throws when message_end event has stopReason error', async () => {
+      const agent = new Agent(
+        'claude-sonnet-4-5',
+        'anthropic',
+        'test-token',
+        'off',
+        mockCoreAdapter as any,
+        mockPlatformProvider
+      );
+      await agent.ready();
+
+      // Simulate a message_end error event by setting sessionError directly
+      agent['sessionError'] = 'Provider finish_reason: model_context_window_exceeded';
+
+      // Mock the session state to also have the error
+      agent['session'] = {
+        ...agent['session'],
+        prompt: async () => {},
+        state: { errorMessage: undefined },
+      } as any;
+
+      await expect(agent.run('Hello')).rejects.toThrow(
+        'Pi agent session error: Provider finish_reason: model_context_window_exceeded'
+      );
+    });
+
+    test('throws when session.state.errorMessage is set', async () => {
+      const agent = new Agent(
+        'claude-sonnet-4-5',
+        'anthropic',
+        'test-token',
+        'off',
+        mockCoreAdapter as any,
+        mockPlatformProvider
+      );
+      await agent.ready();
+
+      // Don't set sessionError, rely on state.errorMessage
+      agent['sessionError'] = undefined;
+      agent['session'] = {
+        ...agent['session'],
+        prompt: async () => {},
+        state: { errorMessage: 'API rate limit exceeded' },
+      } as any;
+
+      await expect(agent.run('Hello')).rejects.toThrow(
+        'Pi agent session error: API rate limit exceeded'
+      );
+    });
+
+    test('prefers sessionError from events over state.errorMessage', async () => {
+      const agent = new Agent(
+        'claude-sonnet-4-5',
+        'anthropic',
+        'test-token',
+        'off',
+        mockCoreAdapter as any,
+        mockPlatformProvider
+      );
+      await agent.ready();
+
+      agent['sessionError'] = 'Event-tracked error';
+      agent['session'] = {
+        ...agent['session'],
+        prompt: async () => {},
+        state: { errorMessage: 'State-level error' },
+      } as any;
+
+      await expect(agent.run('Hello')).rejects.toThrow(
+        'Pi agent session error: Event-tracked error'
+      );
+    });
+
+    test('succeeds when no session error is present', async () => {
+      const agent = new Agent(
+        'claude-sonnet-4-5',
+        'anthropic',
+        'test-token',
+        'off',
+        mockCoreAdapter as any,
+        mockPlatformProvider
+      );
+      await agent.ready();
+
+      agent['sessionError'] = undefined;
+      agent['session'] = {
+        ...agent['session'],
+        prompt: async () => {},
+        state: { errorMessage: undefined },
+        getSessionStats: () => ({
+          tokens: { input: 100, output: 50, total: 150 },
+          cost: 0.001,
+        }),
+      } as any;
+
+      const result = await agent.run('Hello');
+      expect(result).toEqual({
+        result: '',
+        sessionStats: {
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+          cost: 0.001,
+          version: expect.any(String),
+        },
+      });
+    });
+
+    test('compaction_end event error is thrown', async () => {
+      const agent = new Agent(
+        'claude-sonnet-4-5',
+        'anthropic',
+        'test-token',
+        'off',
+        mockCoreAdapter as any,
+        mockPlatformProvider
+      );
+      await agent.ready();
+
+      // Simulate a compaction_end error
+      agent['sessionError'] =
+        'Context overflow recovery failed after one compact-and-retry attempt.';
+
+      agent['session'] = {
+        ...agent['session'],
+        prompt: async () => {},
+        state: { errorMessage: undefined },
+      } as any;
+
+      await expect(agent.run('Hello')).rejects.toThrow(
+        'Pi agent session error: Context overflow recovery failed'
+      );
     });
   });
 

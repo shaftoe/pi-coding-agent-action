@@ -33,6 +33,8 @@ export class Agent {
   private token: string;
   private thinkingLevel: ThinkingLevel;
   private outputChunks: string[] = [];
+  /** Tracks session errors detected via events (e.g. context overflow, provider errors). */
+  private sessionError: string | undefined;
   private core: CoreAdapter;
   private platformProvider: PlatformProvider;
   private extensions?: string[];
@@ -134,18 +136,46 @@ export class Agent {
     this.session = session;
 
     this.session.subscribe(event => {
-      if (event.type !== 'message_update') {
-        return;
-      }
-      switch (event.assistantMessageEvent.type) {
-        case 'text_delta':
-          // Sent to the user as comment as final step
-          this.outputChunks.push(event.assistantMessageEvent.delta);
+      switch (event.type) {
+        case 'message_update':
+          switch (event.assistantMessageEvent.type) {
+            case 'text_delta':
+              // Sent to the user as comment as final step
+              this.outputChunks.push(event.assistantMessageEvent.delta);
+              break;
+            case 'thinking_delta':
+              // We write the thinking into action logs directly
+              process.stdout.write(event.assistantMessageEvent.delta);
+              break;
+            default:
+              break;
+          }
           break;
-        case 'thinking_delta':
-          // We write the thinking into action logs directly
-          process.stdout.write(event.assistantMessageEvent.delta);
+
+        // Track session errors that the Pi SDK handles internally without throwing.
+        // When the LLM returns an error (e.g. context_window_exceeded, server errors),
+        // the SDK stores it in the agent state and may attempt recovery (compaction,
+        // auto-retry) but never rejects the prompt() promise. We capture these errors
+        // so the action can fail the workflow instead of completing "successfully".
+        case 'message_end':
+          if (
+            event.message.role === 'assistant' &&
+            'stopReason' in event.message &&
+            event.message.stopReason === 'error'
+          ) {
+            this.sessionError =
+              'errorMessage' in event.message
+                ? (event.message.errorMessage ?? 'Unknown session error')
+                : 'Unknown session error';
+          }
           break;
+
+        case 'compaction_end':
+          if (event.errorMessage) {
+            this.sessionError = event.errorMessage;
+          }
+          break;
+
         default:
           break;
       }
@@ -168,6 +198,15 @@ export class Agent {
 
     await this.session.prompt(text);
     process.stdout.write('\n'); // ensure new line after prompt, usually missing from agent
+
+    // Check for session errors that the Pi SDK handles internally without throwing.
+    // These include context window exceeded, provider API errors, and compaction failures.
+    // The prompt() promise resolves successfully even when the session ends in an error
+    // state, so we must check explicitly and throw to make the CI workflow fail.
+    const error = this.sessionError ?? this.session.state.errorMessage;
+    if (error) {
+      throw new Error(`Pi agent session error: ${error}`);
+    }
 
     const result = this.outputChunks.join('');
     const sessionStats = this.getSessionStats();
