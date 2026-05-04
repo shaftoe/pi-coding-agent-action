@@ -78,7 +78,7 @@ mock.module('@actions/github', () => ({
 }));
 
 // Dynamic import to ensure mocks are set before module loads
-const pullRequestModulePromise = import('../../../src/platform/github/pull-request.js');
+const pullRequestModulePromise = import('../../../src/platform/github/tools/pull-request.js');
 
 // Cache the module after first import
 let pullRequestModule: any | null = null;

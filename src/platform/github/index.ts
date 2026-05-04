@@ -142,18 +142,20 @@ export function isModuleContextInitialized(): boolean {
 // Context extraction functions (used by run.ts)
 export {
   getPrompt,
-  getIssueOrPRThread,
   getStartTimeFromContext,
   getIssueOrPullRequestContext,
-  fetchPRDiff,
+  isPR,
+  getContextType,
+} from './context';
+
+// Shared types
+export {
   type IssueOrPRThread,
   type IssueOrPullRequestContext,
   type ThreadComment,
   type ReviewComment,
   type GetIssueOrPRThreadParams,
-  isPR,
-  getContextType,
-} from './context';
+} from './types';
 
 // Reaction management functions (used by run.ts)
 export { addReaction, deleteReaction, type CreateReactionType } from './reactions';
@@ -161,19 +163,22 @@ export { addReaction, deleteReaction, type CreateReactionType } from './reaction
 // Comment creation functions (used by run.ts)
 export { createFinalComment } from './comments';
 
-// Pull request creation functions (used by git-adapter and provider)
+// Tool implementations (used by git-adapter and provider)
 export {
   createPullRequest,
   type CreatePullRequestParams,
   type CreatePullRequestDetails,
-} from './pull-request';
+} from './tools/pull-request';
 
-// Pull request update functions (used by git-adapter and provider)
 export {
   updatePullRequest,
   type UpdatePullRequestParams,
   type UpdatePullRequestDetails,
-} from './pull-request-update';
+} from './tools/pull-request-update';
+
+// Thread and diff fetching (used by provider and tools)
+export { getIssueOrPRThread } from './tools/thread';
+export { fetchPRDiff } from './tools/pr-diff';
 
 // Platform provider (used by platform/index.ts)
 export { detectPlatform, createGitHubPlatformProvider } from './provider';

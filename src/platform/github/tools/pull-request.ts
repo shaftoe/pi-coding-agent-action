@@ -9,16 +9,16 @@
 
 import * as github from '@actions/github';
 import { Temporal } from '@js-temporal/polyfill';
-import { getOctokit } from './octokit';
-import { BRANCH_PREFIX, MAX_TITLE_LENGTH } from './constants';
-import { getContextType } from './context-utils';
+import { getOctokit } from '../octokit';
+import { BRANCH_PREFIX, MAX_TITLE_LENGTH } from '../constants';
+import { getContextType } from '../context-utils';
 import {
   createLogger,
   scanForChanges,
   createBlobsAndTree,
   createCommitAndUpdateBranch,
   buildFileMap,
-} from './git/index';
+} from '../git/index';
 
 const log = createLogger();
 
