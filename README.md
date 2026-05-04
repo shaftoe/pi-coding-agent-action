@@ -208,6 +208,23 @@ Pi extensions often require environment variables for authentication or configur
 
 Since the action runs as a single Node.js process, these environment variables are available in `process.env` and accessible to all Pi extensions.
 
+#### Token input
+
+The `token` input is optional and the action auth could also be specified as environment variable instead, e.g:
+
+```yaml
+- name: Run Pi agent with auth env var
+  uses: shaftoe/pi-coding-agent-action@v2
+  env:
+    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  with:
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    provider: openai
+    model: gpt-5.4
+```
+
+Examples in this documentation tend to favour `input` because is more consistent with GitHub environment variables/secrets and lets configure the LLM completely via the web admin interface without the need for patching workflow yaml files.
+
 ### Using Outputs in Downstream Jobs
 
 Use `outputs.<job-id>.outputs.<name>` to pass action outputs to another step or another job in the same workflow. For example, you can have Pi generate release notes in one job and then create a release in another:
