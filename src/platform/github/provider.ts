@@ -20,6 +20,7 @@ import { createPullRequest } from './tools/pull-request';
 import { updatePullRequest } from './tools/pull-request-update';
 import { getIssueOrPRThread } from './tools/thread';
 import { fetchPRDiff } from './tools/pr-diff';
+import { MAX_DIFF_LINES } from './constants';
 import type { Temporal } from '@js-temporal/polyfill';
 import type { PlatformProvider, PlatformType, PlatformContext } from '../types';
 import type { CommentMetadata } from '../../types';
@@ -124,8 +125,8 @@ export function createGitHubPlatformProvider(): PlatformProvider {
       return getIssueOrPRThread(params);
     },
 
-    async getPRDiff(owner: string, repo: string, pullNumber: number): Promise<string> {
-      return fetchPRDiff(owner, repo, pullNumber);
+    async getPRDiff(owner: string, repo: string, pullNumber: number, ignoreFiles?: string[]): Promise<string> {
+      return fetchPRDiff(owner, repo, pullNumber, MAX_DIFF_LINES, ignoreFiles);
     },
   };
 }

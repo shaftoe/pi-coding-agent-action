@@ -12,6 +12,7 @@ import {
   GET_PR_DIFF_PARAM_REPO_DESCRIPTION,
   GET_PR_DIFF_PARAM_PULL_NUMBER_DESCRIPTION,
   GET_PR_DIFF_PARAM_MAX_LINES_DESCRIPTION,
+  GET_PR_DIFF_PARAM_IGNORE_FILES_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_GET_PR_DIFF } from './constants';
 import { withCancellation } from './tool-execution';
@@ -41,6 +42,16 @@ const getPRDiffSchema = Type.Object({
       description: GET_PR_DIFF_PARAM_MAX_LINES_DESCRIPTION,
     })
   ),
+  ignore_files: Type.Optional(
+    Type.Array(
+      Type.String({
+        description: GET_PR_DIFF_PARAM_IGNORE_FILES_DESCRIPTION,
+      }),
+      {
+        description: GET_PR_DIFF_PARAM_IGNORE_FILES_DESCRIPTION,
+      }
+    )
+  ),
 });
 
 type GetPRDiffToolParams = Static<typeof getPRDiffSchema>;
@@ -49,6 +60,7 @@ interface GetPRDiffDetails {
   pull_number: number;
   lines: number;
   truncated: boolean;
+  ignored_files?: string[];
   cancelled?: boolean;
 }
 
@@ -114,8 +126,9 @@ export function getPRDiffToolFactory(provider: PlatformProvider) {
         }
 
         const { owner, repo, pullNumber } = resolved;
+        const ignoreFiles = params.ignore_files;
 
-        const diff = await provider.getPRDiff(owner, repo, pullNumber);
+        const diff = await provider.getPRDiff(owner, repo, pullNumber, ignoreFiles);
 
         if (!diff) {
           return {
@@ -145,6 +158,15 @@ export function getPRDiffToolFactory(provider: PlatformProvider) {
           truncated = true;
         }
 
+        const details: GetPRDiffDetails = {
+          pull_number: pullNumber,
+          lines: Math.min(lines, maxLines ?? lines),
+          truncated,
+        };
+        if (ignoreFiles && ignoreFiles.length > 0) {
+          details.ignored_files = ignoreFiles;
+        }
+
         return {
           content: [
             {
@@ -152,11 +174,7 @@ export function getPRDiffToolFactory(provider: PlatformProvider) {
               text: `PR #${pullNumber} Diff:\n\`\`\`diff\n${finalDiff}\n\`\`\``,
             },
           ],
-          details: {
-            pull_number: pullNumber,
-            lines: Math.min(lines, maxLines ?? lines),
-            truncated,
-          } satisfies GetPRDiffDetails,
+          details: details satisfies GetPRDiffDetails,
         };
       },
     }),

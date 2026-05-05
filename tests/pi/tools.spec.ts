@@ -407,6 +407,7 @@ describe('extFactory', () => {
       expect(params.properties.repo).toBeDefined();
       expect(params.properties.pull_number).toBeDefined();
       expect(params.properties.max_lines).toBeDefined();
+      expect(params.properties.ignore_files).toBeDefined();
       if (Array.isArray(params.required)) {
         expect(params.required.length).toBe(0);
       }
