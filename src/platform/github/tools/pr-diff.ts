@@ -33,7 +33,8 @@ export function matchesIgnorePattern(filePath: string, ignoreFiles: string[]): b
   const clean = filePath.replace(/^[ab]\//, '');
   return ignoreFiles.some(pattern => {
     if (pattern.endsWith('/')) {
-      return clean.startsWith(pattern) || clean.startsWith(pattern.slice(0, -1) + '/');
+      // Pattern like "dist/" — any file under that directory matches
+      return clean.startsWith(pattern);
     }
     return clean === pattern || clean.startsWith(pattern + '/');
   });
