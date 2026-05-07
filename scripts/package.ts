@@ -5,7 +5,7 @@ import { join } from 'node:path';
 export async function buildDist(cwd: string = process.cwd()): Promise<void> {
   const version = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8')).version;
   const piVersion = JSON.parse(
-    readFileSync(join(cwd, 'node_modules/@mariozechner/pi-coding-agent/package.json'), 'utf-8')
+    readFileSync(join(cwd, 'node_modules/@earendil-works/pi-coding-agent/package.json'), 'utf-8')
   ).version;
 
   await build({
@@ -36,7 +36,7 @@ export async function buildDist(cwd: string = process.cwd()): Promise<void> {
   // SDK's file I/O can find them when PI_PACKAGE_DIR points to dist/pi-sdk/.
   //
   // Asset map: SDK source -> destination under dist/pi-sdk/dist/
-  const sdkDistDir = join(cwd, 'node_modules/@mariozechner/pi-coding-agent/dist');
+  const sdkDistDir = join(cwd, 'node_modules/@earendil-works/pi-coding-agent/dist');
   const piSdkDest = join(cwd, 'dist/pi-sdk/dist');
   const sdkAssets: [string, string[]][] = [
     // HTML session export templates (read by export-html/index.js)

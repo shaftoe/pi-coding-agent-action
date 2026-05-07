@@ -39,6 +39,30 @@ Refer to [the official Pi documentation](https://github.com/badlogic/pi-mono/tre
 > [!NOTE]
 > Codeberg/Forgejo compatibility _should_ work but hasn't been tested yet.
 
+## Namespace Migration
+
+Starting from `v2.15.6` (unreleased) / commit `dbda7aa`, the Pi SDK packages have moved to the **`@earendil-works`** npm scope. This affects the following packages:
+
+| Old name | New name |
+|----------|----------|
+| `@mariozechner/pi-coding-agent` | [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) |
+| `@mariozechner/pi-ai` | `@earendil-works/pi-ai` |
+| `@mariozechner/pi-agent-core` | `@earendil-works/pi-agent-core` |
+
+### What changed
+
+- **Dependency**: `package.json` now depends on `@earendil-works/pi-coding-agent@0.74.0` (was `@mariozechner/pi-coding-agent@0.73.0`).
+- **Imports**: All TypeScript imports across `src/` and `tests/` have been updated from `@mariozechner/*` to `@earendil-works/*`.
+- **Runtime log**: The startup log line now reads `Running @earendil-works/pi-coding-agent@...`.
+- **Dependabot**: The `.github/dependabot.yml` configuration tracks `@earendil-works/*` packages.
+
+### Impact on users
+
+If you use the action as-is (e.g. `uses: shaftoe/pi-coding-agent-action@v2`) there is **no breaking change** — the namespace migration is internal. However, if you reference Pi packages directly in custom extensions or local development:
+
+- Update any `import` or `require` statements from `@mariozechner/*` to `@earendil-works/*`.
+- Update `npm install` / `bun add` commands to use the new package names.
+
 ## Securing your workflows
 
 > [!WARNING]
