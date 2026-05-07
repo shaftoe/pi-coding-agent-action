@@ -3,7 +3,7 @@
  */
 
 import { Type, Static } from 'typebox';
-import { defineTool } from '@mariozechner/pi-coding-agent';
+import { defineTool } from '@earendil-works/pi-coding-agent';
 import {
   GET_ISSUE_PR_THREAD_PROMPT_SNIPPET,
   GET_ISSUE_PR_THREAD_PROMPT_GUIDELINES,
@@ -16,7 +16,7 @@ import {
 import { CANCELLATION_MESSAGE_GET_THREAD } from './constants';
 import { formatThreadAsText } from './common';
 import type { IssueOrPRThread, GetIssueOrPRThreadParams, PlatformProvider } from '../../platform';
-import type { AgentToolResult } from '@mariozechner/pi-coding-agent';
+import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
 import { withCancellation } from './tool-execution';
 
 /**

@@ -2,7 +2,7 @@
 import { describe, expect, test, mock } from 'bun:test';
 import { getIssueOrPRThreadToolFactory } from '../../../src/pi/tools/get-thread';
 import type { PlatformProvider, IssueOrPRThread } from '../../../src/platform';
-import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
+import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import * as githubIndex from '../../../src/platform/github';
 
 // Minimal mock ExtensionContext for tool execute signature

@@ -6,14 +6,14 @@
  * headless / non-interactive use inside GitHub Actions.
  */
 
-import { AuthStorage, createAgentSession, ModelRegistry } from '@mariozechner/pi-coding-agent';
+import { AuthStorage, createAgentSession, ModelRegistry } from '@earendil-works/pi-coding-agent';
 import * as path from 'node:path';
 import { getResourceLoader } from './resource-loader';
 import { getVersion } from './logging';
 
-import type { AgentSession } from '@mariozechner/pi-coding-agent';
-import type { Api, Model } from '@mariozechner/pi-ai';
-import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
+import type { AgentSession } from '@earendil-works/pi-coding-agent';
+import type { Api, Model } from '@earendil-works/pi-ai';
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { PromptResult, SessionStats, CoreAdapter } from '../types';
 import type { PlatformProvider } from '../platform';
 

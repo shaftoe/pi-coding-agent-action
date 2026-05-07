@@ -38,7 +38,7 @@ mock.module('@actions/core', () => ({
   warning: mock(noop),
 }));
 
-import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { PlatformProvider } from '../../src/platform';
 
 // Dynamic import to ensure env vars and mocks are set before module loads

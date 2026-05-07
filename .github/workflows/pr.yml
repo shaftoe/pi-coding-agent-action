@@ -30,7 +30,7 @@ jobs:
 
       - name: Run Pi agent
         id: pi
-        uses: shaftoe/pi-coding-agent-action@v2
+        uses: shaftoe/pi-coding-agent-action@develop
         with:
           export_session_html: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -41,7 +41,7 @@ jobs:
           prompt: |
             This is a GitHub PR (#${{ github.event.pull_request.number }}) that needs code review. Focus on identifying issues, bugs, security concerns, and improvements. Don't apply any changes yourself, just review and suggest improvements.
 
-            If the change involves upgrading dependencies, with special focus on @mariozechner/pi-coding-agent, ensure the version is up-to-date and no breaking changes are introduced. If the change is a new feature, evaluate if it's interesting or useful and suggest a possible implementation to make use of it.
+            If the change involves upgrading dependencies, with special focus on @earendil-works/pi-coding-agent, ensure the version is up-to-date and no breaking changes are introduced. If the change is a new feature, evaluate if it's interesting or useful and suggest a possible implementation to make use of it.
 
             Once you're done, add your findings as comment to the PR.
 

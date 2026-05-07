@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
+import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 // Import directly from source file using namespace import to work around bun test module resolution
 import * as ToolExecution from '../../../src/pi/tools/tool-execution';
 

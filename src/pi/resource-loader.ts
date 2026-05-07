@@ -14,7 +14,7 @@ import {
   DefaultResourceLoader,
   getAgentDir,
   SettingsManager,
-} from '@mariozechner/pi-coding-agent';
+} from '@earendil-works/pi-coding-agent';
 import { SYSTEM_PROMPT } from './prompt';
 import { createLoggingFactory } from './logging';
 import type { ExtensionLoadingInfo } from './logging';

@@ -20,7 +20,7 @@ If all you want is running Pi inside a CI/CD environment technically you don't n
 
 ```yaml
 - uses: actions/setup-node@v6
-- run: npm -g install @mariozechner/pi-coding-agent
+- run: npm -g install @earendil-works/pi-coding-agent
 - run: pi -p "do something useful for me"
 ```
 

@@ -32,7 +32,7 @@ const E2E_TIMEOUT = 10_000;
 // E2E tests run directly with bun test, bypassing the build step.
 // We must define build-time constants manually to match production behavior.
 const piVersion = JSON.parse(
-  readFileSync('node_modules/@mariozechner/pi-coding-agent/package.json', 'utf-8')
+  readFileSync('node_modules/@earendil-works/pi-coding-agent/package.json', 'utf-8')
 ).version;
 
 declare global {
@@ -164,7 +164,7 @@ process.env.INPUT_MAX_COMMENTS = '100';
 // We call initTheme() directly to satisfy this requirement without needing
 // full theme loading (which we disabled with noThemes: true in resource-loader).
 // This allows telemetry to work while keeping the action headless-friendly.
-import { initTheme } from '@mariozechner/pi-coding-agent';
+import { initTheme } from '@earendil-works/pi-coding-agent';
 
 try {
   // Initialize theme with defaults (minimal, no file watcher)

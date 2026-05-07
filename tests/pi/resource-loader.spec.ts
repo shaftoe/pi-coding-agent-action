@@ -7,7 +7,7 @@
 import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
 import { resolveExtensions, getResourceLoader } from '../../src/pi/resource-loader';
 import type { PlatformProvider } from '../../src/platform';
-import { DefaultPackageManager, DefaultResourceLoader } from '@mariozechner/pi-coding-agent';
+import { DefaultPackageManager, DefaultResourceLoader } from '@earendil-works/pi-coding-agent';
 
 // Mock CoreAdapter for testing
 const mockCoreAdapter = {
