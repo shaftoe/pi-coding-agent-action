@@ -9,7 +9,7 @@
 import { describe, expect, test, mock } from 'bun:test';
 import { getPRDiffToolFactory } from '../../../src/pi/tools/get-pr-diff';
 import type { PlatformProvider } from '../../../src/platform';
-import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
+import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 // Minimal mock ExtensionContext for tool execute signature
 const mockCtx = {

@@ -10,7 +10,7 @@ updates:
         patterns:
           - '@actions/*'
           - '@js-temporal/*'
-          - '@mariozechner/*'
+          - '@earendil-works/*'
           - 'typebox'
           - 'ignore'
       development-dependencies:

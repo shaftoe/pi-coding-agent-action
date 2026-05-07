@@ -6,7 +6,7 @@
  */
 
 import type { CoreAdapter } from '../types';
-import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 /**
  * Captured information about extension loading, passed from resource-loader
@@ -75,7 +75,7 @@ export const loggingFactory = (
 
   pi.on('before_agent_start', async (event, ctx) => {
     core.info('::group::🤖 Agent Session settings');
-    core.info(`  Running @mariozechner/pi-coding-agent@${getVersion()}`);
+    core.info(`  Running @earendil-works/pi-coding-agent@${getVersion()}`);
     core.info('─────────────────────────────────────────────────────────────────────');
 
     const model = ctx.model;

@@ -3,7 +3,7 @@
  */
 
 import { Type, Static } from 'typebox';
-import { defineTool } from '@mariozechner/pi-coding-agent';
+import { defineTool } from '@earendil-works/pi-coding-agent';
 import {
   UPDATE_PULL_REQUEST_PROMPT_SNIPPET,
   UPDATE_PULL_REQUEST_PROMPT_GUIDELINES,

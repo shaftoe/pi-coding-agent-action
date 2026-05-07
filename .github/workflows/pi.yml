@@ -45,7 +45,7 @@ jobs:
 
       - name: Run Pi agent
         id: pi
-        uses: shaftoe/pi-coding-agent-action@v2
+        uses: shaftoe/pi-coding-agent-action@develop
         with:
           export_session_html: true
           github_token: ${{ secrets.gh_token }}

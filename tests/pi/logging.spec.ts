@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { truncateText, getVersion, ExtensionLoadingInfo } from '../../src/pi/logging';
 import { createLoggingFactory } from '../../src/pi/logging';
-import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { CoreAdapter } from '../../src/types';
 
 describe('truncateText', () => {

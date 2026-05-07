@@ -18,7 +18,7 @@ import { createPRToolFactory } from './create-pr';
 import { getIssueOrPRThreadToolFactory } from './get-thread';
 import { getPRDiffToolFactory } from './get-pr-diff';
 import { updatePullRequestToolFactory } from './update-pr';
-import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { PlatformProvider } from '../../platform';
 
 // Re-export tool execution utilities for use in custom tools
