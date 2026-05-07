@@ -373,7 +373,7 @@ describe('Agent', () => {
       });
     });
 
-    test('compaction_end error is thrown', async () => {
+    test('compaction_end error without willRetry is thrown', async () => {
       const agent = createRealAgent();
       await agent.ready();
 
@@ -389,6 +389,98 @@ describe('Agent', () => {
       await expect(agent.run('Hello')).rejects.toThrow(
         'Pi agent session error: Context overflow recovery failed'
       );
+    });
+
+    test('compactionWillRetry waits for session idle then succeeds', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      // Simulate: compaction retry pending, then session becomes idle,
+      // sessionError cleared by successful retry.
+      agent['compactionWillRetry'] = true;
+      agent['sessionError'] = undefined;
+
+      let idleResolve: () => void;
+      const _idlePromise = new Promise<void>(resolve => {
+        idleResolve = resolve;
+      });
+
+      const mockSession = {
+        ...agent['session'],
+        prompt: async () => {},
+        state: { errorMessage: undefined },
+        isStreaming: true,
+        isCompacting: false,
+        isRetrying: false,
+        getSessionStats: () => ({
+          tokens: { input: 100, output: 50, total: 150 },
+          cost: 0.001,
+        }),
+      };
+      agent['session'] = mockSession as any;
+
+      // After a short delay, make the session idle (simulating retry completion)
+      setTimeout(() => {
+        mockSession.isStreaming = false;
+        idleResolve!();
+      }, 300);
+
+      const result = await agent.run('Hello');
+      expect(result.sessionStats).toBeDefined();
+      expect(result.sessionStats!.inputTokens).toBe(100);
+      // compactionWillRetry should be cleared after waiting
+      expect(agent['compactionWillRetry']).toBe(false);
+    });
+
+    test('compactionWillRetry waits for session idle then fails if error persists', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      // Simulate: compaction retry pending, retry runs but also fails.
+      agent['compactionWillRetry'] = true;
+      agent['sessionError'] = 'Context overflow recovery failed after retry';
+
+      const mockSession = {
+        ...agent['session'],
+        prompt: async () => {},
+        state: { errorMessage: undefined },
+        isStreaming: true,
+        isCompacting: false,
+        isRetrying: false,
+      };
+      agent['session'] = mockSession as any;
+
+      // After a short delay, make the session idle (simulating retry failure)
+      setTimeout(() => {
+        mockSession.isStreaming = false;
+      }, 300);
+
+      await expect(agent.run('Hello')).rejects.toThrow(
+        'Pi agent session error: Context overflow recovery failed after retry'
+      );
+      expect(agent['compactionWillRetry']).toBe(false);
+    });
+
+    test('compactionWillRetry does not wait when no retry is pending', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      // No compaction retry pending
+      agent['compactionWillRetry'] = false;
+      agent['sessionError'] = undefined;
+
+      agent['session'] = {
+        ...agent['session'],
+        prompt: async () => {},
+        state: { errorMessage: undefined },
+        getSessionStats: () => ({
+          tokens: { input: 100, output: 50, total: 150 },
+          cost: 0.001,
+        }),
+      } as any;
+
+      const result = await agent.run('Hello');
+      expect(result.sessionStats).toBeDefined();
     });
 
     test('recovered transient error (stale state.errorMessage) does not cause false failure', async () => {

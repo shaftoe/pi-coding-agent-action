@@ -34,6 +34,7 @@ export class Agent {
   private thinkingLevel: ThinkingLevel;
   private outputChunks: string[] = [];
   private sessionError: string | undefined;
+  private compactionWillRetry = false;
   private core: CoreAdapter;
   private platformProvider: PlatformProvider;
   private extensions?: string[];
@@ -169,7 +170,12 @@ export class Agent {
           break;
 
         case 'compaction_end':
-          if (event.errorMessage) {
+          if (event.willRetry) {
+            // Compaction succeeded and SDK will retry the prompt. Don't treat
+            // this as a terminal error — the retry may succeed and clear
+            // sessionError via a subsequent message_end event.
+            this.compactionWillRetry = true;
+          } else if (event.errorMessage) {
             this.sessionError = event.errorMessage;
           }
           break;
@@ -195,6 +201,25 @@ export class Agent {
     }
 
     await this.session.prompt(text);
+
+    // The Pi SDK schedules overflow recovery (compaction + retry) asynchronously
+    // via setTimeout, which may still be pending after prompt() resolves. When
+    // compactionWillRetry is true, the SDK removed the error message from context,
+    // compacted the session, and will retry the LLM call in the background. We must
+    // wait for that retry to complete before deciding whether the session failed.
+    //
+    // Without this wait, the action would fail immediately on context overflow even
+    // though the SDK is about to retry with a compacted context. The background retry
+    // would continue running, posting comments and keeping the process alive for
+    // minutes after the action was already marked as failed.
+    if (this.compactionWillRetry) {
+      this.compactionWillRetry = false;
+      this.core.info(
+        '[recovery] Context overflow detected — SDK is compacting and retrying. Waiting for recovery...'
+      );
+      await this.waitForSessionIdle();
+    }
+
     process.stdout.write('\n'); // ensure new line after prompt, usually missing from agent
 
     // Check for session errors that the Pi SDK handles internally without throwing.
@@ -248,6 +273,36 @@ export class Agent {
       } else {
         delete process.env.PI_PACKAGE_DIR;
       }
+    }
+  }
+
+  /**
+   * Wait for the agent session to become fully idle.
+   *
+   * After prompt() resolves, the SDK may still have background operations
+   * in progress (compaction retry via setTimeout, auto-retry, etc.). This
+   * method polls until the session is no longer streaming, compacting, or
+   * retrying.
+   *
+   * The SDK's compaction retry uses a 100ms setTimeout to start the retry,
+   * so we use an initial delay of 150ms to ensure the retry has started
+   * before we begin checking.
+   *
+   * @param timeoutMs - Maximum time to wait in milliseconds (default: 10 minutes).
+   * @throws {Error} If the session doesn't become idle within the timeout.
+   */
+  private async waitForSessionIdle(timeoutMs = 600_000): Promise<void> {
+    const startTime = Date.now();
+    // Wait for the SDK's setTimeout(100ms) to fire and start the retry
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    while (this.session.isStreaming || this.session.isCompacting || this.session.isRetrying) {
+      if (Date.now() - startTime > timeoutMs) {
+        throw new Error(
+          `Timed out waiting for session to become idle after ${Math.round(timeoutMs / 1000)}s`
+        );
+      }
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
   }
 
