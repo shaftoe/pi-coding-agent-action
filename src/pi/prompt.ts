@@ -108,7 +108,8 @@ export const GET_PR_DIFF_PROMPT_SNIPPET =
 export const GET_PR_DIFF_PROMPT_GUIDELINES = [
   'Use get_pr_diff to fetch the diff of a pull request when you need to understand what changed.',
   'By default, the tool fetches the diff for the current PR from the GitHub context. Only provide owner/repo/pull_number when you need to fetch a different PR.',
-  'The diff is truncated at 1000 lines by default. Use max_lines to increase or decrease this limit.',
+  'The diff is truncated at 1000 lines and 100KB by default. Use max_lines to increase or decrease the line limit.',
+  'Common build artifacts and lock files (dist/, package-lock.json, etc.) are excluded by default. Use ignore_files to add additional patterns.',
 ];
 
 export const GET_PR_DIFF_DESCRIPTION =
@@ -124,7 +125,7 @@ export const GET_PR_DIFF_PARAM_PULL_NUMBER_DESCRIPTION =
   'Pull request number. If not provided, uses the current PR from context.';
 
 export const GET_PR_DIFF_PARAM_MAX_LINES_DESCRIPTION =
-  'Maximum number of diff lines to return. Defaults to 1000. Use for limiting very large diffs.';
+  'Maximum number of diff lines to return. Defaults to 1000 (or the action-level diff_max_lines input). Use for limiting very large diffs.';
 
 export const GET_PR_DIFF_PARAM_IGNORE_FILES_DESCRIPTION =
   'List of file paths to exclude from the diff. Supports exact file paths (e.g. "package-lock.json") and directory prefixes (e.g. "dist/" to exclude everything under dist/). Matching is literal — glob patterns (e.g. "*.min.js") are NOT supported. Useful for filtering out generated files, build artifacts, or vendored dependencies.';

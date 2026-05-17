@@ -17,6 +17,13 @@ import {
 import { CANCELLATION_MESSAGE_GET_PR_DIFF } from './constants';
 import { withCancellation } from './tool-execution';
 import type { PlatformProvider } from '../../platform';
+import type { DiffConfig } from './index';
+
+/** Default max bytes for diff output (100 KB). */
+const DEFAULT_MAX_BYTES = 102_400;
+
+/** Default max lines for diff output. */
+const DEFAULT_MAX_LINES = 1000;
 
 /**
  * Schema for the get_pr_diff tool.
@@ -60,6 +67,7 @@ interface GetPRDiffDetails {
   pull_number: number;
   lines: number;
   truncated: boolean;
+  truncated_reason?: 'bytes' | 'lines';
   ignored_files?: string[];
   cancelled?: boolean;
 }
@@ -88,9 +96,10 @@ function resolvePRParams(
  * Create the get_pr_diff tool definition bound to a platform provider.
  *
  * @param provider - The platform provider for PR diff operations.
+ * @param diffConfig - Optional diff configuration (max lines, max bytes, default ignore patterns).
  * @returns The tool definition.
  */
-export function getPRDiffToolFactory(provider: PlatformProvider) {
+export function getPRDiffToolFactory(provider: PlatformProvider, diffConfig?: DiffConfig) {
   return defineTool({
     name: 'get_pr_diff',
     label: 'Get PR Diff',
@@ -126,9 +135,18 @@ export function getPRDiffToolFactory(provider: PlatformProvider) {
         }
 
         const { owner, repo, pullNumber } = resolved;
-        const ignoreFiles = params.ignore_files;
 
-        const diff = await provider.getPRDiff(owner, repo, pullNumber, ignoreFiles);
+        // Merge default ignore patterns with caller-provided ones
+        const defaultIgnore = diffConfig?.ignorePatterns ?? [];
+        const callerIgnore = params.ignore_files ?? [];
+        const ignoreFiles = [...new Set([...defaultIgnore, ...callerIgnore])];
+
+        const diff = await provider.getPRDiff(
+          owner,
+          repo,
+          pullNumber,
+          ignoreFiles.length > 0 ? ignoreFiles : undefined
+        );
 
         if (!diff) {
           return {
@@ -146,24 +164,41 @@ export function getPRDiffToolFactory(provider: PlatformProvider) {
           };
         }
 
-        const lines = diff.split('\n').length;
-        const maxLines = params.max_lines;
+        const totalLines = diff.split('\n').length;
+        const maxLines = params.max_lines ?? diffConfig?.maxLines ?? DEFAULT_MAX_LINES;
+        const maxBytes = diffConfig?.maxBytes ?? DEFAULT_MAX_BYTES;
         let finalDiff = diff;
         let truncated = false;
+        let truncatedReason: 'bytes' | 'lines' | undefined;
 
-        if (maxLines && lines > maxLines) {
+        // Truncate by bytes first (catches minified single-line blobs)
+        if (Buffer.byteLength(finalDiff, 'utf8') > maxBytes) {
+          const sliced = finalDiff.slice(0, maxBytes);
+          const lastNewline = sliced.lastIndexOf('\n');
           finalDiff =
-            diff.split('\n').slice(0, maxLines).join('\n') +
-            `\n... (truncated at ${maxLines} lines, ${lines - maxLines} more)`;
+            (lastNewline > 0 ? sliced.slice(0, lastNewline) : sliced) +
+            `\n... (truncated at ${maxBytes} bytes)`;
           truncated = true;
+          truncatedReason = 'bytes';
+        }
+
+        // Then truncate by lines
+        const currentLines = finalDiff.split('\n').length;
+        if (currentLines > maxLines) {
+          finalDiff =
+            finalDiff.split('\n').slice(0, maxLines).join('\n') +
+            `\n... (truncated at ${maxLines} lines, ${currentLines - maxLines} more)`;
+          truncated = true;
+          truncatedReason ??= 'lines';
         }
 
         const details: GetPRDiffDetails = {
           pull_number: pullNumber,
-          lines: Math.min(lines, maxLines ?? lines),
+          lines: Math.min(totalLines, maxLines),
           truncated,
+          ...(truncatedReason ? { truncated_reason: truncatedReason } : {}),
         };
-        if (ignoreFiles && ignoreFiles.length > 0) {
+        if (ignoreFiles.length > 0) {
           details.ignored_files = ignoreFiles;
         }
 

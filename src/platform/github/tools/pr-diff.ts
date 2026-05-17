@@ -6,7 +6,6 @@
  * the platform provider.
  */
 
-import { MAX_DIFF_LINES } from '../constants';
 import { getCoreAdapter } from '../index';
 import { getOctokit } from '../octokit';
 
@@ -89,14 +88,15 @@ export function filterDiffByIgnoreFiles(diff: string, ignoreFiles: string[]): st
  * Fetch the diff for a pull request.
  *
  * Retrieves the PR diff via `octokit.rest.pulls.get()` with
- * `mediaType: { format: 'diff' }`. The diff is truncated if it exceeds
- * `maxDiffLines`. Optionally, files matching `ignoreFiles` patterns are
- * stripped from the result before truncation.
+ * `mediaType: { format: 'diff' }`. Optionally, files matching
+ * `ignoreFiles` patterns are stripped from the result.
+ *
+ * Note: line-count and byte truncation is handled by the calling tool,
+ * not here.
  *
  * @param owner - Repository owner.
  * @param repo - Repository name.
  * @param pullNumber - Pull request number.
- * @param maxDiffLines - Maximum number of diff lines before truncation.
  * @param ignoreFiles - Optional list of file path patterns to exclude.
  * @returns The diff string, or empty string on error.
  */
@@ -104,9 +104,7 @@ export async function fetchPRDiff(
   owner: string,
   repo: string,
   pullNumber: number,
-  maxDiffLines: number = MAX_DIFF_LINES,
-  ignoreFiles?: string[]
-): Promise<string> {
+  ignoreFiles?: string[]): Promise<string> {
   try {
     const octokit = getOctokit();
     const response = await octokit.rest.pulls.get({
@@ -121,17 +119,9 @@ export async function fetchPRDiff(
       return '';
     }
 
-    // Filter out ignored files before truncation
+    // Filter out ignored files
     if (ignoreFiles && ignoreFiles.length > 0) {
       diff = filterDiffByIgnoreFiles(diff, ignoreFiles);
-    }
-
-    const lines = diff.split('\n');
-    if (lines.length > maxDiffLines) {
-      return (
-        lines.slice(0, maxDiffLines).join('\n') +
-        `\n... (truncated at ${maxDiffLines} lines, ${lines.length - maxDiffLines} more)`
-      );
     }
 
     return diff;

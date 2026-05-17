@@ -109,6 +109,9 @@ export interface PiConfig {
   loadBuiltinExtensions?: boolean;
   baseUrl?: string;
   exportSessionHtml?: boolean;
+  diffMaxLines?: number;
+  diffMaxBytes?: number;
+  diffIgnorePatterns?: string[];
 }
 
 /**

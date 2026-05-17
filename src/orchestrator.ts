@@ -167,6 +167,17 @@ export class ActionOrchestrator {
       ? exportSessionHtmlInput.toLowerCase() === 'true'
       : true; // default to true
 
+    const diffMaxLinesInput = this.core.getInput('diff_max_lines');
+    const diffMaxLines = diffMaxLinesInput ? parseInt(diffMaxLinesInput, 10) || undefined : undefined;
+
+    const diffMaxBytesInput = this.core.getInput('diff_max_bytes');
+    const diffMaxBytes = diffMaxBytesInput ? parseInt(diffMaxBytesInput, 10) || undefined : undefined;
+
+    const diffIgnorePatternsInput = this.core.getInput('diff_ignore_patterns');
+    const diffIgnorePatterns = diffIgnorePatternsInput
+      ? diffIgnorePatternsInput.split(/\s+/).filter(Boolean)
+      : undefined;
+
     return {
       provider,
       model,
@@ -177,6 +188,9 @@ export class ActionOrchestrator {
       loadBuiltinExtensions,
       ...(baseUrl ? { baseUrl } : {}),
       exportSessionHtml,
+      ...(diffMaxLines ? { diffMaxLines } : {}),
+      ...(diffMaxBytes ? { diffMaxBytes } : {}),
+      ...(diffIgnorePatterns?.length ? { diffIgnorePatterns } : {}),
     };
   }
 

@@ -40,13 +40,18 @@ export {
  * @param provider - The platform provider for tool operations.
  * @returns An extension factory function compatible with the Pi SDK.
  */
-export function createToolsFactory(provider: PlatformProvider): (pi: ExtensionAPI) => void {
+export interface DiffConfig {
+  maxLines?: number;
+  maxBytes?: number;
+  ignorePatterns?: string[];
+}
+export function createToolsFactory(provider: PlatformProvider, diffConfig?: DiffConfig): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI): void => {
     const tools = [
       createPRToolFactory(provider),
       updatePullRequestToolFactory(provider),
       getIssueOrPRThreadToolFactory(provider),
-      getPRDiffToolFactory(provider),
+      getPRDiffToolFactory(provider, diffConfig),
     ];
     tools.forEach(tool => {
       pi.registerTool(tool);
