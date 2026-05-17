@@ -20,6 +20,7 @@ import { getPRDiffToolFactory } from './get-pr-diff';
 import { updatePullRequestToolFactory } from './update-pr';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { PlatformProvider } from '../../platform';
+import type { PiConfig } from '../../types';
 
 // Re-export tool execution utilities for use in custom tools
 export {
@@ -40,18 +41,13 @@ export {
  * @param provider - The platform provider for tool operations.
  * @returns An extension factory function compatible with the Pi SDK.
  */
-export interface DiffConfig {
-  maxLines?: number;
-  maxBytes?: number;
-  ignorePatterns?: string[];
-}
-export function createToolsFactory(provider: PlatformProvider, diffConfig?: DiffConfig): (pi: ExtensionAPI) => void {
+export function createToolsFactory(provider: PlatformProvider, config?: PiConfig): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI): void => {
     const tools = [
       createPRToolFactory(provider),
       updatePullRequestToolFactory(provider),
       getIssueOrPRThreadToolFactory(provider),
-      getPRDiffToolFactory(provider, diffConfig),
+      getPRDiffToolFactory(provider, config),
     ];
     tools.forEach(tool => {
       pi.registerTool(tool);

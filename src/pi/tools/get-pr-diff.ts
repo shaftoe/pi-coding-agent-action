@@ -17,13 +17,7 @@ import {
 import { CANCELLATION_MESSAGE_GET_PR_DIFF } from './constants';
 import { withCancellation } from './tool-execution';
 import type { PlatformProvider } from '../../platform';
-import type { DiffConfig } from './index';
-
-/** Default max bytes for diff output (100 KB). */
-const DEFAULT_MAX_BYTES = 102_400;
-
-/** Default max lines for diff output. */
-const DEFAULT_MAX_LINES = 1000;
+import type { PiConfig } from '../../types';
 
 /**
  * Schema for the get_pr_diff tool.
@@ -99,7 +93,7 @@ function resolvePRParams(
  * @param diffConfig - Optional diff configuration (max lines, max bytes, default ignore patterns).
  * @returns The tool definition.
  */
-export function getPRDiffToolFactory(provider: PlatformProvider, diffConfig?: DiffConfig) {
+export function getPRDiffToolFactory(provider: PlatformProvider, config?: PiConfig) {
   return defineTool({
     name: 'get_pr_diff',
     label: 'Get PR Diff',
@@ -137,7 +131,7 @@ export function getPRDiffToolFactory(provider: PlatformProvider, diffConfig?: Di
         const { owner, repo, pullNumber } = resolved;
 
         // Merge default ignore patterns with caller-provided ones
-        const defaultIgnore = diffConfig?.ignorePatterns ?? [];
+        const defaultIgnore = config?.diffIgnorePatterns ?? [];
         const callerIgnore = params.ignore_files ?? [];
         const ignoreFiles = [...new Set([...defaultIgnore, ...callerIgnore])];
 
@@ -164,8 +158,8 @@ export function getPRDiffToolFactory(provider: PlatformProvider, diffConfig?: Di
           };
         }
 
-        const maxLines = params.max_lines ?? diffConfig?.maxLines ?? DEFAULT_MAX_LINES;
-        const maxBytes = diffConfig?.maxBytes ?? DEFAULT_MAX_BYTES;
+        const maxLines = params.max_lines ?? config?.diffMaxLines ?? 1000;
+        const maxBytes = config?.diffMaxBytes ?? 102_400;
         let finalDiff = diff;
         let truncated = false;
         let truncatedReason: 'bytes' | 'lines' | undefined;

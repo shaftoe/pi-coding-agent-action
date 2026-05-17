@@ -14,9 +14,8 @@ import { getVersion } from './logging';
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
-import type { PromptResult, SessionStats, CoreAdapter } from '../types';
+import type { PromptResult, SessionStats, CoreAdapter, PiConfig } from '../types';
 import type { PlatformProvider } from '../platform';
-import type { DiffConfig } from './tools/index';
 
 /**
  * Pi coding agent for headless execution inside GitHub Actions.
@@ -39,7 +38,7 @@ export class Agent {
   private extensions?: string[];
   private loadBuiltinExtensions?: boolean;
   private baseUrl?: string;
-  private diffConfig?: DiffConfig;
+  private config?: PiConfig;
 
   /**
    * Create a new Pi agent.
@@ -68,7 +67,7 @@ export class Agent {
     extensions?: string[],
     loadBuiltinExtensions?: boolean,
     baseUrl?: string,
-    diffConfig?: DiffConfig
+    config?: PiConfig
   ) {
     this.modelStr = modelStr;
     this.provider = provider;
@@ -85,8 +84,8 @@ export class Agent {
     if (baseUrl !== undefined) {
       this.baseUrl = baseUrl;
     }
-    if (diffConfig !== undefined) {
-      this.diffConfig = diffConfig;
+    if (config !== undefined) {
+      this.config = config;
     }
     this.modelRegistry = ModelRegistry.create(this.authStorage);
 
@@ -135,7 +134,7 @@ export class Agent {
         this.platformProvider,
         this.extensions,
         this.loadBuiltinExtensions,
-        this.diffConfig
+        this.config
       ),
     });
     this.session = session;

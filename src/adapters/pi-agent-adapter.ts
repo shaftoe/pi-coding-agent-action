@@ -6,7 +6,6 @@
 
 import type { PiAgent, PiAgentFactory, PiConfig, CoreAdapter } from '../types';
 import type { PlatformProvider } from '../platform';
-import type { DiffConfig } from '../pi/tools/index';
 import { Agent } from '../pi';
 
 /**
@@ -17,17 +16,6 @@ export const createRealPiAgent: PiAgentFactory = (
   core: CoreAdapter,
   provider: PlatformProvider
 ): PiAgent => {
-  const diffConfig: DiffConfig = {};
-  if (config.diffMaxLines) {
-    diffConfig.maxLines = config.diffMaxLines;
-  }
-  if (config.diffMaxBytes) {
-    diffConfig.maxBytes = config.diffMaxBytes;
-  }
-  if (config.diffIgnorePatterns?.length) {
-    diffConfig.ignorePatterns = config.diffIgnorePatterns;
-  }
-
   const agent = new Agent(
     config.model,
     config.provider,
@@ -38,7 +26,7 @@ export const createRealPiAgent: PiAgentFactory = (
     config.extensions,
     config.loadBuiltinExtensions,
     config.baseUrl,
-    Object.keys(diffConfig).length > 0 ? diffConfig : undefined
+    config
   );
 
   return {
