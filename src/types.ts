@@ -109,6 +109,10 @@ export interface PiConfig {
   loadBuiltinExtensions?: boolean;
   baseUrl?: string;
   exportSessionHtml?: boolean;
+  /** File patterns to exclude from PR diffs. When provided via `diff_ignore_patterns`
+   *  action input, these **replace** the built-in defaults entirely. When not set,
+   *  the built-in defaults (dist/, lock files, vendor/, etc.) are used. */
+  diffIgnorePatterns?: string[];
 }
 
 /**

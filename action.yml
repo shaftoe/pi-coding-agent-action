@@ -55,6 +55,11 @@ inputs:
     required: false
     default: 'false'
 
+  diff_ignore_patterns:
+    description: 'File paths to exclude from PR diffs (one per line). Supports exact paths (e.g. snapshots/test.js) and directory prefixes (e.g. generated/). Glob patterns are NOT supported. When provided, these patterns REPLACE the built-in defaults (dist/, lock files, vendor/, etc.) entirely — giving you full control. Leave empty to use the defaults.'
+    required: false
+    default: ''
+
 runs:
   using: 'node24'
   main: 'dist/index.js'

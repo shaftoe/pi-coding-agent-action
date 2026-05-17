@@ -83,6 +83,15 @@ export interface PlatformProvider {
   readonly type: PlatformType;
 
   /**
+   * Diff ignore patterns from action configuration.
+   *
+   * When set, these patterns **replace** the built-in default ignore patterns
+   * entirely — giving the user full control. When not set, the built-in
+   * defaults (dist/, lock files, vendor/, etc.) are used.
+   */
+  diffIgnorePatterns?: string[];
+
+  /**
    * Get the platform context (repo info, event payload, etc.).
    *
    * Extracts context from the platform's CI/CD environment variables

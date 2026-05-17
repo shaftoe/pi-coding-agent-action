@@ -72,7 +72,7 @@ export function detectPlatform(): PlatformType {
 export function createGitHubPlatformProvider(): PlatformProvider {
   const type = detectPlatform();
 
-  return {
+  const provider: PlatformProvider = {
     type,
 
     getContext(): PlatformContext {
@@ -126,7 +126,11 @@ export function createGitHubPlatformProvider(): PlatformProvider {
     },
 
     async getPRDiff(owner: string, repo: string, pullNumber: number, ignoreFiles?: string[]): Promise<string> {
-      return fetchPRDiff(owner, repo, pullNumber, MAX_DIFF_LINES, ignoreFiles);
+      // Pass user-configured patterns and LLM-provided patterns separately.
+      // User patterns replace built-in defaults; LLM patterns always extend.
+      return fetchPRDiff(owner, repo, pullNumber, MAX_DIFF_LINES, provider.diffIgnorePatterns, ignoreFiles);
     },
   };
+
+  return provider;
 }

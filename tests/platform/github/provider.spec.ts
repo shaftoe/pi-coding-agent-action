@@ -219,4 +219,17 @@ describe('PlatformProvider interface compliance', () => {
       expect(typeof provider[method]).toBe('function');
     }
   });
+
+  test('provider has diffIgnorePatterns property (undefined by default)', () => {
+    process.env.GITHUB_SERVER_URL = 'https://github.com';
+    const provider = createGitHubPlatformProvider();
+    expect(provider.diffIgnorePatterns).toBeUndefined();
+  });
+
+  test('diffIgnorePatterns can be set on provider', () => {
+    process.env.GITHUB_SERVER_URL = 'https://github.com';
+    const provider = createGitHubPlatformProvider();
+    provider.diffIgnorePatterns = ['generated/', 'generated.pb.go'];
+    expect(provider.diffIgnorePatterns).toEqual(['generated/', 'generated.pb.go']);
+  });
 });
