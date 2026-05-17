@@ -69,8 +69,9 @@ export class ActionOrchestrator {
 
       const pi = this.piAgentFactory(config, this.core, this.platformProvider);
 
-      // Pass user-configured diff ignore patterns to the platform provider
-      // so they are merged with built-in defaults in fetchPRDiff.
+      // Pass user-configured diff ignore patterns to the platform provider.
+      // When set, these REPLACE the built-in defaults in fetchPRDiff.
+      // When not set, built-in defaults are used.
       if (config.diffIgnorePatterns) {
         this.platformProvider.diffIgnorePatterns = config.diffIgnorePatterns;
       }

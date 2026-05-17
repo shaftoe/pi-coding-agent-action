@@ -83,8 +83,12 @@ export interface PlatformProvider {
   readonly type: PlatformType;
 
   /**
-   * Additional diff ignore patterns from action configuration.
-   * Merged with built-in defaults in fetchPRDiff.
+   * Diff ignore patterns from action configuration.
+   *
+   * When set (via `diff_ignore_patterns` action input), these REPLACE
+   * the built-in defaults entirely. When not set, defaults are used.
+   * LLM-provided patterns (from `ignore_files` tool param) always extend
+   * whichever base is active.
    */
   diffIgnorePatterns?: string[];
 

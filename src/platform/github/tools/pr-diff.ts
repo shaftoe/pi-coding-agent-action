@@ -87,18 +87,28 @@ export function filterDiffByIgnoreFiles(diff: string, ignoreFiles: string[]): st
 }
 
 /**
- * Merge default ignore patterns with caller-provided ones.
+ * Resolve ignore patterns from the two possible sources.
  *
- * Defaults are always applied; caller patterns extend them.
+ * - If `userPatterns` is provided (set via `diff_ignore_patterns` action input),
+ *   it **replaces** the built-in defaults entirely — giving the user full control.
+ * - If `userPatterns` is not provided, the built-in defaults are used.
+ * - In both cases, `llmPatterns` (from the LLM tool's `ignore_files` param)
+ *   are **appended** to whatever base is active.
+ *
  * Duplicates are removed via Set deduplication.
  *
- * @param extraPatterns - Optional additional patterns from action config or LLM tool call.
- * @returns Deduplicated merged pattern list.
+ * @param userPatterns - Patterns from action config (replace defaults when set).
+ * @param llmPatterns - Patterns from LLM tool call (always extend).
+ * @returns Deduplicated resolved pattern list.
  */
-export function mergeIgnorePatterns(extraPatterns?: string[]): string[] {
-  const merged = new Set<string>(DEFAULT_DIFF_IGNORE_PATTERNS);
-  if (extraPatterns) {
-    for (const p of extraPatterns) {
+export function resolveIgnorePatterns(userPatterns?: string[], llmPatterns?: string[]): string[] {
+  // User patterns replace defaults entirely when provided
+  const base = (userPatterns && userPatterns.length > 0)
+    ? userPatterns
+    : [...DEFAULT_DIFF_IGNORE_PATTERNS];
+  const merged = new Set<string>(base);
+  if (llmPatterns) {
+    for (const p of llmPatterns) {
       merged.add(p);
     }
   }
@@ -197,16 +207,18 @@ export function smartTruncate(diff: string, maxBytes: number): string {
  *
  * Retrieves the PR diff via `octokit.rest.pulls.get()` with
  * `mediaType: { format: 'diff' }`. The diff is truncated if it exceeds
- * `maxDiffLines`. Files matching ignore patterns (defaults always applied,
- * plus any caller-provided patterns) are stripped before truncation.
- * A byte-budget smart truncation is applied if the filtered diff is still
- * too large.
+ * `maxDiffLines`. Files matching ignore patterns are stripped before
+ * truncation. When `userPatterns` is provided it replaces the built-in
+ * defaults; otherwise defaults are used. LLM-provided `llmPatterns`
+ * always extend the base. A byte-budget smart truncation is applied if
+ * the filtered diff is still too large.
  *
  * @param owner - Repository owner.
  * @param repo - Repository name.
  * @param pullNumber - Pull request number.
  * @param maxDiffLines - Maximum number of diff lines before truncation.
- * @param ignoreFiles - Optional list of file path patterns to exclude (merged with built-in defaults).
+ * @param userPatterns - User-provided patterns from action config (replace defaults when set).
+ * @param llmPatterns - LLM-provided patterns from tool call (always extend).
  * @returns The diff string, or empty string on error.
  */
 export async function fetchPRDiff(
@@ -214,7 +226,8 @@ export async function fetchPRDiff(
   repo: string,
   pullNumber: number,
   maxDiffLines: number = MAX_DIFF_LINES,
-  ignoreFiles?: string[]
+  userPatterns?: string[],
+  llmPatterns?: string[]
 ): Promise<string> {
   try {
     const octokit = getOctokit();
@@ -230,9 +243,9 @@ export async function fetchPRDiff(
       return '';
     }
 
-    // Always merge defaults with caller-provided patterns
-    const mergedIgnore = mergeIgnorePatterns(ignoreFiles);
-    diff = filterDiffByIgnoreFiles(diff, mergedIgnore);
+    // Resolve ignore patterns: user patterns replace defaults, LLM patterns extend
+    const resolvedIgnore = resolveIgnorePatterns(userPatterns, llmPatterns);
+    diff = filterDiffByIgnoreFiles(diff, resolvedIgnore);
 
     // Byte-size guard: smart-truncate oversized diffs even after filtering
     const byteSize = Buffer.byteLength(diff, 'utf8');

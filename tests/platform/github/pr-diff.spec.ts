@@ -6,7 +6,7 @@ import { describe, expect, test, beforeAll } from 'bun:test';
 import {
   filterDiffByIgnoreFiles,
   matchesIgnorePattern,
-  mergeIgnorePatterns,
+  resolveIgnorePatterns,
   smartTruncate,
 } from '../../../src/platform/github/tools/pr-diff';
 import { DEFAULT_DIFF_IGNORE_PATTERNS } from '../../../src/platform/github/constants';
@@ -189,32 +189,53 @@ describe('DEFAULT_DIFF_IGNORE_PATTERNS', () => {
   });
 });
 
-describe('mergeIgnorePatterns', () => {
-  test('returns defaults when no extra patterns provided', () => {
-    const result = mergeIgnorePatterns();
+describe('resolveIgnorePatterns', () => {
+  test('returns defaults when no patterns provided', () => {
+    const result = resolveIgnorePatterns();
     expect(result).toContain('dist/');
     expect(result).toContain('package-lock.json');
     expect(result).toContain('vendor/');
   });
 
-  test('returns defaults when undefined extra patterns provided', () => {
-    const result = mergeIgnorePatterns(undefined);
+  test('returns defaults when undefined patterns provided', () => {
+    const result = resolveIgnorePatterns(undefined, undefined);
     expect(result).toEqual(expect.arrayContaining([...DEFAULT_DIFF_IGNORE_PATTERNS]));
   });
 
-  test('merges extra patterns with defaults', () => {
-    const result = mergeIgnorePatterns(['snapshots/', 'fixtures/']);
-    expect(result).toContain('dist/'); // default
-    expect(result).toContain('snapshots/'); // extra
-    expect(result).toContain('fixtures/'); // extra
+  test('user patterns REPLACE defaults entirely', () => {
+    const result = resolveIgnorePatterns(['snapshots/', 'fixtures/']);
+    // User patterns replace defaults — defaults should NOT be present
+    expect(result).not.toContain('dist/');
+    expect(result).not.toContain('vendor/');
+    expect(result).toContain('snapshots/');
+    expect(result).toContain('fixtures/');
+    expect(result).toHaveLength(2);
   });
 
-  test('deduplicates patterns that already exist in defaults', () => {
-    const result = mergeIgnorePatterns(['dist/', 'vendor/']);
+  test('LLM patterns extend defaults when no user patterns', () => {
+    const result = resolveIgnorePatterns(undefined, ['extra.ts']);
+    expect(result).toContain('dist/'); // default
+    expect(result).toContain('extra.ts'); // LLM
+  });
+
+  test('LLM patterns extend user patterns when user patterns are set', () => {
+    const result = resolveIgnorePatterns(['custom/'], ['extra.ts']);
+    expect(result).not.toContain('dist/'); // defaults replaced
+    expect(result).toContain('custom/'); // user
+    expect(result).toContain('extra.ts'); // LLM
+  });
+
+  test('deduplicates patterns', () => {
+    const result = resolveIgnorePatterns(['dist/', 'vendor/'], ['dist/']);
     const distCount = result.filter(p => p === 'dist/').length;
-    const vendorCount = result.filter(p => p === 'vendor/').length;
     expect(distCount).toBe(1);
-    expect(vendorCount).toBe(1);
+  });
+
+  test('empty user patterns array is treated as no user patterns', () => {
+    const result = resolveIgnorePatterns([]);
+    // Empty array means user didn't configure anything — use defaults
+    expect(result).toContain('dist/');
+    expect(result).toContain('vendor/');
   });
 });
 

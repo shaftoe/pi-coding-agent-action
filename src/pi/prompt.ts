@@ -108,13 +108,13 @@ export const GET_PR_DIFF_PROMPT_SNIPPET =
 export const GET_PR_DIFF_PROMPT_GUIDELINES = [
   'Use get_pr_diff to fetch the diff of a pull request when you need to understand what changed.',
   'By default, the tool fetches the diff for the current PR from the GitHub context. Only provide owner/repo/pull_number when you need to fetch a different PR.',
-  'Common generated files (dist/, lock files, vendor/, etc.) are automatically excluded from the diff. You do NOT need to specify ignore_files for these.',
-  'Use ignore_files only for additional repo-specific files you want to exclude (e.g. generated protobuf files, snapshot tests, etc.).',
+  'If the user has configured diff_ignore_patterns, those patterns REPLACE the built-in defaults (dist/, lock files, vendor/, etc.) entirely. Otherwise, built-in defaults are automatically applied.',
+  'Use ignore_files only for additional repo-specific files you want to exclude (e.g. generated protobuf files, snapshot tests, etc.). These always extend whichever base is active.',
   'The diff is truncated at 1000 lines by default. Use max_lines to increase or decrease this limit.',
 ];
 
 export const GET_PR_DIFF_DESCRIPTION =
-  'Fetch the diff of a GitHub pull request. Common generated files (dist/, lock files, vendor/, etc.) are automatically excluded. Useful for understanding what code changes a PR introduces before reviewing or modifying them.';
+  'Fetch the diff of a GitHub pull request. By default, common generated files (dist/, lock files, vendor/, etc.) are automatically excluded. If diff_ignore_patterns is configured, those patterns replace the defaults entirely. Useful for understanding what code changes a PR introduces before reviewing or modifying them.';
 
 export const GET_PR_DIFF_PARAM_OWNER_DESCRIPTION =
   'Repository owner (e.g., "octocat"). If not provided, uses the current repository from context.';

@@ -56,7 +56,7 @@ inputs:
     default: 'false'
 
   diff_ignore_patterns:
-    description: 'Additional file paths to exclude from PR diffs (one per line). Supports exact paths (e.g. snapshots/test.js) and directory prefixes (e.g. generated/). Glob patterns are NOT supported. Common generated files (dist/, lock files, vendor/, etc.) are always excluded. Use this for repo-specific files like generated code or large test fixtures.'
+    description: 'File paths to exclude from PR diffs (one per line). Supports exact paths (e.g. snapshots/test.js) and directory prefixes (e.g. generated/). Glob patterns are NOT supported. When set, these patterns REPLACE the built-in defaults (dist/, lock files, vendor/, etc.) entirely — giving you full control. When not set, built-in defaults are used. The LLM tool\'s ignore_files parameter always extends whichever base is active.'
     required: false
     default: ''
 

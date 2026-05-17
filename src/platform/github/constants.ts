@@ -37,11 +37,12 @@ export const MAX_DIFF_LINES = 1000;
 export const MAX_DIFF_BYTES = 200_000;
 
 /**
- * Default file patterns always excluded from PR diffs.
+ * Default file patterns excluded from PR diffs when the user has NOT
+ * configured `diff_ignore_patterns`.
  *
- * These are common generated/build files that inflate diffs with
- * unreviewable content. They are merged with any user-provided
- * or LLM-provided ignore patterns.
+ * When the user sets `diff_ignore_patterns`, these defaults are NOT used —
+ * the user's patterns replace them entirely. When not set, these defaults
+ * are used as the base, and LLM-provided patterns extend them.
  */
 export const DEFAULT_DIFF_IGNORE_PATTERNS = [
   'dist/',

@@ -126,9 +126,16 @@ export function createGitHubPlatformProvider(): PlatformProvider {
     },
 
     async getPRDiff(owner: string, repo: string, pullNumber: number, ignoreFiles?: string[]): Promise<string> {
-      // Merge action-configured patterns with LLM-provided patterns
-      const mergedIgnore = [...(provider.diffIgnorePatterns ?? []), ...(ignoreFiles ?? [])];
-      return fetchPRDiff(owner, repo, pullNumber, MAX_DIFF_LINES, mergedIgnore.length > 0 ? mergedIgnore : undefined);
+      // Pass user-configured patterns and LLM-provided patterns separately
+      // so fetchPRDiff can apply replace-vs-extend semantics.
+      return fetchPRDiff(
+        owner,
+        repo,
+        pullNumber,
+        MAX_DIFF_LINES,
+        provider.diffIgnorePatterns,
+        ignoreFiles,
+      );
     },
   };
 
