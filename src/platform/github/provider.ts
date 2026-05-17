@@ -72,7 +72,7 @@ export function detectPlatform(): PlatformType {
 export function createGitHubPlatformProvider(): PlatformProvider {
   const type = detectPlatform();
 
-  return {
+  const provider: PlatformProvider = {
     type,
 
     getContext(): PlatformContext {
@@ -126,7 +126,11 @@ export function createGitHubPlatformProvider(): PlatformProvider {
     },
 
     async getPRDiff(owner: string, repo: string, pullNumber: number, ignoreFiles?: string[]): Promise<string> {
-      return fetchPRDiff(owner, repo, pullNumber, MAX_DIFF_LINES, ignoreFiles);
+      // Merge action-configured patterns with LLM-provided patterns
+      const mergedIgnore = [...(provider.diffIgnorePatterns ?? []), ...(ignoreFiles ?? [])];
+      return fetchPRDiff(owner, repo, pullNumber, MAX_DIFF_LINES, mergedIgnore.length > 0 ? mergedIgnore : undefined);
     },
   };
+
+  return provider;
 }

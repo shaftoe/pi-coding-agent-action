@@ -109,6 +109,8 @@ export interface PiConfig {
   loadBuiltinExtensions?: boolean;
   baseUrl?: string;
   exportSessionHtml?: boolean;
+  /** Additional file patterns to exclude from PR diffs (beyond the built-in defaults) */
+  diffIgnorePatterns?: string[];
 }
 
 /**

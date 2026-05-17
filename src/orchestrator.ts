@@ -68,6 +68,13 @@ export class ActionOrchestrator {
       }
 
       const pi = this.piAgentFactory(config, this.core, this.platformProvider);
+
+      // Pass user-configured diff ignore patterns to the platform provider
+      // so they are merged with built-in defaults in fetchPRDiff.
+      if (config.diffIgnorePatterns) {
+        this.platformProvider.diffIgnorePatterns = config.diffIgnorePatterns;
+      }
+
       const { result, sessionStats } = await pi.run(prompt);
 
       if (config.exportSessionHtml) {
@@ -167,6 +174,14 @@ export class ActionOrchestrator {
       ? exportSessionHtmlInput.toLowerCase() === 'true'
       : true; // default to true
 
+    const diffIgnorePatternsInput = this.core.getInput('diff_ignore_patterns');
+    const diffIgnorePatterns = diffIgnorePatternsInput
+      ? diffIgnorePatternsInput
+          .split('\n')
+          .map(s => s.trim())
+          .filter(Boolean)
+      : undefined;
+
     return {
       provider,
       model,
@@ -177,6 +192,7 @@ export class ActionOrchestrator {
       loadBuiltinExtensions,
       ...(baseUrl ? { baseUrl } : {}),
       exportSessionHtml,
+      ...(diffIgnorePatterns?.length ? { diffIgnorePatterns } : {}),
     };
   }
 

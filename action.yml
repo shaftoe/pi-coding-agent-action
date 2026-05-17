@@ -55,6 +55,11 @@ inputs:
     required: false
     default: 'false'
 
+  diff_ignore_patterns:
+    description: 'Additional file patterns to exclude from PR diffs (one per line). Common generated files (dist/, lock files, vendor/, etc.) are always excluded. Use this for repo-specific patterns like generated code or large test fixtures.'
+    required: false
+    default: ''
+
 runs:
   using: 'node24'
   main: 'dist/index.js'

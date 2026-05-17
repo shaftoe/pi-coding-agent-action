@@ -255,4 +255,29 @@ describe('get_pr_diff tool - execution', () => {
     expect((result.content as any)[0].text).toContain('cancelled');
     expect((result.details as any).cancelled).toBe(true);
   });
+
+  test('execute merges LLM-provided ignore_files with caller-provided patterns', async () => {
+    const getPRDiff = mock(async () => SAMPLE_DIFF);
+    const provider = createMockProvider({ getPRDiff });
+    const tool = getPRDiffToolFactory(provider);
+
+    await tool.execute(
+      'call-merge',
+      {
+        owner: 'test-owner',
+        repo: 'test-repo',
+        pull_number: 42,
+        ignore_files: ['generated/', '*.pb.go'],
+      },
+      undefined,
+      undefined,
+      mockCtx
+    );
+
+    // The LLM-provided ignore_files should be passed to the provider
+    expect(getPRDiff).toHaveBeenCalledTimes(1);
+    const ignoreArg = (getPRDiff as any).mock.calls[0][3];
+    expect(ignoreArg).toContain('generated/');
+    expect(ignoreArg).toContain('*.pb.go');
+  });
 });

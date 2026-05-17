@@ -83,6 +83,12 @@ export interface PlatformProvider {
   readonly type: PlatformType;
 
   /**
+   * Additional diff ignore patterns from action configuration.
+   * Merged with built-in defaults in fetchPRDiff.
+   */
+  diffIgnorePatterns?: string[];
+
+  /**
    * Get the platform context (repo info, event payload, etc.).
    *
    * Extracts context from the platform's CI/CD environment variables

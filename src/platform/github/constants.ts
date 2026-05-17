@@ -32,3 +32,23 @@ export const MAX_REVIEW_COMMENTS = 50;
 
 // GitHub max diff lines before truncation
 export const MAX_DIFF_LINES = 1000;
+
+// GitHub max diff bytes before smart truncation (~50K tokens safety limit)
+export const MAX_DIFF_BYTES = 200_000;
+
+/**
+ * Default file patterns always excluded from PR diffs.
+ *
+ * These are common generated/build files that inflate diffs with
+ * unreviewable content. They are merged with any user-provided
+ * or LLM-provided ignore patterns.
+ */
+export const DEFAULT_DIFF_IGNORE_PATTERNS = [
+  'dist/',
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'bun.lockb',
+  'bun.lock',
+  'vendor/',
+] as const;

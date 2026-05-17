@@ -1332,4 +1332,79 @@ describe('ActionOrchestrator', () => {
       );
     });
   });
+
+  describe('diff_ignore_patterns configuration', () => {
+    test('calls getInput for diff_ignore_patterns', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockCore.getInput).toHaveBeenCalledWith('diff_ignore_patterns');
+    });
+
+    test('omits diffIgnorePatterns when input is empty', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          diffIgnorePatterns: expect.any(Array),
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('parses diff_ignore_patterns input into config array', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          diff_ignore_patterns: 'generated/\n*.pb.go',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          diffIgnorePatterns: ['generated/', '*.pb.go'],
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('sets diffIgnorePatterns on platform provider when configured', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          diff_ignore_patterns: 'snapshots/\nfixtures/',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockProvider.diffIgnorePatterns).toEqual(['snapshots/', 'fixtures/']);
+    });
+
+    test('does not set diffIgnorePatterns when not configured', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockProvider.diffIgnorePatterns).toBeUndefined();
+    });
+  });
 });

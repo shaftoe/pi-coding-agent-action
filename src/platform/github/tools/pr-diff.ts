@@ -6,7 +6,7 @@
  * the platform provider.
  */
 
-import { MAX_DIFF_LINES } from '../constants';
+import { MAX_DIFF_LINES, MAX_DIFF_BYTES, DEFAULT_DIFF_IGNORE_PATTERNS } from '../constants';
 import { getCoreAdapter } from '../index';
 import { getOctokit } from '../octokit';
 
@@ -100,6 +100,73 @@ export function filterDiffByIgnoreFiles(diff: string, ignoreFiles: string[]): st
  * @param ignoreFiles - Optional list of file path patterns to exclude.
  * @returns The diff string, or empty string on error.
  */
+/**
+ * Merge default ignore patterns with caller-provided ones.
+ *
+ * Defaults are always applied; caller patterns extend them.
+ * Duplicates are removed.
+ */
+function mergeIgnorePatterns(extraPatterns?: string[]): string[] {
+  const merged = new Set<string>(DEFAULT_DIFF_IGNORE_PATTERNS);
+  if (extraPatterns) {
+    for (const p of extraPatterns) {
+      merged.add(p);
+    }
+  }
+  return [...merged];
+}
+
+/**
+ * Smart-truncate a diff by removing the largest file hunks until it fits
+ * within a byte budget.
+ *
+ * Falls back to simple line truncation if hunk-level trimming isn't enough.
+ */
+function smartTruncate(diff: string, maxBytes: number): string {
+  const hunkSeparator = 'diff --git ';
+  const hunks = diff.split(hunkSeparator);
+  const header = hunks[0];
+  const fileHunks = hunks.slice(1);
+
+  if (fileHunks.length <= 1) {
+    // Single file – can't remove hunks, just truncate lines
+    const lines = diff.split('\n');
+    const budget = Math.max(100, Math.floor(maxBytes / 80)); // rough line estimate
+    return (
+      lines.slice(0, budget).join('\n') +
+      `\n... (truncated to fit byte limit, ${lines.length - budget} more lines)`
+    );
+  }
+
+  // Sort hunks by size ascending – keep smallest, drop largest
+  const indexed = fileHunks.map((h, i) => ({ h, i, size: Buffer.byteLength(h, 'utf8') }));
+  indexed.sort((a, b) => a.size - b.size);
+
+  const kept: string[] = [];
+  let totalBytes = Buffer.byteLength(header ?? '', 'utf8');
+  for (const entry of indexed) {
+    const hunkBytes = Buffer.byteLength(hunkSeparator + entry.h, 'utf8');
+    if (totalBytes + hunkBytes > maxBytes) {
+      debug(
+        `[smartTruncate] Dropping hunk ${entry.i} (${(hunkBytes / 1024).toFixed(1)}KB) to fit budget`
+      );
+      continue;
+    }
+    kept.push(hunkSeparator + entry.h);
+    totalBytes += hunkBytes;
+  }
+
+  const result = header + kept.join('');
+  const droppedCount = fileHunks.length - kept.length;
+  if (droppedCount > 0) {
+    debug(
+      `[smartTruncate] Kept ${kept.length}/${fileHunks.length} files, ` +
+        `${(totalBytes / 1024).toFixed(1)}KB total`
+    );
+  }
+  return result;
+}
+
 export async function fetchPRDiff(
   owner: string,
   repo: string,
@@ -121,9 +188,17 @@ export async function fetchPRDiff(
       return '';
     }
 
-    // Filter out ignored files before truncation
-    if (ignoreFiles && ignoreFiles.length > 0) {
-      diff = filterDiffByIgnoreFiles(diff, ignoreFiles);
+    // Always merge defaults with caller-provided patterns
+    const mergedIgnore = mergeIgnorePatterns(ignoreFiles);
+    diff = filterDiffByIgnoreFiles(diff, mergedIgnore);
+
+    // Byte-size guard: smart-truncate oversized diffs even after filtering
+    const byteSize = Buffer.byteLength(diff, 'utf8');
+    if (byteSize > MAX_DIFF_BYTES) {
+      debug(
+        `[fetchPRDiff] Diff is ${(byteSize / 1024).toFixed(1)}KB, applying smart truncation`
+      );
+      diff = smartTruncate(diff, MAX_DIFF_BYTES);
     }
 
     const lines = diff.split('\n');

@@ -4,6 +4,7 @@
 
 import { describe, expect, test, beforeAll } from 'bun:test';
 import { filterDiffByIgnoreFiles, matchesIgnorePattern } from '../../../src/platform/github/tools/pr-diff';
+import { DEFAULT_DIFF_IGNORE_PATTERNS } from '../../../src/platform/github/constants';
 import { resetModuleContext } from '../../../src/platform/github';
 
 const SAMPLE_DIFF = `diff --git a/src/index.ts b/src/index.ts
@@ -141,5 +142,36 @@ new file mode 100644
   test('handles diff with no matching files to filter', () => {
     const result = filterDiffByIgnoreFiles(SAMPLE_DIFF, ['nonexistent/']);
     expect(result).toBe(SAMPLE_DIFF);
+  });
+});
+
+describe('DEFAULT_DIFF_IGNORE_PATTERNS', () => {
+  test('includes dist/', () => {
+    expect(DEFAULT_DIFF_IGNORE_PATTERNS).toContain('dist/');
+  });
+
+  test('includes package-lock.json', () => {
+    expect(DEFAULT_DIFF_IGNORE_PATTERNS).toContain('package-lock.json');
+  });
+
+  test('includes yarn.lock', () => {
+    expect(DEFAULT_DIFF_IGNORE_PATTERNS).toContain('yarn.lock');
+  });
+
+  test('includes pnpm-lock.yaml', () => {
+    expect(DEFAULT_DIFF_IGNORE_PATTERNS).toContain('pnpm-lock.yaml');
+  });
+
+  test('includes vendor/', () => {
+    expect(DEFAULT_DIFF_IGNORE_PATTERNS).toContain('vendor/');
+  });
+
+  test('filtering with default patterns removes dist/ and lock files', () => {
+    const result = filterDiffByIgnoreFiles(SAMPLE_DIFF, [...DEFAULT_DIFF_IGNORE_PATTERNS]);
+    // Should keep only src/ files
+    expect(result).toContain('diff --git a/src/index.ts');
+    expect(result).toContain('diff --git a/src/utils/helpers.ts');
+    expect(result).not.toContain('diff --git a/dist/');
+    expect(result).not.toContain('diff --git a/package-lock.json');
   });
 });
