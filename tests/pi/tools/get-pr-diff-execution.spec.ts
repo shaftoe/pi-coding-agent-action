@@ -10,6 +10,7 @@ import { describe, expect, test, mock } from 'bun:test';
 import { getPRDiffToolFactory } from '../../../src/pi/tools/get-pr-diff';
 import type { PlatformProvider } from '../../../src/platform';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { DiffConfig } from '../../../src/pi/tools/index';
 
 // Minimal mock ExtensionContext for tool execute signature
 const mockCtx = {
@@ -149,6 +150,53 @@ describe('get_pr_diff tool - execution', () => {
     expect((getPRDiff as any).mock.calls[0][3]).toBeUndefined();
   });
 
+  test('execute merges default ignore patterns with caller-provided ones', async () => {
+    const getPRDiff = mock(async () => SAMPLE_DIFF);
+    const provider = createMockProvider({ getPRDiff });
+    const diffConfig: DiffConfig = { ignorePatterns: ['dist/', 'node_modules/'] };
+    const tool = getPRDiffToolFactory(provider, diffConfig);
+
+    await tool.execute(
+      'call-merge',
+      {
+        owner: 'test-owner',
+        repo: 'test-repo',
+        pull_number: 42,
+        ignore_files: ['package-lock.json', 'dist/'],
+      },
+      undefined,
+      undefined,
+      mockCtx
+    );
+
+    expect(getPRDiff).toHaveBeenCalledTimes(1);
+    // Should be a deduped union of default + caller patterns
+    const passedIgnore = (getPRDiff as any).mock.calls[0][3] as string[];
+    expect(passedIgnore).toContain('dist/');
+    expect(passedIgnore).toContain('node_modules/');
+    expect(passedIgnore).toContain('package-lock.json');
+    // No duplicates
+    expect(passedIgnore.filter(p => p === 'dist/')).toHaveLength(1);
+  });
+
+  test('execute uses default ignore patterns when caller provides none', async () => {
+    const getPRDiff = mock(async () => SAMPLE_DIFF);
+    const provider = createMockProvider({ getPRDiff });
+    const diffConfig: DiffConfig = { ignorePatterns: ['dist/', 'package-lock.json'] };
+    const tool = getPRDiffToolFactory(provider, diffConfig);
+
+    await tool.execute(
+      'call-default-ignore',
+      { owner: 'test-owner', repo: 'test-repo', pull_number: 42 },
+      undefined,
+      undefined,
+      mockCtx
+    );
+
+    expect(getPRDiff).toHaveBeenCalledTimes(1);
+    expect((getPRDiff as any).mock.calls[0][3]).toEqual(['dist/', 'package-lock.json']);
+  });
+
   test('execute includes ignored_files in details when provided', async () => {
     const getPRDiff = mock(async () => SAMPLE_DIFF);
     const provider = createMockProvider({ getPRDiff });
@@ -217,8 +265,126 @@ describe('get_pr_diff tool - execution', () => {
     );
 
     expect((result.details as any).truncated).toBe(true);
-    expect((result.details as any).lines).toBe(10);
+    // After line truncation, the marker line is included, so total = 10 content lines + 1 marker line
+    expect((result.details as any).lines).toBe(11);
     expect((result.content as any)[0].text).toContain('truncated at 10 lines');
+    expect((result.details as any).truncated_reason).toBe('lines');
+  });
+
+  test('execute truncates diff by bytes when maxBytes is exceeded', async () => {
+    // Create a diff that is ~500 bytes
+    const byteDiff = Array.from({ length: 50 }, (_, i) => `line ${i} with some content`).join('\n');
+    const getPRDiff = mock(async () => byteDiff);
+    const provider = createMockProvider({ getPRDiff });
+    const diffConfig: DiffConfig = { maxBytes: 200 };
+    const tool = getPRDiffToolFactory(provider, diffConfig);
+
+    const result = await tool.execute(
+      'call-bytes',
+      { owner: 'test-owner', repo: 'test-repo', pull_number: 42 },
+      undefined,
+      undefined,
+      mockCtx
+    );
+
+    expect((result.details as any).truncated).toBe(true);
+    expect((result.details as any).truncated_reason).toBe('bytes');
+    expect((result.content as any)[0].text).toContain('truncated at 200 bytes');
+    // The final output should be at or under maxBytes
+    const outputText = (result.content as any)[0].text;
+    const diffSection = outputText.match(/```diff\n([\s\S]*)\n```/)?.[1] ?? '';
+    expect(Buffer.byteLength(diffSection, 'utf8')).toBeLessThanOrEqual(200 + 50); // some slack for marker
+  });
+
+  test('execute truncates by bytes before lines (bytes reason takes precedence)', async () => {
+    // Create a diff that exceeds both byte and line limits
+    const bigDiff = Array.from({ length: 200 }, (_, i) => `line ${i} with content padding`).join('\n');
+    const getPRDiff = mock(async () => bigDiff);
+    const provider = createMockProvider({ getPRDiff });
+    const diffConfig: DiffConfig = { maxBytes: 500 };
+    const tool = getPRDiffToolFactory(provider, diffConfig);
+
+    const result = await tool.execute(
+      'call-bytes-first',
+      { owner: 'test-owner', repo: 'test-repo', pull_number: 42, max_lines: 50 },
+      undefined,
+      undefined,
+      mockCtx
+    );
+
+    expect((result.details as any).truncated).toBe(true);
+    expect((result.details as any).truncated_reason).toBe('bytes');
+  });
+
+  test('execute reports correct line count after byte truncation', async () => {
+    // Create a diff that will be byte-truncated to fewer lines than maxLines
+    const byteDiff = Array.from({ length: 100 }, (_, i) => `line ${i} with content`).join('\n');
+    const getPRDiff = mock(async () => byteDiff);
+    const provider = createMockProvider({ getPRDiff });
+    const diffConfig: DiffConfig = { maxBytes: 300 };
+    const tool = getPRDiffToolFactory(provider, diffConfig);
+
+    const result = await tool.execute(
+      'call-lines-after-bytes',
+      { owner: 'test-owner', repo: 'test-repo', pull_number: 42, max_lines: 1000 },
+      undefined,
+      undefined,
+      mockCtx
+    );
+
+    // details.lines should reflect the actual final content, not Math.min(original, maxLines)
+    const reportedLines = (result.details as any).lines;
+    const outputText = (result.content as any)[0].text;
+    const diffSection = outputText.match(/```diff\n([\s\S]*)\n```/)?.[1] ?? '';
+    const actualLines = diffSection.split('\n').length;
+    expect(reportedLines).toBe(actualLines);
+    // Should be significantly less than the original 100 lines
+    expect(reportedLines).toBeLessThan(100);
+  });
+
+  test('execute uses diffConfig maxLines when no max_lines param provided', async () => {
+    const longDiff = Array.from({ length: 50 }, (_, i) => `line ${i}`).join('\n');
+    const getPRDiff = mock(async () => longDiff);
+    const provider = createMockProvider({ getPRDiff });
+    const diffConfig: DiffConfig = { maxLines: 5 };
+    const tool = getPRDiffToolFactory(provider, diffConfig);
+
+    const result = await tool.execute(
+      'call-config-maxlines',
+      { owner: 'test-owner', repo: 'test-repo', pull_number: 42 },
+      undefined,
+      undefined,
+      mockCtx
+    );
+
+    expect((result.details as any).truncated).toBe(true);
+    expect((result.details as any).truncated_reason).toBe('lines');
+    expect((result.content as any)[0].text).toContain('truncated at 5 lines');
+  });
+
+  test('execute byte truncation handles multi-byte characters correctly', async () => {
+    // Create a diff with multi-byte UTF-8 characters (emoji, CJK)
+    const multiByteDiff = Array.from({ length: 10 }, (_, i) =>
+      `line ${i}: 🎉🎉🎉 日本語テスト émoji`
+    ).join('\n');
+    const getPRDiff = mock(async () => multiByteDiff);
+    const provider = createMockProvider({ getPRDiff });
+    const diffConfig: DiffConfig = { maxBytes: 80 };
+    const tool = getPRDiffToolFactory(provider, diffConfig);
+
+    const result = await tool.execute(
+      'call-multibyte',
+      { owner: 'test-owner', repo: 'test-repo', pull_number: 42 },
+      undefined,
+      undefined,
+      mockCtx
+    );
+
+    expect((result.details as any).truncated).toBe(true);
+    expect((result.details as any).truncated_reason).toBe('bytes');
+    // The output should not contain garbled/incomplete characters
+    const outputText = (result.content as any)[0].text;
+    expect(outputText).not.toContain('\ufffd'); // no replacement character
   });
 
   test('execute uses context defaults when owner/repo/pull_number not provided', async () => {

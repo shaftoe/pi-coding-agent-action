@@ -56,7 +56,7 @@ inputs:
     default: '102400'
 
   diff_ignore_patterns:
-    description: 'Space-separated list of file patterns to exclude from PR diffs by default (e.g. "dist/ package-lock.json"). The agent can still override this at call time.'
+    description: 'Space-separated list of file patterns to exclude from PR diffs by default (e.g. "dist/ package-lock.json"). The agent can still provide additional patterns at call time.'
     required: false
     default: 'dist/ package-lock.json'
 

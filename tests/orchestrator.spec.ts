@@ -1332,4 +1332,139 @@ describe('ActionOrchestrator', () => {
       );
     });
   });
+
+  describe('diff configuration', () => {
+    test('calls getInput for diff_max_lines, diff_max_bytes, diff_ignore_patterns', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockCore.getInput).toHaveBeenCalledWith('diff_max_lines');
+      expect(mockCore.getInput).toHaveBeenCalledWith('diff_max_bytes');
+      expect(mockCore.getInput).toHaveBeenCalledWith('diff_ignore_patterns');
+    });
+
+    test('passes diffMaxLines when provided', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          diff_max_lines: '500',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          diffMaxLines: 500,
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('passes diffMaxBytes when provided', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          diff_max_bytes: '204800',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          diffMaxBytes: 204800,
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('passes diffIgnorePatterns when provided', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          diff_ignore_patterns: 'dist/ package-lock.json yarn.lock',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          diffIgnorePatterns: ['dist/', 'package-lock.json', 'yarn.lock'],
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('omits diff config when inputs are empty', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          diff_max_lines: '',
+          diff_max_bytes: '',
+          diff_ignore_patterns: '',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.diffMaxLines).toBeUndefined();
+      expect(callArgs.diffMaxBytes).toBeUndefined();
+      expect(callArgs.diffIgnorePatterns).toBeUndefined();
+    });
+
+    test('ignores non-numeric diff_max_lines input', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          diff_max_lines: 'not-a-number',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.diffMaxLines).toBeUndefined();
+    });
+  });
 });

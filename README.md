@@ -293,7 +293,7 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
 | `base_url` | Optional override for the provider base URL (e.g., to route traffic through a proxy or use an OpenAI-compatible gateway) | No | - |
-| `diff_ignore_patterns` | Space-separated list of file patterns to exclude from PR diffs by default (e.g. `"dist/ package-lock.json"). The agent can still override this at call time | No | `dist/ package-lock.json` |
+| `diff_ignore_patterns` | Space-separated list of file patterns to exclude from PR diffs by default (e.g. `"dist/ package-lock.json"). The agent can still provide additional patterns at call time | No | `dist/ package-lock.json` |
 | `diff_max_bytes` | Maximum diff size in bytes returned by the `get_pr_diff` tool | No | `102400` |
 | `diff_max_lines` | Maximum number of diff lines returned by the `get_pr_diff` tool | No | `1000` |
 | `export_session_html` | Export the session as a self-contained HTML file | No | `false` |

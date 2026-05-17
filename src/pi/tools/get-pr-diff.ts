@@ -164,7 +164,6 @@ export function getPRDiffToolFactory(provider: PlatformProvider, diffConfig?: Di
           };
         }
 
-        const totalLines = diff.split('\n').length;
         const maxLines = params.max_lines ?? diffConfig?.maxLines ?? DEFAULT_MAX_LINES;
         const maxBytes = diffConfig?.maxBytes ?? DEFAULT_MAX_BYTES;
         let finalDiff = diff;
@@ -173,11 +172,24 @@ export function getPRDiffToolFactory(provider: PlatformProvider, diffConfig?: Di
 
         // Truncate by bytes first (catches minified single-line blobs)
         if (Buffer.byteLength(finalDiff, 'utf8') > maxBytes) {
-          const sliced = finalDiff.slice(0, maxBytes);
+          // Reserve space for the truncation marker to stay within maxBytes
+          const marker = `\n... (truncated at ${maxBytes} bytes)`;
+          const markerBytes = Buffer.byteLength(marker, 'utf8');
+          const budget = maxBytes - markerBytes;
+          // Slice at a byte boundary that won't split a multi-byte character
+          const buf = Buffer.from(finalDiff, 'utf8');
+          let cutAt = Math.min(budget, buf.length);
+          // Walk back to a safe UTF-8 boundary (never split a continuation byte)
+          while (cutAt > 0 && ((buf[cutAt] ?? 0) & 0xc0) === 0x80) {
+            cutAt--;
+          }
+          let sliced = buf.subarray(0, cutAt).toString('utf8');
+          // Snap to the last newline so we don't cut mid-line
           const lastNewline = sliced.lastIndexOf('\n');
-          finalDiff =
-            (lastNewline > 0 ? sliced.slice(0, lastNewline) : sliced) +
-            `\n... (truncated at ${maxBytes} bytes)`;
+          if (lastNewline > 0) {
+            sliced = sliced.slice(0, lastNewline);
+          }
+          finalDiff = sliced + marker;
           truncated = true;
           truncatedReason = 'bytes';
         }
@@ -192,9 +204,10 @@ export function getPRDiffToolFactory(provider: PlatformProvider, diffConfig?: Di
           truncatedReason ??= 'lines';
         }
 
+        const finalLineCount = finalDiff.split('\n').length;
         const details: GetPRDiffDetails = {
           pull_number: pullNumber,
-          lines: Math.min(totalLines, maxLines),
+          lines: finalLineCount,
           truncated,
           ...(truncatedReason ? { truncated_reason: truncatedReason } : {}),
         };
