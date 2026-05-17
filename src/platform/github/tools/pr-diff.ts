@@ -23,6 +23,7 @@ function debug(msg: string): void {
  * A pattern matches if it is an exact path or a directory prefix
  * (ending with `/`). For example, `"dist/"` matches any file under
  * `dist/` while `"package-lock.json"` matches only that exact file.
+ * Glob patterns are NOT supported.
  *
  * @param filePath - The file path from the diff header (e.g. "a/src/foo.ts").
  * @param ignoreFiles - The list of ignore patterns.
@@ -86,27 +87,15 @@ export function filterDiffByIgnoreFiles(diff: string, ignoreFiles: string[]): st
 }
 
 /**
- * Fetch the diff for a pull request.
- *
- * Retrieves the PR diff via `octokit.rest.pulls.get()` with
- * `mediaType: { format: 'diff' }`. The diff is truncated if it exceeds
- * `maxDiffLines`. Optionally, files matching `ignoreFiles` patterns are
- * stripped from the result before truncation.
- *
- * @param owner - Repository owner.
- * @param repo - Repository name.
- * @param pullNumber - Pull request number.
- * @param maxDiffLines - Maximum number of diff lines before truncation.
- * @param ignoreFiles - Optional list of file path patterns to exclude.
- * @returns The diff string, or empty string on error.
- */
-/**
  * Merge default ignore patterns with caller-provided ones.
  *
  * Defaults are always applied; caller patterns extend them.
- * Duplicates are removed.
+ * Duplicates are removed via Set deduplication.
+ *
+ * @param extraPatterns - Optional additional patterns from action config or LLM tool call.
+ * @returns Deduplicated merged pattern list.
  */
-function mergeIgnorePatterns(extraPatterns?: string[]): string[] {
+export function mergeIgnorePatterns(extraPatterns?: string[]): string[] {
   const merged = new Set<string>(DEFAULT_DIFF_IGNORE_PATTERNS);
   if (extraPatterns) {
     for (const p of extraPatterns) {
@@ -120,9 +109,21 @@ function mergeIgnorePatterns(extraPatterns?: string[]): string[] {
  * Smart-truncate a diff by removing the largest file hunks until it fits
  * within a byte budget.
  *
+ * Surviving hunks are output in their original order (not reordered by size).
+ * A summary of dropped files is appended so the LLM knows what was omitted.
+ *
  * Falls back to simple line truncation if hunk-level trimming isn't enough.
+ *
+ * @param diff - The diff string to truncate.
+ * @param maxBytes - Maximum byte budget.
+ * @returns The truncated diff string.
  */
-function smartTruncate(diff: string, maxBytes: number): string {
+export function smartTruncate(diff: string, maxBytes: number): string {
+  // Early return for empty or already-fitting diffs
+  if (!diff || Buffer.byteLength(diff, 'utf8') <= maxBytes) {
+    return diff;
+  }
+
   const hunkSeparator = 'diff --git ';
   const hunks = diff.split(hunkSeparator);
   const header = hunks[0];
@@ -138,11 +139,12 @@ function smartTruncate(diff: string, maxBytes: number): string {
     );
   }
 
-  // Sort hunks by size ascending – keep smallest, drop largest
+  // Sort by size ascending to determine *which* hunks to keep (smallest first)
   const indexed = fileHunks.map((h, i) => ({ h, i, size: Buffer.byteLength(h, 'utf8') }));
   indexed.sort((a, b) => a.size - b.size);
 
-  const kept: string[] = [];
+  // Select hunks to keep within budget
+  const keptIndices = new Set<number>();
   let totalBytes = Buffer.byteLength(header ?? '', 'utf8');
   for (const entry of indexed) {
     const hunkBytes = Buffer.byteLength(hunkSeparator + entry.h, 'utf8');
@@ -152,13 +154,36 @@ function smartTruncate(diff: string, maxBytes: number): string {
       );
       continue;
     }
-    kept.push(hunkSeparator + entry.h);
+    keptIndices.add(entry.i);
     totalBytes += hunkBytes;
   }
 
-  const result = header + kept.join('');
+  // Output kept hunks in their original order (not size-sorted)
+  const kept: string[] = [];
+  const droppedNames: string[] = [];
+  for (let i = 0; i < fileHunks.length; i++) {
+    const hunk = fileHunks[i]!;
+    if (keptIndices.has(i)) {
+      kept.push(hunkSeparator + hunk);
+    } else {
+      // Extract file name from dropped hunk for the summary
+      const firstNewline = hunk.indexOf('\n');
+      const headerLine = firstNewline === -1 ? hunk : hunk.slice(0, firstNewline);
+      const match = headerLine.match(/^a\/(.+?)\s+b\//);
+      if (match?.[1]) {
+        droppedNames.push(match[1]);
+      }
+    }
+  }
+
+  let result = header + kept.join('');
   const droppedCount = fileHunks.length - kept.length;
   if (droppedCount > 0) {
+    const suffix =
+      droppedNames.length > 0
+        ? `: ${droppedNames.join(', ')}`
+        : '';
+    result += `\n\n... (${droppedCount} large file${droppedCount > 1 ? 's' : ''} omitted to fit context budget${suffix})`;
     debug(
       `[smartTruncate] Kept ${kept.length}/${fileHunks.length} files, ` +
         `${(totalBytes / 1024).toFixed(1)}KB total`
@@ -167,6 +192,23 @@ function smartTruncate(diff: string, maxBytes: number): string {
   return result;
 }
 
+/**
+ * Fetch the diff for a pull request.
+ *
+ * Retrieves the PR diff via `octokit.rest.pulls.get()` with
+ * `mediaType: { format: 'diff' }`. The diff is truncated if it exceeds
+ * `maxDiffLines`. Files matching ignore patterns (defaults always applied,
+ * plus any caller-provided patterns) are stripped before truncation.
+ * A byte-budget smart truncation is applied if the filtered diff is still
+ * too large.
+ *
+ * @param owner - Repository owner.
+ * @param repo - Repository name.
+ * @param pullNumber - Pull request number.
+ * @param maxDiffLines - Maximum number of diff lines before truncation.
+ * @param ignoreFiles - Optional list of file path patterns to exclude (merged with built-in defaults).
+ * @returns The diff string, or empty string on error.
+ */
 export async function fetchPRDiff(
   owner: string,
   repo: string,

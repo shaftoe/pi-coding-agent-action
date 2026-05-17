@@ -56,7 +56,7 @@ inputs:
     default: 'false'
 
   diff_ignore_patterns:
-    description: 'Additional file patterns to exclude from PR diffs (one per line). Common generated files (dist/, lock files, vendor/, etc.) are always excluded. Use this for repo-specific patterns like generated code or large test fixtures.'
+    description: 'Additional file paths to exclude from PR diffs (one per line). Supports exact paths (e.g. snapshots/test.js) and directory prefixes (e.g. generated/). Glob patterns are NOT supported. Common generated files (dist/, lock files, vendor/, etc.) are always excluded. Use this for repo-specific files like generated code or large test fixtures.'
     required: false
     default: ''
 

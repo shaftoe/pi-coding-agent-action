@@ -229,7 +229,7 @@ describe('PlatformProvider interface compliance', () => {
   test('diffIgnorePatterns can be set on provider', () => {
     process.env.GITHUB_SERVER_URL = 'https://github.com';
     const provider = createGitHubPlatformProvider();
-    provider.diffIgnorePatterns = ['generated/', '*.pb.go'];
-    expect(provider.diffIgnorePatterns).toEqual(['generated/', '*.pb.go']);
+    provider.diffIgnorePatterns = ['generated/', 'generated.pb.go'];
+    expect(provider.diffIgnorePatterns).toEqual(['generated/', 'generated.pb.go']);
   });
 });

@@ -3,7 +3,12 @@
  */
 
 import { describe, expect, test, beforeAll } from 'bun:test';
-import { filterDiffByIgnoreFiles, matchesIgnorePattern } from '../../../src/platform/github/tools/pr-diff';
+import {
+  filterDiffByIgnoreFiles,
+  matchesIgnorePattern,
+  mergeIgnorePatterns,
+  smartTruncate,
+} from '../../../src/platform/github/tools/pr-diff';
 import { DEFAULT_DIFF_IGNORE_PATTERNS } from '../../../src/platform/github/constants';
 import { resetModuleContext } from '../../../src/platform/github';
 
@@ -166,6 +171,14 @@ describe('DEFAULT_DIFF_IGNORE_PATTERNS', () => {
     expect(DEFAULT_DIFF_IGNORE_PATTERNS).toContain('vendor/');
   });
 
+  test('includes go.sum', () => {
+    expect(DEFAULT_DIFF_IGNORE_PATTERNS).toContain('go.sum');
+  });
+
+  test('includes Cargo.lock', () => {
+    expect(DEFAULT_DIFF_IGNORE_PATTERNS).toContain('Cargo.lock');
+  });
+
   test('filtering with default patterns removes dist/ and lock files', () => {
     const result = filterDiffByIgnoreFiles(SAMPLE_DIFF, [...DEFAULT_DIFF_IGNORE_PATTERNS]);
     // Should keep only src/ files
@@ -173,5 +186,104 @@ describe('DEFAULT_DIFF_IGNORE_PATTERNS', () => {
     expect(result).toContain('diff --git a/src/utils/helpers.ts');
     expect(result).not.toContain('diff --git a/dist/');
     expect(result).not.toContain('diff --git a/package-lock.json');
+  });
+});
+
+describe('mergeIgnorePatterns', () => {
+  test('returns defaults when no extra patterns provided', () => {
+    const result = mergeIgnorePatterns();
+    expect(result).toContain('dist/');
+    expect(result).toContain('package-lock.json');
+    expect(result).toContain('vendor/');
+  });
+
+  test('returns defaults when undefined extra patterns provided', () => {
+    const result = mergeIgnorePatterns(undefined);
+    expect(result).toEqual(expect.arrayContaining([...DEFAULT_DIFF_IGNORE_PATTERNS]));
+  });
+
+  test('merges extra patterns with defaults', () => {
+    const result = mergeIgnorePatterns(['snapshots/', 'fixtures/']);
+    expect(result).toContain('dist/'); // default
+    expect(result).toContain('snapshots/'); // extra
+    expect(result).toContain('fixtures/'); // extra
+  });
+
+  test('deduplicates patterns that already exist in defaults', () => {
+    const result = mergeIgnorePatterns(['dist/', 'vendor/']);
+    const distCount = result.filter(p => p === 'dist/').length;
+    const vendorCount = result.filter(p => p === 'vendor/').length;
+    expect(distCount).toBe(1);
+    expect(vendorCount).toBe(1);
+  });
+});
+
+describe('smartTruncate', () => {
+  test('returns diff as-is when it fits within budget', () => {
+    const smallDiff = 'diff --git a/file.ts b/file.ts\n+hello\n';
+    const result = smartTruncate(smallDiff, 100_000);
+    expect(result).toBe(smallDiff);
+  });
+
+  test('preserves original file order among kept hunks', () => {
+    // Build a diff with 3 files: small, medium, large
+    const makeHunk = (name: string, sizeBytes: number) => {
+      const padding = 'x'.repeat(sizeBytes);
+      return `diff --git a/${name} b/${name}\n--- a/${name}\n+++ b/${name}\n+${padding}\n`;
+    };
+    const diff = makeHunk('aaa-small.ts', 100) + makeHunk('zzz-large.ts', 5000) + makeHunk('mmm-medium.ts', 200);
+
+    // Budget only allows the two smallest files (aaa-small + mmm-medium)
+    const result = smartTruncate(diff, 1000);
+
+    // aaa-small.ts should appear before mmm-medium.ts (original order)
+    const aaaPos = result.indexOf('aaa-small.ts');
+    const mmmPos = result.indexOf('mmm-medium.ts');
+    expect(aaaPos).toBeGreaterThan(-1);
+    expect(mmmPos).toBeGreaterThan(-1);
+    expect(aaaPos).toBeLessThan(mmmPos);
+
+    // zzz-large.ts should be dropped (not in kept hunks)
+    expect(result).not.toContain('--- a/zzz-large.ts');
+  });
+
+  test('appends summary of dropped files', () => {
+    const makeHunk = (name: string, sizeBytes: number) => {
+      const padding = 'x'.repeat(sizeBytes);
+      return `diff --git a/${name} b/${name}\n--- a/${name}\n+++ b/${name}\n+${padding}\n`;
+    };
+    const diff = makeHunk('small.ts', 100) + makeHunk('large.ts', 5000);
+
+    const result = smartTruncate(diff, 1000);
+    expect(result).toContain('1 large file omitted');
+    expect(result).toContain('large.ts');
+  });
+
+  test('handles diff with exactly one file exceeding budget', () => {
+    const singleFileDiff = `diff --git a/huge.ts b/huge.ts
+--- a/huge.ts
++++ b/huge.ts
++${'x'.repeat(5000)}
+`;
+    const result = smartTruncate(singleFileDiff, 1000);
+    // Single file can't be hunk-dropped, falls back to line truncation
+    expect(result).toContain('truncated to fit byte limit');
+  });
+
+  test('handles empty diff', () => {
+    const result = smartTruncate('', 1000);
+    expect(result).toBe('');
+  });
+
+  test('all hunks dropped produces header-only result with summary', () => {
+    const makeHunk = (name: string) =>
+      `diff --git a/${name} b/${name}\n--- a/${name}\n+++ b/${name}\n+${'x'.repeat(500)}\n`;
+    const diff = makeHunk('big1.ts') + makeHunk('big2.ts');
+
+    // Budget so small that no hunk can fit
+    const result = smartTruncate(diff, 50);
+    expect(result).toContain('2 large files omitted');
+    expect(result).toContain('big1.ts');
+    expect(result).toContain('big2.ts');
   });
 });

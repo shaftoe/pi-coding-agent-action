@@ -50,5 +50,7 @@ export const DEFAULT_DIFF_IGNORE_PATTERNS = [
   'pnpm-lock.yaml',
   'bun.lockb',
   'bun.lock',
+  'go.sum',
+  'Cargo.lock',
   'vendor/',
 ] as const;

@@ -1362,7 +1362,7 @@ describe('ActionOrchestrator', () => {
           token: 'test-token',
           thinking_level: '',
           prompt: '',
-          diff_ignore_patterns: 'generated/\n*.pb.go',
+          diff_ignore_patterns: 'generated/\ngenerated.pb.go',
         };
         return inputs[name];
       });
@@ -1373,7 +1373,7 @@ describe('ActionOrchestrator', () => {
 
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({
-          diffIgnorePatterns: ['generated/', '*.pb.go'],
+          diffIgnorePatterns: ['generated/', 'generated.pb.go'],
         }),
         mockCore,
         mockProvider

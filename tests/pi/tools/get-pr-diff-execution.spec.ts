@@ -267,7 +267,7 @@ describe('get_pr_diff tool - execution', () => {
         owner: 'test-owner',
         repo: 'test-repo',
         pull_number: 42,
-        ignore_files: ['generated/', '*.pb.go'],
+        ignore_files: ['generated/', 'generated.pb.go'],
       },
       undefined,
       undefined,
@@ -278,6 +278,6 @@ describe('get_pr_diff tool - execution', () => {
     expect(getPRDiff).toHaveBeenCalledTimes(1);
     const ignoreArg = (getPRDiff as any).mock.calls[0][3];
     expect(ignoreArg).toContain('generated/');
-    expect(ignoreArg).toContain('*.pb.go');
+    expect(ignoreArg).toContain('generated.pb.go');
   });
 });
