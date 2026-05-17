@@ -214,7 +214,13 @@ function validateE2EEnvVars() {
 async function createAgent(): Promise<Agent> {
   const { provider, model, token } = validateE2EEnvVars();
   const { Agent } = await import('../../src/pi/agent.js');
-  return new Agent(model, provider, token, 'off', mockCoreAdapter, mockPlatformProvider);
+  return new Agent(mockCoreAdapter, mockPlatformProvider, {
+    model,
+    provider,
+    token,
+    thinkingLevel: 'off',
+    promptInput: '',
+  });
 }
 
 // ============================================================================
@@ -287,14 +293,13 @@ describe('E2E: Real Pi Agent with Mocked GitHub', () => {
         const { Agent } = await import('../../src/pi/agent.js');
 
         expect(() => {
-          new Agent(
-            'invalid-model-xyz',
+          new Agent(mockCoreAdapter, mockPlatformProvider, {
+            model: 'invalid-model-xyz',
             provider,
             token,
-            'off',
-            mockCoreAdapter,
-            mockPlatformProvider
-          );
+            thinkingLevel: 'off',
+            promptInput: '',
+          });
         }).toThrow('Model not found');
       },
       E2E_TIMEOUT

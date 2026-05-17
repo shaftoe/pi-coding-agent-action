@@ -79,14 +79,13 @@ const mockPlatformProvider: any = {
  * Create a standard agent instance for testing (calls real ready()).
  */
 function createRealAgent(): InstanceType<typeof Agent> {
-  return new Agent(
-    'claude-sonnet-4-5',
-    'anthropic',
-    'test-token',
-    'off',
-    mockCoreAdapter as any,
-    mockPlatformProvider
-  );
+  return new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+    model: 'claude-sonnet-4-5',
+    provider: 'anthropic',
+    token: 'test-token',
+    thinkingLevel: 'off',
+    promptInput: '',
+  });
 }
 
 describe('Agent', () => {
@@ -94,26 +93,24 @@ describe('Agent', () => {
     test('throws error for non-existent model', () => {
       // Use a provider/model combo that won't exist in the registry
       expect(() => {
-        const _agent = new Agent(
-          'model-name',
-          'fake-provider',
-          'test-token',
-          'off',
-          mockCoreAdapter as any,
-          mockPlatformProvider
-        );
+        const _agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          model: 'model-name',
+          provider: 'fake-provider',
+          token: 'test-token',
+          thinkingLevel: 'off',
+          promptInput: '',
+        });
       }).toThrow('Model not found');
     });
 
     test('stores token in auth storage when provided', () => {
-      const agent = new Agent(
-        'claude-sonnet-4-5',
-        'anthropic',
-        'sk-12345',
-        'off',
-        mockCoreAdapter as any,
-        mockPlatformProvider
-      );
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        token: 'sk-12345',
+        thinkingLevel: 'off',
+        promptInput: '',
+      });
       // Agent is created without error
       expect(agent).toBeDefined();
     });
@@ -125,21 +122,26 @@ describe('Agent', () => {
       };
       const adapter = { ...mockCoreAdapter, debug: mock(debugLogger) };
 
-      new Agent('claude-sonnet-4-5', 'anthropic', '', 'off', adapter as any, mockPlatformProvider);
+      new Agent(adapter as any, mockPlatformProvider, {
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        token: '',
+        thinkingLevel: 'off',
+        promptInput: '',
+      });
 
       // Should not log auth debug message
       expect(mockDebug).not.toContain('[auth] Setting api_key token');
     });
 
     test('stores model, provider, and thinking level', () => {
-      const agent = new Agent(
-        'claude-sonnet-4-5',
-        'anthropic',
-        'test-token',
-        'medium',
-        mockCoreAdapter as any,
-        mockPlatformProvider
-      );
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        token: 'test-token',
+        thinkingLevel: 'medium',
+        promptInput: '',
+      });
       // Agent is created without error
       expect(agent).toBeDefined();
       // Can't directly verify internal properties, but creation succeeds

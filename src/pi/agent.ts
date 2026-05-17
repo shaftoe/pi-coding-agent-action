@@ -28,87 +28,47 @@ export class Agent {
   private authStorage: AuthStorage = AuthStorage.create();
   private modelRegistry: ModelRegistry;
   private session!: AgentSession;
-  private modelStr: string;
-  private provider: string;
-  private token: string;
   private thinkingLevel: ThinkingLevel;
   private outputChunks: string[] = [];
   private core: CoreAdapter;
   private platformProvider: PlatformProvider;
-  private extensions?: string[];
-  private loadBuiltinExtensions?: boolean;
-  private baseUrl?: string;
-  private config?: PiConfig;
+  private config: PiConfig;
 
   /**
    * Create a new Pi agent.
    *
-   * @param modelStr              - Model identifier (e.g. `"claude-sonnet-4-20250514"`).
-   * @param provider              - Provider name as expected by the model registry
-   *                                (e.g. `"anthropic"`, `"openai"`).
-   * @param token                 - API key for the provider. When non-empty it is stored in
-   *                                the auth storage automatically.
-   * @param level                 - Thinking/reasoning level for the model
-   *                                (default `'off'`).
-   * @param core                  - The CoreAdapter for logging and debug output.
-   * @param platformProvider      - The platform provider for custom tool operations.
-   * @param extensions            - Optional array of extension sources (npm, git, or local paths).
-   * @param loadBuiltinExtensions - Whether to load built-in GitHub extensions (default true).
-   * @param baseUrl               - Optional base URL override for the provider.
-   * @throws {Error}   If the requested model cannot be found in the registry.
+   * @param core              - The CoreAdapter for logging and debug output.
+   * @param platformProvider  - The platform provider for custom tool operations.
+   * @param config            - The action configuration.
+   * @throws {Error} If the requested model cannot be found in the registry.
    */
-  constructor(
-    modelStr: string,
-    provider: string,
-    token: string,
-    level = 'off',
-    core: CoreAdapter,
-    platformProvider: PlatformProvider,
-    extensions?: string[],
-    loadBuiltinExtensions?: boolean,
-    baseUrl?: string,
-    config?: PiConfig
-  ) {
-    this.modelStr = modelStr;
-    this.provider = provider;
-    this.token = token;
-    this.thinkingLevel = level as ThinkingLevel;
+  constructor(core: CoreAdapter, platformProvider: PlatformProvider, config: PiConfig) {
     this.core = core;
     this.platformProvider = platformProvider;
-    if (extensions !== undefined) {
-      this.extensions = extensions;
-    }
-    if (loadBuiltinExtensions !== undefined) {
-      this.loadBuiltinExtensions = loadBuiltinExtensions;
-    }
-    if (baseUrl !== undefined) {
-      this.baseUrl = baseUrl;
-    }
-    if (config !== undefined) {
-      this.config = config;
-    }
+    this.config = config;
+    this.thinkingLevel = (config.thinkingLevel ?? 'off') as ThinkingLevel;
     this.modelRegistry = ModelRegistry.create(this.authStorage);
 
-    if (this.token) {
-      this.core.debug(`[auth] Setting api_key token for ${this.provider} provider`);
-      this.authStorage.set(this.provider, {
+    if (config.token) {
+      this.core.debug(`[auth] Setting api_key token for ${config.provider} provider`);
+      this.authStorage.set(config.provider, {
         type: 'api_key',
-        key: this.token,
+        key: config.token,
       });
     }
 
-    if (this.baseUrl) {
-      this.core.debug(`[provider] Overriding base URL for ${this.provider}: ${this.baseUrl}`);
-      this.modelRegistry.registerProvider(this.provider, { baseUrl: this.baseUrl });
+    if (config.baseUrl) {
+      this.core.debug(`[provider] Overriding base URL for ${config.provider}: ${config.baseUrl}`);
+      this.modelRegistry.registerProvider(config.provider, { baseUrl: config.baseUrl });
     }
 
-    const foundModel = this.modelRegistry.find(this.provider, this.modelStr);
+    const foundModel = this.modelRegistry.find(config.provider, config.model);
 
     if (foundModel) {
       this.model = foundModel;
     } else {
       throw new Error(
-        `Model not found: ${this.provider}/${this.modelStr}. ` +
+        `Model not found: ${config.provider}/${config.model}. ` +
           `Please check that the \`provider\` and \`model\` inputs are correct and that the provider is supported. ` +
           `See https://github.com/shaftoe/pi-coding-agent-action#usage for details.`
       );
@@ -132,8 +92,8 @@ export class Agent {
       resourceLoader: await getResourceLoader(
         this.core,
         this.platformProvider,
-        this.extensions,
-        this.loadBuiltinExtensions,
+        this.config.extensions,
+        this.config.loadBuiltinExtensions,
         this.config
       ),
     });
