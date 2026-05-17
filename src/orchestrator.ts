@@ -70,18 +70,21 @@ export class ActionOrchestrator {
       const pi = this.piAgentFactory(config, this.core, this.platformProvider);
       const { result, sessionStats } = await pi.run(prompt);
 
-      this.core.info('\n');
-      this.core.info('════════════════════════════════════════════════════════════════');
-      this.core.info('✅ Agent session completed');
-      this.core.info('════════════════════════════════════════════════════════════════');
-
       if (config.exportSessionHtml) {
         await this.exportSessionHtml(pi);
       } else {
         this.core.debug('[session-html] export disabled by configuration');
       }
 
-      await this.finalize(result, config, startTime, reaction, sessionStats, true);
+      this.core.info('\n');
+      this.core.info('════════════════════════════════════════════════════════════════');
+      this.core.info('✅ Agent session completed');
+      this.core.info('════════════════════════════════════════════════════════════════');
+
+      // Ensure we always post a final comment — when the agent only used tools
+      // (e.g. created/updated a PR) the text response may be empty.
+      const finalBody = result || '✅ Agent session completed';
+      await this.finalize(finalBody, config, startTime, reaction, sessionStats, true);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
 

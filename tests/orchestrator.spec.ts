@@ -310,6 +310,37 @@ describe('ActionOrchestrator', () => {
       });
     });
 
+    test('posts default completion comment when agent returns empty result', async () => {
+      const runMock = mock(async () => ({
+        result: '',
+        sessionStats: undefined,
+      }));
+      mockPiAgent.run = runMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      // Should always post a comment even when result is empty
+      const calls = (mockGit.createFinalComment as any).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      expect(calls[0][0]).toBe('✅ Agent session completed');
+    });
+
+    test('logs completion banner after session html export', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
+      const bannerIndex = infoCalls.indexOf('✅ Agent session completed');
+      const htmlExportCalls = infoCalls.filter((c: string) => c.includes('[session-html]'));
+
+      // The completion banner should appear after the HTML export log
+      if (htmlExportCalls.length > 0) {
+        const htmlExportIndex = infoCalls.findIndex((c: string) => c.includes('[session-html]'));
+        expect(bannerIndex).toBeGreaterThan(htmlExportIndex);
+      }
+    });
+
     test('includes execution duration in final comment metadata', async () => {
       const startTime = Temporal.Now.instant();
       const getStartTimeMock = mock(() => startTime);
