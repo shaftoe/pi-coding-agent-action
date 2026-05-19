@@ -38,6 +38,7 @@ jobs:
           model: ${{ vars.MODEL }}
           token: ${{ secrets.API_KEY }}
           thinking_level: ${{ vars.THINKING_LEVEL }}
+          diff_ignore_patterns: 'dist/ bun.lock node_modules/'
           prompt: |
             This is a GitHub PR (#${{ github.event.pull_request.number }}) that needs code review. Focus on identifying issues, bugs, security concerns, and improvements. Don't apply any changes yourself, just review and suggest improvements.
 
