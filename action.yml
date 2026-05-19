@@ -58,7 +58,7 @@ inputs:
   diff_ignore_patterns:
     description: 'Space-separated list of file patterns to exclude from PR diffs by default (e.g. "dist/ package-lock.json"). The agent can still provide additional patterns at call time.'
     required: false
-    default: 'dist/ package-lock.json'
+    default: ''
 
   base_url:
     description: 'Optional override for the provider base URL (e.g. to route OpenAI traffic through a proxy or use an OpenAI-compatible gateway).'

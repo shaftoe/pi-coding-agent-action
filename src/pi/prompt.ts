@@ -109,7 +109,7 @@ export const GET_PR_DIFF_PROMPT_GUIDELINES = [
   'Use get_pr_diff to fetch the diff of a pull request when you need to understand what changed.',
   'By default, the tool fetches the diff for the current PR from the GitHub context. Only provide owner/repo/pull_number when you need to fetch a different PR.',
   'The diff is truncated at 1000 lines and 100KB by default. Use max_lines to increase or decrease the line limit.',
-  'Common build artifacts and lock files (dist/, package-lock.json, etc.) are excluded by default. Use ignore_files to add additional patterns.',
+  'Use ignore_files to exclude common noisy paths (dist/, package-lock.json, etc.) from the diff.',
 ];
 
 export const GET_PR_DIFF_DESCRIPTION =
