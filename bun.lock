@@ -7,7 +7,7 @@
       "dependencies": {
         "@actions/core": "^3.0.1",
         "@actions/github": "^9.1.1",
-        "@earendil-works/pi-coding-agent": "^0.74.1",
+        "@earendil-works/pi-coding-agent": "0.74.1",
         "@js-temporal/polyfill": "^0.5.1",
         "ignore": "^7.0.5",
       },
