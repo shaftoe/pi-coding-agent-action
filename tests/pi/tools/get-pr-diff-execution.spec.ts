@@ -10,7 +10,7 @@ import { describe, expect, test, mock } from 'bun:test';
 import { getPRDiffToolFactory } from '../../../src/pi/tools/get-pr-diff';
 import type { PlatformProvider } from '../../../src/platform';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
-import type { PiConfig } from '../../../src/types';
+import type { DiffConfig } from '../../../src/types';
 
 // Minimal mock ExtensionContext for tool execute signature
 const mockCtx = {
@@ -153,7 +153,7 @@ describe('get_pr_diff tool - execution', () => {
   test('execute merges default ignore patterns with caller-provided ones', async () => {
     const getPRDiff = mock(async () => SAMPLE_DIFF);
     const provider = createMockProvider({ getPRDiff });
-    const config = { diffIgnorePatterns: ['dist/', 'node_modules/'] } as PiConfig;
+    const config = { diffIgnorePatterns: ['dist/', 'node_modules/'] } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
     await tool.execute(
@@ -182,7 +182,7 @@ describe('get_pr_diff tool - execution', () => {
   test('execute uses default ignore patterns when caller provides none', async () => {
     const getPRDiff = mock(async () => SAMPLE_DIFF);
     const provider = createMockProvider({ getPRDiff });
-    const config = { diffIgnorePatterns: ['dist/', 'package-lock.json'] } as PiConfig;
+    const config = { diffIgnorePatterns: ['dist/', 'package-lock.json'] } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
     await tool.execute(
@@ -276,7 +276,7 @@ describe('get_pr_diff tool - execution', () => {
     const byteDiff = Array.from({ length: 50 }, (_, i) => `line ${i} with some content`).join('\n');
     const getPRDiff = mock(async () => byteDiff);
     const provider = createMockProvider({ getPRDiff });
-    const config = { diffMaxBytes: 200 } as PiConfig;
+    const config = { diffMaxBytes: 200 } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
     const result = await tool.execute(
@@ -301,7 +301,7 @@ describe('get_pr_diff tool - execution', () => {
     const bigDiff = Array.from({ length: 200 }, (_, i) => `line ${i} with content padding`).join('\n');
     const getPRDiff = mock(async () => bigDiff);
     const provider = createMockProvider({ getPRDiff });
-    const config = { diffMaxBytes: 500 } as PiConfig;
+    const config = { diffMaxBytes: 500 } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
     const result = await tool.execute(
@@ -321,7 +321,7 @@ describe('get_pr_diff tool - execution', () => {
     const byteDiff = Array.from({ length: 100 }, (_, i) => `line ${i} with content`).join('\n');
     const getPRDiff = mock(async () => byteDiff);
     const provider = createMockProvider({ getPRDiff });
-    const config = { diffMaxBytes: 300 } as PiConfig;
+    const config = { diffMaxBytes: 300 } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
     const result = await tool.execute(
@@ -346,7 +346,7 @@ describe('get_pr_diff tool - execution', () => {
     const longDiff = Array.from({ length: 50 }, (_, i) => `line ${i}`).join('\n');
     const getPRDiff = mock(async () => longDiff);
     const provider = createMockProvider({ getPRDiff });
-    const config = { diffMaxLines: 5 } as PiConfig;
+    const config = { diffMaxLines: 5 } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
     const result = await tool.execute(
@@ -369,7 +369,7 @@ describe('get_pr_diff tool - execution', () => {
     ).join('\n');
     const getPRDiff = mock(async () => multiByteDiff);
     const provider = createMockProvider({ getPRDiff });
-    const config = { diffMaxBytes: 80 } as PiConfig;
+    const config = { diffMaxBytes: 80 } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
     const result = await tool.execute(

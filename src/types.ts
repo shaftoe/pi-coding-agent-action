@@ -97,6 +97,18 @@ export type PiAgentFactory = (
 ) => PiAgent;
 
 /**
+ * Subset of configuration used by the PR-diff tool.
+ *
+ * Extracted from {@link PiConfig} so the tool layer depends only on the
+ * fields it actually consumes, reducing coupling to the full config schema.
+ */
+export interface DiffConfig {
+  diffMaxLines?: number;
+  diffMaxBytes?: number;
+  diffIgnorePatterns?: string[];
+}
+
+/**
  * Configuration for the Pi agent.
  */
 export interface PiConfig {

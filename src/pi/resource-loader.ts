@@ -19,7 +19,7 @@ import { SYSTEM_PROMPT } from './prompt';
 import { createLoggingFactory } from './logging';
 import type { ExtensionLoadingInfo } from './logging';
 import { createToolsFactory } from './tools/index';
-import type { CoreAdapter, PiConfig } from '../types';
+import type { CoreAdapter, DiffConfig } from '../types';
 import type { PlatformProvider } from '../platform';
 
 /**
@@ -90,7 +90,7 @@ export async function getResourceLoader(
   provider: PlatformProvider,
   extensions?: string[],
   loadBuiltinExtensions = true,
-  config?: PiConfig
+  config?: DiffConfig
 ): Promise<DefaultResourceLoader> {
   const { paths: additionalExtensionPaths, info: extensionInfo } =
     await resolveExtensions(extensions);

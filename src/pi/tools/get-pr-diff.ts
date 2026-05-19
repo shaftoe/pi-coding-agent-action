@@ -17,7 +17,7 @@ import {
 import { CANCELLATION_MESSAGE_GET_PR_DIFF } from './constants';
 import { withCancellation } from './tool-execution';
 import type { PlatformProvider } from '../../platform';
-import type { PiConfig } from '../../types';
+import type { DiffConfig } from '../../types';
 
 /**
  * Schema for the get_pr_diff tool.
@@ -93,7 +93,7 @@ function resolvePRParams(
  * @param diffConfig - Optional diff configuration (max lines, max bytes, default ignore patterns).
  * @returns The tool definition.
  */
-export function getPRDiffToolFactory(provider: PlatformProvider, config?: PiConfig) {
+export function getPRDiffToolFactory(provider: PlatformProvider, config?: DiffConfig) {
   return defineTool({
     name: 'get_pr_diff',
     label: 'Get PR Diff',
