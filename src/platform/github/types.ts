@@ -64,3 +64,50 @@ export interface GetIssueOrPRThreadParams {
   issue_number?: number;
   max_comments?: number;
 }
+
+/**
+ * A single inline comment anchored to a specific line of the pull request diff.
+ */
+export interface ReviewInlineComment {
+  /** Repository-relative file path (e.g. "src/main.ts"). */
+  path: string;
+  /** Line number in the diff. For multi-line comments this is the **end** line. */
+  line: number;
+  /** Which side of the diff the line refers to: `RIGHT` = new file (default), `LEFT` = old file. */
+  side?: 'LEFT' | 'RIGHT';
+  /** Start line for multi-line comments. If omitted the comment covers a single line. */
+  start_line?: number;
+  /** Which side `start_line` refers to. Only required when `start_line` is set and differs from `side`. */
+  start_side?: 'LEFT' | 'RIGHT';
+  /** The Markdown body of the comment. */
+  body: string;
+}
+
+export interface CreateReviewParams {
+  /** Pull request number. If omitted the current PR from context is used. */
+  pull_number?: number;
+  /** Summary comment for the review (shown at the top of the review). */
+  body?: string;
+  /** Review event: COMMENT (default), APPROVE, or REQUEST_CHANGES. */
+  event?: 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES';
+  /** Inline comments anchored to specific diff lines. At least one is required. */
+  comments: ReviewInlineComment[];
+}
+
+/**
+ * Structured details returned after a review is created.
+ */
+export interface CreateReviewDetails {
+  /** The ID of the created review. */
+  reviewId: number;
+  /** The HTML URL of the review. */
+  reviewUrl: string;
+  /** The pull request number the review was created on. */
+  pullRequestNumber: number;
+  /** The review event type. */
+  event: string;
+  /** Number of inline comments created. */
+  commentCount: number;
+  /** Whether the operation was cancelled. */
+  cancelled?: boolean;
+}

@@ -176,6 +176,14 @@ export {
   type UpdatePullRequestDetails,
 } from './tools/pull-request-update';
 
+export {
+  createReview,
+  validateCreateReviewParams,
+  type CreateReviewParams,
+  type CreateReviewDetails,
+  type ReviewInlineComment,
+} from './tools/review';
+
 // Thread and diff fetching (used by provider and tools)
 export { getIssueOrPRThread } from './tools/thread';
 export { fetchPRDiff } from './tools/pr-diff';

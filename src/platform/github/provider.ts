@@ -20,6 +20,7 @@ import { createPullRequest } from './tools/pull-request';
 import { updatePullRequest } from './tools/pull-request-update';
 import { getIssueOrPRThread } from './tools/thread';
 import { fetchPRDiff } from './tools/pr-diff';
+import { createReview } from './tools/review';
 import type { Temporal } from '@js-temporal/polyfill';
 import type { PlatformProvider, PlatformType, PlatformContext } from '../types';
 import type { CommentMetadata } from '../../types';
@@ -27,6 +28,7 @@ import type { CreateReactionType } from './reactions';
 import type { IssueOrPRThread, GetIssueOrPRThreadParams } from './types';
 import type { CreatePullRequestParams, CreatePullRequestDetails } from './tools/pull-request';
 import type { UpdatePullRequestParams, UpdatePullRequestDetails } from './tools/pull-request-update';
+import type { CreateReviewParams, CreateReviewDetails } from './tools/review';
 
 /**
  * Detect the current platform based on the server URL.
@@ -126,6 +128,12 @@ export function createGitHubPlatformProvider(): PlatformProvider {
 
     async getPRDiff(owner: string, repo: string, pullNumber: number, ignoreFiles?: string[]): Promise<string> {
       return fetchPRDiff(owner, repo, pullNumber, ignoreFiles);
+    },
+
+    async createReview(
+      params: CreateReviewParams
+    ): Promise<{ content: { type: 'text'; text: string }[]; details: CreateReviewDetails }> {
+      return createReview(params);
     },
   };
 }

@@ -69,6 +69,16 @@ const createMockProvider = (overrides?: Partial<PlatformProvider>): PlatformProv
   }),
   getIssueOrPRThread: async () => undefined,
   getPRDiff: async () => '',
+  createReview: async () => ({
+    content: [{ type: 'text' as const, text: 'Review created' }],
+    details: {
+      reviewId: 1,
+      reviewUrl: '',
+      pullRequestNumber: 1,
+      event: 'COMMENT',
+      commentCount: 1,
+    },
+  }),
   ...overrides,
 });
 

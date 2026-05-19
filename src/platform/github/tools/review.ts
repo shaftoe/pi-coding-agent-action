@@ -1,0 +1,159 @@
+/**
+ * @file Pull request review creation with inline diff-anchored comments.
+ *
+ * Implements the server-side logic for the `create_pull_request_review` custom
+ * tool: creates a GitHub Pull Request Review with optional inline comments
+ * anchored to specific lines of the diff. Uses the modern `line`/`side`
+ * positioning (not the deprecated `position` field).
+ */
+
+import * as github from '@actions/github';
+import { getOctokit } from '../octokit';
+import { getCoreAdapter } from '../index';
+import type {
+  CreateReviewParams,
+  CreateReviewDetails,
+  ReviewInlineComment,
+} from '../types';
+
+export type { CreateReviewParams, CreateReviewDetails, ReviewInlineComment };
+
+/**
+ * Debug logging helper.
+ */
+function debug(msg: string): void {
+  getCoreAdapter().debug(msg);
+}
+
+/**
+ * Validate review parameters before making API calls.
+ *
+ * @param params - The review parameters to validate.
+ * @throws {Error} If validation fails.
+ * @internal Exported for testing purposes.
+ */
+export function validateCreateReviewParams(params: CreateReviewParams): void {
+  if (!params.comments || params.comments.length === 0) {
+    throw new Error('At least one inline comment is required to create a review');
+  }
+
+  for (const c of params.comments) {
+    if (!c.path || c.path.trim() === '') {
+      throw new Error(`Comment at index: "path" is required and cannot be empty`);
+    }
+    if (!c.body || c.body.trim() === '') {
+      throw new Error(`Comment at index: "body" is required and cannot be empty`);
+    }
+    if (typeof c.line !== 'number' || c.line < 1) {
+      throw new Error(`Comment at index: "line" must be a positive integer`);
+    }
+    if (c.start_line !== undefined) {
+      if (c.start_line < 1) {
+        throw new Error(`Comment at index: "start_line" must be a positive integer`);
+      }
+      if (c.start_line > c.line) {
+        throw new Error(
+          `Comment at index: "start_line" (${c.start_line}) must be <= "line" (${c.line})`
+        );
+      }
+    }
+  }
+
+  if (params.event && !['COMMENT', 'APPROVE', 'REQUEST_CHANGES'].includes(params.event)) {
+    throw new Error(
+      `Invalid event "${params.event}". Must be one of: COMMENT, APPROVE, REQUEST_CHANGES`
+    );
+  }
+}
+
+/**
+ * Transform a {@link ReviewInlineComment} into the shape expected by the
+ * GitHub REST API `pulls.createReview`.
+ *
+ * @param comment - The platform-agnostic inline comment.
+ * @returns The GitHub API comment object.
+ */
+function toGitHubComment(comment: ReviewInlineComment): Record<string, unknown> {
+  const ghComment: Record<string, unknown> = {
+    path: comment.path,
+    line: comment.line,
+    side: comment.side ?? 'RIGHT',
+    body: comment.body,
+  };
+
+  if (comment.start_line !== undefined) {
+    ghComment.start_line = comment.start_line;
+    ghComment.start_side = comment.start_side ?? comment.side ?? 'RIGHT';
+  }
+
+  return ghComment;
+}
+
+/**
+ * Create a pull request review with inline comments.
+ *
+ * Uses `octokit.rest.pulls.createReview()` with the modern `line`/`side`
+ * positioning for each comment.
+ *
+ * @param params - Parameters for the review.
+ * @returns Structured details about the created review.
+ * @throws {Error} If the PR number cannot be resolved, validation fails,
+ *                 or the GitHub API call fails.
+ */
+export async function createReview(
+  params: CreateReviewParams
+): Promise<{ content: { type: 'text'; text: string }[]; details: CreateReviewDetails }> {
+  validateCreateReviewParams(params);
+
+  const resolvedPullNumber = params.pull_number ?? github.context.issue.number;
+  if (!resolvedPullNumber) {
+    throw new Error(
+      'Pull request number not provided and not available in context. ' +
+        'Please provide pull_number parameter or run this action in the context of a pull request.'
+    );
+  }
+
+  const owner = github.context.repo.owner;
+  const repo = github.context.repo.repo;
+  const event = params.event ?? 'COMMENT';
+  const body = params.body ?? '';
+
+  debug(
+    `Creating review on PR #${resolvedPullNumber} with ${params.comments.length} comment(s), event=${event}`
+  );
+
+  const octokit = getOctokit();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Octokit's comment type is complex; our mapping produces the correct shape
+  const reviewComments = params.comments.map(toGitHubComment) as any;
+  const response = await octokit.rest.pulls.createReview({
+    owner,
+    repo,
+    pull_number: resolvedPullNumber,
+    body,
+    event,
+    comments: reviewComments,
+  });
+
+  const reviewId = response.data.id;
+  const reviewUrl = response.data.html_url;
+  const commentCount = params.comments.length;
+
+  const successMessage = [
+    `Review created on PR #${resolvedPullNumber}: ${reviewUrl}`,
+    `- Event: ${event}`,
+    `- Inline comments: ${commentCount}`,
+  ].join('\n');
+
+  debug(`SUCCESS: ${successMessage}`);
+
+  return {
+    content: [{ type: 'text' as const, text: successMessage }],
+    details: {
+      reviewId,
+      reviewUrl,
+      pullRequestNumber: resolvedPullNumber,
+      event,
+      commentCount,
+    },
+  };
+}

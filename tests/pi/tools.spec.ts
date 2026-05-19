@@ -106,6 +106,16 @@ const mockProvider: PlatformProvider = {
   }),
   getIssueOrPRThread: async () => undefined,
   getPRDiff: async () => '',
+  createReview: async () => ({
+    content: [{ type: 'text' as const, text: 'Review created' }],
+    details: {
+      reviewId: 1,
+      reviewUrl: '',
+      pullRequestNumber: 1,
+      event: 'COMMENT',
+      commentCount: 1,
+    },
+  }),
 };
 
 function captureRegisteredTools() {
@@ -131,6 +141,7 @@ describe('extFactory', () => {
   let updatePRTool: TestTool;
   let getIssuePRThreadTool: TestTool;
   let getPRDiffTool: TestTool;
+  let createReviewTool: TestTool;
 
   beforeEach(() => {
     tools = captureRegisteredTools();
@@ -138,10 +149,11 @@ describe('extFactory', () => {
     updatePRTool = getToolByName(tools, 'update_pull_request')!;
     getIssuePRThreadTool = getToolByName(tools, 'get_issue_or_pr_thread')!;
     getPRDiffTool = getToolByName(tools, 'get_pr_diff')!;
+    createReviewTool = getToolByName(tools, 'create_pull_request_review')!;
   });
 
-  test('registers four tools', () => {
-    expect(tools.length).toBe(4);
+  test('registers five tools', () => {
+    expect(tools.length).toBe(5);
   });
 
   test('registers a tool named create_pull_request', () => {
@@ -428,6 +440,79 @@ describe('extFactory', () => {
       expect(result.content[0]?.text).toContain('cancelled');
       expect(result.details.cancelled).toBe(true);
       expect(result.details.pull_number).toBe(0);
+    });
+  });
+
+  describe('create_pull_request_review', () => {
+    test('registers a tool named create_pull_request_review', () => {
+      expect(createReviewTool).toBeDefined();
+      expect(createReviewTool.name).toBe('create_pull_request_review');
+    });
+
+    test('has a label', () => {
+      expect(createReviewTool.label).toBe('Create Pull Request Review');
+    });
+
+    test('has a non-empty description', () => {
+      expect(typeof createReviewTool.description).toBe('string');
+      expect(createReviewTool.description.length).toBeGreaterThan(0);
+    });
+
+    test('has prompt guidelines', () => {
+      expect(Array.isArray(createReviewTool.promptGuidelines)).toBe(true);
+      expect(createReviewTool.promptGuidelines.length).toBeGreaterThan(0);
+    });
+
+    test('has a prompt snippet', () => {
+      expect(typeof createReviewTool.promptSnippet).toBe('string');
+      expect(createReviewTool.promptSnippet.length).toBeGreaterThan(0);
+    });
+
+    test('parameters - comments is required', () => {
+      const params = createReviewTool.parameters;
+      expect(params.properties.comments).toBeDefined();
+      expect(params.required).toContain('comments');
+    });
+
+    test('parameters - pull_number is optional', () => {
+      const params = createReviewTool.parameters;
+      expect(params.properties.pull_number).toBeDefined();
+      if (Array.isArray(params.required)) {
+        expect(params.required).not.toContain('pull_number');
+      }
+    });
+
+    test('parameters - body is optional', () => {
+      const params = createReviewTool.parameters;
+      expect(params.properties.body).toBeDefined();
+      if (Array.isArray(params.required)) {
+        expect(params.required).not.toContain('body');
+      }
+    });
+
+    test('parameters - event is optional', () => {
+      const params = createReviewTool.parameters;
+      expect(params.properties.event).toBeDefined();
+      if (Array.isArray(params.required)) {
+        expect(params.required).not.toContain('event');
+      }
+    });
+
+    test('returns cancellation message when signal is aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      const result = await createReviewTool.execute(
+        'id',
+        { comments: [{ path: 'test.ts', line: 1, body: 'test' }] },
+        controller.signal,
+        undefined,
+        undefined as unknown as Parameters<typeof createReviewTool.execute>[4]
+      );
+
+      expect(result.content[0]?.text).toContain('cancelled');
+      expect(result.details.cancelled).toBe(true);
+      expect(result.details.reviewId).toBe(0);
     });
   });
 });

@@ -19,6 +19,8 @@ import type {
   UpdatePullRequestParams,
   UpdatePullRequestDetails,
   CreateReactionType,
+  CreateReviewParams,
+  CreateReviewDetails,
 } from './github';
 
 // Re-export types used by consumers (pi tools, adapters, etc.) so they
@@ -33,6 +35,9 @@ export type {
   UpdatePullRequestParams,
   UpdatePullRequestDetails,
   CreateReactionType,
+  CreateReviewParams,
+  CreateReviewDetails,
+  ReviewInlineComment,
 } from './github';
 import type { CommentMetadata } from '../types';
 
@@ -176,4 +181,17 @@ export interface PlatformProvider {
     pullNumber: number,
     ignoreFiles?: string[]
   ): Promise<string>;
+
+  /**
+   * Create a pull request review with inline comments anchored to diff lines.
+   *
+   * Uses the GitHub `pulls.createReview` API with the modern `line`/`side`
+   * positioning for each comment.
+   *
+   * @param params - Review creation parameters including inline comments.
+   * @returns The tool result containing a human-readable message and structured details.
+   */
+  createReview(
+    params: CreateReviewParams
+  ): Promise<{ content: { type: 'text'; text: string }[]; details: CreateReviewDetails }>;
 }

@@ -129,3 +129,53 @@ export const GET_PR_DIFF_PARAM_MAX_LINES_DESCRIPTION =
 
 export const GET_PR_DIFF_PARAM_IGNORE_FILES_DESCRIPTION =
   'List of file paths to exclude from the diff. Supports exact file paths (e.g. "package-lock.json") and directory prefixes (e.g. "dist/" to exclude everything under dist/). Matching is literal — glob patterns (e.g. "*.min.js") are NOT supported. Useful for filtering out generated files, build artifacts, or vendored dependencies.';
+
+//
+// Create Pull Request Review
+//
+export const CREATE_REVIEW_PROMPT_SNIPPET =
+  'Create a pull request review with inline comments anchored to specific lines of the diff. This is the best way to provide line-by-line code review feedback.';
+
+export const CREATE_REVIEW_PROMPT_GUIDELINES = [
+  'Use create_pull_request_review to post inline review comments anchored to specific diff lines. This is much more useful than top-level comments because reviewers can see findings directly in the diff context.',
+  'Each comment requires a `path` (file path relative to repo root), `line` (line number in the new/right side of the diff), and `body` (Markdown comment text).',
+  'Use `side: "LEFT"` to comment on the old version of the file (before the change), or omit it / use `side: "RIGHT"` (default) for the new version.',
+  'For multi-line comments, set `start_line` to the first line and `line` to the last line of the range.',
+  'The `event` parameter controls the review type: COMMENT (default, neutral feedback), APPROVE (approve the PR), or REQUEST_CHANGES (request changes before merging).',
+  'A `body` (summary comment) is optional but recommended — it provides context for the overall review.',
+  'At least one inline comment is required. To post only a summary review comment without inline comments, use a regular PR comment instead.',
+  'Make sure line numbers reference the correct version of the file. Use the `get_pr_diff` tool first to understand the diff and verify line numbers.',
+];
+
+export const CREATE_REVIEW_DESCRIPTION =
+  'Create a pull request review with inline comments anchored to specific lines of the diff. Posts a GitHub Pull Request Review using the `pulls.createReview` API with comments positioned on specific lines. Each comment is anchored to a file path and line number in the diff.';
+
+export const CREATE_REVIEW_PARAM_PULL_NUMBER_DESCRIPTION =
+  'Pull request number. If not provided, uses the current PR from context.';
+
+export const CREATE_REVIEW_PARAM_BODY_DESCRIPTION =
+  'Summary comment for the review (shown at the top of the review). Optional but recommended.';
+
+export const CREATE_REVIEW_PARAM_EVENT_DESCRIPTION =
+  'Review event type: COMMENT (default, neutral feedback), APPROVE (approve the PR), or REQUEST_CHANGES (request changes before merging).';
+
+export const CREATE_REVIEW_PARAM_COMMENTS_DESCRIPTION =
+  'Array of inline comments. Each comment requires: path (file path), line (line number in the diff), and body (Markdown comment). Optional: side (LEFT=old or RIGHT=new, default RIGHT), start_line (for multi-line comments).';
+
+export const CREATE_REVIEW_PARAM_COMMENT_PATH_DESCRIPTION =
+  'Repository-relative file path (e.g., "src/main.ts").';
+
+export const CREATE_REVIEW_PARAM_COMMENT_LINE_DESCRIPTION =
+  'Line number in the diff. For multi-line comments, this is the end line. Must be a positive integer.';
+
+export const CREATE_REVIEW_PARAM_COMMENT_SIDE_DESCRIPTION =
+  'Which side of the diff: RIGHT (new file, default) or LEFT (old file).';
+
+export const CREATE_REVIEW_PARAM_COMMENT_START_LINE_DESCRIPTION =
+  'Start line for multi-line comments. If set, `line` is treated as the end line.';
+
+export const CREATE_REVIEW_PARAM_COMMENT_START_SIDE_DESCRIPTION =
+  'Which side `start_line` refers to. Only needed when different from `side`.';
+
+export const CREATE_REVIEW_PARAM_COMMENT_BODY_DESCRIPTION =
+  'The Markdown body of the inline comment.';

@@ -1,7 +1,7 @@
 /**
  * @file Pi extension factory – registers custom tools with the agent.
  *
- * Defines three tools that extend Pi's built-in capabilities:
+ * Defines tools that extend Pi's built-in capabilities:
  *
  * - **`create_pull_request`** – creates a GitHub pull request with the current
  *   working-tree changes.
@@ -9,6 +9,9 @@
  *   new commits to the PR branch and optionally updating the title and/or body.
  * - **`get_issue_or_pr_thread`** – fetches the full comment thread of an issue
  *   or pull request for context.
+ * - **`get_pr_diff`** – fetches the diff of a pull request.
+ * - **`create_pull_request_review`** – creates a pull request review with
+ *   inline comments anchored to specific diff lines.
  *
  * The exported {@link toolsFactory} function is passed to the Pi SDK resource
  * loader so that the tools are available during agent sessions.
@@ -18,6 +21,7 @@ import { createPRToolFactory } from './create-pr';
 import { getIssueOrPRThreadToolFactory } from './get-thread';
 import { getPRDiffToolFactory } from './get-pr-diff';
 import { updatePullRequestToolFactory } from './update-pr';
+import { createReviewToolFactory } from './create-review';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { PlatformProvider } from '../../platform';
 import type { DiffConfig } from '../../types';
@@ -36,7 +40,7 @@ export {
  *
  * Called by the Pi SDK resource loader during session initialisation. Registers
  * the `create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`,
- * and `get_pr_diff` tools.
+ * `get_pr_diff`, and `create_pull_request_review` tools.
  *
  * @param provider - The platform provider for tool operations.
  * @returns An extension factory function compatible with the Pi SDK.
@@ -48,6 +52,7 @@ export function createToolsFactory(provider: PlatformProvider, config?: DiffConf
       updatePullRequestToolFactory(provider),
       getIssueOrPRThreadToolFactory(provider),
       getPRDiffToolFactory(provider, config),
+      createReviewToolFactory(provider),
     ];
     tools.forEach(tool => {
       pi.registerTool(tool);

@@ -212,6 +212,8 @@ describe('PlatformProvider interface compliance', () => {
       'createPullRequest',
       'updatePullRequest',
       'getIssueOrPRThread',
+      'getPRDiff',
+      'createReview',
       'getContext',
     ];
 

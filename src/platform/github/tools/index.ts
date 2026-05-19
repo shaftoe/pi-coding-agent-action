@@ -3,7 +3,7 @@
  *
  * Re-exports the platform-specific implementations that back the Pi agent
  * custom tools (`create_pull_request`, `update_pull_request`,
- * `get_issue_or_pr_thread`, `get_pr_diff`).
+ * `get_issue_or_pr_thread`, `get_pr_diff`, `create_pull_request_review`).
  */
 
 // Pull request creation
@@ -31,3 +31,12 @@ export { getIssueOrPRThread } from './thread';
 
 // PR diff fetching
 export { fetchPRDiff } from './pr-diff';
+
+// Pull request review with inline comments
+export {
+  createReview,
+  validateCreateReviewParams,
+  type CreateReviewParams,
+  type CreateReviewDetails,
+  type ReviewInlineComment,
+} from './review';
