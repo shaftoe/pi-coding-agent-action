@@ -91,7 +91,6 @@ export class Agent {
         ? { diffIgnorePatterns: this.config.diffIgnorePatterns }
         : {}),
     };
-    const hasDiffConfig = Object.values(diffConfig).some(v => v !== undefined);
 
     const { session } = await createAgentSession({
       model: this.model,
@@ -103,7 +102,7 @@ export class Agent {
         this.platformProvider,
         this.config.extensions,
         this.config.loadBuiltinExtensions,
-        hasDiffConfig ? diffConfig : undefined
+        diffConfig
       ),
     });
     this.session = session;

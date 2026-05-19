@@ -98,35 +98,30 @@ export function filterDiffByIgnoreFiles(diff: string, ignoreFiles: string[]): st
  * @param repo - Repository name.
  * @param pullNumber - Pull request number.
  * @param ignoreFiles - Optional list of file path patterns to exclude.
- * @returns The diff string, or empty string on error.
+ * @returns The diff string, or empty string if the PR has no diff.
  */
 export async function fetchPRDiff(
   owner: string,
   repo: string,
   pullNumber: number,
   ignoreFiles?: string[]): Promise<string> {
-  try {
-    const octokit = getOctokit();
-    const response = await octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: pullNumber,
-      mediaType: { format: 'diff' },
-    });
+  const octokit = getOctokit();
+  const response = await octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: pullNumber,
+    mediaType: { format: 'diff' },
+  });
 
-    let diff = response.data as unknown as string;
-    if (!diff) {
-      return '';
-    }
-
-    // Filter out ignored files
-    if (ignoreFiles && ignoreFiles.length > 0) {
-      diff = filterDiffByIgnoreFiles(diff, ignoreFiles);
-    }
-
-    return diff;
-  } catch (_e) {
-    debug(`[fetchPRDiff] Failed to fetch PR diff, continuing`);
+  let diff = response.data as unknown as string;
+  if (!diff) {
     return '';
   }
+
+  // Filter out ignored files
+  if (ignoreFiles && ignoreFiles.length > 0) {
+    diff = filterDiffByIgnoreFiles(diff, ignoreFiles);
+  }
+
+  return diff;
 }

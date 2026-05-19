@@ -248,6 +248,26 @@ describe('get_pr_diff tool - execution', () => {
     );
 
     expect((result.content as any)[0].text).toContain('No diff available');
+    expect((result.details as any).pull_number).toBe(42);
+    expect((result.details as any).truncated).toBe(false);
+  });
+
+  test('execute propagates provider errors (SDK sets isError)', async () => {
+    const getPRDiff = mock(async () => {
+      throw new Error('API rate limit exceeded');
+    });
+    const provider = createMockProvider({ getPRDiff });
+    const tool = getPRDiffToolFactory(provider);
+
+    await expect(
+      tool.execute(
+        'call-error',
+        { owner: 'test-owner', repo: 'test-repo', pull_number: 42 },
+        undefined,
+        undefined,
+        mockCtx
+      )
+    ).rejects.toThrow('API rate limit exceeded');
   });
 
   test('execute truncates diff when max_lines is exceeded', async () => {

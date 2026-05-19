@@ -147,7 +147,7 @@ export function getPRDiffToolFactory(provider: PlatformProvider, config?: DiffCo
             content: [
               {
                 type: 'text' as const,
-                text: `No diff available for PR #${pullNumber}. This may not be a pull request, or the diff could not be fetched.`,
+                text: `No diff available for PR #${pullNumber}. This may not be a pull request, or the diff is empty.`,
               },
             ],
             details: {
