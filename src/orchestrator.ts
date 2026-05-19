@@ -168,10 +168,12 @@ export class ActionOrchestrator {
       : true; // default to true
 
     const diffMaxLinesInput = this.core.getInput('diff_max_lines');
-    const diffMaxLines = diffMaxLinesInput ? parseInt(diffMaxLinesInput, 10) || undefined : undefined;
+    const parsedLines = diffMaxLinesInput ? parseInt(diffMaxLinesInput, 10) : NaN;
+    const diffMaxLines = parsedLines > 0 ? parsedLines : undefined;
 
     const diffMaxBytesInput = this.core.getInput('diff_max_bytes');
-    const diffMaxBytes = diffMaxBytesInput ? parseInt(diffMaxBytesInput, 10) || undefined : undefined;
+    const parsedBytes = diffMaxBytesInput ? parseInt(diffMaxBytesInput, 10) : NaN;
+    const diffMaxBytes = parsedBytes > 0 ? parsedBytes : undefined;
 
     const diffIgnorePatternsInput = this.core.getInput('diff_ignore_patterns');
     const diffIgnorePatterns = diffIgnorePatternsInput

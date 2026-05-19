@@ -188,14 +188,18 @@ export function getPRDiffToolFactory(provider: PlatformProvider, config?: DiffCo
           truncatedReason = 'bytes';
         }
 
-        // Then truncate by lines
-        const currentLines = finalDiff.split('\n').length;
-        if (currentLines > maxLines) {
-          finalDiff =
-            finalDiff.split('\n').slice(0, maxLines).join('\n') +
-            `\n... (truncated at ${maxLines} lines, ${currentLines - maxLines} more)`;
-          truncated = true;
-          truncatedReason ??= 'lines';
+        // Then truncate by lines (skip if byte truncation already occurred,
+        // since the byte limit is the tighter constraint and already snapped
+        // to a newline boundary)
+        if (!truncatedReason) {
+          const currentLines = finalDiff.split('\n').length;
+          if (currentLines > maxLines) {
+            finalDiff =
+              finalDiff.split('\n').slice(0, maxLines).join('\n') +
+              `\n... (truncated at ${maxLines} lines, ${currentLines - maxLines} more)`;
+            truncated = true;
+            truncatedReason = 'lines';
+          }
         }
 
         const finalLineCount = finalDiff.split('\n').length;

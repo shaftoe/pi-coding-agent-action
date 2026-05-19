@@ -111,7 +111,7 @@ export interface DiffConfig {
 /**
  * Configuration for the Pi agent.
  */
-export interface PiConfig {
+export interface PiConfig extends DiffConfig {
   provider: string;
   model: string;
   token: string;
@@ -121,9 +121,6 @@ export interface PiConfig {
   loadBuiltinExtensions?: boolean;
   baseUrl?: string;
   exportSessionHtml?: boolean;
-  diffMaxLines?: number;
-  diffMaxBytes?: number;
-  diffIgnorePatterns?: string[];
 }
 
 /**

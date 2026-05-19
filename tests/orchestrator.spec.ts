@@ -1466,5 +1466,68 @@ describe('ActionOrchestrator', () => {
       const callArgs = (mockPiFactory as any).mock.calls[0][0];
       expect(callArgs.diffMaxLines).toBeUndefined();
     });
+
+    test('ignores negative diff_max_lines input', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          diff_max_lines: '-1',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.diffMaxLines).toBeUndefined();
+    });
+
+    test('ignores negative diff_max_bytes input', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          diff_max_bytes: '-100',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.diffMaxBytes).toBeUndefined();
+    });
+
+    test('ignores zero diff_max_lines input', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          diff_max_lines: '0',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.diffMaxLines).toBeUndefined();
+    });
   });
 });

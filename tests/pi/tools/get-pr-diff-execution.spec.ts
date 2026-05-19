@@ -387,6 +387,30 @@ describe('get_pr_diff tool - execution', () => {
     expect(outputText).not.toContain('\ufffd'); // no replacement character
   });
 
+  test('execute does not produce double truncation markers when byte-truncated content still exceeds maxLines', async () => {
+    // Create a diff that will be byte-truncated, and the remaining content
+    // would still exceed maxLines if line truncation ran again
+    const bigDiff = Array.from({ length: 200 }, (_, i) => `line ${i} with content padding`).join('\n');
+    const getPRDiff = mock(async () => bigDiff);
+    const provider = createMockProvider({ getPRDiff });
+    const config = { diffMaxBytes: 500 } as DiffConfig;
+    const tool = getPRDiffToolFactory(provider, config);
+
+    const result = await tool.execute(
+      'call-no-double-marker',
+      { owner: 'test-owner', repo: 'test-repo', pull_number: 42, max_lines: 5 },
+      undefined,
+      undefined,
+      mockCtx
+    );
+
+    const outputText = (result.content as any)[0].text;
+    // Should only have one truncation marker (the bytes one)
+    const markerCount = (outputText.match(/truncated at/g) ?? []).length;
+    expect(markerCount).toBe(1);
+    expect((result.details as any).truncated_reason).toBe('bytes');
+  });
+
   test('execute uses context defaults when owner/repo/pull_number not provided', async () => {
     const getPRDiff = mock(async () => SAMPLE_DIFF);
     const provider = createMockProvider({ getPRDiff });
