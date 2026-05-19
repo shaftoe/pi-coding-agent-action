@@ -84,13 +84,7 @@ export class Agent {
    * @returns The agent instance itself, for chaining.
    */
   async ready(): Promise<Agent> {
-    const diffConfig: DiffConfig = {
-      ...(this.config.diffMaxLines !== undefined ? { diffMaxLines: this.config.diffMaxLines } : {}),
-      ...(this.config.diffMaxBytes !== undefined ? { diffMaxBytes: this.config.diffMaxBytes } : {}),
-      ...(this.config.diffIgnorePatterns?.length
-        ? { diffIgnorePatterns: this.config.diffIgnorePatterns }
-        : {}),
-    };
+    const diffConfig: DiffConfig = this.config;
 
     const { session } = await createAgentSession({
       model: this.model,
