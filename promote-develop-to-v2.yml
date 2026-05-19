@@ -1,0 +1,68 @@
+name: Promote develop to v2
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run without pushing (dry run)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    name: Fast-forward v2 to develop
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: v2
+
+      - name: Check if v2 can fast-forward to develop
+        id: check
+        run: |
+          git fetch origin develop
+          MERGE_BASE=$(git merge-base origin/v2 origin/develop)
+          V2_HEAD=$(git rev-parse origin/v2)
+
+          if [ "$MERGE_BASE" = "$V2_HEAD" ]; then
+            echo "can_ff=true" >> "$GITHUB_OUTPUT"
+            DEVELOP_HEAD=$(git rev-parse origin/develop)
+            echo "develop_head=$DEVELOP_HEAD" >> "$GITHUB_OUTPUT"
+            echo "::notice::v2 can be fast-forwarded to develop ($DEVELOP_HEAD)"
+          else
+            echo "can_ff=false" >> "$GITHUB_OUTPUT"
+            echo "::error::v2 has diverged from develop and cannot be fast-forwarded"
+            echo "v2 HEAD:      $V2_HEAD"
+            echo "develop HEAD: $(git rev-parse origin/develop)"
+            echo "merge base:   $MERGE_BASE"
+            exit 1
+          fi
+
+      - name: Fast-forward v2 to develop
+        if: steps.check.outputs.can_ff == 'true'
+        run: |
+          git merge --ff-only origin/develop
+          echo "New v2 HEAD: $(git rev-parse HEAD)"
+          git log --oneline origin/v2..HEAD
+
+      - name: Dry run - skip push
+        if: inputs.dry_run == 'true'
+        run: |
+          echo "::notice::Dry run enabled - changes will NOT be pushed"
+          echo "The following commits would be added to v2:"
+          git log --oneline origin/v2..HEAD
+
+      - name: Push v2
+        if: inputs.dry_run != 'true'
+        run: |
+          git push origin v2
