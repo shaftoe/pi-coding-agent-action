@@ -37,23 +37,23 @@ export function validateCreateReviewParams(params: CreateReviewParams): void {
     throw new Error('At least one inline comment is required to create a review');
   }
 
-  for (const c of params.comments) {
+  for (const [i, c] of params.comments.entries()) {
     if (!c.path || c.path.trim() === '') {
-      throw new Error(`Comment at index: "path" is required and cannot be empty`);
+      throw new Error(`Comment at index ${i}: "path" is required and cannot be empty`);
     }
     if (!c.body || c.body.trim() === '') {
-      throw new Error(`Comment at index: "body" is required and cannot be empty`);
+      throw new Error(`Comment at index ${i}: "body" is required and cannot be empty`);
     }
-    if (typeof c.line !== 'number' || c.line < 1) {
-      throw new Error(`Comment at index: "line" must be a positive integer`);
+    if (typeof c.line !== 'number' || !Number.isInteger(c.line) || c.line < 1) {
+      throw new Error(`Comment at index ${i}: "line" must be a positive integer`);
     }
     if (c.start_line !== undefined) {
-      if (c.start_line < 1) {
-        throw new Error(`Comment at index: "start_line" must be a positive integer`);
+      if (!Number.isInteger(c.start_line) || c.start_line < 1) {
+        throw new Error(`Comment at index ${i}: "start_line" must be a positive integer`);
       }
       if (c.start_line > c.line) {
         throw new Error(
-          `Comment at index: "start_line" (${c.start_line}) must be <= "line" (${c.line})`
+          `Comment at index ${i}: "start_line" (${c.start_line}) must be <= "line" (${c.line})`
         );
       }
     }
@@ -73,7 +73,7 @@ export function validateCreateReviewParams(params: CreateReviewParams): void {
  * @param comment - The platform-agnostic inline comment.
  * @returns The GitHub API comment object.
  */
-function toGitHubComment(comment: ReviewInlineComment): Record<string, unknown> {
+export function toGitHubComment(comment: ReviewInlineComment): Record<string, unknown> {
   const ghComment: Record<string, unknown> = {
     path: comment.path,
     line: comment.line,

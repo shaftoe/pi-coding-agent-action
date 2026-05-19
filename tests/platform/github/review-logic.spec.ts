@@ -6,8 +6,8 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import { validateCreateReviewParams } from '../../../src/platform/github/tools/review';
-import type { CreateReviewParams } from '../../../src/platform/github/types';
+import { validateCreateReviewParams, toGitHubComment } from '../../../src/platform/github/tools/review';
+import type { CreateReviewParams, ReviewInlineComment } from '../../../src/platform/github/types';
 
 describe('validateCreateReviewParams', () => {
   test('throws when comments array is empty', () => {
@@ -21,28 +21,44 @@ describe('validateCreateReviewParams', () => {
     const params: CreateReviewParams = {
       comments: [{ path: '', line: 1, body: 'test' }],
     };
-    expect(() => validateCreateReviewParams(params)).toThrow(/"path" is required/);
+    expect(() => validateCreateReviewParams(params)).toThrow(/Comment at index 0: "path" is required/);
   });
 
   test('throws when comment body is empty', () => {
     const params: CreateReviewParams = {
       comments: [{ path: 'src/main.ts', line: 1, body: '' }],
     };
-    expect(() => validateCreateReviewParams(params)).toThrow(/"body" is required/);
+    expect(() => validateCreateReviewParams(params)).toThrow(/Comment at index 0: "body" is required/);
   });
 
   test('throws when line is not a positive integer', () => {
     const params: CreateReviewParams = {
       comments: [{ path: 'src/main.ts', line: 0, body: 'test' }],
     };
-    expect(() => validateCreateReviewParams(params)).toThrow(/"line" must be a positive integer/);
+    expect(() => validateCreateReviewParams(params)).toThrow(/Comment at index 0: "line" must be a positive integer/);
   });
 
   test('throws when line is negative', () => {
     const params: CreateReviewParams = {
       comments: [{ path: 'src/main.ts', line: -1, body: 'test' }],
     };
-    expect(() => validateCreateReviewParams(params)).toThrow(/"line" must be a positive integer/);
+    expect(() => validateCreateReviewParams(params)).toThrow(/Comment at index 0: "line" must be a positive integer/);
+  });
+
+  test('throws when line is a non-integer float', () => {
+    const params: CreateReviewParams = {
+      comments: [{ path: 'src/main.ts', line: 1.5, body: 'test' }],
+    };
+    expect(() => validateCreateReviewParams(params)).toThrow(/Comment at index 0: "line" must be a positive integer/);
+  });
+
+  test('throws when start_line is a non-integer float', () => {
+    const params: CreateReviewParams = {
+      comments: [{ path: 'src/main.ts', line: 5, start_line: 2.7, body: 'test' }],
+    };
+    expect(() => validateCreateReviewParams(params)).toThrow(
+      /Comment at index 0: "start_line" must be a positive integer/
+    );
   });
 
   test('throws when start_line is greater than line', () => {
@@ -50,7 +66,7 @@ describe('validateCreateReviewParams', () => {
       comments: [{ path: 'src/main.ts', line: 5, start_line: 10, body: 'test' }],
     };
     expect(() => validateCreateReviewParams(params)).toThrow(
-      /"start_line" \(10\) must be <= "line" \(5\)/
+      /Comment at index 0: "start_line" \(10\) must be <= "line" \(5\)/
     );
   });
 
@@ -59,8 +75,18 @@ describe('validateCreateReviewParams', () => {
       comments: [{ path: 'src/main.ts', line: 5, start_line: 0, body: 'test' }],
     };
     expect(() => validateCreateReviewParams(params)).toThrow(
-      /"start_line" must be a positive integer/
+      /Comment at index 0: "start_line" must be a positive integer/
     );
+  });
+
+  test('error message includes correct comment index for second comment', () => {
+    const params: CreateReviewParams = {
+      comments: [
+        { path: 'src/ok.ts', line: 1, body: 'fine' },
+        { path: '', line: 1, body: 'bad' },
+      ],
+    };
+    expect(() => validateCreateReviewParams(params)).toThrow(/Comment at index 1: "path" is required/);
   });
 
   test('throws for invalid event', () => {
@@ -133,13 +159,99 @@ describe('validateCreateReviewParams', () => {
     const params: CreateReviewParams = {
       comments: [{ path: '   ', line: 1, body: 'test' }],
     };
-    expect(() => validateCreateReviewParams(params)).toThrow(/"path" is required/);
+    expect(() => validateCreateReviewParams(params)).toThrow(/Comment at index 0: "path" is required/);
   });
 
   test('throws when whitespace-only body', () => {
     const params: CreateReviewParams = {
       comments: [{ path: 'src/main.ts', line: 1, body: '   ' }],
     };
-    expect(() => validateCreateReviewParams(params)).toThrow(/"body" is required/);
+    expect(() => validateCreateReviewParams(params)).toThrow(/Comment at index 0: "body" is required/);
+  });
+});
+
+describe('toGitHubComment', () => {
+  test('maps single-line comment with defaults', () => {
+    const comment: ReviewInlineComment = {
+      path: 'src/main.ts',
+      line: 10,
+      body: 'Looks good',
+    };
+    const result = toGitHubComment(comment);
+    expect(result).toEqual({
+      path: 'src/main.ts',
+      line: 10,
+      side: 'RIGHT',
+      body: 'Looks good',
+    });
+    expect(result).not.toHaveProperty('start_line');
+    expect(result).not.toHaveProperty('start_side');
+  });
+
+  test('preserves explicit side', () => {
+    const comment: ReviewInlineComment = {
+      path: 'src/main.ts',
+      line: 10,
+      side: 'LEFT',
+      body: 'Old code was better',
+    };
+    const result = toGitHubComment(comment);
+    expect(result.side).toBe('LEFT');
+  });
+
+  test('maps multi-line comment with start_line and default sides', () => {
+    const comment: ReviewInlineComment = {
+      path: 'src/main.ts',
+      line: 15,
+      start_line: 10,
+      body: 'Multi-line issue',
+    };
+    const result = toGitHubComment(comment);
+    expect(result).toEqual({
+      path: 'src/main.ts',
+      line: 15,
+      side: 'RIGHT',
+      body: 'Multi-line issue',
+      start_line: 10,
+      start_side: 'RIGHT',
+    });
+  });
+
+  test('start_side falls back to side when side is explicitly set', () => {
+    const comment: ReviewInlineComment = {
+      path: 'src/main.ts',
+      line: 15,
+      start_line: 10,
+      side: 'LEFT',
+      body: 'Old multi-line',
+    };
+    const result = toGitHubComment(comment);
+    expect(result.start_side).toBe('LEFT');
+    expect(result.side).toBe('LEFT');
+  });
+
+  test('start_side uses explicit value when provided', () => {
+    const comment: ReviewInlineComment = {
+      path: 'src/main.ts',
+      line: 15,
+      start_line: 10,
+      side: 'RIGHT',
+      start_side: 'LEFT',
+      body: 'Cross-side comment',
+    };
+    const result = toGitHubComment(comment);
+    expect(result.side).toBe('RIGHT');
+    expect(result.start_side).toBe('LEFT');
+  });
+
+  test('omits start_line and start_side when start_line is not provided', () => {
+    const comment: ReviewInlineComment = {
+      path: 'src/util.ts',
+      line: 5,
+      body: 'Single line',
+    };
+    const result = toGitHubComment(comment);
+    expect(result).not.toHaveProperty('start_line');
+    expect(result).not.toHaveProperty('start_side');
   });
 });
