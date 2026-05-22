@@ -35,7 +35,7 @@
     "ignore": "^7.0.5"
   },
   "devDependencies": {
-    "@alexanderfortin/semantic-release-keep-a-changelog": "0.2.1",
+    "@alexanderfortin/semantic-release-keep-a-changelog": "0.2.2",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^10.0.1",
