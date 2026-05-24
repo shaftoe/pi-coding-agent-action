@@ -22,58 +22,6 @@ import {
 
 const log = createLogger();
 
-/**
- * Convert a string to a git-branch-safe slug.
- *
- * Lowercases, replaces non-alphanumeric runs with a single hyphen,
- * and strips leading/trailing hyphens.
- *
- * @param text - The text to slugify.
- * @param maxLength - Maximum length of the slug (default 50).
- * @returns The slugified string.
- * @internal Exported for testing purposes.
- */
-export function slugify(text: string, maxLength = 50): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, maxLength);
-}
-
-/**
- * Default branch name template.
- */
-const DEFAULT_BRANCH_NAME_TEMPLATE = `${BRANCH_PREFIX}{number}-{timestamp}`;
-
-/**
- * Generate a branch name from a template with variable substitution.
- *
- * Supports the following variables:
- * - `{number}`: Issue or PR number (e.g. "42")
- * - `{timestamp}`: Current epoch milliseconds (e.g. "1716543210000")
- * - `{title}`: Slugified PR title (e.g. "fix-auth-bug")
- *
- * When `template` is empty or undefined, falls back to the default
- * template `pi/issue{number}-{timestamp}`.
- *
- * @param title - The PR title (used for `{title}` substitution).
- * @param template - Optional template string. When empty, uses the default.
- * @returns The generated branch name.
- * @internal Exported for testing purposes.
- */
-export function generateBranchName(title: string, template?: string): string {
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string should also fall back to default
-  const effectiveTemplate = template || DEFAULT_BRANCH_NAME_TEMPLATE;
-  const issueNumber = github.context.issue?.number ?? 'unknown';
-  const timestamp = Temporal.Now.instant().epochMilliseconds;
-
-  return effectiveTemplate
-    .replace(/\{number\}/g, String(issueNumber))
-    .replace(/\{timestamp\}/g, String(timestamp))
-    .replace(/\{title\}/g, slugify(title));
-}
-
 export interface CreatePullRequestParams {
   title: string;
   body?: string;
@@ -238,9 +186,10 @@ export async function createPullRequest(
   // Validate input parameters early
   validateCreatePullRequestParams(params);
 
-  // Auto-generate branch name from template
-  const template = process.env.INPUT_BRANCH_NAME_TEMPLATE ?? '';
-  const head = generateBranchName(title, template ? template : undefined);
+  // Auto-generate branch name
+  const issueNumber = github.context.issue?.number ?? 'unknown';
+  const timestamp = Temporal.Now.instant().epochMilliseconds;
+  const head = `${BRANCH_PREFIX}${issueNumber}-${timestamp}`;
 
   log.debug(`Title: ${title}`);
   log.debug(`Auto-generated branch: ${head}`);

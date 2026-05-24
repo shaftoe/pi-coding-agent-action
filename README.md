@@ -189,6 +189,33 @@ By default the action loads five built-in GitHub related tools (`create_pull_req
       npm:my-custom-github-tools
 ```
 
+### Custom Branch Names
+
+You can customize the auto-generated branch names used when Pi creates pull requests. By default, branches follow the `pi/issue{number}-{timestamp}` pattern. Use the `branch_name_template` input to override this:
+
+```yaml
+- uses: shaftoe/pi-coding-agent-action@v2
+  with:
+    branch_name_template: 'feature/{title}-{number}'
+```
+
+#### Supported Variables
+
+| Variable | Description | Example |
+|----------|-------------|--------|
+| `{number}` | Issue or PR number | `42` |
+| `{timestamp}` | Epoch milliseconds | `1716543210000` |
+| `{title}` | Slugified PR title | `fix-auth-bug` |
+
+#### Examples
+
+| Template | Result |
+|----------|--------|
+| *(empty — default)* | `pi/issue42-1716543210000` |
+| `feature/{title}` | `feature/fix-auth-bug` |
+| `fix/{number}` | `fix/42` |
+| `{title}-{number}-{timestamp}` | `fix-auth-bug-42-1716543210000` |
+
 ### Injecting Environment Variables
 
 Pi extensions often require environment variables for authentication or configuration. Use the native `env:` step key to pass variables from your workflow's secrets or configuration into the Pi session:
@@ -293,6 +320,7 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
 | `base_url` | Optional override for the provider base URL (e.g., to route traffic through a proxy or use an OpenAI-compatible gateway) | No | - |
+| `branch_name_template` | Template for auto-generated branch names in `create_pull_request`. Supports variables: `{number}` (issue/PR number), `{timestamp}` (epoch ms), `{title}` (slugified PR title). Default: `pi/issue{number}-{timestamp}` | No | - |
 | `diff_ignore_patterns` | Space-separated list of file patterns to exclude from PR diffs by default (e.g. `dist/ package-lock.json`). The agent can still provide additional patterns at call time | No | - |
 | `diff_max_bytes` | Maximum diff size in bytes returned by the `get_pr_diff` tool | No | `102400` |
 | `diff_max_lines` | Maximum number of diff lines returned by the `get_pr_diff` tool | No | `1000` |
