@@ -85,6 +85,21 @@ mock.module('@actions/github', () => ({
 // Import module context helper for test isolation
 import { resetModuleContext } from '../../../../src/platform/github';
 
+// We need a mutable actor for the appendCoAuthoredBy tests
+let testActor: string | undefined = 'test-user';
+
+// Re-mock @actions/github with mutable actor (must override the earlier mock)
+mock.module('@actions/github', () => ({
+  context: new Proxy(mockContext, {
+    get(target, prop) {
+      if (prop === 'actor') {
+        return testActor;
+      }
+      return (target as any)[prop];
+    },
+  }),
+}));
+
 // Set up mock CoreAdapter so createLogger() -> getCoreAdapter() works
 const mockCoreAdapter = {
   debug: mock(() => {}),
@@ -130,7 +145,7 @@ describe('createCommitAndUpdateBranch', () => {
     expect(mockCreateCommit).toHaveBeenCalledWith({
       owner: 'test-owner',
       repo: 'test-repo',
-      message: 'Test commit message',
+      message: 'Test commit message\n\nCo-authored-by: test-user <test-user@users.noreply.github.com>',
       tree: 'tree-sha-abc',
       parents: ['parent-sha-def'],
     });
@@ -189,7 +204,7 @@ describe('createCommitAndUpdateBranch', () => {
     expect(mockCreateCommit).toHaveBeenCalledWith({
       owner: 'test-owner',
       repo: 'test-repo',
-      message,
+      message: `${message}\n\nCo-authored-by: test-user <test-user@users.noreply.github.com>`,
       tree: 'tree-sha-abc',
       parents: ['parent-sha-def'],
     });
@@ -261,5 +276,99 @@ describe('createCommitAndUpdateBranch', () => {
       ref: 'heads/feature/sub/branch',
       sha: 'new-commit-sha-123',
     });
+  });
+
+  test('appends Co-authored-by trailer to commit message', async () => {
+    const module = await commitCreatorModule;
+    const { createCommitAndUpdateBranch } = module;
+
+    testActor = 'octocat';
+
+    await createCommitAndUpdateBranch({
+      treeSha: 'tree-sha-abc',
+      parentSha: 'parent-sha-def',
+      branchName: 'test',
+      message: 'Fix bug',
+    });
+
+    expect(mockCreateCommit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Fix bug\n\nCo-authored-by: octocat <octocat@users.noreply.github.com>',
+      })
+    );
+  });
+
+  test('ommits Co-authored-by trailer when actor is empty', async () => {
+    const module = await commitCreatorModule;
+    const { createCommitAndUpdateBranch } = module;
+
+    testActor = '';
+
+    await createCommitAndUpdateBranch({
+      treeSha: 'tree-sha-abc',
+      parentSha: 'parent-sha-def',
+      branchName: 'test',
+      message: 'Fix bug',
+    });
+
+    expect(mockCreateCommit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Fix bug',
+      })
+    );
+  });
+});
+
+describe('appendCoAuthoredBy', () => {
+  let module: any;
+
+  // Dynamic import (reuses the module already loaded above)
+  const modulePromise = commitCreatorModule;
+
+  beforeEach(() => {
+    testActor = 'test-user';
+  });
+
+  test('appends Co-authored-by trailer with actor', async () => {
+    module ??= await modulePromise;
+    const { appendCoAuthoredBy } = module;
+
+    testActor = 'alice';
+    const result = appendCoAuthoredBy('Fix the bug');
+
+    expect(result).toBe('Fix the bug\n\nCo-authored-by: alice <alice@users.noreply.github.com>');
+  });
+
+  test('returns message unchanged when actor is empty string', async () => {
+    module ??= await modulePromise;
+    const { appendCoAuthoredBy } = module;
+
+    testActor = '';
+    const result = appendCoAuthoredBy('Fix the bug');
+
+    expect(result).toBe('Fix the bug');
+  });
+
+  test('returns message unchanged when actor is undefined', async () => {
+    module ??= await modulePromise;
+    const { appendCoAuthoredBy } = module;
+
+    testActor = undefined;
+    const result = appendCoAuthoredBy('Fix the bug');
+
+    expect(result).toBe('Fix the bug');
+  });
+
+  test('preserves multi-line commit messages', async () => {
+    module ??= await modulePromise;
+    const { appendCoAuthoredBy } = module;
+
+    testActor = 'bob';
+    const message = 'Fix critical bug\n\nThis fixes the edge case in auth.';
+    const result = appendCoAuthoredBy(message);
+
+    expect(result).toBe(
+      'Fix critical bug\n\nThis fixes the edge case in auth.\n\nCo-authored-by: bob <bob@users.noreply.github.com>'
+    );
   });
 });

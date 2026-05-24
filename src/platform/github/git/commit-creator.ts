@@ -10,6 +10,25 @@ import { createLogger } from './types';
 import type { Logger } from '../../../git/types';
 
 /**
+ * Append a Co-authored-by trailer to the commit message.
+ *
+ * Uses the current GitHub Actions actor (the user who triggered the workflow)
+ * to generate a standard `Co-authored-by` trailer. If the actor is not
+ * available (e.g. running outside of GitHub Actions), the original message
+ * is returned unchanged.
+ *
+ * @param message - The original commit message.
+ * @returns The commit message with a Co-authored-by trailer appended.
+ */
+export function appendCoAuthoredBy(message: string): string {
+  const actor = github.context.actor;
+  if (!actor) {
+    return message;
+  }
+  return `${message}\n\nCo-authored-by: ${actor} <${actor}@users.noreply.github.com>`;
+}
+
+/**
  * Parameters for commit creation and branch update operation.
  */
 export interface CreateCommitAndUpdateBranchParams {
@@ -41,10 +60,11 @@ export async function createCommitAndUpdateBranch(
 
   // Create a single commit with the new tree
   log.debug(`Creating commit...`);
+  const commitMessage = appendCoAuthoredBy(message);
   const commit = await octokit.rest.git.createCommit({
     owner,
     repo,
-    message,
+    message: commitMessage,
     tree: treeSha,
     parents: [parentSha],
   });

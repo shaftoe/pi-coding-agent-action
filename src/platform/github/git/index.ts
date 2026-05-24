@@ -20,4 +20,4 @@ export { createBlobsAndTree } from './tree-builder';
 
 // Commit creator
 export type { CreateCommitAndUpdateBranchParams } from './commit-creator';
-export { createCommitAndUpdateBranch } from './commit-creator';
+export { createCommitAndUpdateBranch, appendCoAuthoredBy } from './commit-creator';
