@@ -38,7 +38,8 @@ export function slugify(text: string, maxLength = 50): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, maxLength);
+    .slice(0, maxLength)
+    .replace(/-+$/, '');
 }
 
 /**
@@ -240,7 +241,7 @@ export async function createPullRequest(
 
   // Auto-generate branch name from template
   const template = process.env.INPUT_BRANCH_NAME_TEMPLATE ?? '';
-  const head = generateBranchName(title, template ? template : undefined);
+  const head = generateBranchName(title, template);
 
   log.debug(`Title: ${title}`);
   log.debug(`Auto-generated branch: ${head}`);
