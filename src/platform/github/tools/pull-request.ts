@@ -75,6 +75,108 @@ export function generateBranchName(title: string, template?: string): string {
     .replace(/\{title\}/g, slugify(title));
 }
 
+/**
+ * Characters and patterns forbidden anywhere in a git ref name.
+ *
+ * Based on the rules enforced by `git-check-ref-format`:
+ * https://git-scm.com/docs/git-check-ref-format
+ */
+const INVALID_REF_PATTERNS: readonly (string | RegExp)[] = [
+  '..',    // double dot
+  '~',     // tilde
+  '^',     // caret
+  ':',     // colon
+  '\\',    // backslash
+  ' ',     // space
+  '?',     // question mark
+  '*',     // asterisk
+  '[',     // open bracket
+  '@{',    // reflog syntax
+  '\0',    // null byte
+];
+
+/**
+ * Validate that a branch name is a valid git ref.
+ *
+ * Applies the rules from `git-check-ref-format` so that user-provided
+ * templates produce actionable error messages instead of cryptic API failures.
+ *
+ * @param branchName - The branch name to validate.
+ * @throws {Error} If the branch name is not a valid git ref.
+ * @internal Exported for testing purposes.
+ */
+export function validateBranchName(branchName: string): void {
+  if (!branchName) {
+    throw new Error('Branch name cannot be empty');
+  }
+
+  // Cannot start or end with a dot
+  if (branchName.startsWith('.') || branchName.endsWith('.')) {
+    throw new Error(
+      `Invalid branch name "${branchName}": branch name cannot start or end with a dot (.)`
+    );
+  }
+
+  // Cannot start with a dash
+  if (branchName.startsWith('-')) {
+    throw new Error(
+      `Invalid branch name "${branchName}": branch name cannot start with a dash (-)`
+    );
+  }
+
+  // Cannot start or end with a slash
+  if (branchName.startsWith('/') || branchName.endsWith('/')) {
+    throw new Error(
+      `Invalid branch name "${branchName}": branch name cannot start or end with a slash (/)`
+    );
+  }
+
+  // Cannot end with .lock
+  if (branchName.endsWith('.lock')) {
+    throw new Error(
+      `Invalid branch name "${branchName}": branch name cannot end with ".lock"`
+    );
+  }
+
+  // Cannot contain consecutive slashes
+  if (branchName.includes('//')) {
+    throw new Error(
+      `Invalid branch name "${branchName}": branch name cannot contain consecutive slashes (//)`
+    );
+  }
+
+  // Cannot contain a component ending with a dot (e.g. "feature./fix")
+  if (/(?:^|\/)[^.]*\.(?:\/|$)/.test(branchName)) {
+    throw new Error(
+      `Invalid branch name "${branchName}": component cannot end with a dot (.)`
+    );
+  }
+
+  // Check for forbidden characters/patterns
+  for (const pattern of INVALID_REF_PATTERNS) {
+    if (typeof pattern === 'string') {
+      if (branchName.includes(pattern)) {
+        throw new Error(
+          `Invalid branch name "${branchName}": contains forbidden pattern "${pattern}"`
+        );
+      }
+    } else {
+      if (pattern.test(branchName)) {
+        throw new Error(
+          `Invalid branch name "${branchName}": contains forbidden pattern ${pattern}`
+        );
+      }
+    }
+  }
+
+  // Cannot contain control characters
+  if (/[\x00-\x1f\x7f]/.test(branchName)) {
+    throw new Error(
+      `Invalid branch name "${branchName}": contains control characters`
+    );
+  }
+}
+
 export interface CreatePullRequestParams {
   title: string;
   body?: string;
@@ -239,9 +341,10 @@ export async function createPullRequest(
   // Validate input parameters early
   validateCreatePullRequestParams(params);
 
-  // Auto-generate branch name from template
+  // Auto-generate branch name from template and validate
   const template = process.env.INPUT_BRANCH_NAME_TEMPLATE ?? '';
   const head = generateBranchName(title, template);
+  validateBranchName(head);
 
   log.debug(`Title: ${title}`);
   log.debug(`Auto-generated branch: ${head}`);

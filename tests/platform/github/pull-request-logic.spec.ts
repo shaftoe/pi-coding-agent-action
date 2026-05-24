@@ -437,11 +437,14 @@ describe('slugify', () => {
     expect(slugify('BREAKING CHANGE')).toBe('breaking-change');
   });
 
-  test('truncates to maxLength', async () => {
+  test('truncates to maxLength and strips trailing hyphen', async () => {
     const module = await getModule();
     const { slugify } = module;
 
-    expect(slugify('a very long title that should be truncated', 10)).toBe('a-very-lon');
+    // slugify('a very long title') => 'a-very-long-title'
+    // With maxLength=7, slice gives 'a-very-' which ends with a hyphen.
+    // The trailing hyphen is stripped to produce 'a-very'.
+    expect(slugify('a very long title', 7)).toBe('a-very');
   });
 
   test('handles empty string', async () => {
@@ -545,5 +548,123 @@ describe('generateBranchName', () => {
     const result = generateBranchName('Fix bug', '{number}-pr-{number}');
 
     expect(result).toBe('42-pr-42');
+  });
+});
+
+describe('validateBranchName', () => {
+  const getValidate = async () => {
+    const module = await getModule();
+    return module.validateBranchName as (name: string) => void;
+  };
+
+  test('accepts valid branch names', async () => {
+    const validate = await getValidate();
+    const validNames = [
+      'main',
+      'feature/add-login',
+      'pi/issue42-1716543210000',
+      'fix/auth-bug',
+      'release/v2.0',
+      'a',
+      'branch_name',
+    ];
+    for (const name of validNames) {
+      expect(() => validate(name)).not.toThrow();
+    }
+  });
+
+  test('rejects empty string', async () => {
+    const validate = await getValidate();
+    expect(() => validate('')).toThrow('Branch name cannot be empty');
+  });
+
+  test('rejects branch name starting with dot', async () => {
+    const validate = await getValidate();
+    expect(() => validate('.hidden')).toThrow('start or end with a dot');
+  });
+
+  test('rejects branch name ending with dot', async () => {
+    const validate = await getValidate();
+    expect(() => validate('feature.')).toThrow('start or end with a dot');
+  });
+
+  test('rejects branch name starting with dash', async () => {
+    const validate = await getValidate();
+    expect(() => validate('-feature')).toThrow('start with a dash');
+  });
+
+  test('rejects branch name starting with slash', async () => {
+    const validate = await getValidate();
+    expect(() => validate('/feature')).toThrow('start or end with a slash');
+  });
+
+  test('rejects branch name ending with slash', async () => {
+    const validate = await getValidate();
+    expect(() => validate('feature/')).toThrow('start or end with a slash');
+  });
+
+  test('rejects branch name ending with .lock', async () => {
+    const validate = await getValidate();
+    expect(() => validate('refs.lock')).toThrow('.lock');
+  });
+
+  test('rejects consecutive slashes', async () => {
+    const validate = await getValidate();
+    expect(() => validate('feature//fix')).toThrow('consecutive slashes');
+  });
+
+  test('rejects double dot', async () => {
+    const validate = await getValidate();
+    expect(() => validate('feature..fix')).toThrow('forbidden pattern ".."');
+  });
+
+  test('rejects tilde', async () => {
+    const validate = await getValidate();
+    expect(() => validate('feature~1')).toThrow('forbidden pattern "~"');
+  });
+
+  test('rejects caret', async () => {
+    const validate = await getValidate();
+    expect(() => validate('feature^1')).toThrow('forbidden pattern "^"');
+  });
+
+  test('rejects colon', async () => {
+    const validate = await getValidate();
+    expect(() => validate('feat:fix')).toThrow('forbidden pattern ":"');
+  });
+
+  test('rejects backslash', async () => {
+    const validate = await getValidate();
+    expect(() => validate('feat\\fix')).toThrow('forbidden pattern "\\"');
+  });
+
+  test('rejects space', async () => {
+    const validate = await getValidate();
+    expect(() => validate('feature fix')).toThrow('forbidden pattern " "');
+  });
+
+  test('rejects question mark', async () => {
+    const validate = await getValidate();
+    expect(() => validate('feature?')).toThrow('forbidden pattern "?"');
+  });
+
+  test('rejects asterisk', async () => {
+    const validate = await getValidate();
+    expect(() => validate('feature*')).toThrow('forbidden pattern "*"');
+  });
+
+  test('rejects open bracket', async () => {
+    const validate = await getValidate();
+    expect(() => validate('feature[0]')).toThrow('forbidden pattern "["');
+  });
+
+  test('rejects reflog syntax', async () => {
+    const validate = await getValidate();
+    expect(() => validate('feature@{1}')).toThrow('forbidden pattern "@{"');
+  });
+
+  test('rejects component ending with dot', async () => {
+    const validate = await getValidate();
+    expect(() => validate('feature./fix')).toThrow('component cannot end with a dot');
   });
 });
