@@ -21,7 +21,8 @@ import { updatePullRequest } from './tools/pull-request-update';
 import { getIssueOrPRThread } from './tools/thread';
 import { fetchPRDiff } from './tools/pr-diff';
 import { createReview } from './tools/review';
-import { getCIStatus, getWorkflowRunLogs } from './tools/ci-status';
+import { getCIStatus } from './tools/get-ci-status';
+import { getWorkflowRunLogs } from './tools/get-workflow-run-logs';
 import type { Temporal } from '@js-temporal/polyfill';
 import type { PlatformProvider, PlatformType, PlatformContext } from '../types';
 import type { CommentMetadata } from '../../types';
@@ -30,7 +31,8 @@ import type { IssueOrPRThread, GetIssueOrPRThreadParams } from './types';
 import type { CreatePullRequestParams, CreatePullRequestDetails } from './tools/pull-request';
 import type { UpdatePullRequestParams, UpdatePullRequestDetails } from './tools/pull-request-update';
 import type { CreateReviewParams, CreateReviewDetails } from './tools/review';
-import type { GetCIStatusParams, GetCIStatusDetails, GetWorkflowRunLogsParams, GetWorkflowRunLogsDetails } from './tools/ci-status';
+import type { GetCIStatusParams, GetCIStatusDetails } from './tools/get-ci-status';
+import type { GetWorkflowRunLogsParams, GetWorkflowRunLogsDetails } from './tools/get-workflow-run-logs';
 
 /**
  * Detect the current platform based on the server URL.

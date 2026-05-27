@@ -42,15 +42,19 @@ export {
   type ReviewInlineComment,
 } from './review';
 
-// CI/CD status and workflow run logs
+// CI/CD status
 export {
   getCIStatus,
-  getWorkflowRunLogs,
   type GetCIStatusParams,
   type GetCIStatusDetails,
   type CheckRunResult,
   type WorkflowRunResult,
+} from './get-ci-status';
+
+// Workflow run logs
+export {
+  getWorkflowRunLogs,
   type GetWorkflowRunLogsParams,
   type GetWorkflowRunLogsDetails,
   type JobLog,
-} from './ci-status';
+} from './get-workflow-run-logs';
