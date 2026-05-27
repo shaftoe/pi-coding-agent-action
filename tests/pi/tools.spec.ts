@@ -116,6 +116,23 @@ const mockProvider: PlatformProvider = {
       commentCount: 1,
     },
   }),
+  getCIStatus: async () => ({
+    content: [{ type: 'text' as const, text: 'CI status fetched' }],
+    details: {
+      ref: 'abc123',
+      check_runs: [],
+      workflow_runs: [],
+    },
+  }),
+  getWorkflowRunLogs: async () => ({
+    content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
+    details: {
+      run_id: 0,
+      jobs: [],
+      total_bytes: 0,
+      truncated: false,
+    },
+  }),
 };
 
 function captureRegisteredTools() {
@@ -142,6 +159,8 @@ describe('extFactory', () => {
   let getIssuePRThreadTool: TestTool;
   let getPRDiffTool: TestTool;
   let createReviewTool: TestTool;
+  let getCIStatusTool: TestTool;
+  let getWorkflowRunLogsTool: TestTool;
 
   beforeEach(() => {
     tools = captureRegisteredTools();
@@ -150,10 +169,12 @@ describe('extFactory', () => {
     getIssuePRThreadTool = getToolByName(tools, 'get_issue_or_pr_thread')!;
     getPRDiffTool = getToolByName(tools, 'get_pr_diff')!;
     createReviewTool = getToolByName(tools, 'create_pull_request_review')!;
+    getCIStatusTool = getToolByName(tools, 'get_ci_status')!;
+    getWorkflowRunLogsTool = getToolByName(tools, 'get_workflow_run_logs')!;
   });
 
-  test('registers five tools', () => {
-    expect(tools.length).toBe(5);
+  test('registers seven tools', () => {
+    expect(tools.length).toBe(7);
   });
 
   test('registers a tool named create_pull_request', () => {
@@ -513,6 +534,123 @@ describe('extFactory', () => {
       expect(result.content[0]?.text).toContain('cancelled');
       expect(result.details.cancelled).toBe(true);
       expect(result.details.reviewId).toBe(0);
+    });
+  });
+
+  describe('get_ci_status', () => {
+    test('registers a tool named get_ci_status', () => {
+      expect(getCIStatusTool).toBeDefined();
+      expect(getCIStatusTool.name).toBe('get_ci_status');
+    });
+
+    test('has a label', () => {
+      expect(getCIStatusTool.label).toBe('Get CI Status');
+    });
+
+    test('has a non-empty description', () => {
+      expect(typeof getCIStatusTool.description).toBe('string');
+      expect(getCIStatusTool.description.length).toBeGreaterThan(0);
+    });
+
+    test('has prompt guidelines', () => {
+      expect(Array.isArray(getCIStatusTool.promptGuidelines)).toBe(true);
+      expect(getCIStatusTool.promptGuidelines.length).toBeGreaterThan(0);
+    });
+
+    test('has a prompt snippet', () => {
+      expect(typeof getCIStatusTool.promptSnippet).toBe('string');
+      expect(getCIStatusTool.promptSnippet.length).toBeGreaterThan(0);
+    });
+
+    test('parameters - all fields are optional', () => {
+      const params = getCIStatusTool.parameters;
+      expect(params.properties.owner).toBeDefined();
+      expect(params.properties.repo).toBeDefined();
+      expect(params.properties.pull_number).toBeDefined();
+      expect(params.properties.ref).toBeDefined();
+      expect(params.properties.status).toBeDefined();
+      expect(params.properties.conclusion).toBeDefined();
+      if (Array.isArray(params.required)) {
+        expect(params.required.length).toBe(0);
+      }
+    });
+
+    test('returns cancellation message when signal is aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      const result = await getCIStatusTool.execute(
+        'id',
+        {},
+        controller.signal,
+        undefined,
+        undefined as unknown as Parameters<typeof getCIStatusTool.execute>[4]
+      );
+
+      expect(result.content[0]?.text).toContain('cancelled');
+      expect(result.details.cancelled).toBe(true);
+      expect(result.details.ref).toBe('');
+    });
+  });
+
+  describe('get_workflow_run_logs', () => {
+    test('registers a tool named get_workflow_run_logs', () => {
+      expect(getWorkflowRunLogsTool).toBeDefined();
+      expect(getWorkflowRunLogsTool.name).toBe('get_workflow_run_logs');
+    });
+
+    test('has a label', () => {
+      expect(getWorkflowRunLogsTool.label).toBe('Get Workflow Run Logs');
+    });
+
+    test('has a non-empty description', () => {
+      expect(typeof getWorkflowRunLogsTool.description).toBe('string');
+      expect(getWorkflowRunLogsTool.description.length).toBeGreaterThan(0);
+    });
+
+    test('has prompt guidelines', () => {
+      expect(Array.isArray(getWorkflowRunLogsTool.promptGuidelines)).toBe(true);
+      expect(getWorkflowRunLogsTool.promptGuidelines.length).toBeGreaterThan(0);
+    });
+
+    test('has a prompt snippet', () => {
+      expect(typeof getWorkflowRunLogsTool.promptSnippet).toBe('string');
+      expect(getWorkflowRunLogsTool.promptSnippet.length).toBeGreaterThan(0);
+    });
+
+    test('parameters - run_id is required', () => {
+      const params = getWorkflowRunLogsTool.parameters;
+      expect(params.properties.run_id).toBeDefined();
+      expect(params.required).toContain('run_id');
+    });
+
+    test('parameters - owner, repo, max_bytes are optional', () => {
+      const params = getWorkflowRunLogsTool.parameters;
+      expect(params.properties.owner).toBeDefined();
+      expect(params.properties.repo).toBeDefined();
+      expect(params.properties.max_bytes).toBeDefined();
+      if (Array.isArray(params.required)) {
+        expect(params.required).not.toContain('owner');
+        expect(params.required).not.toContain('repo');
+        expect(params.required).not.toContain('max_bytes');
+      }
+    });
+
+    test('returns cancellation message when signal is aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      const result = await getWorkflowRunLogsTool.execute(
+        'id',
+        { run_id: 123 },
+        controller.signal,
+        undefined,
+        undefined as unknown as Parameters<typeof getWorkflowRunLogsTool.execute>[4]
+      );
+
+      expect(result.content[0]?.text).toContain('cancelled');
+      expect(result.details.cancelled).toBe(true);
+      expect(result.details.run_id).toBe(0);
     });
   });
 });

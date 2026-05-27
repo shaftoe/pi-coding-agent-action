@@ -22,6 +22,13 @@ export {
   type CreateReviewParams,
   type CreateReviewDetails,
   type ReviewInlineComment,
+  type GetCIStatusParams,
+  type GetCIStatusDetails,
+  type CheckRunResult,
+  type WorkflowRunResult,
+  type GetWorkflowRunLogsParams,
+  type GetWorkflowRunLogsDetails,
+  type JobLog,
 } from './types';
 
 export { detectPlatform, createGitHubPlatformProvider } from './github/index';

@@ -76,6 +76,23 @@ const mockPlatformProvider: PlatformProvider = {
       commentCount: 1,
     },
   }),
+  getCIStatus: async () => ({
+    content: [{ type: 'text' as const, text: 'CI status fetched' }],
+    details: {
+      ref: 'abc123',
+      check_runs: [],
+      workflow_runs: [],
+    },
+  }),
+  getWorkflowRunLogs: async () => ({
+    content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
+    details: {
+      run_id: 0,
+      jobs: [],
+      total_bytes: 0,
+      truncated: false,
+    },
+  }),
 };
 
 // Set env vars before importing

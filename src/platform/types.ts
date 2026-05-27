@@ -21,6 +21,10 @@ import type {
   CreateReactionType,
   CreateReviewParams,
   CreateReviewDetails,
+  GetCIStatusParams,
+  GetCIStatusDetails,
+  GetWorkflowRunLogsParams,
+  GetWorkflowRunLogsDetails,
 } from './github';
 
 // Re-export types used by consumers (pi tools, adapters, etc.) so they
@@ -38,6 +42,13 @@ export type {
   CreateReviewParams,
   CreateReviewDetails,
   ReviewInlineComment,
+  GetCIStatusParams,
+  GetCIStatusDetails,
+  CheckRunResult,
+  WorkflowRunResult,
+  GetWorkflowRunLogsParams,
+  GetWorkflowRunLogsDetails,
+  JobLog,
 } from './github';
 import type { CommentMetadata } from '../types';
 
@@ -194,4 +205,30 @@ export interface PlatformProvider {
   createReview(
     params: CreateReviewParams
   ): Promise<{ content: { type: 'text'; text: string }[]; details: CreateReviewDetails }>;
+
+  /**
+   * Get CI status for a ref or pull request.
+   *
+   * Fetches check runs and workflow runs for the resolved commit SHA.
+   * For pull requests, the head SHA is resolved automatically.
+   *
+   * @param params - Parameters for the CI status query.
+   * @returns Structured details about CI check runs and workflow runs.
+   */
+  getCIStatus(
+    params: GetCIStatusParams
+  ): Promise<{ content: { type: 'text'; text: string }[]; details: GetCIStatusDetails }>;
+
+  /**
+   * Get logs for a specific workflow run.
+   *
+   * Lists all jobs for the run and downloads their logs, truncated
+   * to the specified byte limit.
+   *
+   * @param params - Parameters including the run ID and optional byte limit.
+   * @returns Structured details about the workflow run logs.
+   */
+  getWorkflowRunLogs(
+    params: GetWorkflowRunLogsParams
+  ): Promise<{ content: { type: 'text'; text: string }[]; details: GetWorkflowRunLogsDetails }>;
 }

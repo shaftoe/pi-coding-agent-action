@@ -214,6 +214,8 @@ describe('PlatformProvider interface compliance', () => {
       'getIssueOrPRThread',
       'getPRDiff',
       'createReview',
+      'getCIStatus',
+      'getWorkflowRunLogs',
       'getContext',
     ];
 

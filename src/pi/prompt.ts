@@ -179,3 +179,60 @@ export const CREATE_REVIEW_PARAM_COMMENT_START_SIDE_DESCRIPTION =
 
 export const CREATE_REVIEW_PARAM_COMMENT_BODY_DESCRIPTION =
   'The Markdown body of the inline comment.';
+
+//
+// Get CI Status
+//
+export const GET_CI_STATUS_PROMPT_SNIPPET =
+  'Check the CI/CD status for a pull request or commit ref. Returns check runs and workflow runs with their statuses, conclusions, and URLs.';
+
+export const GET_CI_STATUS_PROMPT_GUIDELINES = [
+  'Use get_ci_status to inspect the CI/CD status of a pull request or commit before or after making changes.',
+  'By default, the tool fetches status for the current PR from the GitHub context. Only provide owner/repo/pull_number when you need to check a different PR.',
+  'You can also provide a `ref` (commit SHA or branch name) directly instead of a pull_number.',
+  'Filter by `status` (queued, in_progress, completed) or `conclusion` (success, failure, cancelled, timed_out) to narrow results.',
+  'For failed workflow runs, use the returned run_id with the `get_workflow_run_logs` tool to fetch detailed job logs and diagnose failures.',
+];
+
+export const GET_CI_STATUS_DESCRIPTION =
+  'Get the CI/CD status for a pull request or commit ref. Returns a list of check runs and workflow runs with their statuses, conclusions, and URLs. Use this to check if CI is passing or failing before or after making changes.';
+
+export const GET_CI_STATUS_PARAM_OWNER_DESCRIPTION =
+  'Repository owner (e.g., "octocat"). If not provided, uses the current repository from context.';
+
+export const GET_CI_STATUS_PARAM_REPO_DESCRIPTION =
+  'Repository name (e.g., "hello-world"). If not provided, uses the current repository from context.';
+
+export const GET_CI_STATUS_PARAM_PULL_NUMBER_DESCRIPTION =
+  'Pull request number. If not provided, uses the current PR from context. Alternative to providing a ref.';
+
+export const GET_CI_STATUS_PARAM_REF_DESCRIPTION =
+  'Git ref (commit SHA or branch name) to check. If not provided, resolved from pull_number or context.';
+
+export const GET_CI_STATUS_PARAM_STATUS_DESCRIPTION =
+  'Filter by status: queued, in_progress, completed.';
+
+export const GET_CI_STATUS_PARAM_CONCLUSION_DESCRIPTION =
+  'Filter by conclusion: success, failure, cancelled, timed_out, action_required, etc.';
+
+//
+// Get Workflow Run Logs
+//
+export const GET_WORKFLOW_RUN_LOGS_PROMPT_SNIPPET =
+  'Fetch the job logs for a specific workflow run. Use this to diagnose CI failures by inspecting the actual log output.';
+
+export const GET_WORKFLOW_RUN_LOGS_PROMPT_GUIDELINES = [
+  'Use get_workflow_run_logs when you need to inspect the actual log output of a workflow run to diagnose failures.',
+  'First use `get_ci_status` to find the run_id of a failed workflow run, then use this tool to fetch its logs.',
+  'Logs are truncated to 50KB by default. Use `max_bytes` to increase or decrease the limit.',
+  'The tool returns logs for all jobs in the run, with each job clearly labeled.',
+];
+
+export const GET_WORKFLOW_RUN_LOGS_DESCRIPTION =
+  'Fetch the job logs for a specific GitHub Actions workflow run. Returns the log output for each job, truncated if too large. Use this to diagnose CI failures by inspecting the actual error messages and stack traces.';
+
+export const GET_WORKFLOW_RUN_LOGS_PARAM_RUN_ID_DESCRIPTION =
+  'The workflow run ID to fetch logs for. Get this from the get_ci_status tool output.';
+
+export const GET_WORKFLOW_RUN_LOGS_PARAM_MAX_BYTES_DESCRIPTION =
+  'Maximum total log bytes to return. Defaults to 51200 (50KB). Use for limiting very large log outputs.';

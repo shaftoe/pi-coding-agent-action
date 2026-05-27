@@ -12,6 +12,10 @@
  * - **`get_pr_diff`** – fetches the diff of a pull request.
  * - **`create_pull_request_review`** – creates a pull request review with
  *   inline comments anchored to specific diff lines.
+ * - **`get_ci_status`** – checks the CI/CD status of check runs and workflow
+ *   runs for a pull request or commit ref.
+ * - **`get_workflow_run_logs`** – fetches job logs for a specific workflow run
+ *   to diagnose CI failures.
  *
  * The exported {@link toolsFactory} function is passed to the Pi SDK resource
  * loader so that the tools are available during agent sessions.
@@ -22,6 +26,7 @@ import { getIssueOrPRThreadToolFactory } from './get-thread';
 import { getPRDiffToolFactory } from './get-pr-diff';
 import { updatePullRequestToolFactory } from './update-pr';
 import { createReviewToolFactory } from './create-review';
+import { getCIStatusToolFactory, getWorkflowRunLogsToolFactory } from './get-ci-status';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { PlatformProvider } from '../../platform';
 import type { DiffConfig } from '../../types';
@@ -40,7 +45,8 @@ export {
  *
  * Called by the Pi SDK resource loader during session initialisation. Registers
  * the `create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`,
- * `get_pr_diff`, and `create_pull_request_review` tools.
+ * `get_pr_diff`, `create_pull_request_review`, `get_ci_status`, and
+ * `get_workflow_run_logs` tools.
  *
  * @param provider - The platform provider for tool operations.
  * @returns An extension factory function compatible with the Pi SDK.
@@ -53,6 +59,8 @@ export function createToolsFactory(provider: PlatformProvider, config?: DiffConf
       getIssueOrPRThreadToolFactory(provider),
       getPRDiffToolFactory(provider, config),
       createReviewToolFactory(provider),
+      getCIStatusToolFactory(provider),
+      getWorkflowRunLogsToolFactory(provider),
     ];
     tools.forEach(tool => {
       pi.registerTool(tool);

@@ -83,6 +83,97 @@ export interface ReviewInlineComment {
   body: string;
 }
 
+/**
+ * Parameters for the get_ci_status operation.
+ */
+export interface GetCIStatusParams {
+  owner?: string;
+  repo?: string;
+  pull_number?: number;
+  /** Git ref (SHA or branch) to check. Alternative to pull_number. */
+  ref?: string;
+  /** Filter by status: queued, in_progress, completed. */
+  status?: string;
+  /** Filter by conclusion: success, failure, cancelled, timed_out, etc. */
+  conclusion?: string;
+}
+
+/**
+ * A single check run result.
+ */
+export interface CheckRunResult {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  html_url: string | null;
+  details_url: string | null;
+}
+
+/**
+ * A single workflow run result.
+ */
+export interface WorkflowRunResult {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  started_at: string | null;
+  html_url: string;
+  head_branch: string;
+  head_sha: string;
+  event: string;
+}
+
+/**
+ * Details returned by the get_ci_status tool.
+ */
+export interface GetCIStatusDetails {
+  ref: string;
+  check_runs: CheckRunResult[];
+  workflow_runs: WorkflowRunResult[];
+  cancelled?: boolean;
+}
+
+/**
+ * Parameters for the get_workflow_run_logs operation.
+ */
+export interface GetWorkflowRunLogsParams {
+  owner?: string;
+  repo?: string;
+  /** The workflow run ID to fetch logs for. */
+  run_id: number;
+  /** Maximum total log bytes to return. Defaults to 51200 (50KB). */
+  max_bytes?: number;
+}
+
+/**
+ * Log output for a single job.
+ */
+export interface JobLog {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  log: string;
+  truncated: boolean;
+}
+
+/**
+ * Details returned by the get_workflow_run_logs tool.
+ */
+export interface GetWorkflowRunLogsDetails {
+  run_id: number;
+  jobs: JobLog[];
+  total_bytes: number;
+  truncated: boolean;
+  cancelled?: boolean;
+}
+
 export interface CreateReviewParams {
   /** Pull request number. If omitted the current PR from context is used. */
   pull_number?: number;
