@@ -47,7 +47,7 @@
     "bun-types": "1.3.14",
     "esbuild": "^0.28.0",
     "eslint": "10.4.0",
-    "isomorphic-git": "1.38.2",
+    "isomorphic-git": "1.38.3",
     "prettier": "^3.8.3",
     "semantic-release": "^25.0.3",
     "typescript": "^6.0.3"
