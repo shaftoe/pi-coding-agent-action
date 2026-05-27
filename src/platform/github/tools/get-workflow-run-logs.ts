@@ -13,6 +13,7 @@ import type {
   GetWorkflowRunLogsDetails,
   JobLog,
 } from '../types';
+import { getStatusIcon } from './ci-utils';
 
 export type {
   GetWorkflowRunLogsParams,
@@ -139,14 +140,10 @@ export async function getWorkflowRunLogs(params: GetWorkflowRunLogsParams): Prom
 
   let overallTruncated = false;
   for (const job of jobs) {
-    const icon =
-      job.conclusion === 'success'
-        ? '✅'
-        : job.conclusion === 'failure'
-          ? '❌'
-          : job.conclusion === 'cancelled'
-            ? '⛔'
-            : '⏳';
+    const icon = getStatusIcon(
+      job.conclusion ? 'completed' : job.status,
+      job.conclusion
+    );
     lines.push(`--- ${icon} Job: ${job.name} (${job.conclusion ?? job.status}) ---`);
     if (job.log) {
       lines.push(job.log);

@@ -58,3 +58,6 @@ export {
   type GetWorkflowRunLogsDetails,
   type JobLog,
 } from './get-workflow-run-logs';
+
+// Shared CI utilities
+export { getStatusIcon } from './ci-utils';

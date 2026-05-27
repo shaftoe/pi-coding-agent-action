@@ -14,6 +14,7 @@ import type {
   CheckRunResult,
   WorkflowRunResult,
 } from '../types';
+import { getStatusIcon } from './ci-utils';
 
 /** Status types for check runs */
 type CheckRunStatus = 'queued' | 'in_progress' | 'completed';
@@ -196,18 +197,7 @@ export async function getCIStatus(params: GetCIStatusParams): Promise<{
   if (checkRuns.length > 0) {
     lines.push(`Check Runs (${checkRuns.length}):`);
     for (const cr of checkRuns) {
-      const icon =
-        cr.status === 'completed'
-          ? cr.conclusion === 'success'
-            ? '✅'
-            : cr.conclusion === 'failure'
-              ? '❌'
-              : cr.conclusion === 'cancelled'
-                ? '⛔'
-                : '⚠️'
-          : cr.status === 'in_progress'
-            ? '🔄'
-            : '⏳';
+      const icon = getStatusIcon(cr.status, cr.conclusion);
       lines.push(
         `  ${icon} ${cr.name}: ${cr.status}` +
           `${cr.conclusion ? ` (${cr.conclusion})` : ''}`
@@ -222,18 +212,7 @@ export async function getCIStatus(params: GetCIStatusParams): Promise<{
   if (workflowRuns.length > 0) {
     lines.push(`Workflow Runs (${workflowRuns.length}):`);
     for (const wr of workflowRuns) {
-      const icon =
-        wr.status === 'completed'
-          ? wr.conclusion === 'success'
-            ? '✅'
-            : wr.conclusion === 'failure'
-              ? '❌'
-              : wr.conclusion === 'cancelled'
-                ? '⛔'
-                : '⚠️'
-          : wr.status === 'in_progress'
-            ? '🔄'
-            : '⏳';
+      const icon = getStatusIcon(wr.status, wr.conclusion);
       lines.push(
         `  ${icon} ${wr.name} [${wr.event}]: ${wr.status}` +
           `${wr.conclusion ? ` (${wr.conclusion})` : ''}`
