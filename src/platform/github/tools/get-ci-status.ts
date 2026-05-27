@@ -62,17 +62,13 @@ async function resolveHeadSha(
 
   // Fetch PR head SHA if pull_number provided
   if (params.pull_number) {
-    try {
-      const octokit = getOctokit();
-      const pr = await octokit.rest.pulls.get({
-        owner,
-        repo,
-        pull_number: params.pull_number,
-      });
-      return pr.data.head.sha;
-    } catch (_e) {
-      debug(`[getCIStatus] Failed to fetch PR #${params.pull_number}, trying context SHA`);
-    }
+    const octokit = getOctokit();
+    const pr = await octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: params.pull_number,
+    });
+    return pr.data.head.sha;
   }
 
   // Fall back to context SHA
@@ -90,38 +86,33 @@ async function fetchCheckRuns(
   status?: string,
   conclusion?: string
 ): Promise<CheckRunResult[]> {
-  try {
-    const octokit = getOctokit();
-    const response = await octokit.rest.checks.listForRef({
-      owner,
-      repo,
-      ref,
-      per_page: MAX_CHECK_RUNS,
-      ...(status ? { status: status as CheckRunStatus } : {}),
-      ...(conclusion ? { filter: 'all' as const } : {}),
-    });
+  const octokit = getOctokit();
+  const response = await octokit.rest.checks.listForRef({
+    owner,
+    repo,
+    ref,
+    per_page: MAX_CHECK_RUNS,
+    ...(status ? { status: status as CheckRunStatus } : {}),
+    ...(conclusion ? { filter: 'all' as const } : {}),
+  });
 
-    let checkRuns = response.data.check_runs.map((cr): CheckRunResult => ({
-      id: cr.id,
-      name: cr.name,
-      status: cr.status,
-      conclusion: cr.conclusion ?? null,
-      started_at: cr.started_at ?? null,
-      completed_at: cr.completed_at ?? null,
-      html_url: cr.html_url,
-      details_url: cr.details_url ?? null,
-    }));
+  let checkRuns = response.data.check_runs.map((cr): CheckRunResult => ({
+    id: cr.id,
+    name: cr.name,
+    status: cr.status,
+    conclusion: cr.conclusion ?? null,
+    started_at: cr.started_at ?? null,
+    completed_at: cr.completed_at ?? null,
+    html_url: cr.html_url,
+    details_url: cr.details_url ?? null,
+  }));
 
-    // Client-side conclusion filter (API doesn't support it directly)
-    if (conclusion) {
-      checkRuns = checkRuns.filter(cr => cr.conclusion === conclusion);
-    }
-
-    return checkRuns;
-  } catch (_e) {
-    debug(`[getCIStatus] Failed to fetch check runs for ref ${ref}`);
-    return [];
+  // Client-side conclusion filter (API doesn't support it directly)
+  if (conclusion) {
+    checkRuns = checkRuns.filter(cr => cr.conclusion === conclusion);
   }
+
+  return checkRuns;
 }
 
 /**
@@ -133,31 +124,26 @@ async function fetchWorkflowRuns(
   ref: string,
   status?: string
 ): Promise<WorkflowRunResult[]> {
-  try {
-    const octokit = getOctokit();
-    const response = await octokit.rest.actions.listWorkflowRunsForRepo({
-      owner,
-      repo,
-      head_sha: ref,
-      per_page: MAX_WORKFLOW_RUNS,
-      ...(status ? { status: status as WorkflowRunStatus } : {}),
-    });
+  const octokit = getOctokit();
+  const response = await octokit.rest.actions.listWorkflowRunsForRepo({
+    owner,
+    repo,
+    head_sha: ref,
+    per_page: MAX_WORKFLOW_RUNS,
+    ...(status ? { status: status as WorkflowRunStatus } : {}),
+  });
 
-    return response.data.workflow_runs.map((wr): WorkflowRunResult => ({
-      id: wr.id,
-      name: wr.name ?? wr.path?.split('/').pop() ?? 'unknown',
-      status: wr.status ?? 'unknown',
-      conclusion: wr.conclusion ?? null,
-      started_at: wr.run_started_at ?? wr.created_at ?? null,
-      html_url: wr.html_url,
-      head_branch: wr.head_branch ?? '',
-      head_sha: wr.head_sha?.substring(0, 8) ?? '',
-      event: wr.event,
-    }));
-  } catch (_e) {
-    debug(`[getCIStatus] Failed to fetch workflow runs for ref ${ref}`);
-    return [];
-  }
+  return response.data.workflow_runs.map((wr): WorkflowRunResult => ({
+    id: wr.id,
+    name: wr.name ?? wr.path?.split('/').pop() ?? 'unknown',
+    status: wr.status ?? 'unknown',
+    conclusion: wr.conclusion ?? null,
+    started_at: wr.run_started_at ?? wr.created_at ?? null,
+    html_url: wr.html_url,
+    head_branch: wr.head_branch ?? '',
+    head_sha: wr.head_sha?.substring(0, 8) ?? '',
+    event: wr.event,
+  }));
 }
 
 /**
