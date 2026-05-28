@@ -356,7 +356,7 @@ The action exposes the following outputs, which can be consumed by downstream st
 
 ## Custom Tools
 
-The action extends Pi with seven custom tools to interact more efficiently with GitHub and perform CI/CD operations:
+The action extends Pi with seven custom tools to interact more efficiently with GitHub APIs:
 
 | Tool | Description |
 |------|-------------|
