@@ -369,6 +369,33 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       expect(result.details.truncated).toBe(true);
     });
 
+    test('caps max_bytes at 1MB (1048576)', async () => {
+      const fn = await getModule();
+      const bigLog = 'x'.repeat(2_000_000);
+      mockListJobsForWorkflowRun.mockImplementation(() =>
+        Promise.resolve({
+          data: {
+            jobs: [
+              { id: 606, name: 'job', status: 'completed', conclusion: 'success', started_at: null, completed_at: null },
+            ],
+          },
+        })
+      );
+      mockDownloadJobLogs.mockImplementation(() =>
+        Promise.resolve({ data: bigLog })
+      );
+
+      // Request 2MB, but cap at 1MB
+      const result = await fn({ run_id: 100, max_bytes: 2_000_000 });
+
+      expect(result.details.jobs[0].truncated).toBe(true);
+      // log is 2MB, budget capped at 1MB: log must be truncated
+      const logByteLength = Buffer.byteLength(result.details.jobs[0].log, 'utf8');
+      // Should use roughly 1MB budget (capped), much less than the 2MB requested
+      expect(logByteLength).toBeLessThan(1_500_000);
+      expect(logByteLength).toBeGreaterThan(900_000);
+    });
+
     test('respects custom max_bytes parameter', async () => {
       const fn = await getModule();
       const log = 'A'.repeat(200);
@@ -415,7 +442,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       expect(result.details.jobs[0].log).toBe('short log');
     });
 
-    test('truncates at newline boundary', async () => {
+    test('truncates at newline boundary (keeps tail)', async () => {
       const fn = await getModule();
       const log = 'line1\nline2\nline3\nline4\nline5\n';
       mockListJobsForWorkflowRun.mockImplementation(() =>
@@ -431,14 +458,15 @@ describe('getWorkflowRunLogs - platform implementation', () => {
         Promise.resolve({ data: log })
       );
 
-      // Use a budget smaller than the full log (30 bytes) but large enough for line1 (6 bytes) + suffix (16 bytes)
+      // Use a budget smaller than the full log (30 bytes) but large enough for prefix (16 bytes) + partial tail
       const result = await fn({ run_id: 100, max_bytes: 25 });
 
       expect(result.details.jobs[0].truncated).toBe(true);
       // Should snap to a newline boundary (not cut mid-line)
       expect(result.details.jobs[0].log).toContain('... (truncated)');
-      // Should contain at least the first line
-      expect(result.details.jobs[0].log).toContain('line1');
+      // Tail truncation: should contain the last line, not the first
+      expect(result.details.jobs[0].log).toContain('line5');
+      expect(result.details.jobs[0].log).not.toContain('line1');
     });
 
     test('marks job as truncated when byte budget is exhausted', async () => {
@@ -598,7 +626,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
   // ─── Unicode handling ──────────────────────────────────────────
 
   describe('unicode handling', () => {
-    test('handles multi-byte characters in log truncation', async () => {
+    test('handles multi-byte characters in log truncation (keeps tail)', async () => {
       const fn = await getModule();
       // String with multi-byte characters (emoji, CJK)
       const log = 'Hello 🌍 世界 🎉 ' + 'x'.repeat(200) + '\n';

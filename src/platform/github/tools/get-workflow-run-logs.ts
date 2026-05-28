@@ -31,6 +31,9 @@ function debug(msg: string): void {
 /** Default max log bytes (50 KB). */
 const DEFAULT_MAX_LOG_BYTES = 51_200;
 
+/** Absolute maximum log bytes (1 MB). */
+const MAX_LOG_BYTES = 1_048_576;
+
 /**
  * Get logs for a specific workflow run.
  *
@@ -46,7 +49,7 @@ export async function getWorkflowRunLogs(params: GetWorkflowRunLogsParams): Prom
 }> {
   const owner = params.owner ?? github.context.repo.owner;
   const repo = params.repo ?? github.context.repo.repo;
-  const maxBytes = params.max_bytes ?? DEFAULT_MAX_LOG_BYTES;
+  const maxBytes = Math.min(params.max_bytes ?? DEFAULT_MAX_LOG_BYTES, MAX_LOG_BYTES);
 
   debug(`[getWorkflowRunLogs] Fetching logs for run ${params.run_id}`);
 
@@ -88,8 +91,8 @@ export async function getWorkflowRunLogs(params: GetWorkflowRunLogsParams): Prom
   }
 
   // Download logs for each job, respecting byte budget
-  const truncationSuffix = '\n... (truncated)';
-  const suffixBytes = Buffer.byteLength(truncationSuffix, 'utf8');
+  const truncationPrefix = '... (truncated)\n';
+  const prefixBytes = Buffer.byteLength(truncationPrefix, 'utf8');
   let totalBytesUsed = 0;
   const bytesPerJob = Math.floor(maxBytes / jobs.length);
 
@@ -121,21 +124,24 @@ export async function getWorkflowRunLogs(params: GetWorkflowRunLogsParams): Prom
     }
 
     if (Buffer.byteLength(logText, 'utf8') > jobBudget) {
-      // Reserve space for the truncation suffix
-      const targetBudget = Math.max(jobBudget - suffixBytes, 0);
+      // Reserve space for the truncation prefix
+      const targetBudget = Math.max(jobBudget - prefixBytes, 0);
       const buf = Buffer.from(logText, 'utf8');
-      let cutAt = Math.min(targetBudget, buf.length);
-      // Walk back to safe UTF-8 boundary
-      while (cutAt > 0 && ((buf[cutAt] ?? 0) & 0xc0) === 0x80) {
-        cutAt--;
+      const totalBytes = buf.length;
+      // Keep the tail (end) of the log — errors are typically at the end
+      const startAt = Math.max(totalBytes - targetBudget, 0);
+      // Walk forward to safe UTF-8 boundary
+      let cutAt = startAt;
+      while (cutAt < totalBytes && ((buf[cutAt] ?? 0) & 0xc0) === 0x80) {
+        cutAt++;
       }
-      let sliced = buf.subarray(0, cutAt).toString('utf8');
-      // Snap to last newline
-      const lastNewline = sliced.lastIndexOf('\n');
-      if (lastNewline > 0) {
-        sliced = sliced.slice(0, lastNewline);
+      let sliced = buf.subarray(cutAt).toString('utf8');
+      // Snap to first newline (to avoid showing a partial line at the start)
+      const firstNewline = sliced.indexOf('\n');
+      if (firstNewline > 0) {
+        sliced = sliced.slice(firstNewline + 1);
       }
-      job.log = sliced + truncationSuffix;
+      job.log = truncationPrefix + sliced;
       job.truncated = true;
       totalBytesUsed += Buffer.byteLength(job.log, 'utf8');
     } else {

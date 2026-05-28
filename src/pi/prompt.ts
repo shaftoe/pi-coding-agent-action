@@ -224,8 +224,8 @@ export const GET_WORKFLOW_RUN_LOGS_PROMPT_SNIPPET =
 export const GET_WORKFLOW_RUN_LOGS_PROMPT_GUIDELINES = [
   'Use get_workflow_run_logs when you need to inspect the actual log output of a workflow run to diagnose failures.',
   'First use `get_ci_status` to find the run_id of a failed workflow run, then use this tool to fetch its logs.',
-  'Logs are truncated to 50KB by default. Use `max_bytes` to increase or decrease the limit.',
-  'The tool returns logs for all jobs in the run, with each job clearly labeled.',
+  'Logs are truncated to 50KB by default. Truncation keeps the end of the log (where errors typically appear). Use `max_bytes` to increase or decrease the limit (capped at 1MB).',
+  'The tool returns logs for all jobs in the run, with each job clearly labeled. Logs are truncated from the head, preserving the tail where error messages typically appear.',
 ];
 
 export const GET_WORKFLOW_RUN_LOGS_DESCRIPTION =
@@ -235,4 +235,4 @@ export const GET_WORKFLOW_RUN_LOGS_PARAM_RUN_ID_DESCRIPTION =
   'The workflow run ID to fetch logs for. Get this from the get_ci_status tool output.';
 
 export const GET_WORKFLOW_RUN_LOGS_PARAM_MAX_BYTES_DESCRIPTION =
-  'Maximum total log bytes to return. Defaults to 51200 (50KB). Use for limiting very large log outputs.';
+  'Maximum total log bytes to return. Defaults to 51200 (50KB). Capped at 1048576 (1MB). Use for limiting very large log outputs.';
