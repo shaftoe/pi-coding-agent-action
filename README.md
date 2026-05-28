@@ -189,6 +189,23 @@ By default the action loads five built-in GitHub related tools (`create_pull_req
       npm:my-custom-github-tools
 ```
 
+### Selective Tool Loading
+
+Use `loaded_tools` to control exactly which tools (built-in **and** Pi's own) are available in the session. This is useful when you want to keep built-in extensions enabled but restrict the agent to a subset of tools.
+
+```yaml
+- name: Run Pi agent (read-only tools only)
+  uses: shaftoe/pi-coding-agent-action@v2
+  with:
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    provider: openai
+    model: gpt-5.4
+    token: ${{ secrets.OPENAI_API_KEY }}
+    loaded_tools: 'get_pr_diff,create_pull_request_review,get_issue_or_pr_thread'
+```
+
+The default value is `all` which keeps the current behaviour (every registered tool is active). Tool names must match exactly — the run fails early if a name doesn't correspond to a registered tool.
+
 ### Custom Branch Names
 
 You can customize the auto-generated branch names used when Pi creates pull requests. By default, branches follow the `pi/issue{number}-{timestamp}` pattern. Use the `branch_name_template` input to override this:
@@ -328,6 +345,7 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
 | `github_token` | GitHub token for API access | Yes | - |
 | `load_builtin_extensions` | Whether to load built-in GitHub extensions (`create_pull_request`, `create_pull_request_review`, `update_pull_request`, `get_issue_or_pr_thread`, `get_pr_diff`, `get_ci_status`, `get_workflow_run_logs`) | No | `true` |
+| `loaded_tools` | Controls which tools are available in the session. Defaults to `all`. Accepts a comma-separated list of tool names (built-in or custom) to load — unknown names cause the run to fail early | No | `all` |
 | `model` | Model to use (e.g., gpt-5.4, gpt-4o, gemini-2.5-pro) | Yes | - |
 | `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
 | `provider` | LLM provider (openai, google, anthropic, etc.) | Yes | - |

@@ -1530,4 +1530,209 @@ describe('ActionOrchestrator', () => {
       expect(callArgs.diffMaxLines).toBeUndefined();
     });
   });
+
+  describe('loaded_tools configuration', () => {
+    test('calls getInput for loaded_tools', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockCore.getInput).toHaveBeenCalledWith('loaded_tools');
+    });
+
+    test('defaults to undefined when not provided (all tools)', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.loadedTools).toBeUndefined();
+    });
+
+    test('defaults to undefined when input is empty string', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          loaded_tools: '',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.loadedTools).toBeUndefined();
+    });
+
+    test('defaults to undefined when input is "all"', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          loaded_tools: 'all',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.loadedTools).toBeUndefined();
+    });
+
+    test('defaults to undefined when input is "ALL" (case insensitive)', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          loaded_tools: 'ALL',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.loadedTools).toBeUndefined();
+    });
+
+    test('parses single tool name', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          loaded_tools: 'get_pr_diff',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loadedTools: ['get_pr_diff'],
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('parses comma-separated tool names', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          loaded_tools: 'get_pr_diff,create_pull_request_review',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loadedTools: ['get_pr_diff', 'create_pull_request_review'],
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('trims whitespace around tool names', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          loaded_tools: ' get_pr_diff , create_pull_request_review , read ',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loadedTools: ['get_pr_diff', 'create_pull_request_review', 'read'],
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('filters out empty items from trailing commas', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          loaded_tools: 'get_pr_diff,,create_pull_request_review,',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loadedTools: ['get_pr_diff', 'create_pull_request_review'],
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('handles whitespace-only input as undefined', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          loaded_tools: '   ',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.loadedTools).toBeUndefined();
+    });
+  });
 });

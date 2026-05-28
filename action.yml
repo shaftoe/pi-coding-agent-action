@@ -45,6 +45,11 @@ inputs:
     required: false
     default: 'true'
 
+  loaded_tools:
+    description: "Controls which tools are loaded into the session. Defaults to 'all' which loads all available tools (built-in + custom). Accepts a comma-separated list of tool names to load only those tools. Tool names must match exactly — unknown names cause the run to fail early."
+    required: false
+    default: 'all'
+
   diff_max_lines:
     description: 'Maximum number of diff lines returned by the get_pr_diff tool. Defaults to 1000.'
     required: false

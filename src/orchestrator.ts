@@ -25,6 +25,28 @@ import type { CreateReactionType, PlatformProvider } from './platform';
 declare const __VERSION__: string;
 
 /**
+ * Parse the `loaded_tools` input.
+ *
+ * - `'all'`, empty, or whitespace-only → `undefined` (use all tools)
+ * - Comma-separated list of tool names → `string[]`
+ *
+ * Whitespace around tool names is trimmed. Empty items after splitting are
+ * discarded. Duplicate names are preserved (deduplication happens at validation
+ * time in the resource loader).
+ */
+function parseLoadedTools(input: string): 'all' | string[] | undefined {
+  const trimmed = input?.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'all') {
+    return undefined;
+  }
+  const tools = trimmed
+    .split(',')
+    .map(t => t.trim())
+    .filter(Boolean);
+  return tools.length > 0 ? tools : undefined;
+}
+
+/**
  * Orchestrates the GitHub Action execution flow.
  *
  * The orchestrator gathers configuration, retrieves the prompt, manages the
@@ -160,6 +182,9 @@ export class ActionOrchestrator {
       ? loadBuiltinExtensionsInput.toLowerCase() === 'true'
       : true; // default to true
 
+    const loadedToolsInput = this.core.getInput('loaded_tools');
+    const loadedTools = parseLoadedTools(loadedToolsInput);
+
     const baseUrl = this.core.getInput('base_url') || undefined;
 
     const exportSessionHtmlInput = this.core.getInput('export_session_html');
@@ -188,6 +213,7 @@ export class ActionOrchestrator {
       promptInput: this.core.getInput('prompt'),
       ...(extensions?.length ? { extensions } : {}),
       loadBuiltinExtensions,
+      ...(loadedTools ? { loadedTools } : {}),
       ...(baseUrl ? { baseUrl } : {}),
       exportSessionHtml,
       ...(diffMaxLines ? { diffMaxLines } : {}),

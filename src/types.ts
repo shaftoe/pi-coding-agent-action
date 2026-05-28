@@ -116,6 +116,12 @@ export interface PiConfig extends DiffConfig {
   promptInput: string;
   extensions?: string[];
   loadBuiltinExtensions?: boolean;
+  /**
+   * Controls which tools are loaded into the session.
+   * - `'all'` (default): load all available tools
+   * - `string[]`: load only the listed tools (validated against available tools after extension loading)
+   */
+  loadedTools?: 'all' | string[];
   baseUrl?: string;
   exportSessionHtml?: boolean;
 }
