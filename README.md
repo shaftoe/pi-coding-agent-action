@@ -174,7 +174,7 @@ See the [Custom Provider documentation](https://github.com/badlogic/pi-mono/blob
 
 ### Disabling Built-in Extensions
 
-By default the action loads five built-in GitHub related tools (`create_pull_request`, `create_pull_request_review`, `update_pull_request`, `get_issue_or_pr_thread`, `get_pr_diff`) to help Pi better interact with GitHub action environment without relying on external tools like `gh` nor need special skills setup for that. If you want Pi to use only your own custom extensions (or none at all), set `load_builtin_extensions` to `false`:
+By default the action loads all built-in GitHub tools (see [Custom Tools](#custom-tools) for the full list) to help Pi better interact with GitHub Actions environment without relying on external tools like `gh` or special skills setup. If you want Pi to use only your own custom extensions (or none at all), set `load_builtin_extensions` to `false`:
 
 ```yaml
 - name: Run Pi agent
@@ -205,6 +205,9 @@ Use `loaded_tools` to control exactly which tools (built-in **and** Pi's own) ar
 ```
 
 The default value is `all`. Tool names must match exactly — the run fails early if a name doesn't correspond to a registered tool.
+
+> [!WARNING]
+> `loaded_tools` can only reference tools that are actually available in the session. If `load_builtin_extensions` is set to `false`, built-in GitHub tool names won't be available to list — use `load_builtin_extensions: true` (the default) and then restrict with `loaded_tools` instead.
 
 ### Custom Branch Names
 
@@ -344,7 +347,7 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | `export_session_html` | Export the session as a self-contained HTML file | No | `false` |
 | `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
 | `github_token` | GitHub token for API access | Yes | - |
-| `load_builtin_extensions` | Whether to load built-in GitHub extensions (`create_pull_request`, `create_pull_request_review`, `update_pull_request`, `get_issue_or_pr_thread`, `get_pr_diff`, `get_ci_status`, `get_workflow_run_logs`) | No | `true` |
+| `load_builtin_extensions` | Whether to load built-in GitHub tools (see [Custom Tools](#custom-tools) for the full list) | No | `true` |
 | `loaded_tools` | Controls which tools are available in the session. Defaults to `all`. Accepts a comma-separated list of tool names (built-in or custom) to load — unknown names cause the run to fail early | No | `all` |
 | `model` | Model to use (e.g., gpt-5.4, gpt-4o, gemini-2.5-pro) | Yes | - |
 | `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
@@ -374,7 +377,7 @@ The action exposes the following outputs, which can be consumed by downstream st
 
 ## Custom Tools
 
-The action extends Pi with seven custom tools to interact more efficiently with GitHub APIs:
+The action extends Pi with the following built-in GitHub tools:
 
 | Tool | Description |
 |------|-------------|
