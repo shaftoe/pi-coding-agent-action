@@ -5,7 +5,11 @@
  */
 
 import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
-import { resolveExtensions, getResourceLoader } from '../../src/pi/resource-loader';
+import {
+  resolveExtensions,
+  getResourceLoader,
+  createToolFilterFactory,
+} from '../../src/pi/resource-loader';
 import type { PlatformProvider } from '../../src/platform';
 import { DefaultPackageManager, DefaultResourceLoader } from '@earendil-works/pi-coding-agent';
 
@@ -390,6 +394,180 @@ describe('getResourceLoader', () => {
       await expect(
         getResourceLoader(mockCoreAdapter, mockPlatformProvider, { extensions: ['npm:package'] })
       ).rejects.toThrow('Extension resolution failed');
+    });
+  });
+});
+
+describe('createToolFilterFactory', () => {
+  // Sample tool list that simulates what getAllTools() would return
+  const allTools = [
+    { name: 'read' },
+    { name: 'write' },
+    { name: 'edit' },
+    { name: 'bash' },
+    { name: 'create_pull_request' },
+    { name: 'get_pr_diff' },
+    { name: 'get_issue_or_pr_thread' },
+  ];
+
+  function createMockExtensionAPI(): import('@earendil-works/pi-coding-agent').ExtensionAPI {
+    const handlers: Record<string, ((...args: any[]) => void)[]> = {};
+    return {
+      registerTool: mock(),
+      getAllTools: mock(() => allTools),
+      setActiveTools: mock(),
+      on: mock((event: string, handler: (...args: any[]) => void) => {
+        if (!handlers[event]) {
+          handlers[event] = [];
+        }
+        handlers[event].push(handler);
+      }),
+      // Expose handlers for triggering events in tests
+      _handlers: handlers,
+    } as any;
+  }
+
+  /**
+   * Helper: create a factory for the given config, call it with a mock ExtensionAPI,
+   * then simulate session_start by invoking the registered handler.
+   */
+  function runFilter(config: { loadedTools?: string[] }, coreInfo: ReturnType<typeof mock>) {
+    const mockCore = { info: coreInfo } as any;
+    const factory = createToolFilterFactory(config, mockCore);
+    const api = createMockExtensionAPI();
+    factory(api);
+
+    // Find the session_start handler that was registered
+    const onCalls = (api.on as any).mock.calls;
+    const sessionStartHandler = onCalls.find((c: string[]) => c[0] === 'session_start');
+
+    if (sessionStartHandler) {
+      sessionStartHandler[1](); // invoke the handler
+    }
+
+    return api;
+  }
+
+  describe('when loadedTools is undefined', () => {
+    test('does not register session_start handler (no-op)', () => {
+      const config = {}; // no loadedTools
+      const factory = createToolFilterFactory(config, mockCoreAdapter as any);
+      const api = createMockExtensionAPI();
+      factory(api);
+
+      expect(api.on).not.toHaveBeenCalledWith('session_start', expect.any(Function));
+    });
+
+    test('does not call setActiveTools', () => {
+      const api = runFilter({}, mock());
+      expect(api.setActiveTools).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('when loadedTools has valid tool names', () => {
+    test('sets active tools to the requested subset', () => {
+      const api = runFilter({ loadedTools: ['read', 'edit', 'bash'] }, mock());
+      expect(api.setActiveTools).toHaveBeenCalledWith(['read', 'edit', 'bash']);
+    });
+
+    test('logs kept and removed tools', () => {
+      const coreInfo = mock();
+      runFilter({ loadedTools: ['read', 'write'] }, coreInfo);
+
+      expect(coreInfo).toHaveBeenCalledWith(
+        expect.stringContaining('Keeping 2 tool(s): read, write')
+      );
+      expect(coreInfo).toHaveBeenCalledWith(expect.stringContaining('Removing 5 tool(s)'));
+    });
+
+    test('works with a single tool', () => {
+      const api = runFilter({ loadedTools: ['bash'] }, mock());
+      expect(api.setActiveTools).toHaveBeenCalledWith(['bash']);
+    });
+
+    test('works with all available tools listed (no-op filter)', () => {
+      const allNames = allTools.map(t => t.name);
+      const api = runFilter({ loadedTools: allNames }, mock());
+      expect(api.setActiveTools).toHaveBeenCalledWith(allNames);
+    });
+  });
+
+  describe('when loadedTools has unknown tool names', () => {
+    test('throws an error listing unknown names', () => {
+      const factory = createToolFilterFactory(
+        { loadedTools: ['read', 'nonexistent_tool'] },
+        mockCoreAdapter as any
+      );
+      const api = createMockExtensionAPI();
+      factory(api);
+
+      // Find the session_start handler
+      const onCalls = (api.on as any).mock.calls;
+      const handler = onCalls.find((c: string[]) => c[0] === 'session_start')[1];
+
+      expect(() => handler()).toThrow('nonexistent_tool');
+    });
+
+    test('error message includes available tools', () => {
+      const factory = createToolFilterFactory(
+        { loadedTools: ['unknown_tool'] },
+        mockCoreAdapter as any
+      );
+      const api = createMockExtensionAPI();
+      factory(api);
+
+      const onCalls = (api.on as any).mock.calls;
+      const handler = onCalls.find((c: string[]) => c[0] === 'session_start')[1];
+
+      expect(() => handler()).toThrow(/Available tools/);
+    });
+
+    test('lists all unknown names in the error', () => {
+      const factory = createToolFilterFactory(
+        { loadedTools: ['foo', 'bar', 'baz'] },
+        mockCoreAdapter as any
+      );
+      const api = createMockExtensionAPI();
+      factory(api);
+
+      const onCalls = (api.on as any).mock.calls;
+      const handler = onCalls.find((c: string[]) => c[0] === 'session_start')[1];
+
+      expect(() => handler()).toThrow(/foo, bar, baz/);
+    });
+
+    test('does not call setActiveTools when validation fails', () => {
+      const factory = createToolFilterFactory({ loadedTools: ['invalid'] }, mockCoreAdapter as any);
+      const api = createMockExtensionAPI();
+      factory(api);
+
+      const onCalls = (api.on as any).mock.calls;
+      const handler = onCalls.find((c: string[]) => c[0] === 'session_start')[1];
+
+      try {
+        handler();
+      } catch {
+        // expected
+      }
+
+      expect(api.setActiveTools).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('integration with getResourceLoader', () => {
+    test('creates loader successfully with loadedTools set', async () => {
+      const loader = await getResourceLoader(mockCoreAdapter, mockPlatformProvider, {
+        loadedTools: ['get_pr_diff', 'create_pull_request'],
+      });
+
+      expect(loader).toBeDefined();
+      expect(loader).toBeInstanceOf(DefaultResourceLoader);
+    });
+
+    test('does not include tool filter factory when loadedTools is undefined', async () => {
+      // Just verify the loader is created without throwing
+      const loader = await getResourceLoader(mockCoreAdapter, mockPlatformProvider);
+      expect(loader).toBeDefined();
     });
   });
 });

@@ -80,20 +80,21 @@ export async function resolveExtensions(extensions?: string[]): Promise<Extensio
  * Create an extension factory that filters the active tool set based on
  * `config.loadedTools`.
  *
- * When `loadedTools` is `'all'` or `undefined`, no filtering is performed.
+ * When `loadedTools` is `undefined`, no filtering is performed.
  * Otherwise the list is validated against the tools that are actually available
  * after all extensions have been loaded. Unknown tool names cause an early
  * error that fails the run.
  *
- * @param config - The Pi config containing the `loadedTools` setting.
+ * @param config - The configuration containing the `loadedTools` setting.
  * @param core   - CoreAdapter for logging.
+ * @returns An extension factory that registers a `session_start` handler.
  */
-function createToolFilterFactory(config: Partial<PiConfig>, core: CoreAdapter) {
+export function createToolFilterFactory(config: Partial<PiConfig>, core: CoreAdapter) {
   return (pi: import('@earendil-works/pi-coding-agent').ExtensionAPI): void => {
     const loadedTools = config.loadedTools;
 
     // No filtering needed when all tools should be loaded
-    if (!loadedTools || loadedTools === 'all') {
+    if (!loadedTools) {
       return;
     }
 
@@ -101,11 +102,8 @@ function createToolFilterFactory(config: Partial<PiConfig>, core: CoreAdapter) {
       const availableTools = pi.getAllTools().map(t => t.name);
       const availableSet = new Set(availableTools);
 
-      // Deduplicate requested tools
-      const requested = [...new Set(loadedTools)];
-
       // Find unknown tool names
-      const unknown = requested.filter(name => !availableSet.has(name));
+      const unknown = loadedTools.filter(name => !availableSet.has(name));
 
       if (unknown.length > 0) {
         const message =
@@ -116,15 +114,15 @@ function createToolFilterFactory(config: Partial<PiConfig>, core: CoreAdapter) {
       }
 
       // Log the filtering
-      const removed = availableTools.filter(name => !requested.includes(name));
+      const removed = availableTools.filter(name => !loadedTools.includes(name));
       if (removed.length > 0) {
         core.info(
-          `[loaded_tools] Keeping ${requested.length} tool(s): ${requested.join(', ')}
-` + `[loaded_tools] Removing ${removed.length} tool(s): ${removed.sort().join(', ')}`
+          `[loaded_tools] Keeping ${loadedTools.length} tool(s): ${loadedTools.join(', ')}\n` +
+            `[loaded_tools] Removing ${removed.length} tool(s): ${removed.sort().join(', ')}`
         );
       }
 
-      pi.setActiveTools(requested);
+      pi.setActiveTools(loadedTools);
     });
   };
 }
@@ -132,14 +130,14 @@ function createToolFilterFactory(config: Partial<PiConfig>, core: CoreAdapter) {
 /**
  * Create and configure the resource loader used by the agent session.
  *
- * Accepts the Pi config object which carries `extensions`, `loadBuiltinExtensions`,
- * `loadedTools`, and diff-config fields — extracted inside the function rather
- * than passed as separate positional arguments.
+ * Accepts a Pi config object but only uses the fields the loader needs:
+ * extensions, loadBuiltinExtensions, loadedTools, and diff limits.
+ * Other config fields (provider, model, token, etc.) are ignored.
  *
  * @param core     - The CoreAdapter to use for logging within the Pi agent.
  * @param provider - The platform provider for custom tool operations.
- * @param config   - Full or partial Pi config (extensions list, loaded_tools filter,
- *                   diff limits, etc.). Fields not needed by the loader are ignored.
+ * @param config   - Partial Pi config; only `extensions`, `loadBuiltinExtensions`,
+ *                   `loadedTools`, and diff-limit fields are used.
  * @returns A fully loaded {@link DefaultResourceLoader} instance.
  */
 export async function getResourceLoader(
@@ -159,7 +157,7 @@ export async function getResourceLoader(
   }
 
   // Add tool filter when loadedTools is configured
-  if (config?.loadedTools && config.loadedTools !== 'all') {
+  if (config?.loadedTools) {
     extensionFactories.push(createToolFilterFactory(config, core));
   }
 

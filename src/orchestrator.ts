@@ -31,10 +31,9 @@ declare const __VERSION__: string;
  * - Comma-separated list of tool names → `string[]`
  *
  * Whitespace around tool names is trimmed. Empty items after splitting are
- * discarded. Duplicate names are preserved (deduplication happens at validation
- * time in the resource loader).
+ * discarded. Duplicate names are deduplicated.
  */
-function parseLoadedTools(input: string): 'all' | string[] | undefined {
+function parseLoadedTools(input: string): string[] | undefined {
   const trimmed = input?.trim();
   if (!trimmed || trimmed.toLowerCase() === 'all') {
     return undefined;
@@ -43,7 +42,7 @@ function parseLoadedTools(input: string): 'all' | string[] | undefined {
     .split(',')
     .map(t => t.trim())
     .filter(Boolean);
-  return tools.length > 0 ? tools : undefined;
+  return tools.length > 0 ? [...new Set(tools)] : undefined;
 }
 
 /**
