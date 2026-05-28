@@ -88,7 +88,7 @@ export async function resolveExtensions(extensions?: string[]): Promise<Extensio
  * @param config - The Pi config containing the `loadedTools` setting.
  * @param core   - CoreAdapter for logging.
  */
-function createToolFilterFactory(config: PiConfig, core: CoreAdapter) {
+function createToolFilterFactory(config: Partial<PiConfig>, core: CoreAdapter) {
   return (pi: import('@earendil-works/pi-coding-agent').ExtensionAPI): void => {
     const loadedTools = config.loadedTools;
 
@@ -132,20 +132,24 @@ function createToolFilterFactory(config: PiConfig, core: CoreAdapter) {
 /**
  * Create and configure the resource loader used by the agent session.
  *
- * @param core - The CoreAdapter to use for logging within the Pi agent.
+ * Accepts the Pi config object which carries `extensions`, `loadBuiltinExtensions`,
+ * `loadedTools`, and diff-config fields — extracted inside the function rather
+ * than passed as separate positional arguments.
+ *
+ * @param core     - The CoreAdapter to use for logging within the Pi agent.
  * @param provider - The platform provider for custom tool operations.
- * @param extensions - Optional array of extension sources (npm packages, git repos, or local paths).
- * @param loadBuiltinExtensions - Whether to load built-in GitHub extensions (default true).
- * @param config - Full Pi config (used for loaded_tools filtering).
+ * @param config   - Full or partial Pi config (extensions list, loaded_tools filter,
+ *                   diff limits, etc.). Fields not needed by the loader are ignored.
  * @returns A fully loaded {@link DefaultResourceLoader} instance.
  */
 export async function getResourceLoader(
   core: CoreAdapter,
   provider: PlatformProvider,
-  extensions?: string[],
-  loadBuiltinExtensions = true,
-  config?: PiConfig
+  config?: Partial<PiConfig>
 ): Promise<DefaultResourceLoader> {
+  const extensions = config?.extensions;
+  const loadBuiltinExtensions = config?.loadBuiltinExtensions ?? true;
+
   const { paths: additionalExtensionPaths, info: extensionInfo } =
     await resolveExtensions(extensions);
 

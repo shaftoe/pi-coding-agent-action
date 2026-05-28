@@ -89,13 +89,7 @@ export class Agent {
       thinkingLevel: this.thinkingLevel,
       authStorage: this.authStorage,
       modelRegistry: this.modelRegistry,
-      resourceLoader: await getResourceLoader(
-        this.core,
-        this.platformProvider,
-        this.config.extensions,
-        this.config.loadBuiltinExtensions,
-        this.config
-      ),
+      resourceLoader: await getResourceLoader(this.core, this.platformProvider, this.config),
     });
     this.session = session;
 

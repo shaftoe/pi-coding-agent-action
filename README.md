@@ -204,7 +204,7 @@ Use `loaded_tools` to control exactly which tools (built-in **and** Pi's own) ar
     loaded_tools: 'get_pr_diff,create_pull_request_review,get_issue_or_pr_thread'
 ```
 
-The default value is `all` which keeps the current behaviour (every registered tool is active). Tool names must match exactly — the run fails early if a name doesn't correspond to a registered tool.
+The default value is `all`. Tool names must match exactly — the run fails early if a name doesn't correspond to a registered tool.
 
 ### Custom Branch Names
 
