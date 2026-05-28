@@ -6,6 +6,43 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const sharedRules = {
+  ...typescriptEslint.configs["eslint-recommended"].rules,
+  ...typescriptEslint.configs["recommended"].rules,
+  ...typescriptEslint.configs["stylistic"].rules,
+  "@typescript-eslint/no-unused-vars": [
+    "error",
+    {
+      argsIgnorePattern: "^_",
+      varsIgnorePattern: "^_",
+      caughtErrorsIgnorePattern: "^_",
+    },
+  ],
+  "@typescript-eslint/no-explicit-any": "warn",
+  "@typescript-eslint/explicit-module-boundary-types": "off",
+  "@typescript-eslint/prefer-nullish-coalescing": "warn",
+  "@typescript-eslint/prefer-optional-chain": "warn",
+  "@typescript-eslint/strict-boolean-expressions": "off",
+  "no-console": [
+    "warn",
+    {
+      allow: ["info", "warn", "error"],
+    },
+  ],
+  "prefer-const": "warn",
+  "no-var": "error",
+  eqeqeq: ["error", "always"],
+  curly: ["error", "all"],
+};
+
+const testOverrides = {
+  "@typescript-eslint/no-floating-promises": "off",
+  "@typescript-eslint/no-misused-promises": "off",
+  "@typescript-eslint/await-thenable": "off",
+  "@typescript-eslint/no-unnecessary-type-assertion": "off",
+  "@typescript-eslint/no-empty-function": "off",
+};
+
 export default [
   {
     ignores: ["dist/**", "node_modules/**", "*.js"],
@@ -27,40 +64,15 @@ export default [
       "@typescript-eslint": typescriptEslint,
     },
     rules: {
-      ...typescriptEslint.configs["eslint-recommended"].rules,
-      ...typescriptEslint.configs["recommended"].rules,
-      ...typescriptEslint.configs["stylistic"].rules,
-      "@typescript-eslint/no-unused-vars": [
-        "error",
-        {
-          argsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
-          caughtErrorsIgnorePattern: "^_",
-        },
-      ],
-      "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/explicit-module-boundary-types": "off",
+      ...sharedRules,
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-misused-promises": "error",
       "@typescript-eslint/await-thenable": "error",
       "@typescript-eslint/no-unnecessary-type-assertion": "error",
-      "@typescript-eslint/prefer-nullish-coalescing": "warn",
-      "@typescript-eslint/prefer-optional-chain": "warn",
-      "@typescript-eslint/strict-boolean-expressions": "off",
-      "no-console": [
-        "warn",
-        {
-          allow: ["info", "warn", "error"],
-        },
-      ],
-      "prefer-const": "warn",
-      "no-var": "error",
-      "eqeqeq": ["error", "always"],
-      curly: ["error", "all"],
     },
   },
   {
-    files: ["tests/**/*.spec.ts"],
+    files: ["tests/**/*.ts"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -76,87 +88,8 @@ export default [
       "@typescript-eslint": typescriptEslint,
     },
     rules: {
-      ...typescriptEslint.configs["eslint-recommended"].rules,
-      ...typescriptEslint.configs["recommended"].rules,
-      ...typescriptEslint.configs["stylistic"].rules,
-      "@typescript-eslint/no-unused-vars": [
-        "error",
-        {
-          argsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
-          caughtErrorsIgnorePattern: "^_",
-        },
-      ],
-      "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/explicit-module-boundary-types": "off",
-      "@typescript-eslint/no-floating-promises": "off",
-      "@typescript-eslint/no-misused-promises": "off",
-      "@typescript-eslint/await-thenable": "off",
-      "@typescript-eslint/no-unnecessary-type-assertion": "off",
-      "@typescript-eslint/prefer-nullish-coalescing": "warn",
-      "@typescript-eslint/prefer-optional-chain": "warn",
-      "@typescript-eslint/strict-boolean-expressions": "off",
-      "@typescript-eslint/no-empty-function": "off",
-      "no-console": [
-        "warn",
-        {
-          allow: ["info", "warn", "error"],
-        },
-      ],
-      "prefer-const": "warn",
-      "no-var": "error",
-      "eqeqeq": ["error", "always"],
-      curly: ["error", "all"],
-    },
-  },
-  {
-    files: ["tests/helpers/**/*.ts"],
-    languageOptions: {
-      parser: tsParser,
-      parserOptions: {
-        ecmaVersion: "latest",
-        sourceType: "module",
-        project: path.join(__dirname, "tests/tsconfig.json"),
-      },
-      globals: {
-        node: true,
-      },
-    },
-    plugins: {
-      "@typescript-eslint": typescriptEslint,
-    },
-    rules: {
-      ...typescriptEslint.configs["eslint-recommended"].rules,
-      ...typescriptEslint.configs["recommended"].rules,
-      ...typescriptEslint.configs["stylistic"].rules,
-      "@typescript-eslint/no-unused-vars": [
-        "error",
-        {
-          argsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
-          caughtErrorsIgnorePattern: "^_",
-        },
-      ],
-      "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/explicit-module-boundary-types": "off",
-      "@typescript-eslint/no-floating-promises": "off",
-      "@typescript-eslint/no-misused-promises": "off",
-      "@typescript-eslint/await-thenable": "off",
-      "@typescript-eslint/no-unnecessary-type-assertion": "off",
-      "@typescript-eslint/prefer-nullish-coalescing": "warn",
-      "@typescript-eslint/prefer-optional-chain": "warn",
-      "@typescript-eslint/strict-boolean-expressions": "off",
-      "@typescript-eslint/no-empty-function": "off",
-      "no-console": [
-        "warn",
-        {
-          allow: ["info", "warn", "error"],
-        },
-      ],
-      "prefer-const": "warn",
-      "no-var": "error",
-      "eqeqeq": ["error", "always"],
-      curly: ["error", "all"],
+      ...sharedRules,
+      ...testOverrides,
     },
   },
 ];
