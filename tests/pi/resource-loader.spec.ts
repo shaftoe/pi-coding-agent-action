@@ -352,7 +352,7 @@ describe('getResourceLoader', () => {
   describe('with extensions', () => {
     test('resolves and includes extension paths', async () => {
       const extensions = ['npm:package-one', 'npm:package-two'];
-      const loader = await getResourceLoader(mockCoreAdapter, mockPlatformProvider, extensions);
+      const loader = await getResourceLoader(mockCoreAdapter, mockPlatformProvider, { extensions });
 
       // Verify extensions were resolved
       expect(mockResolveExtensionSources).toHaveBeenCalledWith(
@@ -366,7 +366,9 @@ describe('getResourceLoader', () => {
     });
 
     test('handles no extensions', async () => {
-      const loader = await getResourceLoader(mockCoreAdapter, mockPlatformProvider, []);
+      const loader = await getResourceLoader(mockCoreAdapter, mockPlatformProvider, {
+        extensions: [],
+      });
 
       // Loader should be created successfully even with no extensions
       expect(loader).toBeDefined();
@@ -390,7 +392,7 @@ describe('getResourceLoader', () => {
       DefaultPackageManager.prototype.resolveExtensionSources = mockResolveExtensionSources;
 
       await expect(
-        getResourceLoader(mockCoreAdapter, mockPlatformProvider, ['npm:package'])
+        getResourceLoader(mockCoreAdapter, mockPlatformProvider, { extensions: ['npm:package'] })
       ).rejects.toThrow('Extension resolution failed');
     });
   });
@@ -554,13 +556,9 @@ describe('createToolFilterFactory', () => {
 
   describe('integration with getResourceLoader', () => {
     test('creates loader successfully with loadedTools set', async () => {
-      const loader = await getResourceLoader(
-        mockCoreAdapter,
-        mockPlatformProvider,
-        undefined,
-        true,
-        { loadedTools: ['get_pr_diff', 'create_pull_request'] }
-      );
+      const loader = await getResourceLoader(mockCoreAdapter, mockPlatformProvider, {
+        loadedTools: ['get_pr_diff', 'create_pull_request'],
+      });
 
       expect(loader).toBeDefined();
       expect(loader).toBeInstanceOf(DefaultResourceLoader);

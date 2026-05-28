@@ -130,20 +130,20 @@ export function createToolFilterFactory(opts: { loadedTools?: string[] }, core: 
 /**
  * Create and configure the resource loader used by the agent session.
  *
- * @param core                 - The CoreAdapter to use for logging within the Pi agent.
- * @param provider             - The platform provider for custom tool operations.
- * @param extensions           - Optional array of extension sources (npm packages, git repos, or local paths).
- * @param loadBuiltinExtensions - Whether to load built-in GitHub extensions (default true).
- * @param config               - Optional resource loader config (contains loadedTools and diff limits).
+ * @param core     - The CoreAdapter to use for logging within the Pi agent.
+ * @param provider - The platform provider for custom tool operations.
+ * @param config   - Optional resource loader config (extensions, builtin toggle,
+ *                   loadedTools filter, diff limits).
  * @returns A fully loaded {@link DefaultResourceLoader} instance.
  */
 export async function getResourceLoader(
   core: CoreAdapter,
   provider: PlatformProvider,
-  extensions?: string[],
-  loadBuiltinExtensions = true,
   config?: ResourceLoaderConfig
 ): Promise<DefaultResourceLoader> {
+  const extensions = config?.extensions;
+  const loadBuiltinExtensions = config?.loadBuiltinExtensions ?? true;
+
   const { paths: additionalExtensionPaths, info: extensionInfo } =
     await resolveExtensions(extensions);
 

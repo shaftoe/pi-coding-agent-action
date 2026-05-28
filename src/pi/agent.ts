@@ -14,13 +14,7 @@ import { getVersion } from './logging';
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
-import type {
-  PromptResult,
-  SessionStats,
-  CoreAdapter,
-  PiConfig,
-  ResourceLoaderConfig,
-} from '../types';
+import type { PromptResult, SessionStats, CoreAdapter, PiConfig } from '../types';
 import type { PlatformProvider } from '../platform';
 
 /**
@@ -90,20 +84,12 @@ export class Agent {
    * @returns The agent instance itself, for chaining.
    */
   async ready(): Promise<Agent> {
-    const loaderConfig: ResourceLoaderConfig = this.config;
-
     const { session } = await createAgentSession({
       model: this.model,
       thinkingLevel: this.thinkingLevel,
       authStorage: this.authStorage,
       modelRegistry: this.modelRegistry,
-      resourceLoader: await getResourceLoader(
-        this.core,
-        this.platformProvider,
-        this.config.extensions,
-        this.config.loadBuiltinExtensions,
-        loaderConfig
-      ),
+      resourceLoader: await getResourceLoader(this.core, this.platformProvider, this.config),
     });
     this.session = session;
 
