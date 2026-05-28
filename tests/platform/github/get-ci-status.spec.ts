@@ -387,7 +387,7 @@ describe('getCIStatus - platform implementation', () => {
       );
       expect(result.details.workflow_runs).toHaveLength(1);
       expect(result.details.workflow_runs[0].name).toBe('CI Pipeline');
-      expect(result.details.workflow_runs[0].head_sha).toBe('abc12345');
+      expect(result.details.workflow_runs[0].head_sha).toBe('abc123456789');
     });
 
     test('passes status filter to workflow runs API', async () => {
@@ -399,6 +399,26 @@ describe('getCIStatus - platform implementation', () => {
           status: 'in_progress',
         })
       );
+    });
+
+    test('client-side filters workflow runs by conclusion', async () => {
+      const fn = await getModule();
+      mockListWorkflowRuns.mockImplementation(() =>
+        Promise.resolve({
+          data: {
+            workflow_runs: [
+              { id: 100, name: 'CI', status: 'completed', conclusion: 'success', run_started_at: null, html_url: 'https://github.com/test/actions/runs/100', head_branch: 'main', head_sha: 'aaa', event: 'push', created_at: null, path: null },
+              { id: 101, name: 'Deploy', status: 'completed', conclusion: 'failure', run_started_at: null, html_url: 'https://github.com/test/actions/runs/101', head_branch: 'main', head_sha: 'bbb', event: 'push', created_at: null, path: null },
+              { id: 102, name: 'Lint', status: 'completed', conclusion: 'success', run_started_at: null, html_url: 'https://github.com/test/actions/runs/102', head_branch: 'main', head_sha: 'ccc', event: 'push', created_at: null, path: null },
+            ],
+          },
+        })
+      );
+
+      const result = await fn({ ref: 'abc', conclusion: 'failure' });
+
+      expect(result.details.workflow_runs).toHaveLength(1);
+      expect(result.details.workflow_runs[0].name).toBe('Deploy');
     });
 
     test('falls back to path-derived name when name is null', async () => {
@@ -460,6 +480,36 @@ describe('getCIStatus - platform implementation', () => {
       expect(result.details.workflow_runs[0].status).toBe('unknown');
       expect(result.details.workflow_runs[0].head_branch).toBe('');
       expect(result.details.workflow_runs[0].head_sha).toBe('');
+    });
+
+    test('stores full head_sha in structured data', async () => {
+      const fn = await getModule();
+      mockListWorkflowRuns.mockImplementation(() =>
+        Promise.resolve({
+          data: {
+            workflow_runs: [
+              {
+                id: 200,
+                name: 'Full SHA',
+                status: 'completed',
+                conclusion: 'success',
+                run_started_at: null,
+                html_url: 'https://github.com/test/actions/runs/200',
+                head_branch: 'main',
+                head_sha: 'abcdef1234567890abcdef1234567890abcdef12',
+                event: 'push',
+                created_at: null,
+                path: null,
+              },
+            ],
+          },
+        })
+      );
+
+      const result = await fn({ ref: 'abc' });
+
+      // Structured data should contain the full SHA
+      expect(result.details.workflow_runs[0].head_sha).toBe('abcdef1234567890abcdef1234567890abcdef12');
     });
 
     test('uses created_at when run_started_at is null', async () => {

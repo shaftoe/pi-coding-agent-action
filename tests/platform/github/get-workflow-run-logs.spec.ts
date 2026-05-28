@@ -167,6 +167,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
         owner: 'test-owner',
         repo: 'test-repo',
         run_id: 100,
+        per_page: 100,
       });
       expect(result.details.jobs).toHaveLength(2);
       expect(result.details.jobs[0].name).toBe('build');
@@ -244,6 +245,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
         owner: 'custom',
         repo: 'repo',
         run_id: 100,
+        per_page: 100,
       });
     });
   });
@@ -303,6 +305,41 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       const result = await fn({ run_id: 100 });
 
       expect(result.details.jobs[0].log).toBe('{"message":"not a string"}');
+    });
+  });
+
+  // ─── Error handling ────────────────────────────────────────────
+
+  describe('error handling', () => {
+    test('returns partial results when a job log download fails', async () => {
+      const fn = await getModule();
+      mockListJobsForWorkflowRun.mockImplementation(() =>
+        Promise.resolve({
+          data: {
+            jobs: [
+              { id: 501, name: 'build', status: 'completed', conclusion: 'success', started_at: null, completed_at: null },
+              { id: 502, name: 'test', status: 'completed', conclusion: 'failure', started_at: null, completed_at: null },
+            ],
+          },
+        })
+      );
+      let callIdx = 0;
+      mockDownloadJobLogs.mockImplementation(() => {
+        callIdx++;
+        if (callIdx === 1) {
+          return Promise.resolve({ data: 'build log output' });
+        }
+        return Promise.reject(new Error('Logs expired'));
+      });
+
+      const result = await fn({ run_id: 100 });
+
+      // First job should have its log
+      expect(result.details.jobs[0].log).toBe('build log output');
+      expect(result.details.jobs[0].truncated).toBe(false);
+      // Second job should have error marker
+      expect(result.details.jobs[1].log).toContain('log unavailable');
+      expect(result.details.jobs[1].log).toContain('Logs expired');
     });
   });
 
@@ -394,8 +431,8 @@ describe('getWorkflowRunLogs - platform implementation', () => {
         Promise.resolve({ data: log })
       );
 
-      // Use a very small budget so truncation happens at first few bytes
-      const result = await fn({ run_id: 100, max_bytes: 15 });
+      // Use a budget smaller than the full log (30 bytes) but large enough for line1 (6 bytes) + suffix (16 bytes)
+      const result = await fn({ run_id: 100, max_bytes: 25 });
 
       expect(result.details.jobs[0].truncated).toBe(true);
       // Should snap to a newline boundary (not cut mid-line)

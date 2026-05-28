@@ -123,7 +123,8 @@ async function fetchWorkflowRuns(
   owner: string,
   repo: string,
   ref: string,
-  status?: string
+  status?: string,
+  conclusion?: string
 ): Promise<WorkflowRunResult[]> {
   const octokit = getOctokit();
   const response = await octokit.rest.actions.listWorkflowRunsForRepo({
@@ -134,7 +135,7 @@ async function fetchWorkflowRuns(
     ...(status ? { status: status as WorkflowRunStatus } : {}),
   });
 
-  return response.data.workflow_runs.map((wr): WorkflowRunResult => ({
+  let workflowRuns = response.data.workflow_runs.map((wr): WorkflowRunResult => ({
     id: wr.id,
     name: wr.name ?? wr.path?.split('/').pop() ?? 'unknown',
     status: wr.status ?? 'unknown',
@@ -142,9 +143,16 @@ async function fetchWorkflowRuns(
     started_at: wr.run_started_at ?? wr.created_at ?? null,
     html_url: wr.html_url,
     head_branch: wr.head_branch ?? '',
-    head_sha: wr.head_sha?.substring(0, 8) ?? '',
+    head_sha: wr.head_sha ?? '',
     event: wr.event,
   }));
+
+  // Client-side conclusion filter (API doesn't support it for workflow runs)
+  if (conclusion) {
+    workflowRuns = workflowRuns.filter(wr => wr.conclusion === conclusion);
+  }
+
+  return workflowRuns;
 }
 
 /**
@@ -185,12 +193,13 @@ export async function getCIStatus(params: GetCIStatusParams): Promise<{
   // Fetch check runs and workflow runs in parallel
   const [checkRuns, workflowRuns] = await Promise.all([
     fetchCheckRuns(owner, repo, ref, params.status, params.conclusion),
-    fetchWorkflowRuns(owner, repo, ref, params.status),
+    fetchWorkflowRuns(owner, repo, ref, params.status, params.conclusion),
   ]);
 
   // Build human-readable summary
+  const shortRef = ref.length > 8 ? ref.substring(0, 8) : ref;
   const lines: string[] = [
-    `CI Status for ${ref.substring(0, 8)}:`,
+    `CI Status for ${shortRef}:`,
     '',
   ];
 

@@ -56,6 +56,7 @@ export async function getWorkflowRunLogs(params: GetWorkflowRunLogsParams): Prom
     owner,
     repo,
     run_id: params.run_id,
+    per_page: 100,
   });
 
   const jobs: JobLog[] = response.data.jobs.map(job => ({
@@ -87,6 +88,8 @@ export async function getWorkflowRunLogs(params: GetWorkflowRunLogsParams): Prom
   }
 
   // Download logs for each job, respecting byte budget
+  const truncationSuffix = '\n... (truncated)';
+  const suffixBytes = Buffer.byteLength(truncationSuffix, 'utf8');
   let totalBytesUsed = 0;
   const bytesPerJob = Math.floor(maxBytes / jobs.length);
 
@@ -100,19 +103,28 @@ export async function getWorkflowRunLogs(params: GetWorkflowRunLogsParams): Prom
       continue;
     }
 
-    const logResponse = await octokit.rest.actions.downloadJobLogsForWorkflowRun({
-      owner,
-      repo,
-      job_id: job.id,
-    });
+    let logText: string;
+    try {
+      const logResponse = await octokit.rest.actions.downloadJobLogsForWorkflowRun({
+        owner,
+        repo,
+        job_id: job.id,
+      });
 
-    const logText = typeof logResponse.data === 'string'
-      ? logResponse.data
-      : JSON.stringify(logResponse.data);
+      logText = typeof logResponse.data === 'string'
+        ? logResponse.data
+        : JSON.stringify(logResponse.data);
+    } catch (e) {
+      job.log = `(log unavailable: ${e instanceof Error ? e.message : 'unknown error'})`;
+      totalBytesUsed += Buffer.byteLength(job.log, 'utf8');
+      continue;
+    }
 
     if (Buffer.byteLength(logText, 'utf8') > jobBudget) {
+      // Reserve space for the truncation suffix
+      const targetBudget = Math.max(jobBudget - suffixBytes, 0);
       const buf = Buffer.from(logText, 'utf8');
-      let cutAt = Math.min(jobBudget, buf.length);
+      let cutAt = Math.min(targetBudget, buf.length);
       // Walk back to safe UTF-8 boundary
       while (cutAt > 0 && ((buf[cutAt] ?? 0) & 0xc0) === 0x80) {
         cutAt--;
@@ -123,7 +135,7 @@ export async function getWorkflowRunLogs(params: GetWorkflowRunLogsParams): Prom
       if (lastNewline > 0) {
         sliced = sliced.slice(0, lastNewline);
       }
-      job.log = sliced + '\n... (truncated)';
+      job.log = sliced + truncationSuffix;
       job.truncated = true;
       totalBytesUsed += Buffer.byteLength(job.log, 'utf8');
     } else {
