@@ -106,12 +106,6 @@ export interface DiffConfig {
 }
 
 /**
- * Subset of configuration used by the resource loader.
- *
- * Contains only the fields the resource loader actually needs, avoiding
- * coupling to the full {@link PiConfig} type.
- */
-/**
  * Configuration fields consumed by the resource loader.
  *
  * A purpose-built subset of {@link PiConfig} that carries everything the

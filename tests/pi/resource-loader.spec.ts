@@ -398,6 +398,8 @@ describe('getResourceLoader', () => {
   });
 });
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 describe('createToolFilterFactory', () => {
   // Sample tool list that simulates what getAllTools() would return
   const allTools = [
@@ -410,21 +412,18 @@ describe('createToolFilterFactory', () => {
     { name: 'get_issue_or_pr_thread' },
   ];
 
-  function createMockExtensionAPI(): import('@earendil-works/pi-coding-agent').ExtensionAPI {
+  function createMockExtensionAPI() {
     const handlers: Record<string, ((...args: any[]) => void)[]> = {};
-    return {
+    const api: any = {
       registerTool: mock(),
       getAllTools: mock(() => allTools),
       setActiveTools: mock(),
       on: mock((event: string, handler: (...args: any[]) => void) => {
-        if (!handlers[event]) {
-          handlers[event] = [];
-        }
+        handlers[event] ??= [];
         handlers[event].push(handler);
       }),
-      // Expose handlers for triggering events in tests
-      _handlers: handlers,
-    } as any;
+    };
+    return { api, handlers };
   }
 
   /**
@@ -432,41 +431,40 @@ describe('createToolFilterFactory', () => {
    * then simulate session_start by invoking the registered handler.
    */
   function runFilter(config: { loadedTools?: string[] }, coreInfo: ReturnType<typeof mock>) {
-    const mockCore = { info: coreInfo } as any;
+    const mockCore = { info: coreInfo, setFailed: mock() } as any;
     const factory = createToolFilterFactory(config, mockCore);
-    const api = createMockExtensionAPI();
+    const { api, handlers } = createMockExtensionAPI();
     factory(api);
 
-    // Find the session_start handler that was registered
-    const onCalls = (api.on as any).mock.calls;
-    const sessionStartHandler = onCalls.find((c: string[]) => c[0] === 'session_start');
+    // Simulate session_start by invoking the registered handler
+    const sessionStartHandler = handlers['session_start']?.[0];
 
     if (sessionStartHandler) {
-      sessionStartHandler[1](); // invoke the handler
+      sessionStartHandler();
     }
 
-    return api;
+    return { api, handlers };
   }
 
   describe('when loadedTools is undefined', () => {
     test('does not register session_start handler (no-op)', () => {
       const config = {}; // no loadedTools
       const factory = createToolFilterFactory(config, mockCoreAdapter as any);
-      const api = createMockExtensionAPI();
+      const { api, handlers } = createMockExtensionAPI();
       factory(api);
 
-      expect(api.on).not.toHaveBeenCalledWith('session_start', expect.any(Function));
+      expect(Object.keys(handlers)).not.toContain('session_start');
     });
 
     test('does not call setActiveTools', () => {
-      const api = runFilter({}, mock());
+      const { api } = runFilter({}, mock());
       expect(api.setActiveTools).not.toHaveBeenCalled();
     });
   });
 
   describe('when loadedTools has valid tool names', () => {
     test('sets active tools to the requested subset', () => {
-      const api = runFilter({ loadedTools: ['read', 'edit', 'bash'] }, mock());
+      const { api } = runFilter({ loadedTools: ['read', 'edit', 'bash'] }, mock());
       expect(api.setActiveTools).toHaveBeenCalledWith(['read', 'edit', 'bash']);
     });
 
@@ -481,71 +479,47 @@ describe('createToolFilterFactory', () => {
     });
 
     test('works with a single tool', () => {
-      const api = runFilter({ loadedTools: ['bash'] }, mock());
+      const { api } = runFilter({ loadedTools: ['bash'] }, mock());
       expect(api.setActiveTools).toHaveBeenCalledWith(['bash']);
     });
 
     test('works with all available tools listed (no-op filter)', () => {
       const allNames = allTools.map(t => t.name);
-      const api = runFilter({ loadedTools: allNames }, mock());
+      const { api } = runFilter({ loadedTools: allNames }, mock());
       expect(api.setActiveTools).toHaveBeenCalledWith(allNames);
     });
   });
 
   describe('when loadedTools has unknown tool names', () => {
-    test('throws an error listing unknown names', () => {
-      const factory = createToolFilterFactory(
-        { loadedTools: ['read', 'nonexistent_tool'] },
-        mockCoreAdapter as any
-      );
-      const api = createMockExtensionAPI();
+    function getHandler(loadedTools: string[]) {
+      const factory = createToolFilterFactory({ loadedTools }, mockCoreAdapter as any);
+      const { api, handlers } = createMockExtensionAPI();
       factory(api);
+      return handlers['session_start']?.[0];
+    }
 
-      // Find the session_start handler
-      const onCalls = (api.on as any).mock.calls;
-      const handler = onCalls.find((c: string[]) => c[0] === 'session_start')[1];
-
+    test('throws an error listing unknown names', () => {
+      const handler = getHandler(['read', 'nonexistent_tool'])!;
       expect(() => handler()).toThrow('nonexistent_tool');
     });
 
     test('error message includes available tools', () => {
-      const factory = createToolFilterFactory(
-        { loadedTools: ['unknown_tool'] },
-        mockCoreAdapter as any
-      );
-      const api = createMockExtensionAPI();
-      factory(api);
-
-      const onCalls = (api.on as any).mock.calls;
-      const handler = onCalls.find((c: string[]) => c[0] === 'session_start')[1];
-
+      const handler = getHandler(['unknown_tool'])!;
       expect(() => handler()).toThrow(/Available tools/);
     });
 
     test('lists all unknown names in the error', () => {
-      const factory = createToolFilterFactory(
-        { loadedTools: ['foo', 'bar', 'baz'] },
-        mockCoreAdapter as any
-      );
-      const api = createMockExtensionAPI();
-      factory(api);
-
-      const onCalls = (api.on as any).mock.calls;
-      const handler = onCalls.find((c: string[]) => c[0] === 'session_start')[1];
-
+      const handler = getHandler(['foo', 'bar', 'baz'])!;
       expect(() => handler()).toThrow(/foo, bar, baz/);
     });
 
     test('does not call setActiveTools when validation fails', () => {
       const factory = createToolFilterFactory({ loadedTools: ['invalid'] }, mockCoreAdapter as any);
-      const api = createMockExtensionAPI();
+      const { api, handlers } = createMockExtensionAPI();
       factory(api);
 
-      const onCalls = (api.on as any).mock.calls;
-      const handler = onCalls.find((c: string[]) => c[0] === 'session_start')[1];
-
       try {
-        handler();
+        handlers['session_start']?.[0]?.();
       } catch {
         // expected
       }

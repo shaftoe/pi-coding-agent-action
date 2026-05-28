@@ -110,6 +110,7 @@ export function createToolFilterFactory(opts: { loadedTools?: string[] }, core: 
           `loaded_tools: unknown tool name(s): ${unknown.join(', ')}. ` +
           `Available tools: ${availableTools.sort().join(', ')}`;
         core.info(`[loaded_tools] ❌ ${message}`);
+        core.setFailed(new Error(message));
         throw new Error(message);
       }
 

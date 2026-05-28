@@ -1714,6 +1714,32 @@ describe('ActionOrchestrator', () => {
       );
     });
 
+    test('deduplicates duplicate tool names', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          loaded_tools: 'read,read,write,read',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loadedTools: ['read', 'write'],
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
     test('handles whitespace-only input as undefined', async () => {
       const getInputMock = mock((name: string) => {
         const inputs: Record<string, string> = {
