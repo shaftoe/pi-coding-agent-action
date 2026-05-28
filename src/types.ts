@@ -106,6 +106,23 @@ export interface DiffConfig {
 }
 
 /**
+ * Subset of configuration used by the resource loader.
+ *
+ * Contains only the fields the resource loader actually needs, avoiding
+ * coupling to the full {@link PiConfig} type.
+ */
+export interface ResourceLoaderConfig extends DiffConfig {
+  extensions?: string[];
+  loadBuiltinExtensions?: boolean;
+  /**
+   * Controls which tools are loaded into the session.
+   * - `undefined` (default): load all available tools
+   * - `string[]`: load only the listed tools (validated against available tools after extension loading)
+   */
+  loadedTools?: string[];
+}
+
+/**
  * Configuration for the Pi agent.
  */
 export interface PiConfig extends DiffConfig {

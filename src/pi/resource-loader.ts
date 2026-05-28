@@ -19,7 +19,7 @@ import { SYSTEM_PROMPT } from './prompt';
 import { createLoggingFactory } from './logging';
 import type { ExtensionLoadingInfo } from './logging';
 import { createToolsFactory } from './tools/index';
-import type { CoreAdapter, PiConfig } from '../types';
+import type { CoreAdapter, ResourceLoaderConfig } from '../types';
 import type { PlatformProvider } from '../platform';
 
 /**
@@ -78,20 +78,20 @@ export async function resolveExtensions(extensions?: string[]): Promise<Extensio
 
 /**
  * Create an extension factory that filters the active tool set based on
- * `config.loadedTools`.
+ * `loadedTools`.
  *
  * When `loadedTools` is `undefined`, no filtering is performed.
  * Otherwise the list is validated against the tools that are actually available
  * after all extensions have been loaded. Unknown tool names cause an early
  * error that fails the run.
  *
- * @param config - The configuration containing the `loadedTools` setting.
- * @param core   - CoreAdapter for logging.
+ * @param opts  - Options containing the `loadedTools` setting.
+ * @param core  - CoreAdapter for logging.
  * @returns An extension factory that registers a `session_start` handler.
  */
-export function createToolFilterFactory(config: Partial<PiConfig>, core: CoreAdapter) {
+export function createToolFilterFactory(opts: { loadedTools?: string[] }, core: CoreAdapter) {
   return (pi: import('@earendil-works/pi-coding-agent').ExtensionAPI): void => {
-    const loadedTools = config.loadedTools;
+    const loadedTools = opts.loadedTools;
 
     // No filtering needed when all tools should be loaded
     if (!loadedTools) {
@@ -130,24 +130,20 @@ export function createToolFilterFactory(config: Partial<PiConfig>, core: CoreAda
 /**
  * Create and configure the resource loader used by the agent session.
  *
- * Accepts a Pi config object but only uses the fields the loader needs:
- * extensions, loadBuiltinExtensions, loadedTools, and diff limits.
- * Other config fields (provider, model, token, etc.) are ignored.
- *
- * @param core     - The CoreAdapter to use for logging within the Pi agent.
- * @param provider - The platform provider for custom tool operations.
- * @param config   - Partial Pi config; only `extensions`, `loadBuiltinExtensions`,
- *                   `loadedTools`, and diff-limit fields are used.
+ * @param core                 - The CoreAdapter to use for logging within the Pi agent.
+ * @param provider             - The platform provider for custom tool operations.
+ * @param extensions           - Optional array of extension sources (npm packages, git repos, or local paths).
+ * @param loadBuiltinExtensions - Whether to load built-in GitHub extensions (default true).
+ * @param config               - Optional resource loader config (contains loadedTools and diff limits).
  * @returns A fully loaded {@link DefaultResourceLoader} instance.
  */
 export async function getResourceLoader(
   core: CoreAdapter,
   provider: PlatformProvider,
-  config?: Partial<PiConfig>
+  extensions?: string[],
+  loadBuiltinExtensions = true,
+  config?: ResourceLoaderConfig
 ): Promise<DefaultResourceLoader> {
-  const extensions = config?.extensions;
-  const loadBuiltinExtensions = config?.loadBuiltinExtensions ?? true;
-
   const { paths: additionalExtensionPaths, info: extensionInfo } =
     await resolveExtensions(extensions);
 
