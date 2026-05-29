@@ -109,20 +109,14 @@ export interface DiffConfig {
  * Configuration fields consumed by the resource loader.
  *
  * A purpose-built subset of {@link PiConfig} that carries everything the
- * loader needs — extensions, builtin-extension toggle, tool filtering,
- * and diff limits — without coupling to the full {@link PiConfig} type.
+ * loader needs — extensions, builtin-extension toggle, and diff limits —
+ * without coupling to the full {@link PiConfig} type.
  */
 export interface ResourceLoaderConfig extends DiffConfig {
   /** Optional array of extension sources (npm packages, git repos, or local paths). */
   extensions?: string[];
   /** Whether to load built-in GitHub extensions. Defaults to `true`. */
   loadBuiltinExtensions?: boolean;
-  /**
-   * Controls which tools are loaded into the session.
-   * - `undefined` (default): load all available tools
-   * - `string[]`: load only the listed tools (validated against available tools after extension loading)
-   */
-  loadedTools?: string[];
 }
 
 /**

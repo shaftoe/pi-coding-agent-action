@@ -30,12 +30,12 @@
   "dependencies": {
     "@actions/core": "^3.0.1",
     "@actions/github": "^9.1.1",
-    "@earendil-works/pi-coding-agent": "0.76.0",
+    "@earendil-works/pi-coding-agent": "0.77.0",
     "@js-temporal/polyfill": "^0.5.1",
     "ignore": "^7.0.5"
   },
   "devDependencies": {
-    "@alexanderfortin/semantic-release-keep-a-changelog": "0.2.2",
+    "@alexanderfortin/semantic-release-keep-a-changelog": "0.2.3",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^10.0.1",
