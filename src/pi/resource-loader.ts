@@ -19,7 +19,7 @@ import { SYSTEM_PROMPT } from './prompt';
 import { createLoggingFactory } from './logging';
 import type { ExtensionLoadingInfo } from './logging';
 import { createToolsFactory } from './tools/index';
-import type { CoreAdapter, DiffConfig } from '../types';
+import type { CoreAdapter, ResourceLoaderConfig } from '../types';
 import type { PlatformProvider } from '../platform';
 
 /**
@@ -88,10 +88,7 @@ export async function resolveExtensions(extensions?: string[]): Promise<Extensio
 export async function getResourceLoader(
   core: CoreAdapter,
   provider: PlatformProvider,
-  config?: DiffConfig & {
-    extensions?: string[];
-    loadBuiltinExtensions?: boolean;
-  }
+  config?: ResourceLoaderConfig
 ): Promise<DefaultResourceLoader> {
   const extensions = config?.extensions;
   const loadBuiltinExtensions = config?.loadBuiltinExtensions ?? true;

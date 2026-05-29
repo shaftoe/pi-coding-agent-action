@@ -288,6 +288,78 @@ describe('Agent', () => {
     });
   });
 
+  describe('loadedTools validation', () => {
+    test('throws error when loadedTools contains unknown tool names', async () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        token: 'test-token',
+        thinkingLevel: 'off',
+        promptInput: '',
+        loadedTools: ['definitely_not_a_real_tool_xyz'],
+      });
+
+      await expect(agent.ready()).rejects.toThrow(
+        /loaded_tools: unknown tool name\(s\): definitely_not_a_real_tool_xyz/
+      );
+    });
+
+    test('error message lists available tools for discoverability', async () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        token: 'test-token',
+        thinkingLevel: 'off',
+        promptInput: '',
+        loadedTools: ['bogus_tool'],
+      });
+
+      await expect(agent.ready()).rejects.toThrow(/Available tools:/);
+    });
+
+    test('succeeds when loadedTools has valid tool names', async () => {
+      const infoMessages: string[] = [];
+      const testCore = {
+        ...mockCoreAdapter,
+        info: mock((msg: string) => {
+          infoMessages.push(msg);
+        }),
+      };
+
+      const agent = new Agent(testCore as any, mockPlatformProvider, {
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        token: 'test-token',
+        thinkingLevel: 'off',
+        promptInput: '',
+        // 'read' is a built-in Pi SDK tool that is always available
+        loadedTools: ['read'],
+      });
+
+      // Should not throw — 'read' is a valid Pi SDK tool
+      const result = await agent.ready();
+      expect(result).toBe(agent);
+
+      // No error should be logged (only kept/removed info if applicable)
+      const errorLog = infoMessages.find(m => m.includes('❌'));
+      expect(errorLog).toBeUndefined();
+    });
+
+    test('succeeds without validation when loadedTools is undefined', async () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        token: 'test-token',
+        thinkingLevel: 'off',
+        promptInput: '',
+        // loadedTools is intentionally omitted
+      });
+
+      const result = await agent.ready();
+      expect(result).toBe(agent);
+    });
+  });
+
   describe('exportSessionHtml', () => {
     test('delegates to session.exportToHtml', async () => {
       const agent = createRealAgent();
