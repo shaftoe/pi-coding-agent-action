@@ -77,9 +77,11 @@ describe('ActionOrchestrator', () => {
       sessionStats: undefined,
     }));
     const exportSessionHtmlMock = mock(async (outputPath: string) => outputPath);
+    const exportSessionJsonlMock = mock((outputPath: string) => outputPath);
     mockPiAgent = {
       run: runMock as any,
       exportSessionHtml: exportSessionHtmlMock as any,
+      exportSessionJsonl: exportSessionJsonlMock as any,
     };
 
     mockPiFactory = mock(() => mockPiAgent);
@@ -204,6 +206,8 @@ describe('ActionOrchestrator', () => {
           promptInput: '',
           loadBuiltinExtensions: true, // default value
           exportSessionHtml: true, // default value
+          compaction: { enabled: true },
+          retry: { enabled: true, maxRetries: 2 },
         },
         mockCore,
         mockProvider
@@ -239,6 +243,8 @@ describe('ActionOrchestrator', () => {
           promptInput: '',
           loadBuiltinExtensions: true, // default value
           exportSessionHtml: true, // default value
+          compaction: { enabled: true },
+          retry: { enabled: true, maxRetries: 2 },
         },
         mockCore,
         mockProvider
@@ -1224,6 +1230,8 @@ describe('ActionOrchestrator', () => {
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({
           exportSessionHtml: true,
+          compaction: { enabled: true },
+          retry: { enabled: true, maxRetries: 2 },
         }),
         mockCore,
         mockProvider
@@ -1250,6 +1258,8 @@ describe('ActionOrchestrator', () => {
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({
           exportSessionHtml: true,
+          compaction: { enabled: true },
+          retry: { enabled: true, maxRetries: 2 },
         }),
         mockCore,
         mockProvider
@@ -1276,6 +1286,8 @@ describe('ActionOrchestrator', () => {
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({
           exportSessionHtml: false,
+          compaction: { enabled: true },
+          retry: { enabled: true, maxRetries: 2 },
         }),
         mockCore,
         mockProvider
@@ -1759,6 +1771,250 @@ describe('ActionOrchestrator', () => {
 
       const callArgs = (mockPiFactory as any).mock.calls[0][0];
       expect(callArgs.loadedTools).toBeUndefined();
+    });
+  });
+
+  describe('timeout configuration', () => {
+    test('defaults to undefined when not provided (no timeout)', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          timeout: '',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.timeout).toBeUndefined();
+    });
+
+    test('passes timeout when provided as positive integer', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          timeout: '1800',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.timeout).toBe(1800);
+    });
+
+    test('ignores zero timeout value', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          timeout: '0',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.timeout).toBeUndefined();
+    });
+
+    test('ignores negative timeout value', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          timeout: '-10',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.timeout).toBeUndefined();
+    });
+  });
+
+  describe('compaction configuration', () => {
+    test('defaults compaction to enabled', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          compaction_enabled: '',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.compaction).toEqual({ enabled: true });
+    });
+
+    test('parses compaction_enabled=false correctly', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          compaction_enabled: 'false',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.compaction).toEqual({ enabled: false });
+    });
+  });
+
+  describe('retry configuration', () => {
+    test('defaults retry to enabled with maxRetries=2', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          retry_enabled: '',
+          retry_max_retries: '',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.retry).toEqual({ enabled: true, maxRetries: 2 });
+    });
+
+    test('parses retry_enabled=false and custom max_retries', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          retry_enabled: 'false',
+          retry_max_retries: '5',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.retry).toEqual({ enabled: false, maxRetries: 5 });
+    });
+  });
+
+  describe('timed_out output', () => {
+    test('sets timed_out output to false on success', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockCore.setOutput).toHaveBeenCalledWith('timed_out', false);
+    });
+
+    test('sets timed_out output to false on regular error', async () => {
+      const runMock = mock(() => {
+        throw new Error('API error');
+      });
+      mockPiAgent.run = runMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+
+      try {
+        await orchestrator.execute();
+      } catch {}
+
+      expect(mockCore.setOutput).toHaveBeenCalledWith('timed_out', false);
+    });
+  });
+
+  describe('session JSONL export', () => {
+    test('calls exportSessionJsonl when session HTML export is enabled', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          export_session_html: 'true',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiAgent.exportSessionHtml).toHaveBeenCalled();
+      expect(mockPiAgent.exportSessionJsonl).toHaveBeenCalled();
+    });
+
+    test('does not call exportSessionJsonl when HTML export is disabled', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          export_session_html: 'false',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiAgent.exportSessionHtml).not.toHaveBeenCalled();
+      expect(mockPiAgent.exportSessionJsonl).not.toHaveBeenCalled();
     });
   });
 });

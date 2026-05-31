@@ -60,6 +60,8 @@ export interface PiAgent {
   run(text: string): Promise<PromptResult>;
   /** Export the session as a self-contained HTML file to the given path. */
   exportSessionHtml(outputPath: string): Promise<string>;
+  /** Export the session as a JSONL file to the given path. */
+  exportSessionJsonl(outputPath: string): string;
 }
 
 /**
@@ -106,6 +108,28 @@ export interface DiffConfig {
 }
 
 /**
+ * Configuration for Pi SDK compaction settings.
+ *
+ * Controls automatic context compaction for long conversations.
+ */
+export interface CompactionConfig {
+  /** Whether compaction is enabled. */
+  enabled: boolean;
+}
+
+/**
+ * Configuration for Pi SDK retry settings.
+ *
+ * Controls automatic retry of failed model API requests.
+ */
+export interface RetryConfig {
+  /** Whether retry is enabled. */
+  enabled: boolean;
+  /** Maximum number of retry attempts. */
+  maxRetries: number;
+}
+
+/**
  * Configuration fields consumed by the resource loader.
  *
  * A purpose-built subset of {@link PiConfig} that carries everything the
@@ -138,6 +162,12 @@ export interface PiConfig extends DiffConfig {
   loadedTools?: string[];
   baseUrl?: string;
   exportSessionHtml?: boolean;
+  /** Maximum agent run duration in seconds. 0 or undefined means no timeout. */
+  timeout?: number;
+  /** Compaction settings for long conversation context. */
+  compaction?: CompactionConfig;
+  /** Retry settings for failed model API requests. */
+  retry?: RetryConfig;
 }
 
 /**
@@ -156,4 +186,6 @@ export interface CommentMetadata {
   executionDuration?: Temporal.Duration;
   /** Session statistics including token usage */
   sessionStats?: SessionStats;
+  /** Whether the agent session timed out */
+  timedOut?: boolean;
 }

@@ -80,6 +80,26 @@ inputs:
     required: false
     default: 'false'
 
+  timeout:
+    description: 'Maximum duration of the agent run in seconds. Defaults to 0 (no timeout). When set, the agent session is aborted if it exceeds this limit.'
+    required: false
+    default: '0'
+
+  compaction_enabled:
+    description: 'Whether to enable automatic context compaction for long conversations. Defaults to true.'
+    required: false
+    default: 'true'
+
+  retry_enabled:
+    description: 'Whether to automatically retry failed model API requests. Defaults to true.'
+    required: false
+    default: 'true'
+
+  retry_max_retries:
+    description: 'Maximum number of retry attempts for failed model API requests. Defaults to 2.'
+    required: false
+    default: '2'
+
 runs:
   using: 'node24'
   main: 'dist/index.js'
@@ -99,3 +119,5 @@ outputs:
     description: 'Wall-clock duration of agent execution in seconds'
   session_html_path:
     description: 'Path to the exported session HTML file (when export_session_html is enabled)'
+  timed_out:
+    description: 'Whether the agent session timed out (true/false)'

@@ -6,7 +6,12 @@
  * headless / non-interactive use inside GitHub Actions.
  */
 
-import { AuthStorage, createAgentSession, ModelRegistry } from '@earendil-works/pi-coding-agent';
+import {
+  AuthStorage,
+  createAgentSession,
+  ModelRegistry,
+  SettingsManager,
+} from '@earendil-works/pi-coding-agent';
 import * as path from 'node:path';
 import { getResourceLoader } from './resource-loader';
 import { getVersion } from './logging';
@@ -22,6 +27,26 @@ import type {
   ResourceLoaderConfig,
 } from '../types';
 import type { PlatformProvider } from '../platform';
+
+/**
+ * Error code used by {@link AgentTimeoutError} so callers can distinguish
+ * graceful agent timeouts from ordinary runtime failures.
+ */
+export const TIMEOUT_ERROR_CODE = 'GH_AGENT_TIMEOUT';
+
+/**
+ * Thrown when the agent session exceeds the configured timeout.
+ *
+ * Carries a stable `code` property ({@link TIMEOUT_ERROR_CODE}) so that the
+ * orchestrator and callers can differentiate timeouts from other errors.
+ */
+export class AgentTimeoutError extends Error {
+  readonly code = TIMEOUT_ERROR_CODE;
+  constructor(message: string) {
+    super(message);
+    this.name = 'AgentTimeoutError';
+  }
+}
 
 /**
  * Pi coding agent for headless execution inside GitHub Actions.
@@ -97,12 +122,19 @@ export class Agent {
     // reuse it for post-creation validation without repeated non-null assertions.
     const loadedTools = this.config.loadedTools;
 
+    // Build SettingsManager with compaction and retry overrides
+    const settingsManager = SettingsManager.inMemory({
+      ...(this.config.compaction ? { compaction: this.config.compaction } : {}),
+      ...(this.config.retry ? { retry: this.config.retry } : {}),
+    });
+
     const { session } = await createAgentSession({
       model: this.model,
       thinkingLevel: this.thinkingLevel,
       authStorage: this.authStorage,
       modelRegistry: this.modelRegistry,
       resourceLoader,
+      settingsManager,
       // Pass loadedTools as the SDK's native allowlist (tools option).
       // Unknown tool names are silently ignored by the SDK, so we validate
       // after session creation below.
@@ -159,8 +191,12 @@ export class Agent {
   /**
    * Run the agent with the given prompt and return the accumulated text response with session statistics.
    *
+   * If a timeout is configured and the session exceeds it, a {@link AgentTimeoutError}
+   * is thrown with `code: 'GH_AGENT_TIMEOUT'`.
+   *
    * @param text - The prompt text to send. Must be non-empty.
    * @returns The full assistant text response and session statistics.
+   * @throws {AgentTimeoutError} If the session exceeds the configured timeout.
    * @throws {Error} If `text` is falsy.
    */
   async run(text: string | undefined): Promise<PromptResult> {
@@ -168,7 +204,32 @@ export class Agent {
       throw new Error('no text, skipping prompt');
     }
 
-    await this.session.prompt(text);
+    const timeoutSeconds = this.config.timeout;
+    if (timeoutSeconds && timeoutSeconds > 0) {
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new AgentTimeoutError(`Agent session timed out after ${timeoutSeconds}s`)),
+          timeoutSeconds * 1000
+        );
+      });
+
+      try {
+        await Promise.race([this.session.prompt(text), timeoutPromise]);
+      } catch (error) {
+        if (error instanceof AgentTimeoutError) {
+          this.core.warning(`[timeout] ${error.message}`);
+        }
+        throw error;
+      } finally {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      }
+    } else {
+      await this.session.prompt(text);
+    }
+
     process.stdout.write('\n'); // ensure new line after prompt, usually missing from agent
 
     const result = this.outputChunks.join('');
@@ -209,6 +270,18 @@ export class Agent {
         delete process.env.PI_PACKAGE_DIR;
       }
     }
+  }
+
+  /**
+   * Export the session as a JSONL file.
+   *
+   * Must be called after {@link run} so the session has content.
+   *
+   * @param outputPath - Path to write the JSONL file to.
+   * @returns The JSONL string content.
+   */
+  exportSessionJsonl(outputPath: string): string {
+    return this.session.exportToJsonl(outputPath);
   }
 
   /**

@@ -19,8 +19,11 @@ import {
   type PiAgentFactory,
   type PiConfig,
   type SessionStats,
+  type CompactionConfig,
+  type RetryConfig,
 } from './types';
 import type { CreateReactionType, PlatformProvider } from './platform';
+import { TIMEOUT_ERROR_CODE } from './pi/agent';
 
 declare const __VERSION__: string;
 
@@ -52,6 +55,9 @@ function parseLoadedTools(input: string): string[] | undefined {
  * reaction lifecycle, executes the Pi agent, and finalizes the result or error.
  */
 export class ActionOrchestrator {
+  /** Directory where session exports are written. Set by exportSessionHtml. */
+  private sessionOutputDir: string | undefined;
+
   constructor(
     private readonly core: CoreAdapter,
     private readonly git: GitAdapter,
@@ -89,10 +95,29 @@ export class ActionOrchestrator {
       }
 
       const pi = this.piAgentFactory(config, this.core, this.platformProvider);
-      const { result, sessionStats } = await pi.run(prompt);
+      let result: string;
+      let sessionStats: SessionStats | undefined;
+      let timedOut = false;
+
+      try {
+        const agentResult = await pi.run(prompt);
+        result = agentResult.result;
+        sessionStats = agentResult.sessionStats;
+      } catch (agentError) {
+        // Check for timeout errors
+        if (agentError instanceof Error && (agentError as Error & { code?: string }).code === TIMEOUT_ERROR_CODE) {
+          timedOut = true;
+          result = agentError.message;
+          sessionStats = undefined;
+        } else {
+          throw agentError;
+        }
+      }
 
       if (config.exportSessionHtml) {
         await this.exportSessionHtml(pi);
+        // Also export JSONL alongside HTML for better session reproducibility
+        this.exportSessionJsonl(pi);
       } else {
         this.core.debug('[session-html] export disabled by configuration');
       }
@@ -104,8 +129,10 @@ export class ActionOrchestrator {
 
       // Ensure we always post a final comment — when the agent only used tools
       // (e.g. created/updated a PR) the text response may be empty.
-      const finalBody = result || '✅ Agent session completed';
-      await this.finalize(finalBody, config, startTime, reaction, sessionStats, true);
+      const finalBody = timedOut
+        ? `⚠️ **Agent session timed out**\n\n${result}`
+        : (result || '✅ Agent session completed');
+      await this.finalize(finalBody, config, startTime, reaction, sessionStats, !timedOut, timedOut);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
 
@@ -121,7 +148,7 @@ export class ActionOrchestrator {
           thinkingLevel: '',
           promptInput: '',
         };
-        await this.finalize(errorMessage, errorConfig, startTime, reaction, undefined, false);
+        await this.finalize(errorMessage, errorConfig, startTime, reaction, undefined, false, false);
       } catch (finalizeError) {
         const finalizeErrorMessage =
           finalizeError instanceof Error ? finalizeError.message : String(finalizeError);
@@ -204,6 +231,32 @@ export class ActionOrchestrator {
       ? diffIgnorePatternsInput.split(/\s+/).filter(Boolean)
       : undefined;
 
+    // Parse timeout (0 = no timeout)
+    const timeoutInput = this.core.getInput('timeout');
+    const parsedTimeout = timeoutInput ? parseInt(timeoutInput, 10) : 0;
+    const timeout = parsedTimeout > 0 ? parsedTimeout : undefined;
+
+    // Parse compaction settings
+    const compactionEnabledInput = this.core.getInput('compaction_enabled');
+    const compactionEnabled = compactionEnabledInput
+      ? compactionEnabledInput.toLowerCase() === 'true'
+      : true;
+    const compaction: CompactionConfig = { enabled: compactionEnabled };
+
+    // Parse retry settings
+    const retryEnabledInput = this.core.getInput('retry_enabled');
+    const retryEnabled = retryEnabledInput
+      ? retryEnabledInput.toLowerCase() === 'true'
+      : true;
+    const retryMaxRetriesInput = this.core.getInput('retry_max_retries');
+    const parsedRetryMaxRetries = retryMaxRetriesInput ? parseInt(retryMaxRetriesInput, 10) : 2;
+    const retry: RetryConfig = {
+      enabled: retryEnabled,
+      maxRetries: Number.isNaN(parsedRetryMaxRetries) || parsedRetryMaxRetries < 0
+        ? 2
+        : parsedRetryMaxRetries,
+    };
+
     return {
       provider,
       model,
@@ -218,6 +271,9 @@ export class ActionOrchestrator {
       ...(diffMaxLines ? { diffMaxLines } : {}),
       ...(diffMaxBytes ? { diffMaxBytes } : {}),
       ...(diffIgnorePatterns?.length ? { diffIgnorePatterns } : {}),
+      ...(timeout ? { timeout } : {}),
+      compaction,
+      retry,
     };
   }
 
@@ -236,20 +292,42 @@ export class ActionOrchestrator {
    * ```
    */
   private async exportSessionHtml(pi: PiAgent): Promise<void> {
-    const outputDir = path.join(
+    this.sessionOutputDir = path.join(
       process.env.RUNNER_TEMP ?? os.tmpdir(),
       `pi-session-html-${process.env.GITHUB_RUN_ID ?? 'local'}`
     );
-    const htmlPath = path.join(outputDir, 'session.html');
+    const htmlPath = path.join(this.sessionOutputDir, 'session.html');
 
     try {
-      fs.mkdirSync(outputDir, { recursive: true });
+      fs.mkdirSync(this.sessionOutputDir, { recursive: true });
       await pi.exportSessionHtml(htmlPath);
       this.core.info(`[session-html] exported session HTML to ${htmlPath}`);
       this.core.setOutput('session_html_path', htmlPath);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.core.notice(`[session-html] failed to export HTML: ${msg}`);
+    }
+  }
+
+  /**
+   * Export session as JSONL alongside the HTML export.
+   *
+   * Writes the JSONL to the same directory as the HTML file. JSONL provides
+   * a machine-readable format useful for session replay, debugging, and analysis.
+   *
+   * @param pi - The Pi agent with an active session.
+   */
+  private exportSessionJsonl(pi: PiAgent): void {
+    if (!this.sessionOutputDir) {
+      return;
+    }
+    try {
+      const jsonlPath = path.join(this.sessionOutputDir, 'session.jsonl');
+      pi.exportSessionJsonl(jsonlPath);
+      this.core.info(`[session-jsonl] exported session JSONL to ${jsonlPath}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.core.notice(`[session-jsonl] failed to export JSONL: ${msg}`);
     }
   }
 
@@ -262,7 +340,8 @@ export class ActionOrchestrator {
     startTime: Temporal.Instant,
     reaction: CreateReactionType | undefined,
     sessionStats: SessionStats | undefined,
-    success: boolean
+    success: boolean,
+    timedOut = false,
   ): Promise<void> {
     try {
       if (reaction) {
@@ -275,6 +354,7 @@ export class ActionOrchestrator {
 
     this.core.setOutput('response', body);
     this.core.setOutput('success', success);
+    this.core.setOutput('timed_out', timedOut);
 
     if (sessionStats !== undefined) {
       this.core.setOutput('input_tokens', sessionStats.inputTokens);
@@ -291,6 +371,7 @@ export class ActionOrchestrator {
       model: config.model,
       thinkingLevel: config.thinkingLevel,
       executionDuration,
+      ...(timedOut ? { timedOut } : {}),
     };
 
     if (sessionStats !== undefined) {
