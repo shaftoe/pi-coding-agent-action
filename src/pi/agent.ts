@@ -30,7 +30,7 @@ import type { PlatformProvider } from '../platform';
 
 /**
  * Error code used by {@link AgentTimeoutError} so callers can distinguish
- * graceful agent timeouts from ordinary runtime failures.
+ * agent timeouts from ordinary runtime failures.
  */
 export const TIMEOUT_ERROR_CODE = 'GH_AGENT_TIMEOUT';
 

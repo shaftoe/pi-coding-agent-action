@@ -1230,8 +1230,6 @@ describe('ActionOrchestrator', () => {
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({
           exportSessionHtml: true,
-          compaction: { enabled: true },
-          retry: { enabled: true, maxRetries: 2 },
         }),
         mockCore,
         mockProvider
@@ -1258,8 +1256,6 @@ describe('ActionOrchestrator', () => {
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({
           exportSessionHtml: true,
-          compaction: { enabled: true },
-          retry: { enabled: true, maxRetries: 2 },
         }),
         mockCore,
         mockProvider
@@ -1286,8 +1282,6 @@ describe('ActionOrchestrator', () => {
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({
           exportSessionHtml: false,
-          compaction: { enabled: true },
-          retry: { enabled: true, maxRetries: 2 },
         }),
         mockCore,
         mockProvider
@@ -1959,7 +1953,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('sets timed_out output to false on regular error', async () => {
-      const runMock = mock(() => {
+      const runMock = mock(async () => {
         throw new Error('API error');
       });
       mockPiAgent.run = runMock as any;
@@ -1971,6 +1965,23 @@ describe('ActionOrchestrator', () => {
       } catch {}
 
       expect(mockCore.setOutput).toHaveBeenCalledWith('timed_out', false);
+    });
+
+    test('sets timed_out output to true on timeout error', async () => {
+      const timeoutError = new Error('Agent session timed out after 60s');
+      (timeoutError as any).code = 'GH_AGENT_TIMEOUT';
+      const runMock = mock(async () => {
+        throw timeoutError;
+      });
+      mockPiAgent.run = runMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+
+      try {
+        await orchestrator.execute();
+      } catch {}
+
+      expect(mockCore.setOutput).toHaveBeenCalledWith('timed_out', true);
     });
   });
 

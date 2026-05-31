@@ -95,24 +95,7 @@ export class ActionOrchestrator {
       }
 
       const pi = this.piAgentFactory(config, this.core, this.platformProvider);
-      let result: string;
-      let sessionStats: SessionStats | undefined;
-      let timedOut = false;
-
-      try {
-        const agentResult = await pi.run(prompt);
-        result = agentResult.result;
-        sessionStats = agentResult.sessionStats;
-      } catch (agentError) {
-        // Check for timeout errors
-        if (agentError instanceof Error && (agentError as Error & { code?: string }).code === TIMEOUT_ERROR_CODE) {
-          timedOut = true;
-          result = agentError.message;
-          sessionStats = undefined;
-        } else {
-          throw agentError;
-        }
-      }
+      const { result, sessionStats } = await pi.run(prompt);
 
       if (config.exportSessionHtml) {
         await this.exportSessionHtml(pi);
@@ -129,12 +112,12 @@ export class ActionOrchestrator {
 
       // Ensure we always post a final comment — when the agent only used tools
       // (e.g. created/updated a PR) the text response may be empty.
-      const finalBody = timedOut
-        ? `⚠️ **Agent session timed out**\n\n${result}`
-        : (result || '✅ Agent session completed');
-      await this.finalize(finalBody, config, startTime, reaction, sessionStats, !timedOut, timedOut);
+      const finalBody = result || '✅ Agent session completed';
+      await this.finalize(finalBody, config, startTime, reaction, sessionStats, true);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
+      const isTimeout =
+        e instanceof Error && (e as Error & { code?: string }).code === TIMEOUT_ERROR_CODE;
 
       // Try to post error as comment. Wrap in its own try-catch so that
       // a failure to finalize (e.g. network/API down after a timeout) does
@@ -148,7 +131,7 @@ export class ActionOrchestrator {
           thinkingLevel: '',
           promptInput: '',
         };
-        await this.finalize(errorMessage, errorConfig, startTime, reaction, undefined, false, false);
+        await this.finalize(errorMessage, errorConfig, startTime, reaction, undefined, false, isTimeout);
       } catch (finalizeError) {
         const finalizeErrorMessage =
           finalizeError instanceof Error ? finalizeError.message : String(finalizeError);

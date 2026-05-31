@@ -99,15 +99,6 @@ export type PiAgentFactory = (
 ) => PiAgent;
 
 /**
- * Subset of configuration used by the PR-diff tool.
- */
-export interface DiffConfig {
-  diffMaxLines?: number;
-  diffMaxBytes?: number;
-  diffIgnorePatterns?: string[];
-}
-
-/**
  * Configuration for Pi SDK compaction settings.
  *
  * Controls automatic context compaction for long conversations.
@@ -127,6 +118,15 @@ export interface RetryConfig {
   enabled: boolean;
   /** Maximum number of retry attempts. */
   maxRetries: number;
+}
+
+/**
+ * Subset of configuration used by the PR-diff tool.
+ */
+export interface DiffConfig {
+  diffMaxLines?: number;
+  diffMaxBytes?: number;
+  diffIgnorePatterns?: string[];
 }
 
 /**
