@@ -111,6 +111,44 @@ You can use the `prompt` input to run the agent without requiring a comment trig
 
 When using the `prompt` input, the action still enriches the prompt with issue/PR context (title and description) if available in the workflow context.
 
+#### PR Review with Existing Context
+
+When running automated PR reviews (e.g. on `pull_request: [opened, synchronize]`), you can instruct the agent to fetch existing review comments before reviewing. This prevents duplicate feedback and provides continuity across re-runs:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - uses: shaftoe/pi-coding-agent-action@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          provider: openai
+          model: gpt-5.4
+          token: ${{ secrets.OPENAI_API_KEY }}
+          prompt: |
+            Review this pull request. Before starting, use get_issue_or_pr_thread to
+            fetch any existing review comments so you don't duplicate feedback that
+            has already been given. Focus on issues, bugs, and security concerns.
+            Post your findings as a PR review when done.
+```
+
+> [!TIP]
+> The `get_issue_or_pr_thread` tool returns both regular comments and inline review comments (with file path and line information). Telling the agent to call it first is all you need to provide full review context — no special configuration required.
+
 ### Custom Extensions
 
 You can load custom Pi extensions to add additional tools, custom tools, or modify agent behavior:
