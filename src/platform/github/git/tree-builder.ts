@@ -4,7 +4,9 @@
  * Uploads changed files as Git blobs and creates trees that reference them.
  */
 
-import * as github from '@actions/github';
+import { getGitHubContext } from '../context-accessor';
+
+function ctx() { return getGitHubContext(); }
 import { getOctokit } from '../octokit';
 import { FILE_MODE_REGULAR } from '../../../git/constants';
 import { createLogger } from './types';
@@ -37,9 +39,9 @@ export interface CreateBlobsAndTreeParams {
  */
 export async function createBlobsAndTree(params: CreateBlobsAndTreeParams): Promise<string> {
   const { changedFiles, deletedFiles, parentSha, log = createLogger() } = params;
-  const owner = github.context.repo.owner;
+  const owner = ctx().repo.owner;
   const octokit = getOctokit();
-  const repo = github.context.repo.repo;
+  const repo = ctx().repo.repo;
 
   log.debug(`Creating blobs for changed files...`);
 

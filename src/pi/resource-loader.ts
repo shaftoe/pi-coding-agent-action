@@ -19,7 +19,7 @@ import { SYSTEM_PROMPT } from './prompt';
 import { createLoggingFactory } from './logging';
 import type { ExtensionLoadingInfo } from './logging';
 import { createToolsFactory } from './tools/index';
-import type { CoreAdapter, ResourceLoaderConfig } from '../types';
+import type { Logger, ResourceLoaderConfig } from '../types';
 import type { PlatformProvider } from '../platform';
 
 /**
@@ -79,14 +79,14 @@ export async function resolveExtensions(extensions?: string[]): Promise<Extensio
 /**
  * Create and configure the resource loader used by the agent session.
  *
- * @param core     - The CoreAdapter to use for logging within the Pi agent.
+ * @param logger  - The Logger to use for logging within the Pi agent.
  * @param provider - The platform provider for custom tool operations.
  * @param config   - Optional resource loader config (extensions, builtin toggle,
- *                   diff limits).
+ *                   diff limits, system prompt override).
  * @returns A fully loaded {@link DefaultResourceLoader} instance.
  */
 export async function getResourceLoader(
-  core: CoreAdapter,
+  logger: Logger,
   provider: PlatformProvider,
   config?: ResourceLoaderConfig
 ): Promise<DefaultResourceLoader> {
@@ -96,7 +96,7 @@ export async function getResourceLoader(
   const { paths: additionalExtensionPaths, info: extensionInfo } =
     await resolveExtensions(extensions);
 
-  const extensionFactories = [createLoggingFactory(core, extensionInfo)];
+  const extensionFactories = [createLoggingFactory(logger, extensionInfo)];
   if (loadBuiltinExtensions) {
     extensionFactories.unshift(createToolsFactory(provider, config));
   }
@@ -106,7 +106,7 @@ export async function getResourceLoader(
     agentDir: getAgentDir(),
     extensionFactories,
     additionalExtensionPaths,
-    systemPromptOverride: () => SYSTEM_PROMPT,
+    systemPromptOverride: () => config?.systemPrompt ?? SYSTEM_PROMPT,
     appendSystemPromptOverride: agentsFiles => {
       if (agentsFiles.length === 0) {
         return [];

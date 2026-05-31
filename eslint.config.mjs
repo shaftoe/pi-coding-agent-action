@@ -47,6 +47,7 @@ export default [
   {
     ignores: ["dist/**", "node_modules/**", "*.js"],
   },
+  // All src code
   {
     files: ["src/**/*.ts"],
     languageOptions: {
@@ -71,6 +72,26 @@ export default [
       "@typescript-eslint/no-unnecessary-type-assertion": "error",
     },
   },
+  // Library code: enforce boundary — no @actions/* imports
+  {
+    files: ["src/orchestrator.ts", "src/pi/**/*.ts", "src/types.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@actions/*"],
+              message:
+                "Library code (orchestrator, pi/, types) must not import @actions/* directly. Use Logger/OutputSink interfaces instead.",
+              allowTypeImports: false,
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // Tests
   {
     files: ["tests/**/*.ts"],
     languageOptions: {

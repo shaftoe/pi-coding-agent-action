@@ -9,26 +9,62 @@ import type { Temporal } from '@js-temporal/polyfill';
 import type { CreateReactionType, PlatformProvider } from './platform';
 
 /**
+ * Platform-neutral logging interface.
+ *
+ * Provides a minimal logging abstraction that can be implemented by any
+ * frontend (GitHub Action, CLI, web UI). Decouples library code from
+ * `@actions/core` logging functions.
+ *
+ * Optional `startGroup`/`endGroup` methods allow collapsible log grouping
+ * where supported; they are no-ops when not implemented.
+ */
+export interface Logger {
+  /** Log a debug-level message (only visible when debug logging is enabled). */
+  debug(message: string): void;
+  /** Log an informational message. */
+  info(message: string): void;
+  /** Log a warning message. */
+  warning(message: string): void;
+  /** Log a notice-level message (visible but non-blocking). */
+  notice(message: string): void;
+  /** Log an error message. */
+  error(message: string): void;
+  /** Start a collapsible log group. No-op if not supported. */
+  startGroup?(title: string): void;
+  /** End a collapsible log group. No-op if not supported. */
+  endGroup?(): void;
+}
+
+/**
+ * Output and failure handling interface.
+ *
+ * Abstracts how results are exported (GitHub Action outputs, HTTP responses,
+ * CLI exit codes, etc.) and how failure is reported.
+ */
+export interface OutputSink {
+  /** Set a named output (e.g., "response", "success", "duration_seconds"). */
+  setOutput(name: string, value: string | number | boolean): void;
+  /** Mark the run as failed. */
+  setFailed(error: Error): void;
+  /** Resolve a temp directory for session exports of the given format. */
+  getExportDirectory(format: 'html' | 'jsonl'): string;
+}
+
+/**
  * Adapter interface for @actions/core operations.
  *
- * Provides a testable wrapper around core operations including input retrieval,
- * logging, and workflow status management.
+ * Extends the platform-neutral {@link Logger} interface with GitHub
+ * Actions-specific operations (input retrieval, output setting, failure
+ * reporting). This interface is only used by the GitHub Action frontend;
+ * library code depends on {@link Logger} instead.
  */
-export interface CoreAdapter {
+export interface CoreAdapter extends Logger {
   /** Retrieve an action input by name. */
   getInput(name: string): string;
   /** Mark the workflow run as failed with an error message. */
   setFailed(error: Error): void;
   /** Set an action output. */
   setOutput(name: string, value: string | number | boolean): void;
-  /** Log a notice message. */
-  notice(message: string): void;
-  /** Log a debug message (only visible when debug logging is enabled). */
-  debug(message: string): void;
-  /** Log an info message. */
-  info(message: string): void;
-  /** Log a warning message. */
-  warning(message: string): void;
 }
 
 /**
@@ -94,7 +130,7 @@ export interface PromptResult {
  */
 export type PiAgentFactory = (
   config: PiConfig,
-  core: CoreAdapter,
+  logger: Logger,
   provider: PlatformProvider
 ) => PiAgent;
 
@@ -119,6 +155,8 @@ export interface ResourceLoaderConfig extends DiffConfig {
   extensions?: string[];
   /** Whether to load built-in GitHub extensions. Defaults to `true`. */
   loadBuiltinExtensions?: boolean;
+  /** Override the default system prompt. */
+  systemPrompt?: string;
 }
 
 /**
@@ -142,6 +180,8 @@ export interface PiConfig extends DiffConfig {
   exportSessionHtml?: boolean;
   exportSessionJsonl?: boolean;
   autoCompaction?: boolean;
+  /** Override the default system prompt. */
+  systemPrompt?: string;
 }
 
 /**

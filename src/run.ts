@@ -1,31 +1,56 @@
 /**
  * @file GitHub Action entry point.
  *
- * Orchestrates the action by creating adapters and passing them to the
- * ActionOrchestrator, which handles the complete execution flow.
+ * Orchestrates the action by creating adapters, gathering configuration,
+ * and passing them to the ActionOrchestrator which handles the complete
+ * execution flow.
  */
 
 import * as core from '@actions/core';
+import * as github from '@actions/github';
 import { ActionOrchestrator } from './orchestrator';
 import { RealCoreAdapter } from './adapters/core-adapter';
 import { RealGitAdapter } from './adapters/git-adapter';
 import { createRealPiAgent } from './adapters/pi-agent-adapter';
+import { gatherActionsConfig } from './adapters/config';
+import { ActionsOutputSink } from './adapters/output-sink';
 import { createGitHubPlatformProvider } from './platform';
 
 /**
  * Run the Pi coding agent end-to-end.
  *
- * Creates real adapters for Core, Git platform, and Pi agent, then passes them
- * to the orchestrator which handles the execution flow.
+ * Creates real adapters for Core, Git platform, and Pi agent, gathers
+ * configuration from GitHub Action inputs, and passes them to the
+ * orchestrator which handles the execution flow.
  *
  * @throws Rethrows any error from the orchestrator.
  */
 export async function run() {
   const coreAdapter = new RealCoreAdapter();
+  const config = gatherActionsConfig();
+  const outputSink = new ActionsOutputSink();
   const gitAdapter = new RealGitAdapter(coreAdapter);
-  const platformProvider = createGitHubPlatformProvider();
+
+  // Create Octokit from the github_token input
+  const octokit = github.getOctokit(coreAdapter.getInput('github_token'));
+
+  // Build PlatformContext from the @actions/github singleton
+  const platformContext = {
+    repo: github.context.repo,
+    issue: github.context.issue,
+    eventName: github.context.eventName,
+    payload: github.context.payload as Record<string, unknown>,
+    serverUrl: github.context.serverUrl || 'https://github.com',
+    runId: github.context.runId,
+    workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
+  };
+
+  const platformProvider = createGitHubPlatformProvider({ octokit, context: platformContext });
+
   const orchestrator = new ActionOrchestrator(
-    coreAdapter,
+    config,
+    coreAdapter,       // CoreAdapter extends Logger
+    outputSink,
     gitAdapter,
     createRealPiAgent,
     platformProvider

@@ -13,7 +13,7 @@ import * as github from '@actions/github';
 import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
 import { getOctokit } from './octokit';
 import { REACTION_TYPE_EYES } from './constants';
-import { getCoreAdapter } from './index';
+import { getCoreAdapter, getModulePlatformContext } from './index';
 
 export type CreateReactionType =
   | RestEndpointMethodTypes.RestEndpointMethodTypes['reactions']['createForIssueComment']['response']
@@ -22,6 +22,18 @@ export type CreateReactionType =
 export type DeleteReactionType =
   | RestEndpointMethodTypes.RestEndpointMethodTypes['reactions']['deleteForIssueComment']['response']
   | RestEndpointMethodTypes.RestEndpointMethodTypes['reactions']['deleteForPullRequestComment']['response'];
+
+/**
+ * Get the platform context, falling back to @actions/github singleton.
+ */
+function ctx(): typeof github.context {
+  try {
+    const pc = getModulePlatformContext();
+    return pc as unknown as typeof github.context;
+  } catch {
+    return github.context;
+  }
+}
 
 /**
  * Debug logging helper.
@@ -38,7 +50,7 @@ function debug(msg: string): void {
  * @returns `true` if the comment is a PR review comment, `false` otherwise.
  */
 function isPullRequestReviewComment(): boolean {
-  const comment = github.context.payload.comment;
+  const comment = ctx().payload.comment;
   return comment?.pull_request_review_id !== undefined;
 }
 
@@ -52,7 +64,7 @@ function isPullRequestReviewComment(): boolean {
  *          comment is present in the current context.
  */
 export async function addReaction(): Promise<CreateReactionType | undefined> {
-  const comment = github.context.payload.comment;
+  const comment = ctx().payload.comment;
   if (!comment) {
     debug('[reactions] no comment found, skipping reaction');
     return;
@@ -64,16 +76,16 @@ export async function addReaction(): Promise<CreateReactionType | undefined> {
   if (isPRReviewComment) {
     debug('[reactions] adding reaction to PR review comment');
     return await octokit.rest.reactions.createForPullRequestReviewComment({
-      owner: github.context.repo.owner,
-      repo: github.context.repo.repo,
+      owner: ctx().repo.owner,
+      repo: ctx().repo.repo,
       comment_id: comment.id,
       content: REACTION_TYPE_EYES,
     });
   } else {
     debug('[reactions] adding reaction to issue comment');
     return await octokit.rest.reactions.createForIssueComment({
-      owner: github.context.repo.owner,
-      repo: github.context.repo.repo,
+      owner: ctx().repo.owner,
+      repo: ctx().repo.repo,
       comment_id: comment.id,
       content: REACTION_TYPE_EYES,
     });
@@ -96,7 +108,7 @@ export async function deleteReaction(
     return;
   }
 
-  const comment = github.context.payload.comment;
+  const comment = ctx().payload.comment;
   if (!comment) {
     return;
   }
@@ -107,16 +119,16 @@ export async function deleteReaction(
   if (isPRReviewComment) {
     debug('[reactions] deleting reaction from PR review comment');
     return octokit.rest.reactions.deleteForPullRequestComment({
-      owner: github.context.repo.owner,
-      repo: github.context.repo.repo,
+      owner: ctx().repo.owner,
+      repo: ctx().repo.repo,
       comment_id: comment.id,
       reaction_id: reaction.data.id,
     });
   } else {
     debug('[reactions] deleting reaction from issue comment');
     return octokit.rest.reactions.deleteForIssueComment({
-      owner: github.context.repo.owner,
-      repo: github.context.repo.repo,
+      owner: ctx().repo.owner,
+      repo: ctx().repo.repo,
       comment_id: comment.id,
       reaction_id: reaction.data.id,
     });

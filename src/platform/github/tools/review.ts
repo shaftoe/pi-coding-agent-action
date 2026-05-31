@@ -7,7 +7,9 @@
  * positioning (not the deprecated `position` field).
  */
 
-import * as github from '@actions/github';
+import { getGitHubContext } from '../context-accessor';
+
+function ctx() { return getGitHubContext(); }
 import { getOctokit } from '../octokit';
 import { getCoreAdapter } from '../index';
 import type {
@@ -105,7 +107,7 @@ export async function createReview(
 ): Promise<{ content: { type: 'text'; text: string }[]; details: CreateReviewDetails }> {
   validateCreateReviewParams(params);
 
-  const resolvedPullNumber = params.pull_number ?? github.context.issue.number;
+  const resolvedPullNumber = params.pull_number ?? ctx().issue.number;
   if (!resolvedPullNumber) {
     throw new Error(
       'Pull request number not provided and not available in context. ' +
@@ -113,8 +115,8 @@ export async function createReview(
     );
   }
 
-  const owner = github.context.repo.owner;
-  const repo = github.context.repo.repo;
+  const owner = ctx().repo.owner;
+  const repo = ctx().repo.repo;
   const event = params.event ?? 'COMMENT';
   const body = params.body ?? '';
 

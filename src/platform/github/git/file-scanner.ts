@@ -9,7 +9,9 @@
  * (workspace root, platform ignore patterns) applied.
  */
 
-import * as github from '@actions/github';
+import { getGitHubContext } from '../context-accessor';
+
+function ctx() { return getGitHubContext(); }
 import { getOctokit } from '../octokit';
 import { GITHUB_IGNORE_PATTERNS } from '../constants';
 import { createLogger } from './types';
@@ -68,8 +70,8 @@ export async function buildFileMap(
   log: Logger = createLogger()
 ): Promise<Map<string, { sha: string; content: string | null }>> {
   const octokit = getOctokit();
-  const owner = github.context.repo.owner;
-  const repo = github.context.repo.repo;
+  const owner = ctx().repo.owner;
+  const repo = ctx().repo.repo;
 
   log.debug(`fetching tree: ${treeSha}`);
 

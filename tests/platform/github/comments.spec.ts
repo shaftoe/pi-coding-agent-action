@@ -36,6 +36,7 @@ mock.module('@actions/core', () => ({
   setFailed: mock(noop),
   setOutput: mock(noop),
   warning: mock(noop),
+  error: mock(noop),
 }));
 
 // Create a test CoreAdapter
@@ -49,6 +50,7 @@ const testCoreAdapter = {
   notice: mock(noop),
   info: mock(noop),
   warning: mock(noop),
+  error: mock(noop),
 };
 
 // Mock @actions/github context

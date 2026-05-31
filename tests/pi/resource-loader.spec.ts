@@ -25,6 +25,7 @@ const mockCoreAdapter = {
   debug: mock(),
   info: mock(),
   warning: mock(),
+  error: mock(),
 };
 
 // Mock platform provider for getResourceLoader

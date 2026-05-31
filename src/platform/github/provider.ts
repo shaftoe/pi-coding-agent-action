@@ -12,7 +12,7 @@
  * - Anything else → throws an error (unsupported platform)
  */
 
-import { context } from '@actions/github';
+import * as github from '@actions/github';
 import { addReaction, deleteReaction } from './reactions';
 import { createFinalComment } from './comments';
 import { getPrompt, getStartTimeFromContext } from './context';
@@ -23,6 +23,7 @@ import { fetchPRDiff } from './tools/pr-diff';
 import { createReview } from './tools/review';
 import { getCIStatus } from './tools/get-ci-status';
 import { getWorkflowRunLogs } from './tools/get-workflow-run-logs';
+import { setOctokit, setPlatformContext } from './index';
 import type { Temporal } from '@js-temporal/polyfill';
 import type { PlatformProvider, PlatformType, PlatformContext } from '../types';
 import type { CommentMetadata } from '../../types';
@@ -66,30 +67,56 @@ export function detectPlatform(): PlatformType {
 }
 
 /**
+ * Dependencies required to create a GitHub-compatible platform provider.
+ *
+ * Accepting these as explicit parameters decouples the provider from the
+ * `@actions/github` singleton, enabling use in alternative frontends
+ * (GitHub App, CLI, web UI).
+ */
+export interface GitHubPlatformDeps {
+  /** Pre-authenticated Octokit instance. */
+  octokit: ReturnType<typeof import('@actions/github').getOctokit>;
+  /** Platform context extracted from the CI/CD environment or webhook. */
+  context: PlatformContext;
+}
+
+/**
  * Create a GitHub-compatible platform provider.
  *
  * This implementation works with GitHub, Codeberg, and self-hosted Forgejo
  * instances since all three use the same CI/CD environment variables and
  * GitHub-compatible REST APIs.
  *
+ * @param deps - Optional explicit dependencies (Octokit + context).
+ *               When provided, the provider is fully decoupled from
+ *               `@actions/github` globals. When omitted, falls back to
+ *               the `@actions/github` singleton for backward compatibility.
  * @returns A PlatformProvider instance.
  */
-export function createGitHubPlatformProvider(): PlatformProvider {
+export function createGitHubPlatformProvider(deps?: GitHubPlatformDeps): PlatformProvider {
   const type = detectPlatform();
+
+  // Set module-level deps so sub-functions can access them
+  const resolvedContext: PlatformContext = deps?.context ?? {
+    repo: github.context.repo,
+    issue: github.context.issue,
+    eventName: github.context.eventName,
+    payload: github.context.payload,
+    serverUrl: github.context.serverUrl || 'https://github.com',
+    runId: github.context.runId,
+    workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
+  };
+
+  if (deps?.octokit) {
+    setOctokit(deps.octokit);
+  }
+  setPlatformContext(resolvedContext);
 
   return {
     type,
 
     getContext(): PlatformContext {
-      return {
-        repo: context.repo,
-        issue: context.issue,
-        eventName: context.eventName,
-        payload: context.payload,
-        serverUrl: context.serverUrl || 'https://github.com',
-        runId: context.runId,
-        workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
-      };
+      return resolvedContext;
     },
 
     async addReaction(): Promise<CreateReactionType | undefined> {

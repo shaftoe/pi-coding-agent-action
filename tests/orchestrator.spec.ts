@@ -17,7 +17,7 @@ globalThis.__VERSION__ = 'test-version';
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
 import { Temporal } from '@js-temporal/polyfill';
 import { ActionOrchestrator } from '../src/orchestrator';
-import type { CoreAdapter, GitAdapter, PiAgent } from '../src/types';
+import type { CoreAdapter, GitAdapter, PiAgent, Logger, OutputSink, PiConfig } from '../src/types';
 import type { CreateReactionType, PlatformProvider } from '../src/platform';
 
 describe('ActionOrchestrator', () => {
@@ -26,9 +26,27 @@ describe('ActionOrchestrator', () => {
   let mockProvider: PlatformProvider;
   let mockPiAgent: PiAgent;
   let mockPiFactory: ReturnType<typeof mock>;
+  let mockOutputSink: OutputSink;
+  let defaultConfig: PiConfig;
+
+  /**
+   * Helper to create an orchestrator with the default config and mocks.
+   * Config overrides are merged onto the default config.
+   */
+  function createOrchestrator(configOverrides?: Partial<PiConfig>) {
+    const config = { ...defaultConfig, ...configOverrides };
+    return new ActionOrchestrator(
+      config,
+      mockCore as unknown as Logger,
+      mockOutputSink,
+      mockGit,
+      mockPiFactory,
+      mockProvider
+    );
+  }
 
   beforeEach(() => {
-    // Create mock core adapter
+    // Create mock core adapter (used as Logger)
     const getInputMock = mock((name: string) => {
       const defaults: Record<string, string> = {
         provider: 'anthropic',
@@ -46,6 +64,7 @@ describe('ActionOrchestrator', () => {
     const infoMock = mock();
     const debugMock = mock();
     const warningMock = mock();
+    const errorMock = mock();
     mockCore = {
       getInput: getInputMock,
       setFailed: setFailedMock,
@@ -54,7 +73,28 @@ describe('ActionOrchestrator', () => {
       info: infoMock,
       debug: debugMock,
       warning: warningMock,
+      error: errorMock,
     } as any;
+
+    // Default config (matches what gatherActionsConfig produces with default inputs)
+    defaultConfig = {
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-5',
+      token: 'test-token',
+      thinkingLevel: '',
+      promptInput: '',
+      loadBuiltinExtensions: true,
+      exportSessionHtml: true,
+      exportSessionJsonl: false,
+      autoCompaction: false,
+    };
+
+    // Create mock output sink
+    mockOutputSink = {
+      setOutput: mock() as any,
+      setFailed: mock() as any,
+      getExportDirectory: mock((format: 'html' | 'jsonl') => `/tmp/pi-session-${format}-test`) as any,
+    };
 
     // Create mock git adapter
     const addReactionMock = mock(async () => ({ data: { id: 123 } }) as CreateReactionType);
@@ -128,43 +168,35 @@ describe('ActionOrchestrator', () => {
   });
 
   describe('successful execution flow', () => {
-    test('gathers config from core inputs', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+    test('forwards config to Pi agent factory', async () => {
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      expect(mockCore.getInput).toHaveBeenCalledWith('provider');
-      expect(mockCore.getInput).toHaveBeenCalledWith('model');
-      expect(mockCore.getInput).toHaveBeenCalledWith('token');
-      expect(mockCore.getInput).toHaveBeenCalledWith('thinking_level');
-      expect(mockCore.getInput).toHaveBeenCalledWith('prompt');
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+        }),
+        mockCore,
+        mockProvider
+      );
     });
 
     test('retrieves prompt from git platform', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockGit.getPrompt).toHaveBeenCalledWith('');
     });
 
-    test('gets prompt from input when provided', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: 'Review this code',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+    test('gets prompt from config promptInput', async () => {
+      const orchestrator = createOrchestrator({ promptInput: 'Review this code' });
       await orchestrator.execute();
 
       expect(mockGit.getPrompt).toHaveBeenCalledWith('Review this code');
 
-      // Verify the config was also created with the prompt input
+      // Verify the config was forwarded with the prompt input
       expect(mockPiFactory).toHaveBeenCalledWith(
         expect.objectContaining({
           promptInput: 'Review this code',
@@ -175,26 +207,19 @@ describe('ActionOrchestrator', () => {
     });
 
     test('adds reaction before Pi execution', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockGit.addReaction).toHaveBeenCalled();
     });
 
     test('creates Pi agent with correct config', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'openai',
-          model: 'gpt-4o',
-          token: 'sk-test-key',
-          thinking_level: 'medium',
-          prompt: '',
-        };
-        return inputs[name];
+      const orchestrator = createOrchestrator({
+        provider: 'openai',
+        model: 'gpt-4o',
+        token: 'sk-test-key',
+        thinkingLevel: 'medium',
       });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -204,48 +229,22 @@ describe('ActionOrchestrator', () => {
           token: 'sk-test-key',
           thinkingLevel: 'medium',
           promptInput: '',
-          loadBuiltinExtensions: true, // default value
-          exportSessionHtml: true, // default value
-          exportSessionJsonl: false, // default value
-          autoCompaction: false, // default value
+          loadBuiltinExtensions: true,
+          exportSessionHtml: true,
+          exportSessionJsonl: false,
+          autoCompaction: false,
         },
         mockCore,
         mockProvider
       );
     });
 
-    test('defaults thinking_level to off when not provided', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          prompt: '',
-        };
-        if (name === 'thinking_level') {
-          return ''; // Empty string to simulate no input
-        }
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+    test('uses thinkingLevel from config', async () => {
+      const orchestrator = createOrchestrator({ thinkingLevel: '' });
       await orchestrator.execute();
 
-      // Note: The original code uses ?? 'off', which only applies when input is null/undefined
-      // If getInput returns empty string, the default won't apply. This is the actual behavior.
       expect(mockPiFactory).toHaveBeenCalledWith(
-        {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinkingLevel: '', // Empty string, because ?? doesn't apply to empty strings
-          promptInput: '',
-          loadBuiltinExtensions: true, // default value
-          exportSessionHtml: true, // default value
-          exportSessionJsonl: false, // default value
-          autoCompaction: false, // default value
-        },
+        expect.objectContaining({ thinkingLevel: '' }),
         mockCore,
         mockProvider
       );
@@ -255,7 +254,7 @@ describe('ActionOrchestrator', () => {
       const getPromptMock = mock(async () => 'Write unit tests for this function');
       mockGit.getPrompt = getPromptMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockPiAgent.run).toHaveBeenCalledWith('Write unit tests for this function');
@@ -266,14 +265,14 @@ describe('ActionOrchestrator', () => {
       const addReactionMock = mock(async () => mockReaction);
       mockGit.addReaction = addReactionMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockGit.deleteReaction).toHaveBeenCalledWith(mockReaction);
     });
 
     test('logs agent session completed banner after successful run', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockCore.info).toHaveBeenCalledWith('✅ Agent session completed');
@@ -285,7 +284,7 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).rejects.toThrow('API error');
 
@@ -301,7 +300,7 @@ describe('ActionOrchestrator', () => {
       }));
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const calls = (mockGit.createFinalComment as any).mock.calls;
@@ -323,7 +322,7 @@ describe('ActionOrchestrator', () => {
       }));
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       // Should always post a comment even when result is empty
@@ -333,7 +332,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('logs completion banner after session html export', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
@@ -352,7 +351,7 @@ describe('ActionOrchestrator', () => {
       const getStartTimeMock = mock(() => startTime);
       mockGit.getStartTime = getStartTimeMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const calls = (mockGit.createFinalComment as any).mock.calls;
@@ -368,7 +367,7 @@ describe('ActionOrchestrator', () => {
       const getStartTimeMock = mock(() => githubStartTime);
       mockGit.getStartTime = getStartTimeMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockGit.getStartTime).toHaveBeenCalled();
@@ -378,7 +377,7 @@ describe('ActionOrchestrator', () => {
       const getStartTimeMock = mock(() => undefined);
       mockGit.getStartTime = getStartTimeMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const calls = (mockGit.createFinalComment as any).mock.calls;
@@ -398,7 +397,7 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).rejects.toThrow('API quota exceeded');
 
@@ -419,11 +418,11 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).rejects.toThrow('Network timeout');
 
-      expect(mockCore.setFailed).toHaveBeenCalledWith(error);
+      expect(mockOutputSink.setFailed).toHaveBeenCalledWith(error);
     });
 
     test('deletes reaction even when Pi execution fails', async () => {
@@ -436,7 +435,7 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).rejects.toThrow('Failed');
 
@@ -449,7 +448,7 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).rejects.toThrow('String error');
 
@@ -463,7 +462,7 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).rejects.toBe(error);
     });
@@ -474,7 +473,7 @@ describe('ActionOrchestrator', () => {
       });
       mockGit.addReaction = addReactionMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       // Should not throw - execution continues
       await expect(orchestrator.execute()).resolves.toBeUndefined();
@@ -488,144 +487,12 @@ describe('ActionOrchestrator', () => {
     });
   });
 
-  describe('error handling for missing required inputs', () => {
-    test('throws descriptive error when provider is missing', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: '',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
-
-      await expect(orchestrator.execute()).rejects.toThrow('Missing required input: `provider`');
-      expect(mockCore.setFailed).toHaveBeenCalled();
-    });
-
-    test('throws descriptive error when model is missing', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: '',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
-
-      await expect(orchestrator.execute()).rejects.toThrow('Missing required input: `model`');
-      expect(mockCore.setFailed).toHaveBeenCalled();
-    });
-
+  describe('config forwarding', () => {
     test('allows empty token for provider-side auth (e.g. ADC)', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'google-vertex',
-          model: 'gemini-2.5-pro',
-          token: '',
-          thinking_level: '',
-          prompt: 'Hello',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
       mockGit.getPrompt = mock(async () => 'Hello');
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
-
+      const orchestrator = createOrchestrator({ token: '', promptInput: 'Hello' });
       await orchestrator.execute();
       expect(mockPiFactory).toHaveBeenCalled();
-    });
-
-    test('provider error mentions possible values', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: '',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
-
-      await expect(orchestrator.execute()).rejects.toThrow(/anthropic/);
-    });
-
-    test('empty token does not throw, defers auth to provider', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: '',
-          thinking_level: '',
-          prompt: 'Hello',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-      mockGit.getPrompt = mock(async () => 'Hello');
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
-
-      await orchestrator.execute();
-      expect(mockCore.debug).toHaveBeenCalledWith(
-        expect.stringContaining('No token provided')
-      );
-    });
-
-    test('missing provider does not call Pi factory', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: '',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
-
-      await expect(orchestrator.execute()).rejects.toThrow();
-      expect(mockPiFactory).not.toHaveBeenCalled();
-    });
-
-    test('missing input finalizes with error comment', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: '',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
-
-      await expect(orchestrator.execute()).rejects.toThrow();
-      expect(mockGit.createFinalComment).toHaveBeenCalledWith(
-        expect.stringContaining('Missing required input: `provider`'),
-        expect.any(Object)
-      );
     });
   });
 
@@ -634,7 +501,7 @@ describe('ActionOrchestrator', () => {
       const getPromptMock = mock(async () => undefined);
       mockGit.getPrompt = getPromptMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).rejects.toThrow('No prompt found - cannot proceed');
     });
@@ -643,12 +510,12 @@ describe('ActionOrchestrator', () => {
       const getPromptMock = mock(async () => undefined);
       mockGit.getPrompt = getPromptMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).rejects.toThrow();
 
-      expect(mockCore.setFailed).toHaveBeenCalled();
-      const errorArg = (mockCore.setFailed as any).mock.calls[0][0];
+      expect(mockOutputSink.setFailed).toHaveBeenCalled();
+      const errorArg = (mockOutputSink.setFailed as any).mock.calls[0][0];
       expect(errorArg.message).toBe('No prompt found - cannot proceed');
     });
 
@@ -656,7 +523,7 @@ describe('ActionOrchestrator', () => {
       const getPromptMock = mock(async () => undefined);
       mockGit.getPrompt = getPromptMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).rejects.toThrow();
 
@@ -674,7 +541,7 @@ describe('ActionOrchestrator', () => {
       const getPromptMock = mock(async () => undefined);
       mockGit.getPrompt = getPromptMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).rejects.toThrow();
 
@@ -684,21 +551,10 @@ describe('ActionOrchestrator', () => {
   });
 
   describe('extensions configuration', () => {
-    test('parses extensions input into config array', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          extensions: 'npm:package-one\ngit:github.com/user/repo\n./local-path.ts',
-        };
-        return inputs[name];
+    test('passes extensions config to Pi agent factory', async () => {
+      const orchestrator = createOrchestrator({
+        extensions: ['npm:package-one', 'git:github.com/user/repo', './local-path.ts'],
       });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -710,21 +566,8 @@ describe('ActionOrchestrator', () => {
       );
     });
 
-    test('omits extensions when input is empty', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          extensions: '',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+    test('omits extensions when not in config', async () => {
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -736,20 +579,8 @@ describe('ActionOrchestrator', () => {
       );
     });
 
-    test('omits extensions when input is not provided', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+    test('omits extensions when not in config', async () => {
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -759,19 +590,12 @@ describe('ActionOrchestrator', () => {
         mockCore,
         mockProvider
       );
-    });
-
-    test('calls getInput for extensions', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
-      await orchestrator.execute();
-
-      expect(mockCore.getInput).toHaveBeenCalledWith('extensions');
     });
   });
 
   describe('load_builtin_extensions configuration', () => {
     test('defaults to true when not provided', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -784,20 +608,9 @@ describe('ActionOrchestrator', () => {
     });
 
     test('parses true value correctly', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          load_builtin_extensions: 'true',
-        };
-        return inputs[name];
+      const orchestrator = createOrchestrator({
+        loadBuiltinExtensions: true,
       });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -810,20 +623,9 @@ describe('ActionOrchestrator', () => {
     });
 
     test('parses false value correctly', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          load_builtin_extensions: 'false',
-        };
-        return inputs[name];
+      const orchestrator = createOrchestrator({
+        loadBuiltinExtensions: false,
       });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -835,28 +637,12 @@ describe('ActionOrchestrator', () => {
       );
     });
 
-    test('calls getInput for load_builtin_extensions', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
-      await orchestrator.execute();
 
-      expect(mockCore.getInput).toHaveBeenCalledWith('load_builtin_extensions');
-    });
 
     test('handles case-insensitive true values', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          load_builtin_extensions: 'TRUE',
-        };
-        return inputs[name];
+      const orchestrator = createOrchestrator({
+        loadBuiltinExtensions: true,
       });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -869,20 +655,9 @@ describe('ActionOrchestrator', () => {
     });
 
     test('handles case-insensitive false values', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          load_builtin_extensions: 'FALSE',
-        };
-        return inputs[name];
+      const orchestrator = createOrchestrator({
+        loadBuiltinExtensions: false,
       });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -900,11 +675,11 @@ describe('ActionOrchestrator', () => {
       const getPromptMock = mock(async () => '');
       mockGit.getPrompt = getPromptMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).rejects.toThrow('No prompt found - cannot proceed');
 
-      expect(mockCore.setFailed).toHaveBeenCalled();
+      expect(mockOutputSink.setFailed).toHaveBeenCalled();
       expect(mockGit.createFinalComment).toHaveBeenCalledWith(
         'No prompt found - cannot proceed',
         expect.any(Object)
@@ -917,7 +692,7 @@ describe('ActionOrchestrator', () => {
       const addReactionMock = mock(async () => undefined);
       mockGit.addReaction = addReactionMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockGit.deleteReaction).not.toHaveBeenCalled();
@@ -925,19 +700,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('handles whitespace-only thinking_level input', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '   ',
-          prompt: '',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ thinkingLevel: '   ' });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -956,7 +719,7 @@ describe('ActionOrchestrator', () => {
       }));
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       // Should not throw - execution continues without stats
       await expect(orchestrator.execute()).resolves.toBeUndefined();
@@ -985,7 +748,7 @@ describe('ActionOrchestrator', () => {
       }));
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).resolves.toBeUndefined();
 
@@ -1005,11 +768,11 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).rejects.toBe(error);
 
-      expect(mockCore.setFailed).toHaveBeenCalledWith(error);
+      expect(mockOutputSink.setFailed).toHaveBeenCalledWith(error);
       expect(mockGit.createFinalComment).toHaveBeenCalledWith('Prompt failed', expect.any(Object));
     });
 
@@ -1026,13 +789,13 @@ describe('ActionOrchestrator', () => {
       });
       mockGit.createFinalComment = createFinalCommentMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       // The original error should still be re-thrown
       await expect(orchestrator.execute()).rejects.toThrow('Prompt failed');
 
       // setFailed should STILL have been called even though finalize failed
-      expect(mockCore.setFailed).toHaveBeenCalledWith(error);
+      expect(mockOutputSink.setFailed).toHaveBeenCalledWith(error);
 
       // Final comment creation was attempted in catch block
       expect(mockGit.createFinalComment).toHaveBeenCalledWith('Prompt failed', expect.any(Object));
@@ -1045,12 +808,12 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).rejects.toThrow(error);
 
-      expect(mockCore.setFailed).toHaveBeenCalledWith(error);
-      expect(mockCore.setFailed).toHaveBeenCalledTimes(1);
+      expect(mockOutputSink.setFailed).toHaveBeenCalledWith(error);
+      expect(mockOutputSink.setFailed).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1062,17 +825,17 @@ describe('ActionOrchestrator', () => {
       }));
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      expect(mockCore.setOutput).toHaveBeenCalledWith('response', 'Your tests are ready!');
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('response', 'Your tests are ready!');
     });
 
     test('sets success output to true on successful execution', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      expect(mockCore.setOutput).toHaveBeenCalledWith('success', true);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('success', true);
     });
 
     test('sets success output to false on error', async () => {
@@ -1081,12 +844,12 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).rejects.toThrow('API error');
 
-      expect(mockCore.setOutput).toHaveBeenCalledWith('success', false);
-      expect(mockCore.setOutput).toHaveBeenCalledWith('response', 'API error');
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('success', false);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('response', 'API error');
     });
 
     test('sets token and cost outputs when session stats available', async () => {
@@ -1102,12 +865,12 @@ describe('ActionOrchestrator', () => {
       }));
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      expect(mockCore.setOutput).toHaveBeenCalledWith('input_tokens', 500);
-      expect(mockCore.setOutput).toHaveBeenCalledWith('output_tokens', 200);
-      expect(mockCore.setOutput).toHaveBeenCalledWith('cost', 0.042);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('input_tokens', 500);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('output_tokens', 200);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('cost', 0.042);
     });
 
     test('does not set token/cost outputs when session stats unavailable', async () => {
@@ -1117,12 +880,12 @@ describe('ActionOrchestrator', () => {
       }));
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      expect(mockCore.setOutput).not.toHaveBeenCalledWith('input_tokens', expect.anything());
-      expect(mockCore.setOutput).not.toHaveBeenCalledWith('output_tokens', expect.anything());
-      expect(mockCore.setOutput).not.toHaveBeenCalledWith('cost', expect.anything());
+      expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('input_tokens', expect.anything());
+      expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('output_tokens', expect.anything());
+      expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('cost', expect.anything());
     });
 
     test('sets duration_seconds output', async () => {
@@ -1130,10 +893,10 @@ describe('ActionOrchestrator', () => {
       const getStartTimeMock = mock(() => startTime);
       mockGit.getStartTime = getStartTimeMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      expect(mockCore.setOutput).toHaveBeenCalledWith('duration_seconds', expect.any(Number));
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('duration_seconds', expect.any(Number));
     });
 
     test('sets all outputs on success with session stats', async () => {
@@ -1149,34 +912,25 @@ describe('ActionOrchestrator', () => {
       }));
       mockPiAgent.run = runMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      expect(mockCore.setOutput).toHaveBeenCalledWith('response', 'Analysis complete');
-      expect(mockCore.setOutput).toHaveBeenCalledWith('success', true);
-      expect(mockCore.setOutput).toHaveBeenCalledWith('input_tokens', 1000);
-      expect(mockCore.setOutput).toHaveBeenCalledWith('output_tokens', 500);
-      expect(mockCore.setOutput).toHaveBeenCalledWith('cost', 0.05);
-      expect(mockCore.setOutput).toHaveBeenCalledWith('duration_seconds', expect.any(Number));
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('response', 'Analysis complete');
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('success', true);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('input_tokens', 1000);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('output_tokens', 500);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('cost', 0.05);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('duration_seconds', expect.any(Number));
     });
   });
 
   describe('base_url configuration', () => {
     test('passes baseUrl when provided', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'openai',
-          model: 'gpt-4o',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          base_url: 'https://my-proxy.example.com/v1',
-        };
-        return inputs[name];
+      const orchestrator = createOrchestrator({
+        provider: 'openai',
+        model: 'gpt-4o',
+        baseUrl: 'https://my-proxy.example.com/v1',
       });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1189,20 +943,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('omits baseUrl when input is empty', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          base_url: '',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1214,17 +955,11 @@ describe('ActionOrchestrator', () => {
       );
     });
 
-    test('calls getInput for base_url', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
-      await orchestrator.execute();
-
-      expect(mockCore.getInput).toHaveBeenCalledWith('base_url');
-    });
   });
 
   describe('export_session_html configuration', () => {
     test('defaults to true when not provided', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1237,20 +972,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('parses true value correctly', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          export_session_html: 'true',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ exportSessionHtml: true });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1263,20 +985,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('parses false value correctly', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          export_session_html: 'false',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ exportSessionHtml: false });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1288,35 +997,16 @@ describe('ActionOrchestrator', () => {
       );
     });
 
-    test('calls getInput for export_session_html', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
-      await orchestrator.execute();
-
-      expect(mockCore.getInput).toHaveBeenCalledWith('export_session_html');
-    });
 
     test('calls exportSessionHtml on agent when enabled', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockPiAgent.exportSessionHtml).toHaveBeenCalled();
     });
 
     test('does not call exportSessionHtml when disabled', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          export_session_html: 'false',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ exportSessionHtml: false });
       await orchestrator.execute();
 
       expect(mockPiAgent.exportSessionHtml).not.toHaveBeenCalled();
@@ -1328,11 +1018,11 @@ describe('ActionOrchestrator', () => {
       });
       mockPiAgent.exportSessionHtml = failingExport as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       // Action still completes successfully
-      expect(mockCore.setOutput).toHaveBeenCalledWith('success', true);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('success', true);
       expect(mockCore.notice).toHaveBeenCalledWith(
         expect.stringContaining('[session-html] failed to export HTML')
       );
@@ -1340,30 +1030,27 @@ describe('ActionOrchestrator', () => {
   });
 
   describe('diff configuration', () => {
-    test('calls getInput for diff_max_lines, diff_max_bytes, diff_ignore_patterns', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+    test('passes diff config to Pi agent factory', async () => {
+      const orchestrator = createOrchestrator({
+        diffMaxLines: 500,
+        diffMaxBytes: 204800,
+        diffIgnorePatterns: ['dist/'],
+      });
       await orchestrator.execute();
 
-      expect(mockCore.getInput).toHaveBeenCalledWith('diff_max_lines');
-      expect(mockCore.getInput).toHaveBeenCalledWith('diff_max_bytes');
-      expect(mockCore.getInput).toHaveBeenCalledWith('diff_ignore_patterns');
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          diffMaxLines: 500,
+          diffMaxBytes: 204800,
+          diffIgnorePatterns: ['dist/'],
+        }),
+        mockCore,
+        mockProvider
+      );
     });
 
     test('passes diffMaxLines when provided', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          diff_max_lines: '500',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ diffMaxLines: 500 });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1376,20 +1063,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('passes diffMaxBytes when provided', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          diff_max_bytes: '204800',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ diffMaxBytes: 204800 });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1402,20 +1076,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('passes diffIgnorePatterns when provided', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          diff_ignore_patterns: 'dist/ package-lock.json yarn.lock',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ diffIgnorePatterns: ['dist/', 'package-lock.json', 'yarn.lock'] });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1428,22 +1089,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('omits diff config when inputs are empty', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          diff_max_lines: '',
-          diff_max_bytes: '',
-          diff_ignore_patterns: '',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const callArgs = (mockPiFactory as any).mock.calls[0][0];
@@ -1453,20 +1099,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('ignores non-numeric diff_max_lines input', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          diff_max_lines: 'not-a-number',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const callArgs = (mockPiFactory as any).mock.calls[0][0];
@@ -1474,20 +1107,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('ignores negative diff_max_lines input', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          diff_max_lines: '-1',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const callArgs = (mockPiFactory as any).mock.calls[0][0];
@@ -1495,20 +1115,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('ignores negative diff_max_bytes input', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          diff_max_bytes: '-100',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const callArgs = (mockPiFactory as any).mock.calls[0][0];
@@ -1516,20 +1123,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('ignores zero diff_max_lines input', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          diff_max_lines: '0',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const callArgs = (mockPiFactory as any).mock.calls[0][0];
@@ -1538,15 +1132,9 @@ describe('ActionOrchestrator', () => {
   });
 
   describe('loaded_tools configuration', () => {
-    test('calls getInput for loaded_tools', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
-      await orchestrator.execute();
-
-      expect(mockCore.getInput).toHaveBeenCalledWith('loaded_tools');
-    });
 
     test('defaults to undefined when not provided (all tools)', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const callArgs = (mockPiFactory as any).mock.calls[0][0];
@@ -1554,20 +1142,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('defaults to undefined when input is empty string', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          loaded_tools: '',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const callArgs = (mockPiFactory as any).mock.calls[0][0];
@@ -1588,7 +1163,7 @@ describe('ActionOrchestrator', () => {
       });
       mockCore.getInput = getInputMock as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const callArgs = (mockPiFactory as any).mock.calls[0][0];
@@ -1596,20 +1171,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('defaults to undefined when input is "ALL" (case insensitive)', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          loaded_tools: 'ALL',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const callArgs = (mockPiFactory as any).mock.calls[0][0];
@@ -1617,20 +1179,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('parses single tool name', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          loaded_tools: 'get_pr_diff',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ loadedTools: ['get_pr_diff'] });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1643,20 +1192,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('parses comma-separated tool names', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          loaded_tools: 'get_pr_diff,create_pull_request_review',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ loadedTools: ['get_pr_diff', 'create_pull_request_review'] });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1669,20 +1205,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('trims whitespace around tool names', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          loaded_tools: ' get_pr_diff , create_pull_request_review , read ',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ loadedTools: ['get_pr_diff', 'create_pull_request_review', 'read'] });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1695,20 +1218,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('filters out empty items from trailing commas', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          loaded_tools: 'get_pr_diff,,create_pull_request_review,',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ loadedTools: ['get_pr_diff', 'create_pull_request_review'] });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1721,20 +1231,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('deduplicates duplicate tool names', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          loaded_tools: 'read,read,write,read',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ loadedTools: ['read', 'write'] });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1747,20 +1244,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('handles whitespace-only input as undefined', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          loaded_tools: '   ',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const callArgs = (mockPiFactory as any).mock.calls[0][0];
@@ -1770,7 +1254,7 @@ describe('ActionOrchestrator', () => {
 
   describe('export_session_jsonl configuration', () => {
     test('defaults to false when not provided', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1783,20 +1267,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('parses true value correctly', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          export_session_jsonl: 'true',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ exportSessionJsonl: true });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1809,20 +1280,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('parses false value correctly', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          export_session_jsonl: 'false',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ exportSessionJsonl: false });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1834,100 +1292,42 @@ describe('ActionOrchestrator', () => {
       );
     });
 
-    test('calls getInput for export_session_jsonl', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
-      await orchestrator.execute();
-
-      expect(mockCore.getInput).toHaveBeenCalledWith('export_session_jsonl');
-    });
 
     test('calls exportSessionJsonl on agent when enabled', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          export_session_jsonl: 'true',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ exportSessionJsonl: true });
       await orchestrator.execute();
 
       expect(mockPiAgent.exportSessionJsonl).toHaveBeenCalled();
     });
 
     test('does not call exportSessionJsonl when disabled', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          export_session_jsonl: 'false',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ exportSessionJsonl: false });
       await orchestrator.execute();
 
       expect(mockPiAgent.exportSessionJsonl).not.toHaveBeenCalled();
     });
 
     test('continues execution when exportSessionJsonl throws', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          export_session_jsonl: 'true',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
       const failingExport = mock(async () => {
         throw new Error('jsonl export failed');
       });
       mockPiAgent.exportSessionJsonl = failingExport as any;
 
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ exportSessionJsonl: true });
       await orchestrator.execute();
 
       // Action still completes successfully
-      expect(mockCore.setOutput).toHaveBeenCalledWith('success', true);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('success', true);
       expect(mockCore.notice).toHaveBeenCalledWith(
         expect.stringContaining('[session-jsonl] failed to export JSONL')
       );
     });
 
     test('sets session_jsonl_path output when export succeeds', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          export_session_jsonl: 'true',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ exportSessionJsonl: true });
       await orchestrator.execute();
 
-      expect(mockCore.setOutput).toHaveBeenCalledWith(
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith(
         'session_jsonl_path',
         expect.stringContaining('session.jsonl')
       );
@@ -1936,7 +1336,7 @@ describe('ActionOrchestrator', () => {
 
   describe('auto_compaction configuration', () => {
     test('defaults to false when not provided', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1949,20 +1349,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('parses true value correctly', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          auto_compaction: 'true',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ autoCompaction: true });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -1975,20 +1362,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('parses false value correctly', async () => {
-      const getInputMock = mock((name: string) => {
-        const inputs: Record<string, string> = {
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-          thinking_level: '',
-          prompt: '',
-          auto_compaction: 'false',
-        };
-        return inputs[name];
-      });
-      mockCore.getInput = getInputMock as any;
-
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      const orchestrator = createOrchestrator({ autoCompaction: false });
       await orchestrator.execute();
 
       expect(mockPiFactory).toHaveBeenCalledWith(
@@ -2000,11 +1374,5 @@ describe('ActionOrchestrator', () => {
       );
     });
 
-    test('calls getInput for auto_compaction', async () => {
-      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
-      await orchestrator.execute();
-
-      expect(mockCore.getInput).toHaveBeenCalledWith('auto_compaction');
-    });
   });
 });

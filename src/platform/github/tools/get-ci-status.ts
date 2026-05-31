@@ -5,7 +5,9 @@
  * queries the GitHub Actions / Checks API for workflow runs and check runs.
  */
 
-import * as github from '@actions/github';
+import { getGitHubContext } from '../context-accessor';
+
+function ctx() { return getGitHubContext(); }
 import { getOctokit } from '../octokit';
 import { getCoreAdapter } from '../index';
 import type {
@@ -73,7 +75,7 @@ async function resolveHeadSha(
   }
 
   // Fall back to context SHA
-  const sha = github.context.sha;
+  const sha = ctx().sha;
   return sha || undefined;
 }
 
@@ -168,8 +170,8 @@ export async function getCIStatus(params: GetCIStatusParams): Promise<{
   content: { type: 'text'; text: string }[];
   details: GetCIStatusDetails;
 }> {
-  const owner = params.owner ?? github.context.repo.owner;
-  const repo = params.repo ?? github.context.repo.repo;
+  const owner = params.owner ?? ctx().repo.owner;
+  const repo = params.repo ?? ctx().repo.repo;
 
   const ref = await resolveHeadSha(owner, repo, params);
   if (!ref) {

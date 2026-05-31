@@ -12,7 +12,7 @@ import * as github from '@actions/github';
 import { Temporal } from '@js-temporal/polyfill';
 import { DEFAULT_TRIGGER } from './constants';
 import { isPR, getContextType } from './context-utils';
-import { getCoreAdapter } from './index';
+import { getCoreAdapter, getModulePlatformContext } from './index';
 import type { IssueOrPullRequestContext } from './types';
 
 /**
@@ -20,6 +20,21 @@ import type { IssueOrPullRequestContext } from './types';
  */
 function debug(msg: string): void {
   getCoreAdapter().debug(msg);
+}
+
+/**
+ * Get the platform context, falling back to @actions/github singleton.
+ *
+ * This allows the module to work with injected context (via createGitHubPlatformProvider)
+ * or the legacy @actions/github singleton for backward compatibility.
+ */
+function ctx(): typeof github.context {
+  try {
+    const pc = getModulePlatformContext();
+    return pc as unknown as typeof github.context;
+  } catch {
+    return github.context;
+  }
 }
 
 /**
@@ -56,7 +71,7 @@ function getTrigger(): string {
  * @returns The start instant, or `undefined` if it cannot be determined.
  */
 export function getStartTimeFromContext(): Temporal.Instant | undefined {
-  const { eventName, payload } = github.context;
+  const { eventName, payload } = ctx();
 
   // Record-based dispatch: event name → timestamp field extractor
   const extractor = TIMESTAMP_SOURCES[eventName];
@@ -122,7 +137,7 @@ export function getIssueOrPullRequestContext(): IssueOrPullRequestContext | unde
     return undefined;
   }
 
-  return extractor(github.context.payload);
+  return extractor(ctx().payload);
 }
 
 /**
@@ -201,8 +216,8 @@ interface TriggeringComment {
 }
 
 async function getComment(): Promise<TriggeringComment | undefined> {
-  const comment = github.context.payload.comment;
-  const review = github.context.payload.review;
+  const comment = ctx().payload.comment;
+  const review = ctx().payload.review;
 
   // For pull_request_review events, the body is on the review object, not comment
   if (!comment && review) {

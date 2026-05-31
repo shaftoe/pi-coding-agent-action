@@ -3,6 +3,19 @@
  */
 
 import * as github from '@actions/github';
+import { getModulePlatformContext } from './index';
+
+/**
+ * Get the platform context, falling back to @actions/github singleton.
+ */
+function ctx(): typeof github.context {
+  try {
+    const pc = getModulePlatformContext();
+    return pc as unknown as typeof github.context;
+  } catch {
+    return github.context;
+  }
+}
 
 /**
  * Determine if the current GitHub context is a pull request.
@@ -11,8 +24,8 @@ import * as github from '@actions/github';
  *          `pull_request` object.
  */
 export function isPR(): boolean {
-  const eventType = github.context.eventName;
-  return eventType === 'pull_request' || github.context.payload.pull_request !== undefined;
+  const eventType = ctx().eventName;
+  return eventType === 'pull_request' || ctx().payload.pull_request !== undefined;
 }
 
 /**
@@ -26,7 +39,7 @@ export function getContextType(): 'issue' | 'pull_request' | undefined {
   if (isPR()) {
     return 'pull_request';
   }
-  if (github.context.eventName === 'issue_comment' || github.context.eventName === 'issues') {
+  if (ctx().eventName === 'issue_comment' || ctx().eventName === 'issues') {
     return 'issue';
   }
   return undefined;

@@ -64,6 +64,7 @@ const mockNotice = mock();
 const mockInfo = mock();
 const mockDebug = mock();
 const mockWarning = mock();
+const mockError = mock();
 
 import type { CoreAdapter } from '../../src/types.ts';
 
@@ -75,6 +76,7 @@ const mockCoreAdapter: CoreAdapter = {
   debug: mockDebug,
   info: mockInfo,
   warning: mockWarning,
+  error: mockError,
 };
 
 // Mock platform provider for Agent constructor

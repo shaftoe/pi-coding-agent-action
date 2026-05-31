@@ -80,15 +80,38 @@ mock.module('@actions/github', () => ({
 // Dynamic import to ensure mocks are set before module loads
 const pullRequestModulePromise = import('../../../src/platform/github/tools/pull-request.js');
 
+// Also import the module context to set up the CoreAdapter
+const githubModulePromise = import('../../../src/platform/github/index.js');
+
 // Cache the module after first import
 let pullRequestModule: any | null = null;
+let githubModule: any | null = null;
 
 async function getModule() {
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-  if (!pullRequestModule) {
-    pullRequestModule = await pullRequestModulePromise;
-  }
+  pullRequestModule ??= await pullRequestModulePromise;
   return pullRequestModule;
+}
+
+
+
+async function getGitHubModule() {
+  if (!githubModule) {
+    githubModule = await githubModulePromise;
+    // Set up module context with a mock CoreAdapter for logging
+    githubModule.setCoreAdapter({
+      getInput: mockGetInput,
+      setFailed: noop,
+      setOutput: noop,
+      notice: noop,
+      debug: noop,
+      info: noop,
+      warning: noop,
+      error: noop,
+    });
+    // Don't set platform context — let ctx() fall back to the mocked github.context
+    // which the test modifies per-test via mockContext
+  }
+  return githubModule;
 }
 
 describe('determineBaseBranch', () => {
@@ -100,7 +123,7 @@ describe('determineBaseBranch', () => {
   });
 
   test('returns provided base branch when explicitly set', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { determineBaseBranch } = module;
 
     const result = await determineBaseBranch('feature-branch');
@@ -110,7 +133,7 @@ describe('determineBaseBranch', () => {
   });
 
   test('returns default branch from context when available', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { determineBaseBranch } = module;
 
     const result = await determineBaseBranch(undefined);
@@ -120,7 +143,7 @@ describe('determineBaseBranch', () => {
   });
 
   test('fetches default branch from GitHub API as fallback', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { determineBaseBranch } = module;
 
     // Remove default_branch from context
@@ -138,7 +161,7 @@ describe('determineBaseBranch', () => {
   });
 
   test('logs debug message for each resolution path - provided branch', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { determineBaseBranch } = module;
 
     // Debug logging is tested via observable behavior (returned value, API calls)
@@ -147,7 +170,7 @@ describe('determineBaseBranch', () => {
   });
 
   test('logs debug message for each resolution path - context default', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { determineBaseBranch } = module;
 
     // Debug logging is tested via observable behavior (returned value, API calls)
@@ -156,7 +179,7 @@ describe('determineBaseBranch', () => {
   });
 
   test('logs debug message for each resolution path - API fetch', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { determineBaseBranch } = module;
 
     // @ts-expect-error -- Testing error handling when repository is undefined
@@ -178,7 +201,7 @@ describe('generatePullRequestBody', () => {
   });
 
   test('returns provided body when explicitly set', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generatePullRequestBody } = module;
 
     const result = generatePullRequestBody('Custom PR description');
@@ -187,7 +210,7 @@ describe('generatePullRequestBody', () => {
   });
 
   test('generates body with issue reference (#N) for issue context', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generatePullRequestBody } = module;
 
     mockContext.eventName = 'issues';
@@ -200,7 +223,7 @@ describe('generatePullRequestBody', () => {
   });
 
   test('generates body with PR reference for PR context', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generatePullRequestBody } = module;
 
     mockContext.eventName = 'pull_request';
@@ -213,7 +236,7 @@ describe('generatePullRequestBody', () => {
   });
 
   test('generates body with issue reference for issue_comment context', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generatePullRequestBody } = module;
 
     mockContext.eventName = 'issue_comment';
@@ -226,7 +249,7 @@ describe('generatePullRequestBody', () => {
   });
 
   test('includes agent attribution when auto-generating', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generatePullRequestBody } = module;
 
     const result = generatePullRequestBody(undefined);
@@ -235,7 +258,7 @@ describe('generatePullRequestBody', () => {
   });
 
   test('handles missing issue number in context', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generatePullRequestBody } = module;
 
     // @ts-expect-error -- Testing error handling when issue is undefined
@@ -248,7 +271,7 @@ describe('generatePullRequestBody', () => {
   });
 
   test('handles unknown event type gracefully', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generatePullRequestBody } = module;
 
     mockContext.eventName = 'push';
@@ -260,7 +283,7 @@ describe('generatePullRequestBody', () => {
   });
 
   test('returns empty string when body is explicitly empty string', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generatePullRequestBody } = module;
 
     const result = generatePullRequestBody('');
@@ -272,7 +295,7 @@ describe('generatePullRequestBody', () => {
 
 describe('validateCreatePullRequestParams', () => {
   test('passes validation for valid params', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { validateCreatePullRequestParams } = module;
 
     expect(() => {
@@ -286,7 +309,7 @@ describe('validateCreatePullRequestParams', () => {
   });
 
   test('passes validation with minimal valid params', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { validateCreatePullRequestParams } = module;
 
     expect(() => {
@@ -297,7 +320,7 @@ describe('validateCreatePullRequestParams', () => {
   });
 
   test('throws for empty title', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { validateCreatePullRequestParams } = module;
 
     expect(() => {
@@ -308,7 +331,7 @@ describe('validateCreatePullRequestParams', () => {
   });
 
   test('throws for whitespace-only title', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { validateCreatePullRequestParams } = module;
 
     expect(() => {
@@ -319,7 +342,7 @@ describe('validateCreatePullRequestParams', () => {
   });
 
   test('throws for title exceeding max length', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { validateCreatePullRequestParams } = module;
 
     const longTitle = 'a'.repeat(256);
@@ -331,7 +354,7 @@ describe('validateCreatePullRequestParams', () => {
   });
 
   test('throws for title at exactly max length + 1', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { validateCreatePullRequestParams } = module;
 
     const longTitle = 'a'.repeat(256);
@@ -343,7 +366,7 @@ describe('validateCreatePullRequestParams', () => {
   });
 
   test('passes validation for title at exactly max length', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { validateCreatePullRequestParams } = module;
 
     const maxTitle = 'a'.repeat(255);
@@ -355,7 +378,7 @@ describe('validateCreatePullRequestParams', () => {
   });
 
   test('throws for invalid dry_run value - not a boolean', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { validateCreatePullRequestParams } = module;
 
     // This is a TypeScript type error, but let's test runtime behavior
@@ -372,7 +395,7 @@ describe('validateCreatePullRequestParams', () => {
   });
 
   test('allows undefined dry_run', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { validateCreatePullRequestParams } = module;
 
     expect(() => {
@@ -384,7 +407,7 @@ describe('validateCreatePullRequestParams', () => {
   });
 
   test('allows false dry_run', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { validateCreatePullRequestParams } = module;
 
     expect(() => {
@@ -396,7 +419,7 @@ describe('validateCreatePullRequestParams', () => {
   });
 
   test('allows true dry_run', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { validateCreatePullRequestParams } = module;
 
     expect(() => {
@@ -410,35 +433,35 @@ describe('validateCreatePullRequestParams', () => {
 
 describe('slugify', () => {
   test('converts simple text to slug', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { slugify } = module;
 
     expect(slugify('Fix authentication bug')).toBe('fix-authentication-bug');
   });
 
   test('handles special characters', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { slugify } = module;
 
     expect(slugify('feat: add new API endpoint /users')).toBe('feat-add-new-api-endpoint-users');
   });
 
   test('handles multiple spaces and hyphens', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { slugify } = module;
 
     expect(slugify('  Fix   the -- bug  ')).toBe('fix-the-bug');
   });
 
   test('handles uppercase text', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { slugify } = module;
 
     expect(slugify('BREAKING CHANGE')).toBe('breaking-change');
   });
 
   test('truncates to maxLength and strips trailing hyphen', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { slugify } = module;
 
     // slugify('a very long title') => 'a-very-long-title'
@@ -448,21 +471,21 @@ describe('slugify', () => {
   });
 
   test('handles empty string', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { slugify } = module;
 
     expect(slugify('')).toBe('');
   });
 
   test('handles string with only special characters', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { slugify } = module;
 
     expect(slugify('!!! ???')).toBe('');
   });
 
   test('handles numbers', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { slugify } = module;
 
     expect(slugify('Fix issue #123')).toBe('fix-issue-123');
@@ -476,7 +499,7 @@ describe('generateBranchName', () => {
   });
 
   test('generates default branch name with number and timestamp', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generateBranchName } = module;
 
     const result = generateBranchName('Fix bug');
@@ -485,7 +508,7 @@ describe('generateBranchName', () => {
   });
 
   test('uses custom template with {number}', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generateBranchName } = module;
 
     const result = generateBranchName('Fix bug', 'fix/{number}');
@@ -494,7 +517,7 @@ describe('generateBranchName', () => {
   });
 
   test('uses custom template with {title}', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generateBranchName } = module;
 
     const result = generateBranchName('Add new login page', 'feature/{title}');
@@ -503,7 +526,7 @@ describe('generateBranchName', () => {
   });
 
   test('uses custom template with all variables', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generateBranchName } = module;
 
     const result = generateBranchName('Fix auth', '{title}-{number}-{timestamp}');
@@ -512,7 +535,7 @@ describe('generateBranchName', () => {
   });
 
   test('falls back to default when template is empty', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generateBranchName } = module;
 
     const result = generateBranchName('Fix bug', '');
@@ -521,7 +544,7 @@ describe('generateBranchName', () => {
   });
 
   test('handles unknown issue number', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generateBranchName } = module;
 
     // @ts-expect-error -- Testing missing issue number
@@ -533,7 +556,7 @@ describe('generateBranchName', () => {
   });
 
   test('template without variables passes through unchanged', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generateBranchName } = module;
 
     const result = generateBranchName('Fix bug', 'static-branch-name');
@@ -542,7 +565,7 @@ describe('generateBranchName', () => {
   });
 
   test('replaces multiple occurrences of same variable', async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     const { generateBranchName } = module;
 
     const result = generateBranchName('Fix bug', '{number}-pr-{number}');
@@ -553,7 +576,7 @@ describe('generateBranchName', () => {
 
 describe('validateBranchName', () => {
   const getValidate = async () => {
-    const module = await getModule();
+    await getGitHubModule(); const module = await getModule();
     return module.validateBranchName as (name: string) => void;
   };
 

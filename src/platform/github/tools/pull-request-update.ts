@@ -9,6 +9,9 @@
  */
 
 import * as github from '@actions/github';
+import { getGitHubContext } from '../context-accessor';
+
+function ctx() { return getGitHubContext(); }
 import { getOctokit } from '../octokit';
 import { MAX_TITLE_LENGTH } from '../constants';
 import {
@@ -57,8 +60,8 @@ async function updatePullRequestMetadata(
   pullNumber: number,
   updates: { title?: string; body?: string }
 ): Promise<{ titleUpdated: boolean; bodyUpdated: boolean }> {
-  const owner = github.context.repo.owner;
-  const repo = github.context.repo.repo;
+  const owner = ctx().repo.owner;
+  const repo = ctx().repo.repo;
 
   const updateParams: {
     title?: string;
@@ -141,7 +144,7 @@ export async function updatePullRequest(
   validateUpdatePullRequestParams(params);
 
   // Resolve PR number from context if not provided
-  const resolvedPullNumber = pull_number ?? github.context.issue.number;
+  const resolvedPullNumber = pull_number ?? ctx().issue?.number;
   if (!resolvedPullNumber) {
     throw new Error(
       'Pull request number not provided and not available in context. ' +
@@ -156,8 +159,8 @@ export async function updatePullRequest(
 
   // Fetch PR details
   const octokit = getOctokit();
-  const owner = github.context.repo.owner;
-  const repo = github.context.repo.repo;
+  const owner = ctx().repo.owner;
+  const repo = ctx().repo.repo;
 
   log.debug(`Fetching PR #${resolvedPullNumber}...`);
   const prData = await octokit.rest.pulls.get({

@@ -5,16 +5,19 @@
  * implementation details (how we talk to GitHub, Core, or Pi). This enables
  * comprehensive unit testing of the action's behavior without mocking
  * the external dependencies themselves.
+ *
+ * Accepts platform-agnostic interfaces ({@link Logger}, {@link OutputSink},
+ * {@link PiConfig}) so the same orchestrator can drive any frontend.
  */
 
 import { Temporal } from '@js-temporal/polyfill';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import {
   type CommentMetadata,
-  type CoreAdapter,
   type GitAdapter,
+  type Logger,
+  type OutputSink,
   type PiAgent,
   type PiAgentFactory,
   type PiConfig,
@@ -25,35 +28,18 @@ import type { CreateReactionType, PlatformProvider } from './platform';
 declare const __VERSION__: string;
 
 /**
- * Parse the `loaded_tools` input.
+ * Orchestrates the Pi agent execution flow.
  *
- * - `'all'`, empty, or whitespace-only → `undefined` (use all tools)
- * - Comma-separated list of tool names → `string[]`
- *
- * Whitespace around tool names is trimmed. Empty items after splitting are
- * discarded. Duplicate names are deduplicated.
- */
-function parseLoadedTools(input: string): string[] | undefined {
-  const trimmed = input?.trim();
-  if (!trimmed || trimmed.toLowerCase() === 'all') {
-    return undefined;
-  }
-  const tools = trimmed
-    .split(',')
-    .map(t => t.trim())
-    .filter(Boolean);
-  return tools.length > 0 ? [...new Set(tools)] : undefined;
-}
-
-/**
- * Orchestrates the GitHub Action execution flow.
- *
- * The orchestrator gathers configuration, retrieves the prompt, manages the
- * reaction lifecycle, executes the Pi agent, and finalizes the result or error.
+ * The orchestrator receives a pre-built configuration, retrieves the prompt,
+ * manages the reaction lifecycle, executes the Pi agent, and finalizes the
+ * result or error. All platform-specific operations are delegated to the
+ * injected adapters.
  */
 export class ActionOrchestrator {
   constructor(
-    private readonly core: CoreAdapter,
+    private readonly config: PiConfig,
+    private readonly logger: Logger,
+    private readonly outputSink: OutputSink,
     private readonly git: GitAdapter,
     private readonly piAgentFactory: PiAgentFactory,
     private readonly platformProvider: PlatformProvider
@@ -62,20 +48,18 @@ export class ActionOrchestrator {
   /**
    * Execute the complete action flow.
    *
-   * @throws Rethrows any error from the Pi session after reporting it via core.setFailed.
+   * @throws Rethrows any error from the Pi session after reporting it via outputSink.setFailed.
    *         Finalization errors (posting comment, deleting reaction) are caught and logged
    *         so they never prevent setFailed from running.
    */
   async execute(): Promise<void> {
-    this.core.info(`running action v${__VERSION__}`);
+    this.logger.info(`running action v${__VERSION__}`);
     const startTime = this.git.getStartTime() ?? Temporal.Now.instant();
-    let config: PiConfig | undefined;
     let reaction: CreateReactionType | undefined;
     let prompt: string | undefined;
 
     try {
-      config = this.gatherConfig();
-      prompt = await this.git.getPrompt(config.promptInput);
+      prompt = await this.git.getPrompt(this.config.promptInput);
 
       if (!prompt) {
         throw new Error('No prompt found - cannot proceed');
@@ -85,34 +69,34 @@ export class ActionOrchestrator {
         reaction = await this.git.addReaction();
       } catch (e) {
         const errorMessage = e instanceof Error ? e.message : String(e);
-        this.core.notice(`failed to add reaction: ${errorMessage}`);
+        this.logger.notice(`failed to add reaction: ${errorMessage}`);
       }
 
-      const pi = this.piAgentFactory(config, this.core, this.platformProvider);
+      const pi = this.piAgentFactory(this.config, this.logger, this.platformProvider);
       const { result, sessionStats } = await pi.run(prompt);
 
       const exportPromises: Promise<void>[] = [];
-      if (config.exportSessionHtml) {
+      if (this.config.exportSessionHtml) {
         exportPromises.push(this.exportSessionOutput(pi, 'html'));
       } else {
-        this.core.debug('[session-html] export disabled by configuration');
+        this.logger.debug('[session-html] export disabled by configuration');
       }
-      if (config.exportSessionJsonl) {
+      if (this.config.exportSessionJsonl) {
         exportPromises.push(this.exportSessionOutput(pi, 'jsonl'));
       } else {
-        this.core.debug('[session-jsonl] export disabled by configuration');
+        this.logger.debug('[session-jsonl] export disabled by configuration');
       }
       await Promise.all(exportPromises);
 
-      this.core.info('\n');
-      this.core.info('════════════════════════════════════════════════════════════════');
-      this.core.info('✅ Agent session completed');
-      this.core.info('════════════════════════════════════════════════════════════════');
+      this.logger.info('\n');
+      this.logger.info('════════════════════════════════════════════════════════════════');
+      this.logger.info('✅ Agent session completed');
+      this.logger.info('════════════════════════════════════════════════════════════════');
 
       // Ensure we always post a final comment — when the agent only used tools
       // (e.g. created/updated a PR) the text response may be empty.
       const finalBody = result || '✅ Agent session completed';
-      await this.finalize(finalBody, config, startTime, reaction, sessionStats, true);
+      await this.finalize(finalBody, this.config, startTime, reaction, sessionStats, true);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
 
@@ -121,142 +105,25 @@ export class ActionOrchestrator {
       // NOT prevent setFailed from running. The action must always signal
       // failure to the CI runner, even when we cannot leave a comment.
       try {
-        const errorConfig = config ?? {
-          provider: '',
-          model: '',
-          token: '',
-          thinkingLevel: '',
-          promptInput: '',
-        };
-        await this.finalize(errorMessage, errorConfig, startTime, reaction, undefined, false);
+        await this.finalize(errorMessage, this.config, startTime, reaction, undefined, false);
       } catch (finalizeError) {
         const finalizeErrorMessage =
           finalizeError instanceof Error ? finalizeError.message : String(finalizeError);
-        this.core.notice(`failed to finalize after error: ${finalizeErrorMessage}`);
+        this.logger.notice(`failed to finalize after error: ${finalizeErrorMessage}`);
       }
 
       // Mark the action as failed and re-throw the original error
-      this.core.setFailed(e as Error);
+      this.outputSink.setFailed(e as Error);
       throw e;
     }
   }
 
   /**
-   * Gather configuration from core inputs.
-   *
-   * Validates that all required inputs are present and throws descriptive
-   * errors when they are missing, so users see actionable guidance instead
-   * of obscure downstream failures like "Model not found: /".
-   */
-  private gatherConfig(): PiConfig {
-    const provider = this.core.getInput('provider');
-    const model = this.core.getInput('model');
-    const token = this.core.getInput('token');
-
-    if (!provider) {
-      throw new Error(
-        'Missing required input: `provider`. ' +
-          'Set it to your LLM provider (e.g. "anthropic", "openai", "google"). ' +
-          'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.'
-      );
-    }
-
-    if (!model) {
-      throw new Error(
-        'Missing required input: `model`. ' +
-          'Set it to the desired model (e.g. "claude-sonnet-4-5", "gpt-4o"). ' +
-          'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.'
-      );
-    }
-
-    if (!token) {
-      this.core.debug(
-        '[config] No token provided — relying on provider-side auth (e.g. ADC)'
-      );
-    }
-
-    const extensionsInput = this.core.getInput('extensions');
-    const extensions = extensionsInput
-      ? extensionsInput
-          .split('\n')
-          .map(s => s.trim())
-          .filter(Boolean)
-      : undefined;
-
-    const loadBuiltinExtensionsInput = this.core.getInput('load_builtin_extensions');
-    const loadBuiltinExtensions = loadBuiltinExtensionsInput
-      ? loadBuiltinExtensionsInput.toLowerCase() === 'true'
-      : true; // default to true
-
-    const loadedToolsInput = this.core.getInput('loaded_tools');
-    const loadedTools = parseLoadedTools(loadedToolsInput);
-
-    const baseUrl = this.core.getInput('base_url') || undefined;
-
-    const exportSessionHtmlInput = this.core.getInput('export_session_html');
-    const exportSessionHtml = exportSessionHtmlInput
-      ? exportSessionHtmlInput.toLowerCase() === 'true'
-      : true; // default to true
-
-    const exportSessionJsonlInput = this.core.getInput('export_session_jsonl');
-    const exportSessionJsonl = exportSessionJsonlInput
-      ? exportSessionJsonlInput.toLowerCase() === 'true'
-      : false; // default to false
-
-    const autoCompactionInput = this.core.getInput('auto_compaction');
-    const autoCompaction = autoCompactionInput
-      ? autoCompactionInput.toLowerCase() === 'true'
-      : false; // default to false
-
-    const diffMaxLinesInput = this.core.getInput('diff_max_lines');
-    const parsedLines = diffMaxLinesInput ? parseInt(diffMaxLinesInput, 10) : NaN;
-    const diffMaxLines = parsedLines > 0 ? parsedLines : undefined;
-
-    const diffMaxBytesInput = this.core.getInput('diff_max_bytes');
-    const parsedBytes = diffMaxBytesInput ? parseInt(diffMaxBytesInput, 10) : NaN;
-    const diffMaxBytes = parsedBytes > 0 ? parsedBytes : undefined;
-
-    const diffIgnorePatternsInput = this.core.getInput('diff_ignore_patterns');
-    const diffIgnorePatterns = diffIgnorePatternsInput
-      ? diffIgnorePatternsInput.split(/\s+/).filter(Boolean)
-      : undefined;
-
-    return {
-      provider,
-      model,
-      token,
-      thinkingLevel: this.core.getInput('thinking_level') ?? 'off',
-      promptInput: this.core.getInput('prompt'),
-      ...(extensions?.length ? { extensions } : {}),
-      loadBuiltinExtensions,
-      ...(loadedTools ? { loadedTools } : {}),
-      ...(baseUrl ? { baseUrl } : {}),
-      exportSessionHtml,
-      exportSessionJsonl,
-      autoCompaction,
-      ...(diffMaxLines ? { diffMaxLines } : {}),
-      ...(diffMaxBytes ? { diffMaxBytes } : {}),
-      ...(diffIgnorePatterns?.length ? { diffIgnorePatterns } : {}),
-    };
-  }
-
-  /**
    * Export session output for a given format (HTML or JSONL).
    *
-   * Shared implementation for session exports: creates a temp directory,
-   * calls the appropriate export method on the Pi agent, sets the action
-   * output, and logs success/failure.
-   *
-   * Users can upload exported files as artifacts:
-   *
-   * ```yaml
-   * - uses: actions/upload-artifact@v4
-   *   with:
-   *     name: pi-session-exports
-   *     path: |
-   *       ${{ steps.pi.outputs.session_html_path }}
-   *       ${{ steps.pi.outputs.session_jsonl_path }}
-   * ```
+   * Shared implementation for session exports: creates the export directory
+   * via the output sink, calls the appropriate export method on the Pi agent,
+   * sets the action output, and logs success/failure.
    */
   private async exportSessionOutput(
     pi: PiAgent,
@@ -264,10 +131,7 @@ export class ActionOrchestrator {
   ): Promise<void> {
     const tag = `session-${format}`;
     const formatLabel = format.toUpperCase();
-    const outputDir = path.join(
-      process.env.RUNNER_TEMP ?? os.tmpdir(),
-      `pi-session-${format}-${process.env.GITHUB_RUN_ID ?? 'local'}`
-    );
+    const outputDir = this.outputSink.getExportDirectory(format);
     const outputPath = path.join(outputDir, `session.${format}`);
 
     try {
@@ -275,11 +139,11 @@ export class ActionOrchestrator {
       const exportFn =
         format === 'html' ? pi.exportSessionHtml : pi.exportSessionJsonl;
       await exportFn.call(pi, outputPath);
-      this.core.info(`[${tag}] exported session ${formatLabel} to ${outputPath}`);
-      this.core.setOutput(`session_${format}_path`, outputPath);
+      this.logger.info(`[${tag}] exported session ${formatLabel} to ${outputPath}`);
+      this.outputSink.setOutput(`session_${format}_path`, outputPath);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      this.core.notice(`[${tag}] failed to export ${formatLabel}: ${msg}`);
+      this.logger.notice(`[${tag}] failed to export ${formatLabel}: ${msg}`);
     }
   }
 
@@ -300,20 +164,20 @@ export class ActionOrchestrator {
       }
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
-      this.core.notice(`failed to delete reaction: ${errorMessage}`);
+      this.logger.notice(`failed to delete reaction: ${errorMessage}`);
     }
 
-    this.core.setOutput('response', body);
-    this.core.setOutput('success', success);
+    this.outputSink.setOutput('response', body);
+    this.outputSink.setOutput('success', success);
 
     if (sessionStats !== undefined) {
-      this.core.setOutput('input_tokens', sessionStats.inputTokens);
-      this.core.setOutput('output_tokens', sessionStats.outputTokens);
-      this.core.setOutput('cost', sessionStats.cost);
+      this.outputSink.setOutput('input_tokens', sessionStats.inputTokens);
+      this.outputSink.setOutput('output_tokens', sessionStats.outputTokens);
+      this.outputSink.setOutput('cost', sessionStats.cost);
     }
 
     const executionDuration = startTime.until(Temporal.Now.instant());
-    this.core.setOutput('duration_seconds', executionDuration.total('seconds'));
+    this.outputSink.setOutput('duration_seconds', executionDuration.total('seconds'));
 
     const metadata: CommentMetadata = {
       actionVersion: __VERSION__,

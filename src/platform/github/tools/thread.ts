@@ -6,7 +6,9 @@
  * `get_issue_or_pr_thread` Pi tool via the platform provider.
  */
 
-import * as github from '@actions/github';
+import { getGitHubContext } from '../context-accessor';
+
+function ctx() { return getGitHubContext(); }
 import { getOctokit } from '../octokit';
 import { MAX_COMMENTS, MAX_REVIEW_COMMENTS } from '../constants';
 import { getCoreAdapter } from '../index';
@@ -25,9 +27,9 @@ function resolveThreadParams(
 ): { owner: string; repo: string; issueNumber: number; maxComments: number } | undefined {
   const { owner, repo, issue_number, max_comments = MAX_COMMENTS } = params ?? {};
 
-  const resolvedOwner = owner ?? github.context.repo.owner;
-  const resolvedRepo = repo ?? github.context.repo.repo;
-  const resolvedIssueNumber = issue_number ?? github.context.issue.number;
+  const resolvedOwner = owner ?? ctx().repo.owner;
+  const resolvedRepo = repo ?? ctx().repo.repo;
+  const resolvedIssueNumber = issue_number ?? ctx().issue.number;
 
   if (!resolvedOwner || !resolvedRepo || !resolvedIssueNumber) {
     debug(`[getIssueOrPRThread] Missing owner, repo, or issue_number`);
@@ -92,7 +94,7 @@ function transformComment(comment: {
   body?: string | null;
 }): ThreadComment {
   const triggeringCommentId =
-    github.context.payload.comment?.id ?? github.context.payload.review?.id;
+    ctx().payload.comment?.id ?? ctx().payload.review?.id;
 
   const baseComment: ThreadComment = {
     id: comment.id,

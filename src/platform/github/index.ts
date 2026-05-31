@@ -7,7 +7,10 @@
  * Supports GitHub, Codeberg, and self-hosted Forgejo instances.
  */
 
-import type { CoreAdapter } from '../../types';
+import type { CoreAdapter, Logger } from '../../types';
+import type { PlatformContext } from '../types';
+
+type OctokitInstance = ReturnType<typeof import('@actions/github').getOctokit>;
 
 /**
  * GitHub module context manager.
@@ -27,6 +30,8 @@ import type { CoreAdapter } from '../../types';
  */
 class GitHubModuleContext {
   private _coreAdapter: CoreAdapter | undefined;
+  private _octokit: OctokitInstance | undefined;
+  private _platformContext: PlatformContext | undefined;
 
   /**
    * Set the CoreAdapter for the github module.
@@ -62,6 +67,68 @@ class GitHubModuleContext {
   }
 
   /**
+   * Get the Logger for the github module.
+   *
+   * Returns the CoreAdapter (which extends Logger) if set.
+   *
+   * @returns The Logger instance.
+   * @throws {Error} If the context has not been initialized.
+   */
+  getLogger(): Logger {
+    return this.getCoreAdapter();
+  }
+
+  /**
+   * Set the Octokit instance for the github module.
+   *
+   * @param octokit - The Octokit instance to use.
+   */
+  setOctokit(octokit: OctokitInstance): void {
+    this._octokit = octokit;
+  }
+
+  /**
+   * Get the Octokit instance for the github module.
+   *
+   * @returns The Octokit instance.
+   * @throws {Error} If the Octokit has not been initialized.
+   */
+  getOctokit(): OctokitInstance {
+    if (!this._octokit) {
+      throw new Error(
+        'GitHub module Octokit not initialized. ' +
+          'Call setOctokit() before using github API functions.'
+      );
+    }
+    return this._octokit;
+  }
+
+  /**
+   * Set the platform context for the github module.
+   *
+   * @param ctx - The PlatformContext to use.
+   */
+  setPlatformContext(ctx: PlatformContext): void {
+    this._platformContext = ctx;
+  }
+
+  /**
+   * Get the platform context for the github module.
+   *
+   * @returns The PlatformContext.
+   * @throws {Error} If the platform context has not been initialized.
+   */
+  getPlatformContext(): PlatformContext {
+    if (!this._platformContext) {
+      throw new Error(
+        'GitHub module platform context not initialized. ' +
+          'Call setPlatformContext() before using github context functions.'
+      );
+    }
+    return this._platformContext;
+  }
+
+  /**
    * Check if the context has been initialized.
    *
    * @internal Used for testing purposes.
@@ -82,6 +149,8 @@ class GitHubModuleContext {
    */
   reset(core?: CoreAdapter): void {
     this._coreAdapter = core;
+    this._octokit = undefined;
+    this._platformContext = undefined;
   }
 }
 
@@ -115,12 +184,48 @@ export function getCoreAdapter(): CoreAdapter {
 }
 
 /**
+ * Set the Octokit instance for the github module.
+ *
+ * @param octokit - The Octokit instance to use.
+ */
+export function setOctokit(octokit: OctokitInstance): void {
+  moduleContext.setOctokit(octokit);
+}
+
+/**
+ * Get the Octokit instance for the github module.
+ *
+ * @returns The Octokit instance.
+ * @throws {Error} If the Octokit has not been initialized.
+ */
+export function getModuleOctokit() {
+  return moduleContext.getOctokit();
+}
+
+/**
+ * Set the platform context for the github module.
+ *
+ * @param ctx - The PlatformContext to use.
+ */
+export function setPlatformContext(ctx: PlatformContext): void {
+  moduleContext.setPlatformContext(ctx);
+}
+
+/**
+ * Get the platform context for the github module.
+ *
+ * @returns The PlatformContext.
+ * @throws {Error} If the platform context has not been initialized.
+ */
+export function getModulePlatformContext(): PlatformContext {
+  return moduleContext.getPlatformContext();
+}
+
+/**
  * Reset the github module context.
  *
- * Clears the module-level CoreAdapter. Used in tests to ensure clean
- * isolation between test cases. After resetting, you should either:
- * 1. Call setCoreAdapter() with a new adapter instance
- * 2. Pass a test adapter directly to this function
+ * Clears the module-level CoreAdapter, Octokit, and PlatformContext.
+ * Used in tests to ensure clean isolation between test cases.
  *
  * @param core - Optional new CoreAdapter instance to set after reset.
  * @internal Exported for testing purposes only.

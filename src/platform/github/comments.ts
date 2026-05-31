@@ -10,7 +10,7 @@ import * as github from '@actions/github';
 import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
 import { Temporal } from '@js-temporal/polyfill';
 import { getOctokit } from './octokit';
-import { getCoreAdapter } from './index';
+import { getCoreAdapter, getModulePlatformContext } from './index';
 import type { SessionStats } from '../../types';
 
 /**
@@ -42,6 +42,18 @@ export type CreateCommentType =
  */
 function debug(msg: string): void {
   getCoreAdapter().debug(msg);
+}
+
+/**
+ * Get the platform context, falling back to @actions/github singleton.
+ */
+function ctx(): typeof github.context {
+  try {
+    const pc = getModulePlatformContext();
+    return pc as unknown as typeof github.context;
+  } catch {
+    return github.context;
+  }
 }
 
 /**
@@ -83,7 +95,7 @@ export function formatExecutionTime(duration: Temporal.Duration): string {
  * @returns `true` if the comment is a PR review comment, `false` otherwise.
  */
 function isPullRequestReviewComment(): boolean {
-  const comment = github.context.payload.comment;
+  const comment = ctx().payload.comment;
   return comment?.pull_request_review_id !== undefined;
 }
 
@@ -101,7 +113,7 @@ async function createComment(body: string): Promise<CreateCommentType | undefine
     return;
   }
 
-  const issueNumber = github.context.issue.number;
+  const issueNumber = ctx().issue.number;
   if (!issueNumber) {
     debug('[comments] no issue/PR number in context, skipping comment creation');
     return undefined;
@@ -111,7 +123,7 @@ async function createComment(body: string): Promise<CreateCommentType | undefine
 
   // Check if this is a reply to a PR review comment (inline comment)
   if (isPullRequestReviewComment()) {
-    const comment = github.context.payload.comment;
+    const comment = ctx().payload.comment;
     if (!comment) {
       debug('[comments] no comment found for review reply');
       return undefined;
@@ -119,8 +131,8 @@ async function createComment(body: string): Promise<CreateCommentType | undefine
 
     debug('[comments] creating reply to PR review comment');
     return octokit.rest.pulls.createReplyForReviewComment({
-      owner: github.context.repo.owner,
-      repo: github.context.repo.repo,
+      owner: ctx().repo.owner,
+      repo: ctx().repo.repo,
       pull_number: issueNumber,
       comment_id: comment.id,
       body,
@@ -128,8 +140,8 @@ async function createComment(body: string): Promise<CreateCommentType | undefine
   } else {
     debug('[comments] creating top-level issue/PR comment');
     return octokit.rest.issues.createComment({
-      owner: github.context.repo.owner,
-      repo: github.context.repo.repo,
+      owner: ctx().repo.owner,
+      repo: ctx().repo.repo,
       issue_number: issueNumber,
       body,
     });
@@ -173,9 +185,10 @@ export async function createFinalComment(
   }
 
   // Build the action run URL
-  const serverUrl = github.context.serverUrl || 'https://github.com';
-  const { owner, repo } = github.context.repo;
-  const runId = github.context.runId;
+  const context = ctx();
+  const serverUrl = context.serverUrl || 'https://github.com';
+  const { owner, repo } = context.repo;
+  const runId = context.runId;
 
   let finalBody = body;
   if (owner && repo && runId) {

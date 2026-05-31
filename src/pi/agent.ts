@@ -14,13 +14,7 @@ import { getVersion } from './logging';
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
-import type {
-  PromptResult,
-  SessionStats,
-  CoreAdapter,
-  PiConfig,
-  ResourceLoaderConfig,
-} from '../types';
+import type { PromptResult, SessionStats, Logger, PiConfig, ResourceLoaderConfig } from '../types';
 import type { PlatformProvider } from '../platform';
 
 /**
@@ -36,7 +30,7 @@ export class Agent {
   private session!: AgentSession;
   private thinkingLevel: ThinkingLevel;
   private outputChunks: string[] = [];
-  private core: CoreAdapter;
+  private logger: Logger;
   private platformProvider: PlatformProvider;
   private config: PiConfig;
 
@@ -48,15 +42,15 @@ export class Agent {
    * @param config            - The action configuration.
    * @throws {Error} If the requested model cannot be found in the registry.
    */
-  constructor(core: CoreAdapter, platformProvider: PlatformProvider, config: PiConfig) {
-    this.core = core;
+  constructor(logger: Logger, platformProvider: PlatformProvider, config: PiConfig) {
+    this.logger = logger;
     this.platformProvider = platformProvider;
     this.config = config;
     this.thinkingLevel = (config.thinkingLevel ?? 'off') as ThinkingLevel;
     this.modelRegistry = ModelRegistry.create(this.authStorage);
 
     if (config.token) {
-      this.core.debug(`[auth] Setting api_key token for ${config.provider} provider`);
+      this.logger.debug(`[auth] Setting api_key token for ${config.provider} provider`);
       this.authStorage.set(config.provider, {
         type: 'api_key',
         key: config.token,
@@ -64,7 +58,7 @@ export class Agent {
     }
 
     if (config.baseUrl) {
-      this.core.debug(`[provider] Overriding base URL for ${config.provider}: ${config.baseUrl}`);
+      this.logger.debug(`[provider] Overriding base URL for ${config.provider}: ${config.baseUrl}`);
       this.modelRegistry.registerProvider(config.provider, { baseUrl: config.baseUrl });
     }
 
@@ -91,7 +85,11 @@ export class Agent {
    */
   async ready(): Promise<Agent> {
     const loaderConfig: ResourceLoaderConfig = this.config;
-    const resourceLoader = await getResourceLoader(this.core, this.platformProvider, loaderConfig);
+    const resourceLoader = await getResourceLoader(
+      this.logger,
+      this.platformProvider,
+      loaderConfig
+    );
 
     // Extract loadedTools early so we can pass it to createAgentSession and
     // reuse it for post-creation validation without repeated non-null assertions.
@@ -115,7 +113,7 @@ export class Agent {
     // longer sessions without hitting context limits.
     if (this.config.autoCompaction) {
       session.setAutoCompactionEnabled(true);
-      this.core.info('[auto-compaction] enabled');
+      this.logger.info('[auto-compaction] enabled');
     }
 
     // Validate that all requested tool names actually exist after extensions
@@ -130,13 +128,13 @@ export class Agent {
         const message =
           `loaded_tools: unknown tool name(s): ${unknown.join(', ')}. ` +
           `Available tools: ${availableTools.sort().join(', ')}`;
-        this.core.info(`[loaded_tools] ❌ ${message}`);
+        this.logger.info(`[loaded_tools] ❌ ${message}`);
         throw new Error(message);
       }
 
       const removed = availableTools.filter(name => !loadedTools.includes(name));
       if (removed.length > 0) {
-        this.core.info(
+        this.logger.info(
           `[loaded_tools] Keeping ${loadedTools.length} tool(s): ${loadedTools.join(', ')}\n` +
             `[loaded_tools] Removing ${removed.length} tool(s): ${removed.sort().join(', ')}`
         );
@@ -255,7 +253,7 @@ export class Agent {
       };
     } catch (_error) {
       // Session stats are metadata - don't fail the action if unavailable
-      this.core.notice('Failed to get session stats, continuing without stats');
+      this.logger.notice('Failed to get session stats, continuing without stats');
       return undefined;
     }
   }

@@ -5,7 +5,9 @@
  * queries the GitHub Actions API for job logs of a specific workflow run.
  */
 
-import * as github from '@actions/github';
+import { getGitHubContext } from '../context-accessor';
+
+function ctx() { return getGitHubContext(); }
 import { getOctokit } from '../octokit';
 import { getCoreAdapter } from '../index';
 import type {
@@ -47,8 +49,8 @@ export async function getWorkflowRunLogs(params: GetWorkflowRunLogsParams): Prom
   content: { type: 'text'; text: string }[];
   details: GetWorkflowRunLogsDetails;
 }> {
-  const owner = params.owner ?? github.context.repo.owner;
-  const repo = params.repo ?? github.context.repo.repo;
+  const owner = params.owner ?? ctx().repo.owner;
+  const repo = params.repo ?? ctx().repo.repo;
   const maxBytes = Math.min(params.max_bytes ?? DEFAULT_MAX_LOG_BYTES, MAX_LOG_BYTES);
 
   debug(`[getWorkflowRunLogs] Fetching logs for run ${params.run_id}`);

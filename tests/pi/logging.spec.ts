@@ -122,6 +122,7 @@ describe('createLoggingFactory', () => {
       debug: () => {},
       info: () => {},
       warning: () => {},
+      error: () => {},
     };
 
     const factory = createLoggingFactory(mockCore);
@@ -146,6 +147,7 @@ describe('createLoggingFactory', () => {
       debug: () => {},
       info: () => {},
       warning: () => {},
+      error: () => {},
     };
 
     const extensionInfo: ExtensionLoadingInfo = {

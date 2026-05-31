@@ -4,7 +4,7 @@
  * Provides the production implementation for Pi agent operations.
  */
 
-import type { PiAgent, PiAgentFactory, PiConfig, CoreAdapter } from '../types';
+import type { PiAgent, PiAgentFactory, PiConfig, Logger } from '../types';
 import type { PlatformProvider } from '../platform';
 import { Agent } from '../pi';
 
@@ -13,10 +13,10 @@ import { Agent } from '../pi';
  */
 export const createRealPiAgent: PiAgentFactory = (
   config: PiConfig,
-  core: CoreAdapter,
+  logger: Logger,
   provider: PlatformProvider
 ): PiAgent => {
-  const agent = new Agent(core, provider, config);
+  const agent = new Agent(logger, provider, config);
 
   return {
     async run(text: string) {

@@ -4,7 +4,9 @@
  * Creates commits on trees and updates branch references.
  */
 
-import * as github from '@actions/github';
+import { getGitHubContext } from '../context-accessor';
+
+function ctx() { return getGitHubContext(); }
 import { getOctokit } from '../octokit';
 import { createLogger } from './types';
 import type { Logger } from '../../../git/types';
@@ -21,7 +23,7 @@ import type { Logger } from '../../../git/types';
  * @returns The commit message with a Co-authored-by trailer appended.
  */
 export function appendCoAuthoredBy(message: string): string {
-  const actor = github.context.actor;
+  const actor = ctx().actor;
   if (!actor) {
     return message;
   }
@@ -55,8 +57,8 @@ export async function createCommitAndUpdateBranch(
 ): Promise<string> {
   const { treeSha, parentSha, branchName, message, log = createLogger() } = params;
   const octokit = getOctokit();
-  const owner = github.context.repo.owner;
-  const repo = github.context.repo.repo;
+  const owner = ctx().repo.owner;
+  const repo = ctx().repo.repo;
 
   // Create a single commit with the new tree
   log.debug(`Creating commit...`);

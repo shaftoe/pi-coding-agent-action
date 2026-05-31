@@ -7,7 +7,9 @@
  * Supports dry-run mode for testing without side effects.
  */
 
-import * as github from '@actions/github';
+import { getGitHubContext } from '../context-accessor';
+
+function ctx() { return getGitHubContext(); }
 import { Temporal } from '@js-temporal/polyfill';
 import { getOctokit } from '../octokit';
 import { BRANCH_PREFIX, MAX_TITLE_LENGTH } from '../constants';
@@ -66,7 +68,7 @@ const DEFAULT_BRANCH_NAME_TEMPLATE = `${BRANCH_PREFIX}{number}-{timestamp}`;
 export function generateBranchName(title: string, template?: string): string {
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string should also fall back to default
   const effectiveTemplate = template || DEFAULT_BRANCH_NAME_TEMPLATE;
-  const issueNumber = github.context.issue?.number ?? 'unknown';
+  const issueNumber = ctx().issue?.number ?? 'unknown';
   const timestamp = Temporal.Now.instant().epochMilliseconds;
 
   return effectiveTemplate
@@ -217,9 +219,10 @@ export async function determineBaseBranch(providedBase: string | undefined): Pro
     return baseBranch;
   }
 
-  if (github.context.payload.repository?.default_branch) {
+  const repoPayload = ctx().payload.repository as { default_branch?: string } | undefined;
+  if (repoPayload?.default_branch) {
     // Available in context
-    baseBranch = github.context.payload.repository.default_branch;
+    baseBranch = repoPayload.default_branch;
     log.debug(`Using default branch from context: ${baseBranch}`);
     return baseBranch;
   }
@@ -227,8 +230,8 @@ export async function determineBaseBranch(providedBase: string | undefined): Pro
   // Fetch from GitHub API
   log.debug(`Fetching repository default branch from GitHub API...`);
   const octokit = getOctokit();
-  const owner = github.context.repo.owner;
-  const repo = github.context.repo.repo;
+  const owner = ctx().repo.owner;
+  const repo = ctx().repo.repo;
   const repoData = await octokit.rest.repos.get({
     owner,
     repo,
@@ -250,9 +253,9 @@ export async function determineBaseBranch(providedBase: string | undefined): Pro
  */
 export function generatePullRequestBody(providedBody: string | undefined): string {
   let bodyText = providedBody ?? '';
-  if (!bodyText && github.context.issue?.number) {
+  if (!bodyText && ctx().issue?.number) {
     const contextType = getContextType();
-    const issueNum = github.context.issue.number;
+    const issueNum = ctx().issue?.number;
     if (contextType === 'issue') {
       bodyText = `Fixes #${issueNum}\n\nCreated by pi coding agent.`;
     } else if (contextType === 'pull_request') {
@@ -298,8 +301,8 @@ async function createPullRequestOnGitHub(
   baseBranch: string,
   headBranch: string
 ): Promise<{ number: number; url: string; headRef: string; baseRef: string }> {
-  const owner = github.context.repo.owner;
-  const repo = github.context.repo.repo;
+  const owner = ctx().repo.owner;
+  const repo = ctx().repo.repo;
 
   log.debug(`Creating pull request...`);
 
@@ -379,8 +382,8 @@ export async function createPullRequest(
 
   try {
     const octokit = getOctokit();
-    const owner = github.context.repo.owner;
-    const repo = github.context.repo.repo;
+    const owner = ctx().repo.owner;
+    const repo = ctx().repo.repo;
 
     // Get base branch reference
     log.debug(`Getting base branch "${baseBranch}" reference...`);

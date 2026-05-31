@@ -32,6 +32,7 @@ mock.module('@actions/core', () => ({
   setFailed: mock(noop),
   setOutput: mock(noop),
   warning: mock(noop),
+  error: mock(noop),
 }));
 
 // Set env vars BEFORE importing pull-request-update.ts
@@ -136,6 +137,7 @@ const testCoreAdapter = {
   info: mock(noop),
   debug: mock(noop),
   warning: mock(noop),
+  error: mock(noop),
 };
 
 // Dynamic import to ensure mocks are set before module loads
@@ -264,13 +266,12 @@ describe('updatePullRequest - integration tests', () => {
     // @ts-expect-error - Testing with undefined issue
     mockContext.issue = undefined;
 
-    // The actual error happens when trying to access context.issue.number
-    // since we have a title (which is valid), validation passes
+    // With the new context accessor, the error message is more descriptive
     await expect(
       updatePullRequest({
         title: 'Test',
       })
-    ).rejects.toThrow('undefined is not an object');
+    ).rejects.toThrow('Pull request number not provided');
   });
 
   test('returns PR details in result', async () => {

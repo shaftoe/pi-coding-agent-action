@@ -23,6 +23,7 @@ function createMockCoreAdapter(overrides?: Partial<CoreAdapter>): CoreAdapter {
     debug: () => {},
     info: () => {},
     warning: () => {},
+    error: () => {},
     ...overrides,
   };
 }
