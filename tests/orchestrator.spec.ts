@@ -77,9 +77,11 @@ describe('ActionOrchestrator', () => {
       sessionStats: undefined,
     }));
     const exportSessionHtmlMock = mock(async (outputPath: string) => outputPath);
+    const exportSessionJsonlMock = mock((outputPath: string) => outputPath);
     mockPiAgent = {
       run: runMock as any,
       exportSessionHtml: exportSessionHtmlMock as any,
+      exportSessionJsonl: exportSessionJsonlMock as any,
     };
 
     mockPiFactory = mock(() => mockPiAgent);
@@ -204,6 +206,8 @@ describe('ActionOrchestrator', () => {
           promptInput: '',
           loadBuiltinExtensions: true, // default value
           exportSessionHtml: true, // default value
+          exportSessionJsonl: false, // default value
+          autoCompaction: false, // default value
         },
         mockCore,
         mockProvider
@@ -239,6 +243,8 @@ describe('ActionOrchestrator', () => {
           promptInput: '',
           loadBuiltinExtensions: true, // default value
           exportSessionHtml: true, // default value
+          exportSessionJsonl: false, // default value
+          autoCompaction: false, // default value
         },
         mockCore,
         mockProvider
@@ -1759,6 +1765,246 @@ describe('ActionOrchestrator', () => {
 
       const callArgs = (mockPiFactory as any).mock.calls[0][0];
       expect(callArgs.loadedTools).toBeUndefined();
+    });
+  });
+
+  describe('export_session_jsonl configuration', () => {
+    test('defaults to false when not provided', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exportSessionJsonl: false,
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('parses true value correctly', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          export_session_jsonl: 'true',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exportSessionJsonl: true,
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('parses false value correctly', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          export_session_jsonl: 'false',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exportSessionJsonl: false,
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('calls getInput for export_session_jsonl', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockCore.getInput).toHaveBeenCalledWith('export_session_jsonl');
+    });
+
+    test('calls exportSessionJsonl on agent when enabled', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          export_session_jsonl: 'true',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiAgent.exportSessionJsonl).toHaveBeenCalled();
+    });
+
+    test('does not call exportSessionJsonl when disabled', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          export_session_jsonl: 'false',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiAgent.exportSessionJsonl).not.toHaveBeenCalled();
+    });
+
+    test('continues execution when exportSessionJsonl throws', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          export_session_jsonl: 'true',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const failingExport = mock(() => {
+        throw new Error('jsonl export failed');
+      });
+      mockPiAgent.exportSessionJsonl = failingExport as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      // Action still completes successfully
+      expect(mockCore.setOutput).toHaveBeenCalledWith('success', true);
+      expect(mockCore.notice).toHaveBeenCalledWith(
+        expect.stringContaining('[session-jsonl] failed to export JSONL')
+      );
+    });
+
+    test('sets session_jsonl_path output when export succeeds', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          export_session_jsonl: 'true',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockCore.setOutput).toHaveBeenCalledWith(
+        'session_jsonl_path',
+        expect.stringContaining('session.jsonl')
+      );
+    });
+  });
+
+  describe('auto_compaction configuration', () => {
+    test('defaults to false when not provided', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          autoCompaction: false,
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('parses true value correctly', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          auto_compaction: 'true',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          autoCompaction: true,
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('parses false value correctly', async () => {
+      const getInputMock = mock((name: string) => {
+        const inputs: Record<string, string> = {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          token: 'test-token',
+          thinking_level: '',
+          prompt: '',
+          auto_compaction: 'false',
+        };
+        return inputs[name];
+      });
+      mockCore.getInput = getInputMock as any;
+
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          autoCompaction: false,
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('calls getInput for auto_compaction', async () => {
+      const orchestrator = new ActionOrchestrator(mockCore, mockGit, mockPiFactory, mockProvider);
+      await orchestrator.execute();
+
+      expect(mockCore.getInput).toHaveBeenCalledWith('auto_compaction');
     });
   });
 });

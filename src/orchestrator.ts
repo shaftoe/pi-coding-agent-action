@@ -97,6 +97,12 @@ export class ActionOrchestrator {
         this.core.debug('[session-html] export disabled by configuration');
       }
 
+      if (config.exportSessionJsonl) {
+        this.exportSessionJsonl(pi);
+      } else {
+        this.core.debug('[session-jsonl] export disabled by configuration');
+      }
+
       this.core.info('\n');
       this.core.info('════════════════════════════════════════════════════════════════');
       this.core.info('✅ Agent session completed');
@@ -191,6 +197,16 @@ export class ActionOrchestrator {
       ? exportSessionHtmlInput.toLowerCase() === 'true'
       : true; // default to true
 
+    const exportSessionJsonlInput = this.core.getInput('export_session_jsonl');
+    const exportSessionJsonl = exportSessionJsonlInput
+      ? exportSessionJsonlInput.toLowerCase() === 'true'
+      : false; // default to false
+
+    const autoCompactionInput = this.core.getInput('auto_compaction');
+    const autoCompaction = autoCompactionInput
+      ? autoCompactionInput.toLowerCase() === 'true'
+      : false; // default to false
+
     const diffMaxLinesInput = this.core.getInput('diff_max_lines');
     const parsedLines = diffMaxLinesInput ? parseInt(diffMaxLinesInput, 10) : NaN;
     const diffMaxLines = parsedLines > 0 ? parsedLines : undefined;
@@ -215,6 +231,8 @@ export class ActionOrchestrator {
       ...(loadedTools ? { loadedTools } : {}),
       ...(baseUrl ? { baseUrl } : {}),
       exportSessionHtml,
+      exportSessionJsonl,
+      autoCompaction,
       ...(diffMaxLines ? { diffMaxLines } : {}),
       ...(diffMaxBytes ? { diffMaxBytes } : {}),
       ...(diffIgnorePatterns?.length ? { diffIgnorePatterns } : {}),
@@ -250,6 +268,31 @@ export class ActionOrchestrator {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.core.notice(`[session-html] failed to export HTML: ${msg}`);
+    }
+  }
+
+  /**
+   * Export session as a JSONL file.
+   *
+   * Writes the JSONL to the runner's temp directory and sets the
+   * `session_jsonl_path` action output. JSONL format is useful for
+   * programmatic consumption and data analysis pipelines.
+   */
+  private exportSessionJsonl(pi: PiAgent): void {
+    const outputDir = path.join(
+      process.env.RUNNER_TEMP ?? os.tmpdir(),
+      `pi-session-jsonl-${process.env.GITHUB_RUN_ID ?? 'local'}`
+    );
+    const jsonlPath = path.join(outputDir, 'session.jsonl');
+
+    try {
+      fs.mkdirSync(outputDir, { recursive: true });
+      pi.exportSessionJsonl(jsonlPath);
+      this.core.info(`[session-jsonl] exported session JSONL to ${jsonlPath}`);
+      this.core.setOutput('session_jsonl_path', jsonlPath);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.core.notice(`[session-jsonl] failed to export JSONL: ${msg}`);
     }
   }
 

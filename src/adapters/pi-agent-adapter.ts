@@ -26,5 +26,8 @@ export const createRealPiAgent: PiAgentFactory = (
     async exportSessionHtml(outputPath: string) {
       return agent.exportSessionHtml(outputPath);
     },
+    exportSessionJsonl(outputPath: string) {
+      return agent.exportSessionJsonl(outputPath);
+    },
   };
 };
