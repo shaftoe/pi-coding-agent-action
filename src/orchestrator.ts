@@ -98,7 +98,7 @@ export class ActionOrchestrator {
       }
 
       if (config.exportSessionJsonl) {
-        this.exportSessionJsonl(pi);
+        await this.exportSessionJsonl(pi);
       } else {
         this.core.debug('[session-jsonl] export disabled by configuration');
       }
@@ -278,7 +278,7 @@ export class ActionOrchestrator {
    * `session_jsonl_path` action output. JSONL format is useful for
    * programmatic consumption and data analysis pipelines.
    */
-  private exportSessionJsonl(pi: PiAgent): void {
+  private async exportSessionJsonl(pi: PiAgent): Promise<void> {
     const outputDir = path.join(
       process.env.RUNNER_TEMP ?? os.tmpdir(),
       `pi-session-jsonl-${process.env.GITHUB_RUN_ID ?? 'local'}`
@@ -287,7 +287,7 @@ export class ActionOrchestrator {
 
     try {
       fs.mkdirSync(outputDir, { recursive: true });
-      pi.exportSessionJsonl(jsonlPath);
+      await pi.exportSessionJsonl(jsonlPath);
       this.core.info(`[session-jsonl] exported session JSONL to ${jsonlPath}`);
       this.core.setOutput('session_jsonl_path', jsonlPath);
     } catch (e) {

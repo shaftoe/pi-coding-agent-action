@@ -388,7 +388,7 @@ describe('Agent', () => {
         exportToJsonl: mockExportToJsonl,
       } as any;
 
-      const result = agent.exportSessionJsonl('/tmp/test-session.jsonl');
+      const result = await agent.exportSessionJsonl('/tmp/test-session.jsonl');
       expect(result).toBe('/tmp/test-session.jsonl');
       expect(mockExportToJsonl).toHaveBeenCalledWith('/tmp/test-session.jsonl');
     });

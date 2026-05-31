@@ -77,7 +77,7 @@ describe('ActionOrchestrator', () => {
       sessionStats: undefined,
     }));
     const exportSessionHtmlMock = mock(async (outputPath: string) => outputPath);
-    const exportSessionJsonlMock = mock((outputPath: string) => outputPath);
+    const exportSessionJsonlMock = mock(async (outputPath: string) => outputPath);
     mockPiAgent = {
       run: runMock as any,
       exportSessionHtml: exportSessionHtmlMock as any,
@@ -1895,7 +1895,7 @@ describe('ActionOrchestrator', () => {
       });
       mockCore.getInput = getInputMock as any;
 
-      const failingExport = mock(() => {
+      const failingExport = mock(async () => {
         throw new Error('jsonl export failed');
       });
       mockPiAgent.exportSessionJsonl = failingExport as any;

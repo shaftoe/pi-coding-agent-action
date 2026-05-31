@@ -229,7 +229,7 @@ export class Agent {
    * @param outputPath - Path to write the JSONL file to.
    * @returns The path to the written file.
    */
-  exportSessionJsonl(outputPath: string): string {
+  async exportSessionJsonl(outputPath: string): Promise<string> {
     return this.session.exportToJsonl(outputPath);
   }
 
