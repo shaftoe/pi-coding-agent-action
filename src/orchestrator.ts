@@ -91,17 +91,18 @@ export class ActionOrchestrator {
       const pi = this.piAgentFactory(config, this.core, this.platformProvider);
       const { result, sessionStats } = await pi.run(prompt);
 
+      const exportPromises: Promise<void>[] = [];
       if (config.exportSessionHtml) {
-        await this.exportSessionHtml(pi);
+        exportPromises.push(this.exportSessionOutput(pi, 'html'));
       } else {
         this.core.debug('[session-html] export disabled by configuration');
       }
-
       if (config.exportSessionJsonl) {
-        await this.exportSessionJsonl(pi);
+        exportPromises.push(this.exportSessionOutput(pi, 'jsonl'));
       } else {
         this.core.debug('[session-jsonl] export disabled by configuration');
       }
+      await Promise.all(exportPromises);
 
       this.core.info('\n');
       this.core.info('════════════════════════════════════════════════════════════════');
@@ -240,59 +241,45 @@ export class ActionOrchestrator {
   }
 
   /**
-   * Export session as a self-contained HTML file.
+   * Export session output for a given format (HTML or JSONL).
    *
-   * Writes the HTML to the runner's temp directory and sets the
-   * `session_html_path` action output. Users can upload the file
-   * as an artifact using `actions/upload-artifact` in their workflow:
+   * Shared implementation for session exports: creates a temp directory,
+   * calls the appropriate export method on the Pi agent, sets the action
+   * output, and logs success/failure.
+   *
+   * Users can upload exported files as artifacts:
    *
    * ```yaml
-   * - uses: actions/upload-artifact@v7
+   * - uses: actions/upload-artifact@v4
    *   with:
-   *     name: pi-session-html
-   *     path: ${{ steps.pi.outputs.session_html_path }}
+   *     name: pi-session-exports
+   *     path: |
+   *       ${{ steps.pi.outputs.session_html_path }}
+   *       ${{ steps.pi.outputs.session_jsonl_path }}
    * ```
    */
-  private async exportSessionHtml(pi: PiAgent): Promise<void> {
+  private async exportSessionOutput(
+    pi: PiAgent,
+    format: 'html' | 'jsonl'
+  ): Promise<void> {
+    const tag = `session-${format}`;
+    const formatLabel = format.toUpperCase();
     const outputDir = path.join(
       process.env.RUNNER_TEMP ?? os.tmpdir(),
-      `pi-session-html-${process.env.GITHUB_RUN_ID ?? 'local'}`
+      `pi-session-${format}-${process.env.GITHUB_RUN_ID ?? 'local'}`
     );
-    const htmlPath = path.join(outputDir, 'session.html');
+    const outputPath = path.join(outputDir, `session.${format}`);
 
     try {
       fs.mkdirSync(outputDir, { recursive: true });
-      await pi.exportSessionHtml(htmlPath);
-      this.core.info(`[session-html] exported session HTML to ${htmlPath}`);
-      this.core.setOutput('session_html_path', htmlPath);
+      const exportFn =
+        format === 'html' ? pi.exportSessionHtml : pi.exportSessionJsonl;
+      await exportFn.call(pi, outputPath);
+      this.core.info(`[${tag}] exported session ${formatLabel} to ${outputPath}`);
+      this.core.setOutput(`session_${format}_path`, outputPath);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      this.core.notice(`[session-html] failed to export HTML: ${msg}`);
-    }
-  }
-
-  /**
-   * Export session as a JSONL file.
-   *
-   * Writes the JSONL to the runner's temp directory and sets the
-   * `session_jsonl_path` action output. JSONL format is useful for
-   * programmatic consumption and data analysis pipelines.
-   */
-  private async exportSessionJsonl(pi: PiAgent): Promise<void> {
-    const outputDir = path.join(
-      process.env.RUNNER_TEMP ?? os.tmpdir(),
-      `pi-session-jsonl-${process.env.GITHUB_RUN_ID ?? 'local'}`
-    );
-    const jsonlPath = path.join(outputDir, 'session.jsonl');
-
-    try {
-      fs.mkdirSync(outputDir, { recursive: true });
-      await pi.exportSessionJsonl(jsonlPath);
-      this.core.info(`[session-jsonl] exported session JSONL to ${jsonlPath}`);
-      this.core.setOutput('session_jsonl_path', jsonlPath);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      this.core.notice(`[session-jsonl] failed to export JSONL: ${msg}`);
+      this.core.notice(`[${tag}] failed to export ${formatLabel}: ${msg}`);
     }
   }
 
