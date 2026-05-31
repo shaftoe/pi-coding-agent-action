@@ -310,25 +310,47 @@ jobs:
           gh release create v1.0.0 --notes-file release-notes.md
 ```
 
-### Uploading Session HTML as Artifact
+### Session Exports (HTML & JSONL)
 
-When `export_session_html` is enabled, the action writes a self-contained HTML file and exposes its path via the `session_html_path` output. It can be uploaded as a workflow artifact for example:
+The action can export the Pi session in two formats:
+
+- **`export_session_html`** — a self-contained HTML file for human review in any browser
+- **`export_session_jsonl`** — a JSONL file (one JSON object per line) for programmatic consumption, data analysis pipelines, or long-term archival
+
+Both are disabled by default. When enabled, their file paths are exposed via the `session_html_path` and `session_jsonl_path` outputs. They can be uploaded as workflow artifacts:
 
 ```yaml
 - uses: shaftoe/pi-coding-agent-action@v2
   id: pi
   with:
     export_session_html: true
+    export_session_jsonl: true
     github_token: ${{ secrets.GITHUB_TOKEN }}
     provider: openai
     model: gpt-5.4
     token: ${{ secrets.OPENAI_API_KEY }}
 
 - uses: actions/upload-artifact@v7
-  if: ${{ steps.pi.outputs.session_html_path }}
+  if: ${{ steps.pi.outputs.session_html_path || steps.pi.outputs.session_jsonl_path }}
   with:
-    name: pi-session-html-${{ github.event.issue.number || github.event.pull_request.number || github.run_number }}
-    path: ${{ steps.pi.outputs.session_html_path }}
+    name: pi-session-${{ github.event.issue.number || github.event.pull_request.number || github.run_number }}
+    path: |
+      ${{ steps.pi.outputs.session_html_path }}
+      ${{ steps.pi.outputs.session_jsonl_path }}
+```
+
+### Auto-Compaction
+
+For complex, multi-step tasks that generate a lot of context (e.g. large code reviews, multi-file refactors), the conversation may grow too large for the model's context window. Enable `auto_compaction` to have Pi automatically summarize older messages when the context fills up:
+
+```yaml
+- uses: shaftoe/pi-coding-agent-action@v2
+  with:
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    provider: openai
+    model: gpt-5.4
+    token: ${{ secrets.OPENAI_API_KEY }}
+    auto_compaction: true
 ```
 
 ## Quick Start
@@ -344,7 +366,9 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | `diff_ignore_patterns` | Space-separated list of file patterns to exclude from PR diffs by default (e.g. `dist/ package-lock.json`). The agent can still provide additional patterns at call time | No | - |
 | `diff_max_bytes` | Maximum diff size in bytes returned by the `get_pr_diff` tool | No | `102400` |
 | `diff_max_lines` | Maximum number of diff lines returned by the `get_pr_diff` tool | No | `1000` |
+| `auto_compaction` | Enable automatic context compaction when the conversation grows too large for the model's context window. Pi summarizes older messages to free up context space | No | `false` |
 | `export_session_html` | Export the session as a self-contained HTML file | No | `false` |
+| `export_session_jsonl` | Export the session as a JSONL file (one JSON object per line) for programmatic consumption | No | `false` |
 | `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
 | `github_token` | GitHub token for API access | Yes | - |
 | `load_builtin_extensions` | Whether to load built-in GitHub tools (see [Custom Tools](#custom-tools) for the full list) | No | `true` |
@@ -370,6 +394,7 @@ The action exposes the following outputs, which can be consumed by downstream st
 | `output_tokens` | Number of output tokens generated (omitted if unavailable) | `800` |
 | `response` | The main agent response text (or error message on failure) | `Here is the fix for the bug...` |
 | `session_html_path` | Path to the exported session HTML file (when `export_session_html` is enabled) | `/tmp/pi-session-html/session.html` |
+| `session_jsonl_path` | Path to the exported session JSONL file (when `export_session_jsonl` is enabled) | `/tmp/pi-session-jsonl/session.jsonl` |
 | `success` | Whether the agent completed successfully (`true` / `false`) | `true` |
 
 > [!WARNING]
