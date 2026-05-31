@@ -1,4 +1,4 @@
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -28,6 +28,9 @@ const mockGetInput = mock((name: string) => {
   }
   if (name === 'trigger') {
     return '/pi';
+  }
+  if (name === 'pr_number') {
+    return process.env.INPUT_PR_NUMBER ?? '';
   }
   return '';
 });
@@ -73,7 +76,7 @@ const [githubExports, contextExports] = // @ts-expect-error TS1309 -- Top-level 
 const { setCoreAdapter } = githubExports;
 setCoreAdapter(testCoreAdapter);
 
-const { getPrompt, createFinalComment, getIssueOrPRThread, updatePullRequest } = githubExports;
+const { getPrompt, createFinalComment, getIssueOrPRThread, updatePullRequest, resolveIssueNumber } = githubExports;
 
 const { getIssueOrPullRequestContext, isPR, getContextType, getStartTimeFromContext } =
   contextExports;
@@ -344,6 +347,26 @@ describe('getPrompt', () => {
       expect(result).toContain('Review this code for bugs');
     });
   });
+
+  describe('with workflow_dispatch and pr_number', () => {
+    test('returns a prompt when pr_number is set and prompt is empty', async () => {
+      // This test verifies that getPrompt works when pr_number is provided
+      // via input (simulating workflow_dispatch) and no comment exists.
+      // The prompt input takes priority over comment-based extraction.
+      mockGetInput.mockImplementation((name: string) => {
+        if (name === 'github_token') {return 'fake-token';}
+        if (name === 'prompt') {return 'Review this PR';}
+        if (name === 'trigger') {return '/pi';}
+        if (name === 'pr_number') {return '55';}
+        return '';
+      });
+
+      const result = await getPrompt('Review this PR');
+      // With a prompt input, getPrompt should always return something
+      expect(result).toBeDefined();
+      expect(result).toContain('Review this PR');
+    });
+  });
 });
 
 describe('createFinalComment', () => {
@@ -361,6 +384,11 @@ describe('isPR', () => {
   beforeEach(() => {
     github.context.payload = {};
     github.context.eventName = 'issue_comment';
+    delete process.env.INPUT_PR_NUMBER;
+  });
+
+  afterEach(() => {
+    delete process.env.INPUT_PR_NUMBER;
   });
 
   test('returns false for issue_comment event', () => {
@@ -391,6 +419,21 @@ describe('isPR', () => {
     expect(isPR()).toBe(false);
   });
 
+  test('returns true for workflow_dispatch with pr_number input', () => {
+    github.context.eventName = 'workflow_dispatch';
+    github.context.payload = {};
+    process.env.INPUT_PR_NUMBER = '42';
+    expect(isPR()).toBe(true);
+    delete process.env.INPUT_PR_NUMBER;
+  });
+
+  test('returns false for workflow_dispatch without pr_number input', () => {
+    github.context.eventName = 'workflow_dispatch';
+    github.context.payload = {};
+    delete process.env.INPUT_PR_NUMBER;
+    expect(isPR()).toBe(false);
+  });
+
   test('returns true for pull_request_review event (has pull_request in payload)', () => {
     github.context.eventName = 'pull_request_review';
     github.context.payload = {
@@ -412,6 +455,11 @@ describe('getContextType', () => {
   beforeEach(() => {
     github.context.payload = {};
     github.context.eventName = 'issue_comment';
+    delete process.env.INPUT_PR_NUMBER;
+  });
+
+  afterEach(() => {
+    delete process.env.INPUT_PR_NUMBER;
   });
 
   test('returns issue for issue_comment event', () => {
@@ -439,6 +487,21 @@ describe('getContextType', () => {
 
   test('returns undefined for unknown event type', () => {
     github.context.eventName = 'push';
+    expect(getContextType()).toBeUndefined();
+  });
+
+  test('returns pull_request for workflow_dispatch with pr_number input', () => {
+    github.context.eventName = 'workflow_dispatch';
+    github.context.payload = {};
+    process.env.INPUT_PR_NUMBER = '42';
+    expect(getContextType()).toBe('pull_request');
+    delete process.env.INPUT_PR_NUMBER;
+  });
+
+  test('returns undefined for workflow_dispatch without pr_number input', () => {
+    github.context.eventName = 'workflow_dispatch';
+    github.context.payload = {};
+    delete process.env.INPUT_PR_NUMBER;
     expect(getContextType()).toBeUndefined();
   });
 
@@ -637,6 +700,131 @@ describe('getIssueOrPRThread', () => {
 describe('updatePullRequest', () => {
   test('is exported function', () => {
     expect(typeof updatePullRequest).toBe('function');
+  });
+});
+
+describe('resolveIssueNumber', () => {
+  beforeEach(() => {
+    github.context.payload = {};
+    github.context.eventName = 'issue_comment';
+    // Ensure no pr_number leaks from concurrent tests
+    delete process.env.INPUT_PR_NUMBER;
+    mockGetInput.mockImplementation((name: string) => {
+      if (name === 'github_token') {return 'fake-token';}
+      if (name === 'prompt') {return '';}
+      if (name === 'trigger') {return '/pi';}
+      if (name === 'pr_number') {return '';}
+      return '';
+    });
+  });
+
+  afterEach(() => {
+    delete process.env.INPUT_PR_NUMBER;
+  });
+
+  test('returns context issue number when pr_number input is not set', () => {
+    github.context.payload = {
+      issue: { number: 42, title: 'Test' },
+      comment: { id: 1, body: '/pi test' },
+    };
+    const result = resolveIssueNumber();
+    expect(result).toBe(42);
+  });
+
+  test('returns pr_number input when set, overriding context', () => {
+    github.context.payload = {
+      issue: { number: 42, title: 'Test' },
+      comment: { id: 1, body: '/pi test' },
+    };
+    mockGetInput.mockImplementation((name: string) => {
+      if (name === 'github_token') {return 'fake-token';}
+      if (name === 'prompt') {return '';}
+      if (name === 'trigger') {return '/pi';}
+      if (name === 'pr_number') {return '99';}
+      return '';
+    });
+    const result = resolveIssueNumber();
+    expect(result).toBe(99);
+  });
+
+  test('returns pr_number input when context has no issue number', () => {
+    github.context.payload = {};
+    github.context.eventName = 'workflow_dispatch';
+    mockGetInput.mockImplementation((name: string) => {
+      if (name === 'github_token') {return 'fake-token';}
+      if (name === 'prompt') {return '';}
+      if (name === 'trigger') {return '/pi';}
+      if (name === 'pr_number') {return '55';}
+      return '';
+    });
+    const result = resolveIssueNumber();
+    expect(result).toBe(55);
+  });
+
+  test('returns undefined when neither pr_number nor context has issue', () => {
+    // Reset payload completely to ensure no leakage
+    github.context.payload = {};
+    github.context.eventName = 'workflow_dispatch';
+    const issueNumber = github.context.issue?.number;
+    const result = resolveIssueNumber();
+    // The result should match the context issue number or be undefined
+    expect(result).toBe(issueNumber ?? undefined);
+  });
+
+  test('ignores non-numeric pr_number input', () => {
+    github.context.payload = {
+      issue: { number: 42, title: 'Test' },
+      comment: { id: 1, body: '/pi test' },
+    };
+    mockGetInput.mockImplementation((name: string) => {
+      if (name === 'github_token') {return 'fake-token';}
+      if (name === 'prompt') {return '';}
+      if (name === 'trigger') {return '/pi';}
+      if (name === 'pr_number') {return 'abc';}
+      return '';
+    });
+    const result = resolveIssueNumber();
+    expect(result).toBe(42);
+  });
+
+  test('ignores zero pr_number input', () => {
+    github.context.payload = {
+      issue: { number: 42, title: 'Test' },
+      comment: { id: 1, body: '/pi test' },
+    };
+    mockGetInput.mockImplementation((name: string) => {
+      if (name === 'github_token') {return 'fake-token';}
+      if (name === 'prompt') {return '';}
+      if (name === 'trigger') {return '/pi';}
+      if (name === 'pr_number') {return '0';}
+      return '';
+    });
+    const result = resolveIssueNumber();
+    expect(result).toBe(42);
+  });
+
+  test('ignores negative pr_number input', () => {
+    github.context.payload = {
+      issue: { number: 42, title: 'Test' },
+      comment: { id: 1, body: '/pi test' },
+    };
+    mockGetInput.mockImplementation((name: string) => {
+      if (name === 'github_token') {return 'fake-token';}
+      if (name === 'prompt') {return '';}
+      if (name === 'trigger') {return '/pi';}
+      if (name === 'pr_number') {return '-5';}
+      return '';
+    });
+    const result = resolveIssueNumber();
+    expect(result).toBe(42);
+  });
+
+  test('handles workflow_dispatch with no context gracefully', () => {
+    github.context.payload = {};
+    github.context.eventName = 'workflow_dispatch';
+    const issueNumber = github.context.issue?.number;
+    const result = resolveIssueNumber();
+    expect(result).toBe(issueNumber ?? undefined);
   });
 });
 

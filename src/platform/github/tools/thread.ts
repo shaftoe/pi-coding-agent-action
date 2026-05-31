@@ -9,7 +9,7 @@
 import * as github from '@actions/github';
 import { getOctokit } from '../octokit';
 import { MAX_COMMENTS, MAX_REVIEW_COMMENTS } from '../constants';
-import { getCoreAdapter } from '../index';
+import { getCoreAdapter, resolveIssueNumber } from '../index';
 import type { ThreadComment, ReviewComment, IssueOrPRThread, GetIssueOrPRThreadParams } from '../types';
 import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
 
@@ -27,7 +27,7 @@ function resolveThreadParams(
 
   const resolvedOwner = owner ?? github.context.repo.owner;
   const resolvedRepo = repo ?? github.context.repo.repo;
-  const resolvedIssueNumber = issue_number ?? github.context.issue.number;
+  const resolvedIssueNumber = issue_number ?? resolveIssueNumber();
 
   if (!resolvedOwner || !resolvedRepo || !resolvedIssueNumber) {
     debug(`[getIssueOrPRThread] Missing owner, repo, or issue_number`);

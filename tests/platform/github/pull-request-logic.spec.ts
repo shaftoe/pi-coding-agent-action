@@ -80,12 +80,24 @@ mock.module('@actions/github', () => ({
 // Dynamic import to ensure mocks are set before module loads
 const pullRequestModulePromise = import('../../../src/platform/github/tools/pull-request.js');
 
+// Initialize the GitHub module context so resolveIssueNumber() can access getCoreAdapter
+const indexModulePromise = import('../../../src/platform/github/index.js');
+
 // Cache the module after first import
 let pullRequestModule: any | null = null;
 
 async function getModule() {
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   if (!pullRequestModule) {
+    const indexMod = await indexModulePromise;
+    indexMod.setCoreAdapter({
+      getInput: mockGetInput,
+      setFailed: mock(noop),
+      setOutput: mock(noop),
+      notice: mock(noop),
+      info: mock(noop),
+      debug: mock(noop),
+      warning: mock(noop),
+    });
     pullRequestModule = await pullRequestModulePromise;
   }
   return pullRequestModule;

@@ -9,7 +9,7 @@
 
 import * as github from '@actions/github';
 import { getOctokit } from '../octokit';
-import { getCoreAdapter } from '../index';
+import { getCoreAdapter, resolveIssueNumber } from '../index';
 import type {
   CreateReviewParams,
   CreateReviewDetails,
@@ -105,7 +105,7 @@ export async function createReview(
 ): Promise<{ content: { type: 'text'; text: string }[]; details: CreateReviewDetails }> {
   validateCreateReviewParams(params);
 
-  const resolvedPullNumber = params.pull_number ?? github.context.issue.number;
+  const resolvedPullNumber = params.pull_number ?? resolveIssueNumber();
   if (!resolvedPullNumber) {
     throw new Error(
       'Pull request number not provided and not available in context. ' +

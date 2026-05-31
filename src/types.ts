@@ -60,8 +60,6 @@ export interface PiAgent {
   run(text: string): Promise<PromptResult>;
   /** Export the session as a self-contained HTML file to the given path. */
   exportSessionHtml(outputPath: string): Promise<string>;
-  /** Export the session as a JSONL file to the given path. */
-  exportSessionJsonl(outputPath: string): Promise<string>;
 }
 
 /**
@@ -140,8 +138,6 @@ export interface PiConfig extends DiffConfig {
   loadedTools?: string[];
   baseUrl?: string;
   exportSessionHtml?: boolean;
-  exportSessionJsonl?: boolean;
-  autoCompaction?: boolean;
 }
 
 /**

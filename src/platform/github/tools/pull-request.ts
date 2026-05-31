@@ -12,6 +12,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import { getOctokit } from '../octokit';
 import { BRANCH_PREFIX, MAX_TITLE_LENGTH } from '../constants';
 import { getContextType } from '../context-utils';
+import { resolveIssueNumber } from '../index';
 import {
   createLogger,
   scanForChanges,
@@ -66,7 +67,7 @@ const DEFAULT_BRANCH_NAME_TEMPLATE = `${BRANCH_PREFIX}{number}-{timestamp}`;
 export function generateBranchName(title: string, template?: string): string {
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string should also fall back to default
   const effectiveTemplate = template || DEFAULT_BRANCH_NAME_TEMPLATE;
-  const issueNumber = github.context.issue?.number ?? 'unknown';
+  const issueNumber = resolveIssueNumber() ?? 'unknown';
   const timestamp = Temporal.Now.instant().epochMilliseconds;
 
   return effectiveTemplate
@@ -250,9 +251,9 @@ export async function determineBaseBranch(providedBase: string | undefined): Pro
  */
 export function generatePullRequestBody(providedBody: string | undefined): string {
   let bodyText = providedBody ?? '';
-  if (!bodyText && github.context.issue?.number) {
+  const issueNum = resolveIssueNumber();
+  if (!bodyText && issueNum) {
     const contextType = getContextType();
-    const issueNum = github.context.issue.number;
     if (contextType === 'issue') {
       bodyText = `Fixes #${issueNum}\n\nCreated by pi coding agent.`;
     } else if (contextType === 'pull_request') {

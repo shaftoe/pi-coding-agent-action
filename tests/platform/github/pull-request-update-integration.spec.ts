@@ -264,13 +264,12 @@ describe('updatePullRequest - integration tests', () => {
     // @ts-expect-error - Testing with undefined issue
     mockContext.issue = undefined;
 
-    // The actual error happens when trying to access context.issue.number
-    // since we have a title (which is valid), validation passes
+    // With resolveIssueNumber(), the error is now more descriptive
     await expect(
       updatePullRequest({
         title: 'Test',
       })
-    ).rejects.toThrow('undefined is not an object');
+    ).rejects.toThrow('Pull request number not provided and not available in context');
   });
 
   test('returns PR details in result', async () => {

@@ -15,7 +15,7 @@
 import { context } from '@actions/github';
 import { addReaction, deleteReaction } from './reactions';
 import { createFinalComment } from './comments';
-import { getPrompt, getStartTimeFromContext } from './context';
+import { getPrompt, getStartTimeFromContext, resolveIssueNumber } from './context';
 import { createPullRequest } from './tools/pull-request';
 import { updatePullRequest } from './tools/pull-request-update';
 import { getIssueOrPRThread } from './tools/thread';
@@ -81,9 +81,10 @@ export function createGitHubPlatformProvider(): PlatformProvider {
     type,
 
     getContext(): PlatformContext {
+      const issueNumber = resolveIssueNumber();
       return {
         repo: context.repo,
-        issue: context.issue,
+        issue: issueNumber !== undefined ? { number: issueNumber } : {},
         eventName: context.eventName,
         payload: context.payload,
         serverUrl: context.serverUrl || 'https://github.com',

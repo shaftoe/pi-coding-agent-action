@@ -68,7 +68,7 @@ export interface PlatformContext {
   /** Repository owner and name */
   repo: { owner: string; repo: string };
   /** Current issue or PR number */
-  issue: { number: number };
+  issue: { number?: number };
   /** The event that triggered the workflow */
   eventName: string;
   /** The full event payload */

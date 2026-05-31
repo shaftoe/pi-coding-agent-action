@@ -11,6 +11,7 @@
 import * as github from '@actions/github';
 import { getOctokit } from '../octokit';
 import { MAX_TITLE_LENGTH } from '../constants';
+import { resolveIssueNumber } from '../index';
 import {
   createLogger,
   scanForChanges,
@@ -109,7 +110,7 @@ export function validateUpdatePullRequestParams(params: UpdatePullRequestParams)
   // Ensure at least one update parameter is provided (besides dryRun)
   const { title, body, message, pull_number } = params;
   const hasContentUpdate = title !== undefined || body !== undefined || message !== undefined;
-  const hasPRContext = pull_number !== undefined || github.context.issue?.number;
+  const hasPRContext = pull_number !== undefined || resolveIssueNumber();
 
   if (!hasContentUpdate && !hasPRContext) {
     throw new Error(
@@ -141,7 +142,7 @@ export async function updatePullRequest(
   validateUpdatePullRequestParams(params);
 
   // Resolve PR number from context if not provided
-  const resolvedPullNumber = pull_number ?? github.context.issue.number;
+  const resolvedPullNumber = pull_number ?? resolveIssueNumber();
   if (!resolvedPullNumber) {
     throw new Error(
       'Pull request number not provided and not available in context. ' +

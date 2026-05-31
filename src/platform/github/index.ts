@@ -146,6 +146,7 @@ export {
   getIssueOrPullRequestContext,
   isPR,
   getContextType,
+  resolveIssueNumber,
 } from './context';
 
 // Shared types

@@ -23,6 +23,35 @@ function debug(msg: string): void {
 }
 
 /**
+ * Resolve the effective issue/PR number.
+ *
+ * Priority:
+ * 1. Explicit `pr_number` input (for workflow_dispatch)
+ * 2. GitHub context (from triggering event)
+ *
+ * @returns The resolved issue/PR number, or undefined.
+ */
+export function resolveIssueNumber(): number | undefined {
+  // Check for explicit pr_number input first
+  const prNumberInput = getCoreAdapter().getInput('pr_number');
+  if (prNumberInput) {
+    const parsed = parseInt(prNumberInput, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      debug(`[resolveIssueNumber] Using pr_number input: ${parsed}`);
+      return parsed;
+    }
+  }
+
+  // Fall back to GitHub context
+  const contextNumber = github.context.issue?.number;
+  if (contextNumber) {
+    return contextNumber;
+  }
+
+  return undefined;
+}
+
+/**
  * Maps GitHub event names to functions that extract the relevant timestamp
  * from the event payload. Each extractor returns a timestamp string suitable
  * for `Temporal.Instant.from()`, or `undefined` if unavailable.
@@ -126,6 +155,36 @@ export function getIssueOrPullRequestContext(): IssueOrPullRequestContext | unde
 }
 
 /**
+ * Fetch PR context from the GitHub API for a given PR number.
+ *
+ * Used when `pr_number` is provided via input (e.g. workflow_dispatch) and
+ * there is no PR context in the event payload.
+ *
+ * @param prNumber - The pull request number to fetch.
+ * @returns The PR context (title, body, number), or undefined on failure.
+ */
+async function fetchPRContextForNumber(prNumber: number): Promise<IssueOrPullRequestContext | undefined> {
+  try {
+    const { getOctokit } = await import('./octokit.js');
+    const octokit = getOctokit();
+    const { data } = await octokit.rest.pulls.get({
+      owner: github.context.repo.owner,
+      repo: github.context.repo.repo,
+      pull_number: prNumber,
+    });
+    return {
+      title: data.title,
+      number: data.number,
+      ...(data.body !== undefined && data.body !== null ? { body: data.body } : {}),
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    debug(`[fetchPRContextForNumber] Failed to fetch PR #${prNumber}: ${msg}`);
+    return undefined;
+  }
+}
+
+/**
  * Enrich a prompt string with issue/PR context when available.
  *
  * @param instruction - The raw instruction text.
@@ -159,6 +218,9 @@ function enrichWithContext(instruction: string, label: string): string {
  * In both cases, if an issue/PR is available in the current context, its title
  * and description are prepended for additional context.
  *
+ * When `pr_number` is provided via input but no event context exists (e.g.
+ * workflow_dispatch), the PR title and description are fetched from the API.
+ *
  * @returns The assembled prompt string, or `undefined` if no prompt source was
  *          found.
  */
@@ -171,6 +233,23 @@ export async function getPrompt(promptInput?: string): Promise<string | undefine
       return undefined;
     }
     return enrichWithContext(trimmed, 'Instruction');
+  }
+
+  // Check for pr_number input with no event context (workflow_dispatch)
+  const prNumber = resolveIssueNumber();
+  if (prNumber && !github.context.issue.number) {
+    const prContext = await fetchPRContextForNumber(prNumber);
+    if (prContext) {
+      const instruction = promptInput?.trim() ?? 'Review this pull request';
+      const contextParts: string[] = [`Issue/PR #${prContext.number}: ${prContext.title}`];
+      if (prContext.body) {
+        contextParts.push(`\nDescription:\n${prContext.body}`);
+      }
+      contextParts.push(`\n\nInstruction:\n${instruction}`);
+      return contextParts.join('');
+    }
+    // If we can't fetch PR context, use the instruction as-is
+    return 'Review this pull request';
   }
 
   // Fall back to comment-based prompt

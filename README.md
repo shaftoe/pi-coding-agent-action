@@ -111,6 +111,52 @@ You can use the `prompt` input to run the agent without requiring a comment trig
 
 When using the `prompt` input, the action still enriches the prompt with issue/PR context (title and description) if available in the workflow context.
 
+### On-Demand PR Reviews (workflow_dispatch)
+
+Use the `pr_number` input to run the agent on any pull request via `workflow_dispatch`. This enables on-demand reviews, batch processing, and CI/CD integration without requiring a triggering comment:
+
+```yaml
+name: On-demand PR Review
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: number
+      instruction:
+        description: 'Custom instruction (optional)'
+        required: false
+        default: 'Review this PR for bugs, security issues, and improvements'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Required for the agent to see the full diff
+          ref: refs/pull/${{ github.event.inputs.pr_number }}/head
+
+      - uses: shaftoe/pi-coding-agent-action@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          provider: ${{ vars.PROVIDER }}
+          model: ${{ vars.MODEL }}
+          token: ${{ secrets.API_KEY }}
+          pr_number: ${{ github.event.inputs.pr_number }}
+          prompt: ${{ github.event.inputs.instruction }}
+```
+
+> [!IMPORTANT]
+> When using `workflow_dispatch` with `pr_number`, you **must** checkout the PR's head branch so the working tree matches the PR state. Use `ref: refs/pull/${{ pr_number }}/head` in the checkout step as shown above.
+
 ### Custom Extensions
 
 You can load custom Pi extensions to add additional tools, custom tools, or modify agent behavior:
@@ -350,6 +396,7 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | `load_builtin_extensions` | Whether to load built-in GitHub tools (see [Custom Tools](#custom-tools) for the full list) | No | `true` |
 | `loaded_tools` | Controls which tools are available in the session. Defaults to `all`. Accepts a comma-separated list of tool names (built-in or custom) to load — unknown names cause the run to fail early | No | `all` |
 | `model` | Model to use (e.g., gpt-5.4, gpt-4o, gemini-2.5-pro) | Yes | - |
+| `pr_number` | Pull request number to target. Use with `workflow_dispatch` to run the agent on a specific PR without a triggering event. When set, all context-dependent tools target the specified PR | No | - |
 | `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
 | `provider` | LLM provider (openai, google, anthropic, etc.) | Yes | - |
 | `thinking_level` | Model thinking level (off|low|medium|high) | No | off |

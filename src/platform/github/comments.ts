@@ -10,7 +10,7 @@ import * as github from '@actions/github';
 import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
 import { Temporal } from '@js-temporal/polyfill';
 import { getOctokit } from './octokit';
-import { getCoreAdapter } from './index';
+import { getCoreAdapter, resolveIssueNumber } from './index';
 import type { SessionStats } from '../../types';
 
 /**
@@ -101,7 +101,7 @@ async function createComment(body: string): Promise<CreateCommentType | undefine
     return;
   }
 
-  const issueNumber = github.context.issue.number;
+  const issueNumber = resolveIssueNumber();
   if (!issueNumber) {
     debug('[comments] no issue/PR number in context, skipping comment creation');
     return undefined;
