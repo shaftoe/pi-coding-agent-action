@@ -110,6 +110,14 @@ export class Agent {
     });
     this.session = session;
 
+    // Enable auto-compaction if requested. This allows Pi to automatically
+    // summarize older messages when the context window fills up, enabling
+    // longer sessions without hitting context limits.
+    if (this.config.autoCompaction) {
+      session.setAutoCompactionEnabled(true);
+      this.core.info('[auto-compaction] enabled');
+    }
+
     // Validate that all requested tool names actually exist after extensions
     // are loaded. This provides early, actionable errors instead of silently
     // dropping unknown names.
@@ -209,6 +217,20 @@ export class Agent {
         delete process.env.PI_PACKAGE_DIR;
       }
     }
+  }
+
+  /**
+   * Export the session as a JSONL file.
+   *
+   * Uses the Pi SDK's built-in JSONL export. Each line is a JSON object
+   * representing a session entry. Must be called after {@link run} so
+   * the session has content.
+   *
+   * @param outputPath - Path to write the JSONL file to.
+   * @returns The path to the written file.
+   */
+  async exportSessionJsonl(outputPath: string): Promise<string> {
+    return this.session.exportToJsonl(outputPath);
   }
 
   /**

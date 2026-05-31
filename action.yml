@@ -85,6 +85,16 @@ inputs:
     required: false
     default: 'false'
 
+  export_session_jsonl:
+    description: 'Export the Pi session as a JSONL file (one JSON object per line) and expose its path via the `session_jsonl_path` output. Set to true to enable.'
+    required: false
+    default: 'false'
+
+  auto_compaction:
+    description: 'Enable automatic context compaction when the conversation grows too large for the model context window. When enabled, Pi will summarize older messages to free up context space, allowing longer sessions without hitting context limits.'
+    required: false
+    default: 'false'
+
 runs:
   using: 'node24'
   main: 'dist/index.js'
@@ -104,3 +114,5 @@ outputs:
     description: 'Wall-clock duration of agent execution in seconds'
   session_html_path:
     description: 'Path to the exported session HTML file (when export_session_html is enabled)'
+  session_jsonl_path:
+    description: 'Path to the exported session JSONL file (when export_session_jsonl is enabled)'

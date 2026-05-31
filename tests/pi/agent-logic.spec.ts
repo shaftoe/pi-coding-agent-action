@@ -376,4 +376,92 @@ describe('Agent', () => {
       expect(mockExportToHtml).toHaveBeenCalledWith('/tmp/test-session.html');
     });
   });
+
+  describe('exportSessionJsonl', () => {
+    test('delegates to session.exportToJsonl', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      const mockExportToJsonl = mock((outputPath: string) => outputPath);
+      agent['session'] = {
+        ...agent['session'],
+        exportToJsonl: mockExportToJsonl,
+      } as any;
+
+      const result = await agent.exportSessionJsonl('/tmp/test-session.jsonl');
+      expect(result).toBe('/tmp/test-session.jsonl');
+      expect(mockExportToJsonl).toHaveBeenCalledWith('/tmp/test-session.jsonl');
+    });
+  });
+
+  describe('autoCompaction', () => {
+    test('enables auto-compaction on session when config.autoCompaction is true', async () => {
+      const infoMessages: string[] = [];
+      const testCore = {
+        ...mockCoreAdapter,
+        info: mock((msg: string) => {
+          infoMessages.push(msg);
+        }),
+      };
+
+      const agent = new Agent(testCore as any, mockPlatformProvider, {
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        token: 'test-token',
+        thinkingLevel: 'off',
+        promptInput: '',
+        autoCompaction: true,
+      });
+
+      await agent.ready();
+
+      expect(infoMessages).toContain('[auto-compaction] enabled');
+    });
+
+    test('does not enable auto-compaction when config.autoCompaction is false', async () => {
+      const infoMessages: string[] = [];
+      const testCore = {
+        ...mockCoreAdapter,
+        info: mock((msg: string) => {
+          infoMessages.push(msg);
+        }),
+      };
+
+      const agent = new Agent(testCore as any, mockPlatformProvider, {
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        token: 'test-token',
+        thinkingLevel: 'off',
+        promptInput: '',
+        autoCompaction: false,
+      });
+
+      await agent.ready();
+
+      expect(infoMessages).not.toContain('[auto-compaction] enabled');
+    });
+
+    test('does not enable auto-compaction when config.autoCompaction is undefined', async () => {
+      const infoMessages: string[] = [];
+      const testCore = {
+        ...mockCoreAdapter,
+        info: mock((msg: string) => {
+          infoMessages.push(msg);
+        }),
+      };
+
+      const agent = new Agent(testCore as any, mockPlatformProvider, {
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        token: 'test-token',
+        thinkingLevel: 'off',
+        promptInput: '',
+        // autoCompaction omitted
+      });
+
+      await agent.ready();
+
+      expect(infoMessages).not.toContain('[auto-compaction] enabled');
+    });
+  });
 });
