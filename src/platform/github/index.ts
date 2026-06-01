@@ -311,4 +311,4 @@ export {
 } from './tools/get-workflow-run-logs';
 
 // Platform provider (used by platform/index.ts)
-export { detectPlatform, createGitHubPlatformProvider } from './provider';
+export { detectPlatform, createGitHubPlatformProvider, type GitHubPlatformDeps } from './provider';

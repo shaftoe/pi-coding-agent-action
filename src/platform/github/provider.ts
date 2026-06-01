@@ -12,7 +12,7 @@
  * - Anything else → throws an error (unsupported platform)
  */
 
-import * as github from '@actions/github';
+import { setOctokit, setPlatformContext } from './index';
 import { addReaction, deleteReaction } from './reactions';
 import { createFinalComment } from './comments';
 import { getPrompt, getStartTimeFromContext } from './context';
@@ -23,7 +23,6 @@ import { fetchPRDiff } from './tools/pr-diff';
 import { createReview } from './tools/review';
 import { getCIStatus } from './tools/get-ci-status';
 import { getWorkflowRunLogs } from './tools/get-workflow-run-logs';
-import { setOctokit, setPlatformContext } from './index';
 import type { Temporal } from '@js-temporal/polyfill';
 import type { PlatformProvider, PlatformType, PlatformContext } from '../types';
 import type { CommentMetadata } from '../../types';
@@ -87,29 +86,16 @@ export interface GitHubPlatformDeps {
  * instances since all three use the same CI/CD environment variables and
  * GitHub-compatible REST APIs.
  *
- * @param deps - Optional explicit dependencies (Octokit + context).
- *               When provided, the provider is fully decoupled from
- *               `@actions/github` globals. When omitted, falls back to
- *               the `@actions/github` singleton for backward compatibility.
+ * @param deps - Explicit dependencies (Octokit + context).
  * @returns A PlatformProvider instance.
  */
-export function createGitHubPlatformProvider(deps?: GitHubPlatformDeps): PlatformProvider {
+export function createGitHubPlatformProvider(deps: GitHubPlatformDeps): PlatformProvider {
   const type = detectPlatform();
 
   // Set module-level deps so sub-functions can access them
-  const resolvedContext: PlatformContext = deps?.context ?? {
-    repo: github.context.repo,
-    issue: github.context.issue,
-    eventName: github.context.eventName,
-    payload: github.context.payload,
-    serverUrl: github.context.serverUrl || 'https://github.com',
-    runId: github.context.runId,
-    workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
-  };
+  const resolvedContext = deps.context;
 
-  if (deps?.octokit) {
-    setOctokit(deps.octokit);
-  }
+  setOctokit(deps.octokit);
   setPlatformContext(resolvedContext);
 
   return {
