@@ -7,11 +7,7 @@
  * Supports dry-run mode for testing without side effects.
  */
 
-import { getGitHubContext } from '../context-accessor';
-
-function ctx() { return getGitHubContext(); }
 import { Temporal } from '@js-temporal/polyfill';
-import { getOctokit } from '../octokit';
 import { BRANCH_PREFIX, MAX_TITLE_LENGTH } from '../constants';
 import { getContextType } from '../context-utils';
 import {
@@ -21,8 +17,7 @@ import {
   createCommitAndUpdateBranch,
   buildFileMap,
 } from '../git/index';
-
-const log = createLogger();
+import type { GitHubModuleDeps } from '../types';
 
 /**
  * Convert a string to a git-branch-safe slug.
@@ -60,15 +55,16 @@ const DEFAULT_BRANCH_NAME_TEMPLATE = `${BRANCH_PREFIX}{number}-{timestamp}`;
  * When `template` is empty or undefined, falls back to the default
  * template `pi/issue{number}-{timestamp}`.
  *
+ * @param deps - Module dependencies.
  * @param title - The PR title (used for `{title}` substitution).
  * @param template - Optional template string. When empty, uses the default.
  * @returns The generated branch name.
  * @internal Exported for testing purposes.
  */
-export function generateBranchName(title: string, template?: string): string {
+export function generateBranchName(deps: GitHubModuleDeps, title: string, template?: string): string {
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string should also fall back to default
   const effectiveTemplate = template || DEFAULT_BRANCH_NAME_TEMPLATE;
-  const issueNumber = ctx().issue?.number ?? 'unknown';
+  const issueNumber = deps.context.issue?.number ?? 'unknown';
   const timestamp = Temporal.Now.instant().epochMilliseconds;
 
   return effectiveTemplate
@@ -206,11 +202,13 @@ export interface CreatePullRequestDetails {
  * Uses the explicitly provided branch if given, otherwise falls back to the
  * repository's default branch (from the workflow context or the GitHub API).
  *
+ * @param deps - Module dependencies.
  * @param providedBase - Optional branch name override.
  * @returns The resolved base branch name.
  * @internal Exported for testing purposes.
  */
-export async function determineBaseBranch(providedBase: string | undefined): Promise<string> {
+export async function determineBaseBranch(deps: GitHubModuleDeps, providedBase: string | undefined): Promise<string> {
+  const log = createLogger(deps);
   let baseBranch: string;
   if (providedBase) {
     // Explicitly provided by caller
@@ -219,7 +217,7 @@ export async function determineBaseBranch(providedBase: string | undefined): Pro
     return baseBranch;
   }
 
-  const repoPayload = ctx().payload.repository as { default_branch?: string } | undefined;
+  const repoPayload = deps.context.payload.repository as { default_branch?: string } | undefined;
   if (repoPayload?.default_branch) {
     // Available in context
     baseBranch = repoPayload.default_branch;
@@ -229,10 +227,9 @@ export async function determineBaseBranch(providedBase: string | undefined): Pro
 
   // Fetch from GitHub API
   log.debug(`Fetching repository default branch from GitHub API...`);
-  const octokit = getOctokit();
-  const owner = ctx().repo.owner;
-  const repo = ctx().repo.repo;
-  const repoData = await octokit.rest.repos.get({
+  const owner = deps.context.repo.owner;
+  const repo = deps.context.repo.repo;
+  const repoData = await deps.octokit.rest.repos.get({
     owner,
     repo,
   });
@@ -247,15 +244,17 @@ export async function determineBaseBranch(providedBase: string | undefined): Pro
  * Uses the caller-supplied body if provided. Otherwise auto-generates a body
  * that references the originating issue/PR number (e.g. "Fixes #42").
  *
+ * @param deps - Module dependencies.
  * @param providedBody - Optional body text from the tool caller.
  * @returns The final Markdown body string.
  * @internal Exported for testing purposes.
  */
-export function generatePullRequestBody(providedBody: string | undefined): string {
+export function generatePullRequestBody(deps: GitHubModuleDeps, providedBody: string | undefined): string {
+  const log = createLogger(deps);
   let bodyText = providedBody ?? '';
-  if (!bodyText && ctx().issue?.number) {
-    const contextType = getContextType();
-    const issueNum = ctx().issue?.number;
+  if (!bodyText && deps.context.issue?.number) {
+    const contextType = getContextType(deps);
+    const issueNum = deps.context.issue?.number;
     if (contextType === 'issue') {
       bodyText = `Fixes #${issueNum}\n\nCreated by pi coding agent.`;
     } else if (contextType === 'pull_request') {
@@ -289,6 +288,7 @@ export function validateCreatePullRequestParams(params: CreatePullRequestParams)
 /**
  * Create a pull request via the GitHub REST API.
  *
+ * @param deps - Module dependencies.
  * @param title - PR title.
  * @param body - PR body in Markdown.
  * @param baseBranch - Target (base) branch name.
@@ -296,18 +296,19 @@ export function validateCreatePullRequestParams(params: CreatePullRequestParams)
  * @returns An object containing the PR number, URL, and branch refs.
  */
 async function createPullRequestOnGitHub(
+  deps: GitHubModuleDeps,
   title: string,
   body: string,
   baseBranch: string,
   headBranch: string
 ): Promise<{ number: number; url: string; headRef: string; baseRef: string }> {
-  const owner = ctx().repo.owner;
-  const repo = ctx().repo.repo;
+  const owner = deps.context.repo.owner;
+  const repo = deps.context.repo.repo;
+  const log = createLogger(deps);
 
   log.debug(`Creating pull request...`);
 
-  const octokit = getOctokit();
-  const result = await octokit.rest.pulls.create({
+  const result = await deps.octokit.rest.pulls.create({
     owner,
     repo,
     title,
@@ -331,22 +332,25 @@ async function createPullRequestOnGitHub(
  * files, creates a branch, commits, and opens the PR. When `dryRun` is `true`
  * the operation is simulated and no GitHub resources are created.
  *
+ * @param deps - Module dependencies.
  * @param params - Parameters controlling title, body, base branch, and dry-run.
  * @returns The tool result containing a human-readable message and structured
  *          details about the created PR (or dry-run output).
  * @throws {Error} If no changed files are detected or the GitHub API call fails.
  */
 export async function createPullRequest(
+  deps: GitHubModuleDeps,
   params: CreatePullRequestParams
 ): Promise<CreatePullRequestResult> {
   const { title, body, base, dryRun } = params;
+  const log = createLogger(deps);
 
   // Validate input parameters early
   validateCreatePullRequestParams(params);
 
   // Auto-generate branch name from template and validate
   const template = process.env.INPUT_BRANCH_NAME_TEMPLATE ?? '';
-  const head = generateBranchName(title, template);
+  const head = generateBranchName(deps, title, template);
   validateBranchName(head);
 
   log.debug(`Title: ${title}`);
@@ -355,10 +359,10 @@ export async function createPullRequest(
   log.debug(`DryRun: ${dryRun ?? false}`);
 
   // Determine base branch
-  const baseBranch = await determineBaseBranch(base);
+  const baseBranch = await determineBaseBranch(deps, base);
 
   // Generate body text
-  const bodyText = generatePullRequestBody(body);
+  const bodyText = generatePullRequestBody(deps, body);
 
   // Dry run mode
   if (dryRun) {
@@ -381,13 +385,12 @@ export async function createPullRequest(
   log.debug(`Preparing branch and changes via GitHub API...`);
 
   try {
-    const octokit = getOctokit();
-    const owner = ctx().repo.owner;
-    const repo = ctx().repo.repo;
+    const owner = deps.context.repo.owner;
+    const repo = deps.context.repo.repo;
 
     // Get base branch reference
     log.debug(`Getting base branch "${baseBranch}" reference...`);
-    const baseRef = await octokit.rest.git.getRef({
+    const baseRef = await deps.octokit.rest.git.getRef({
       owner,
       repo,
       ref: `heads/${baseBranch}`,
@@ -397,11 +400,11 @@ export async function createPullRequest(
 
     // Get files that exist in the base branch tree (for comparison)
     log.debug(`Getting base branch tree...`);
-    const baseFiles = await buildFileMap(baseSha);
+    const baseFiles = await buildFileMap(deps, baseSha);
     log.debug(`Found ${baseFiles.size} files in base branch`);
 
     // Scan for changes
-    const { changedFiles, deletedFiles } = await scanForChanges(baseFiles, log);
+    const { changedFiles, deletedFiles } = await scanForChanges(deps, baseFiles, log);
 
     if (changedFiles.length === 0 && deletedFiles.length === 0) {
       const errorMsg =
@@ -411,7 +414,7 @@ export async function createPullRequest(
 
     // Create new branch reference from base branch
     log.debug(`Creating new branch "${head}"...`);
-    await octokit.rest.git.createRef({
+    await deps.octokit.rest.git.createRef({
       owner,
       repo,
       ref: `refs/heads/${head}`,
@@ -420,7 +423,7 @@ export async function createPullRequest(
     log.debug(`Branch created successfully`);
 
     // Create blobs and tree
-    const treeSha = await createBlobsAndTree({
+    const treeSha = await createBlobsAndTree(deps, {
       changedFiles,
       deletedFiles,
       parentSha: baseSha,
@@ -428,7 +431,7 @@ export async function createPullRequest(
     });
 
     // Create commit and update branch
-    await createCommitAndUpdateBranch({
+    await createCommitAndUpdateBranch(deps, {
       treeSha,
       parentSha: baseSha,
       branchName: head,
@@ -437,7 +440,7 @@ export async function createPullRequest(
     });
 
     // Create pull request
-    const prResult = await createPullRequestOnGitHub(title, bodyText, baseBranch, head);
+    const prResult = await createPullRequestOnGitHub(deps, title, bodyText, baseBranch, head);
 
     const successMessage = `Pull request #${prResult.number} created: ${prResult.url}`;
 

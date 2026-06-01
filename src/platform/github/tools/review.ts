@@ -7,25 +7,9 @@
  * positioning (not the deprecated `position` field).
  */
 
-import { getGitHubContext } from '../context-accessor';
-
-function ctx() { return getGitHubContext(); }
-import { getOctokit } from '../octokit';
-import { getCoreAdapter } from '../index';
-import type {
-  CreateReviewParams,
-  CreateReviewDetails,
-  ReviewInlineComment,
-} from '../types';
+import type { GitHubModuleDeps, CreateReviewParams, CreateReviewDetails, ReviewInlineComment } from '../types';
 
 export type { CreateReviewParams, CreateReviewDetails, ReviewInlineComment };
-
-/**
- * Debug logging helper.
- */
-function debug(msg: string): void {
-  getCoreAdapter().debug(msg);
-}
 
 /**
  * Validate review parameters before making API calls.
@@ -97,17 +81,19 @@ export function toGitHubComment(comment: ReviewInlineComment): Record<string, un
  * Uses `octokit.rest.pulls.createReview()` with the modern `line`/`side`
  * positioning for each comment.
  *
+ * @param deps - Module dependencies.
  * @param params - Parameters for the review.
  * @returns Structured details about the created review.
  * @throws {Error} If the PR number cannot be resolved, validation fails,
  *                 or the GitHub API call fails.
  */
 export async function createReview(
+  deps: GitHubModuleDeps,
   params: CreateReviewParams
 ): Promise<{ content: { type: 'text'; text: string }[]; details: CreateReviewDetails }> {
   validateCreateReviewParams(params);
 
-  const resolvedPullNumber = params.pull_number ?? ctx().issue.number;
+  const resolvedPullNumber = params.pull_number ?? deps.context.issue.number;
   if (!resolvedPullNumber) {
     throw new Error(
       'Pull request number not provided and not available in context. ' +
@@ -115,19 +101,18 @@ export async function createReview(
     );
   }
 
-  const owner = ctx().repo.owner;
-  const repo = ctx().repo.repo;
+  const owner = deps.context.repo.owner;
+  const repo = deps.context.repo.repo;
   const event = params.event ?? 'COMMENT';
   const body = params.body ?? '';
 
-  debug(
+  deps.logger.debug(
     `Creating review on PR #${resolvedPullNumber} with ${params.comments.length} comment(s), event=${event}`
   );
 
-  const octokit = getOctokit();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Octokit's comment type is complex; our mapping produces the correct shape
   const reviewComments = params.comments.map(toGitHubComment) as any;
-  const response = await octokit.rest.pulls.createReview({
+  const response = await deps.octokit.rest.pulls.createReview({
     owner,
     repo,
     pull_number: resolvedPullNumber,
@@ -146,7 +131,7 @@ export async function createReview(
     `- Inline comments: ${commentCount}`,
   ].join('\n');
 
-  debug(`SUCCESS: ${successMessage}`);
+  deps.logger.debug(`SUCCESS: ${successMessage}`);
 
   return {
     content: [{ type: 'text' as const, text: successMessage }],

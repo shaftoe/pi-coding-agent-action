@@ -1,153 +1,102 @@
 /**
- * Tests for git module context management (GitHubModuleContext).
+ * Tests for GitHubModuleDeps interface — validates that the deps bag
+ * is correctly structured.
  *
- * Tests the singleton module context that manages the CoreAdapter
- * dependency for the git/ module.
+ * The old GitHubModuleContext singleton has been removed; these tests
+ * now verify the deps-based approach works correctly.
  */
 
-import { describe, expect, test, beforeEach } from 'bun:test';
-import {
-  setCoreAdapter,
-  getCoreAdapter,
-  resetModuleContext,
-  isModuleContextInitialized,
-} from '../../../src/platform/github';
-import type { CoreAdapter } from '../../../src/types';
+import { describe, expect, test } from 'bun:test';
+import type { GitHubModuleDeps } from '../../../src/platform/github/types';
 
-function createMockCoreAdapter(overrides?: Partial<CoreAdapter>): CoreAdapter {
+function createTestDeps(overrides?: Partial<GitHubModuleDeps>): GitHubModuleDeps {
   return {
-    getInput: () => '',
-    setFailed: () => {},
-    setOutput: () => {},
-    notice: () => {},
-    debug: () => {},
-    info: () => {},
-    warning: () => {},
-    error: () => {},
+    octokit: {
+      rest: {} as any,
+    } as any,
+    context: {
+      repo: { owner: 'test-owner', repo: 'test-repo' },
+      issue: { number: 42 },
+      eventName: 'issue_comment',
+      payload: {},
+      serverUrl: 'https://github.com',
+      runId: 123456789,
+      workspace: '/tmp/workspace',
+    },
+    logger: {
+      debug: () => {},
+      info: () => {},
+      warning: () => {},
+      notice: () => {},
+      error: () => {},
+    },
     ...overrides,
   };
 }
 
-describe('git module context management', () => {
-  beforeEach(() => {
-    resetModuleContext();
+describe('GitHubModuleDeps', () => {
+  test('can be constructed with all required fields', () => {
+    const deps = createTestDeps();
+    expect(deps.octokit).toBeDefined();
+    expect(deps.context).toBeDefined();
+    expect(deps.logger).toBeDefined();
   });
 
-  describe('isModuleContextInitialized', () => {
-    test('returns false before setCoreAdapter is called', () => {
-      expect(isModuleContextInitialized()).toBe(false);
-    });
-
-    test('returns true after setCoreAdapter is called', () => {
-      setCoreAdapter(createMockCoreAdapter());
-      expect(isModuleContextInitialized()).toBe(true);
-    });
-
-    test('returns false after resetModuleContext is called', () => {
-      setCoreAdapter(createMockCoreAdapter());
-      resetModuleContext();
-      expect(isModuleContextInitialized()).toBe(false);
-    });
-
-    test('returns true after resetModuleContext is called with adapter', () => {
-      setCoreAdapter(createMockCoreAdapter());
-      resetModuleContext(createMockCoreAdapter());
-      expect(isModuleContextInitialized()).toBe(true);
-    });
+  test('octokit is accessible', () => {
+    const deps = createTestDeps();
+    expect(deps.octokit.rest).toBeDefined();
   });
 
-  describe('getCoreAdapter', () => {
-    test('throws when context is not initialized', () => {
-      expect(() => getCoreAdapter()).toThrow(/not initialized/);
-    });
-
-    test('throws with helpful error message when not initialized', () => {
-      expect(() => getCoreAdapter()).toThrow(/setCoreAdapter/);
-    });
-
-    test('returns adapter after setCoreAdapter is called', () => {
-      const adapter = createMockCoreAdapter();
-      setCoreAdapter(adapter);
-      expect(getCoreAdapter()).toBe(adapter);
-    });
-
-    test('returns same adapter on multiple calls', () => {
-      const adapter = createMockCoreAdapter();
-      setCoreAdapter(adapter);
-      expect(getCoreAdapter()).toBe(adapter);
-      expect(getCoreAdapter()).toBe(adapter);
-    });
-
-    test('returns new adapter after resetModuleContext with adapter', () => {
-      const adapter1 = createMockCoreAdapter();
-      setCoreAdapter(adapter1);
-      const adapter2 = createMockCoreAdapter();
-      resetModuleContext(adapter2);
-      expect(getCoreAdapter()).toBe(adapter2);
-      expect(getCoreAdapter()).not.toBe(adapter1);
-    });
+  test('context has required fields', () => {
+    const deps = createTestDeps();
+    expect(deps.context.repo.owner).toBe('test-owner');
+    expect(deps.context.repo.repo).toBe('test-repo');
+    expect(deps.context.issue.number).toBe(42);
+    expect(deps.context.eventName).toBe('issue_comment');
   });
 
-  describe('setCoreAdapter', () => {
-    test('sets the adapter', () => {
-      const adapter = createMockCoreAdapter();
-      setCoreAdapter(adapter);
-      expect(getCoreAdapter()).toBe(adapter);
+  test('logger is functional', () => {
+    const logs: string[] = [];
+    const deps = createTestDeps({
+      logger: {
+        debug: (msg: string) => logs.push(`debug: ${msg}`),
+        info: (msg: string) => logs.push(`info: ${msg}`),
+        warning: (msg: string) => logs.push(`warning: ${msg}`),
+        notice: (msg: string) => logs.push(`notice: ${msg}`),
+        error: (msg: string) => logs.push(`error: ${msg}`),
+      },
     });
 
-    test('replaces existing adapter', () => {
-      const adapter1 = createMockCoreAdapter();
-      setCoreAdapter(adapter1);
-      const adapter2 = createMockCoreAdapter();
-      setCoreAdapter(adapter2);
-      expect(getCoreAdapter()).toBe(adapter2);
-    });
+    deps.logger.debug('test');
+    deps.logger.info('test');
+    deps.logger.warning('test');
+    deps.logger.notice('test');
+    deps.logger.error('test');
 
-    test('throws for undefined adapter', () => {
-      expect(() => setCoreAdapter(undefined as unknown as CoreAdapter)).toThrow(/undefined/);
-    });
-
-    test('does not corrupt state when called with undefined', () => {
-      const adapter = createMockCoreAdapter();
-      setCoreAdapter(adapter);
-      try {
-        setCoreAdapter(undefined as unknown as CoreAdapter);
-      } catch {
-        // Expected
-      }
-      // Previous adapter should still be set
-      expect(getCoreAdapter()).toBe(adapter);
-    });
+    expect(logs).toHaveLength(5);
   });
 
-  describe('resetModuleContext', () => {
-    test('clears the adapter', () => {
-      setCoreAdapter(createMockCoreAdapter());
-      resetModuleContext();
-      expect(isModuleContextInitialized()).toBe(false);
-    });
+  test('deps properties are readonly at type level', () => {
+    const deps = createTestDeps();
+    // Verify the values are set — TypeScript enforces readonly at compile time
+    expect(deps.context.repo.owner).toBe('test-owner');
+    expect(deps.octokit).toBeDefined();
+    expect(deps.logger).toBeDefined();
+  });
 
-    test('sets new adapter when provided', () => {
-      const adapter = createMockCoreAdapter();
-      resetModuleContext(adapter);
-      expect(getCoreAdapter()).toBe(adapter);
+  test('can override individual fields', () => {
+    const deps = createTestDeps({
+      context: {
+        repo: { owner: 'other', repo: 'repo' },
+        issue: { number: 99 },
+        eventName: 'pull_request',
+        payload: { pull_request: { number: 99 } },
+        serverUrl: 'https://codeberg.org',
+        runId: 0,
+        workspace: '/tmp',
+      },
     });
-
-    test('supports multiple resets', () => {
-      const adapter1 = createMockCoreAdapter();
-      setCoreAdapter(adapter1);
-      resetModuleContext();
-      expect(isModuleContextInitialized()).toBe(false);
-
-      const adapter2 = createMockCoreAdapter();
-      setCoreAdapter(adapter2);
-      expect(getCoreAdapter()).toBe(adapter2);
-    });
-
-    test('allows setCoreAdapter after reset', () => {
-      setCoreAdapter(createMockCoreAdapter());
-      resetModuleContext();
-      expect(() => setCoreAdapter(createMockCoreAdapter())).not.toThrow();
-    });
+    expect(deps.context.repo.owner).toBe('other');
+    expect(deps.context.eventName).toBe('pull_request');
   });
 });

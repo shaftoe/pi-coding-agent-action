@@ -90,13 +90,13 @@ describe('validateUpdatePullRequestParams', () => {
     mockContext.issue = { number: 123 };
   });
 
-  test('passes validation with all optional params omitted and context PR number', async () => {
+  test('throws when all optional params are omitted (no context check in validator)', async () => {
     const module = await getModule();
     const { validateUpdatePullRequestParams } = module;
 
     expect(() => {
       validateUpdatePullRequestParams({});
-    }).not.toThrow();
+    }).toThrow('At least one update parameter');
   });
 
   test('passes validation with title provided', async () => {

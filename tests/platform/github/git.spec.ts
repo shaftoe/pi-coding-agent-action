@@ -49,19 +49,43 @@ fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 // Dynamic import to ensure mocks are set before module loads
 const gitUtilsModule = import('../../../src/platform/github/git/index.js');
 
+import type { GitHubModuleDeps } from '../../../src/platform/github/types';
+
+function createTestDeps(): GitHubModuleDeps {
+  return {
+    octokit: {} as any,
+    context: {
+      repo: { owner: 'test-owner', repo: 'test-repo' },
+      issue: { number: 42 },
+      eventName: 'push',
+      payload: {},
+      serverUrl: 'https://github.com',
+      runId: 123456789,
+      workspace: '/tmp',
+    },
+    logger: {
+      debug: debugLogger,
+      info: noop,
+      warning: noop,
+      notice: noop,
+      error: noop,
+    },
+  };
+}
+
 // Extract functions for convenience (using top-level await pattern)
 const [{ createLogger, scanDirectory, scanForChanges }] = // @ts-expect-error TS1309 -- Top-level await not supported in CommonJS, but Bun test runner handles it
   await Promise.all([gitUtilsModule]);
 
 describe('createLogger', () => {
   test('creates logger with default emoji', () => {
-    const logger = createLogger();
+    const logger = createLogger(createTestDeps());
     expect(logger.debug).toBeDefined();
     expect(logger.info).toBeDefined();
   });
 
   test('creates logger with custom emoji', () => {
-    const logger = createLogger('🧪');
+    const logger = createLogger(createTestDeps(), '🧪');
     expect(logger.debug).toBeDefined();
     expect(logger.info).toBeDefined();
   });
@@ -74,7 +98,7 @@ describe('scanForChanges', () => {
   beforeEach(() => {
     mockDebugLog.length = 0;
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-utils-test-'));
-    mockLog = createLogger('🧪');
+    mockLog = createLogger(createTestDeps(), '🧪');
     process.env.GITHUB_WORKSPACE = tempDir;
   });
 
@@ -85,7 +109,7 @@ describe('scanForChanges', () => {
 
     const referenceFiles = new Map();
 
-    const result = await scanForChanges(referenceFiles, mockLog);
+    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
 
     expect(result.changedFiles).toHaveLength(1);
     expect(result.changedFiles[0]).toBeDefined();
@@ -101,7 +125,7 @@ describe('scanForChanges', () => {
     const testFile = path.join(tempDir, 'test.txt');
     fs.writeFileSync(testFile, 'new content');
 
-    const result = await scanForChanges(referenceFiles, mockLog);
+    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
 
     expect(result.changedFiles).toHaveLength(1);
     expect(result.changedFiles[0]).toBeDefined();
@@ -116,7 +140,7 @@ describe('scanForChanges', () => {
     const testFile = path.join(tempDir, 'unchanged.txt');
     fs.writeFileSync(testFile, 'same content');
 
-    const result = await scanForChanges(referenceFiles, mockLog);
+    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
 
     expect(result.changedFiles).toHaveLength(0);
     expect(result.deletedFiles).toHaveLength(0);
@@ -132,7 +156,7 @@ describe('scanForChanges', () => {
     const remainingFile = path.join(tempDir, 'remaining.txt');
     fs.writeFileSync(remainingFile, 'still here');
 
-    const result = await scanForChanges(referenceFiles, mockLog);
+    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
 
     expect(result.changedFiles).toHaveLength(0);
     expect(result.deletedFiles).toHaveLength(1);
@@ -148,7 +172,7 @@ describe('scanForChanges', () => {
 
     const referenceFiles = new Map();
 
-    const result = await scanForChanges(referenceFiles, mockLog);
+    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
 
     expect(result.changedFiles).toHaveLength(1);
     expect(result.changedFiles[0]).toBeDefined();
@@ -168,7 +192,7 @@ describe('scanForChanges', () => {
 
     const referenceFiles = new Map();
 
-    const result = await scanForChanges(referenceFiles, mockLog);
+    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
 
     // .gitignore and included.txt should be found (ignored files are skipped)
     expect(result.changedFiles).toHaveLength(2);
@@ -180,7 +204,7 @@ describe('scanForChanges', () => {
     const referenceFiles = new Map();
     fs.writeFileSync(path.join(tempDir, 'test.txt'), 'content');
 
-    const result = await scanForChanges(referenceFiles, mockLog);
+    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
 
     expect(result.changedFiles).toHaveLength(1);
   });
@@ -207,7 +231,7 @@ describe('scanForChanges', () => {
 
     const referenceFiles = new Map();
 
-    const result = await scanForChanges(referenceFiles, mockLog);
+    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
 
     // All files should be detected as new
     expect(result.changedFiles).toHaveLength(7);
@@ -284,7 +308,7 @@ describe('scanForChanges', () => {
       [path.join('docs', 'api.md'), { sha: 'mno', content: '# API Reference' }],
     ]);
 
-    const result = await scanForChanges(referenceFiles, mockLog);
+    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
 
     // 3 modified, 1 new, 2 deleted
     expect(result.changedFiles).toHaveLength(4);
@@ -326,7 +350,7 @@ describe('scanDirectory', () => {
   beforeEach(() => {
     mockDebugLog.length = 0;
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-utils-scan-test-'));
-    mockLog = createLogger('🔍');
+    mockLog = createLogger(createTestDeps(), '🔍');
   });
 
   test('scans single file', async () => {

@@ -43,6 +43,7 @@ mock.module('@actions/github', () => ({
     eventName: 'issue_comment',
     payload: {},
   },
+  getOctokit: () => ({ rest: {} }),
 }));
 
 // Set env vars before importing modules
@@ -68,7 +69,25 @@ describe('platform barrel exports', () => {
   });
 
   test('createGitHubPlatformProvider returns a valid provider', () => {
-    const provider = createGitHubPlatformProvider();
+    const provider = createGitHubPlatformProvider({
+      octokit: {} as any,
+      context: {
+        repo: { owner: 'test-owner', repo: 'test-repo' },
+        issue: { number: 123 },
+        eventName: 'issue_comment',
+        payload: {},
+        serverUrl: 'https://github.com',
+        runId: 123456789,
+        workspace: '/tmp',
+      },
+      logger: {
+        debug: () => {},
+        info: () => {},
+        warning: () => {},
+        notice: () => {},
+        error: () => {},
+      },
+    });
     expect(provider).toBeDefined();
     expect(['github', 'codeberg', 'forgejo']).toContain(provider.type);
     expect(typeof provider.getContext).toBe('function');

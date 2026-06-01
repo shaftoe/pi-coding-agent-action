@@ -48,17 +48,7 @@ process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
 process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-scanner-${Date.now()}.json`);
 fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 
-// Mock octokit (not used by scanForChanges but needed for module loading)
-mock.module('../../../../src/platform/github/octokit', () => ({
-  getOctokit: mock(() => ({
-    rest: {
-      git: {
-        getBlob: mock(() => Promise.resolve({ data: { content: '' } })),
-        getTree: mock(() => Promise.resolve({ data: { tree: [] } })),
-      },
-    },
-  })),
-}));
+// octokit mock no longer needed - deps pattern used instead
 
 // Mock @actions/github context
 mock.module('@actions/github', () => ({
@@ -71,11 +61,26 @@ mock.module('@actions/github', () => ({
   },
 }));
 
-// Import the module context reset function and git utilities
-import { resetModuleContext } from '../../../../src/platform/github';
+import type { GitHubModuleDeps } from '../../../../src/platform/github/types';
 import { scanForChanges, scanDirectory } from '../../../../src/platform/github/git/file-scanner';
 import { createLogger } from '../../../../src/platform/github/git/types';
 import ignore from 'ignore';
+
+function createTestDeps(): GitHubModuleDeps {
+  return {
+    octokit: {} as any,
+    context: {
+      repo: { owner: 'test-owner', repo: 'test-repo' },
+      issue: { number: 42 },
+      eventName: 'push',
+      payload: {},
+      serverUrl: 'https://github.com',
+      runId: 123456789,
+      workspace: '/tmp',
+    },
+    logger: mockCoreAdapter,
+  };
+}
 
 // Set up mock CoreAdapter for all tests
 const mockCoreAdapter = {
@@ -95,14 +100,14 @@ describe('nested .gitignore support', () => {
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-scanner-test-'));
     process.env.GITHUB_WORKSPACE = tempDir;
-    resetModuleContext(mockCoreAdapter);
+    // resetModuleContext no longer needed
   });
 
   afterEach(() => {
     // Clean up temp directory
     fs.rmSync(tempDir, { recursive: true, force: true });
     delete process.env.GITHUB_WORKSPACE;
-    resetModuleContext(undefined);
+    // resetModuleContext no longer needed
   });
 
   test('respects nested .gitignore in subdirectory', async () => {
@@ -119,7 +124,7 @@ describe('nested .gitignore support', () => {
     fs.writeFileSync(path.join(subdir, 'notes.txt'), 'notes');
 
     const referenceFiles = new Map<string, { sha: string; content: string | null }>();
-    const result = await scanForChanges(referenceFiles);
+    const result = await scanForChanges(createTestDeps(), referenceFiles);
 
     // important.log should be included (nested .gitignore negates root pattern)
     const paths = result.changedFiles.map(f => f.path);
@@ -150,7 +155,7 @@ describe('nested .gitignore support', () => {
     fs.writeFileSync(path.join(otherdir, 'skip.tmp'), 'should be skipped');
 
     const referenceFiles = new Map<string, { sha: string; content: string | null }>();
-    const result = await scanForChanges(referenceFiles);
+    const result = await scanForChanges(createTestDeps(), referenceFiles);
 
     const paths = result.changedFiles.map(f => f.path);
 
@@ -184,7 +189,7 @@ describe('nested .gitignore support', () => {
     fs.writeFileSync(path.join(a, 'normal.txt'), 'normal');
 
     const referenceFiles = new Map<string, { sha: string; content: string | null }>();
-    const result = await scanForChanges(referenceFiles);
+    const result = await scanForChanges(createTestDeps(), referenceFiles);
 
     const paths = result.changedFiles.map(f => f.path);
     expect(paths).toContain(path.join('a', 'keep.secret'));
@@ -206,7 +211,7 @@ describe('nested .gitignore support', () => {
     fs.writeFileSync(path.join(nested, 'config.json'), '{"nested":true}');
 
     const referenceFiles = new Map<string, { sha: string; content: string | null }>();
-    const result = await scanForChanges(referenceFiles);
+    const result = await scanForChanges(createTestDeps(), referenceFiles);
 
     const paths = result.changedFiles.map(f => f.path);
 
@@ -235,7 +240,7 @@ describe('nested .gitignore support', () => {
       [path.join('docs', 'README.md'), { sha: 'abc123', content: 'old readme' }],
     ]);
 
-    const result = await scanForChanges(referenceFiles);
+    const result = await scanForChanges(createTestDeps(), referenceFiles);
 
     // README.md should be detected as modified (it exists and content changed)
     expect(result.changedFiles.some(f => f.path === path.join('docs', 'README.md'))).toBe(true);
@@ -251,13 +256,13 @@ describe('gitignored file deletion safety', () => {
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-scanner-del-test-'));
     process.env.GITHUB_WORKSPACE = tempDir;
-    resetModuleContext(mockCoreAdapter);
+    // resetModuleContext no longer needed
   });
 
   afterEach(() => {
     fs.rmSync(tempDir, { recursive: true, force: true });
     delete process.env.GITHUB_WORKSPACE;
-    resetModuleContext(undefined);
+    // resetModuleContext no longer needed
   });
 
   test('does not delete gitignored files that still exist on disk', async () => {
@@ -272,7 +277,7 @@ describe('gitignored file deletion safety', () => {
       ['main.py', { sha: 'def', content: 'print("old")' }],
     ]);
 
-    const result = await scanForChanges(referenceFiles);
+    const result = await scanForChanges(createTestDeps(), referenceFiles);
 
     // app.log is gitignored so not in encounteredFiles, but it EXISTS on disk
     // → must NOT be marked as deleted
@@ -292,7 +297,7 @@ describe('gitignored file deletion safety', () => {
       ['deleted.py', { sha: 'def', content: 'gone forever' }],
     ]);
 
-    const result = await scanForChanges(referenceFiles);
+    const result = await scanForChanges(createTestDeps(), referenceFiles);
 
     // deleted.py is genuinely missing → should be marked as deleted
     expect(result.deletedFiles).toContain('deleted.py');
@@ -316,7 +321,7 @@ describe('gitignored file deletion safety', () => {
       [path.join('build', 'output.js'), { sha: 'def', content: 'old compiled' }],
     ]);
 
-    const result = await scanForChanges(referenceFiles);
+    const result = await scanForChanges(createTestDeps(), referenceFiles);
 
     // build/output.js is gitignored but exists → should NOT be deleted
     expect(result.deletedFiles).not.toContain(path.join('build', 'output.js'));
@@ -332,13 +337,13 @@ describe('scanDirectory with nested .gitignore', () => {
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-scanner-dir-test-'));
-    resetModuleContext(mockCoreAdapter);
-    mockLog = createLogger('🧪');
+    // resetModuleContext no longer needed
+    mockLog = createLogger(createTestDeps(), '🧪');
   });
 
   afterEach(() => {
     fs.rmSync(tempDir, { recursive: true, force: true });
-    resetModuleContext(undefined);
+    // resetModuleContext no longer needed
   });
 
   test('nested .gitignore patterns apply only within their directory', async () => {

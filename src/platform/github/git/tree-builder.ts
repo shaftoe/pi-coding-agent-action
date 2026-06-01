@@ -4,12 +4,9 @@
  * Uploads changed files as Git blobs and creates trees that reference them.
  */
 
-import { getGitHubContext } from '../context-accessor';
-
-function ctx() { return getGitHubContext(); }
-import { getOctokit } from '../octokit';
 import { FILE_MODE_REGULAR } from '../../../git/constants';
 import { createLogger } from './types';
+import type { GitHubModuleDeps } from '../types';
 import type { FileMode, TreeEntry, Logger } from '../../../git/types';
 
 /**
@@ -34,21 +31,24 @@ export interface CreateBlobsAndTreeParams {
  * Upload changed files as Git blobs and create a tree that references them.
  * Handles both new/modified files and deleted files.
  *
+ * @param deps - Module dependencies.
  * @param params - Parameters controlling the blob and tree creation operation.
  * @returns The SHA of the newly created tree.
  */
-export async function createBlobsAndTree(params: CreateBlobsAndTreeParams): Promise<string> {
-  const { changedFiles, deletedFiles, parentSha, log = createLogger() } = params;
-  const owner = ctx().repo.owner;
-  const octokit = getOctokit();
-  const repo = ctx().repo.repo;
+export async function createBlobsAndTree(
+  deps: GitHubModuleDeps,
+  params: CreateBlobsAndTreeParams
+): Promise<string> {
+  const { changedFiles, deletedFiles, parentSha, log = createLogger(deps) } = params;
+  const owner = deps.context.repo.owner;
+  const repo = deps.context.repo.repo;
 
   log.debug(`Creating blobs for changed files...`);
 
   // Create blobs for all changed files and map their paths to SHAs
   const blobShaMap = new Map<string, string>();
   for (const file of changedFiles) {
-    const blob = await octokit.rest.git.createBlob({
+    const blob = await deps.octokit.rest.git.createBlob({
       owner,
       repo,
       content: Buffer.from(file.content).toString('base64'),
@@ -79,7 +79,7 @@ export async function createBlobsAndTree(params: CreateBlobsAndTreeParams): Prom
     log.debug(`Marked for deletion: ${deletedPath}`);
   }
 
-  const tree = await octokit.rest.git.createTree({
+  const tree = await deps.octokit.rest.git.createTree({
     owner,
     repo,
     base_tree: parentSha,

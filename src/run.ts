@@ -29,7 +29,6 @@ export async function run() {
   const coreAdapter = new RealCoreAdapter();
   const config = gatherActionsConfig();
   const outputSink = new ActionsOutputSink();
-  const gitAdapter = new RealGitAdapter(coreAdapter);
 
   // Create Octokit from the github_token input
   const octokit = github.getOctokit(coreAdapter.getInput('github_token'));
@@ -45,7 +44,15 @@ export async function run() {
     workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
   };
 
-  const platformProvider = createGitHubPlatformProvider({ octokit, context: platformContext });
+  // Create the platform provider with explicit deps (no singletons)
+  const platformProvider = createGitHubPlatformProvider({
+    octokit,
+    context: platformContext,
+    logger: coreAdapter,
+  });
+
+  // Create the git adapter with explicit deps
+  const gitAdapter = new RealGitAdapter(coreAdapter, octokit, platformContext);
 
   const orchestrator = new ActionOrchestrator(
     config,

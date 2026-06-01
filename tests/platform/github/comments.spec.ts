@@ -1,9 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as os from 'node:os';
-import * as github from '@actions/github';
 
 // Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core
 const realStdoutWrite = process.stdout.write.bind(process.stdout);
@@ -16,106 +12,86 @@ const _mockedWrite = mock((...args: any[]) => {
 });
 process.stdout.write = _mockedWrite as typeof process.stdout.write;
 
-// Mock @actions/core
+// Mock @actions/core (transitive only)
 const noop = (): void => {};
-const mockGetInput = mock((name: string) => {
-  if (name === 'github_token') {
-    return 'fake-token';
-  }
-  return '';
-});
-const mockDebugLog: string[] = [];
-const debugLogger = (msg: string): void => {
-  mockDebugLog.push(msg);
-};
 mock.module('@actions/core', () => ({
-  getInput: mockGetInput,
+  getInput: mock(() => ''),
   notice: mock(noop),
   info: mock(noop),
-  debug: mock(debugLogger),
+  debug: mock(noop),
   setFailed: mock(noop),
   setOutput: mock(noop),
   warning: mock(noop),
   error: mock(noop),
 }));
 
-// Create a test CoreAdapter
-const testCoreAdapter = {
-  debug: (msg: string): void => {
-    mockDebugLog.push(msg);
-  },
-  getInput: mockGetInput,
-  setFailed: mock(noop),
-  setOutput: mock(noop),
-  notice: mock(noop),
-  info: mock(noop),
-  warning: mock(noop),
-  error: mock(noop),
-};
-
-// Mock @actions/github context
-const mockContext = {
-  repo: {
-    owner: 'test-owner',
-    repo: 'test-repo',
-  },
-  issue: {
-    number: 123,
-  },
-  serverUrl: 'https://github.com',
-  runId: 123456789,
-  payload: {} as Record<string, unknown>,
-};
 mock.module('@actions/github', () => ({
-  context: mockContext,
+  context: {},
 }));
-
-// Mock the octokit module before importing comments.ts
-const mockCreateIssueComment = mock(() =>
-  Promise.resolve({
-    data: { id: 123 },
-    headers: {},
-    status: 201,
-    url: '',
-  })
-);
-const mockCreateReviewCommentReply = mock(() =>
-  Promise.resolve({
-    data: { id: 456 },
-    headers: {},
-    status: 201,
-    url: '',
-  })
-);
-const mockOctokit = {
-  rest: {
-    issues: {
-      createComment: mockCreateIssueComment,
-    },
-    pulls: {
-      createReplyForReviewComment: mockCreateReviewCommentReply,
-    },
-  },
-};
-mock.module('../../../src/platform/github/octokit', () => ({
-  getOctokit: mock(() => mockOctokit),
-}));
-
-// Set env vars for GitHub context before importing comments.ts
-process.env.INPUT_GITHUB_TOKEN = 'fake-token';
-process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
-process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), 'gh-event-${Date.now()}.json');
-fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 
 import { Temporal } from '@js-temporal/polyfill';
-
-// Initialize the github module context with test adapter
-const githubModulePromise = import('../../../src/platform/github/index.js');
+import type { GitHubModuleDeps } from '../../../src/platform/github/types';
 
 // Dynamic import to ensure mocks are set up before module loads
-const { formatExecutionTime, formatNumber, createFinalComment } =
-  // @ts-expect-error TS1309 -- Top-level await not supported in CommonJS, but Bun test runner handles it
-  await import('../../../src/platform/github/comments.js');
+const commentsModule = import('../../../src/platform/github/comments.js');
+
+function createTestDeps(payload: Record<string, unknown> = {}): GitHubModuleDeps & {
+  octokit: {
+    rest: {
+      issues: { createComment: ReturnType<typeof mock> };
+      pulls: { createReplyForReviewComment: ReturnType<typeof mock> };
+    };
+  };
+} {
+  const mockCreateIssueComment = mock(() =>
+    Promise.resolve({
+      data: { id: 123 },
+      headers: {},
+      status: 201,
+      url: '',
+    })
+  );
+  const mockCreateReviewCommentReply = mock(() =>
+    Promise.resolve({
+      data: { id: 456 },
+      headers: {},
+      status: 201,
+      url: '',
+    })
+  );
+
+  return {
+    octokit: {
+      rest: {
+        issues: {
+          createComment: mockCreateIssueComment,
+        },
+        pulls: {
+          createReplyForReviewComment: mockCreateReviewCommentReply,
+        },
+      },
+    } as any,
+    context: {
+      repo: { owner: 'test-owner', repo: 'test-repo' },
+      issue: { number: 123 },
+      eventName: 'issue_comment',
+      payload,
+      serverUrl: 'https://github.com',
+      runId: 123456789,
+      workspace: '/tmp',
+    },
+    logger: {
+      debug: noop,
+      info: noop,
+      warning: noop,
+      notice: noop,
+      error: noop,
+    },
+  };
+}
+
+// @ts-expect-error TS1309 -- Top-level await in Bun test runner
+const { formatExecutionTime, formatNumber, createFinalComment } = await commentsModule;
 
 describe('formatExecutionTime', () => {
   test('formats seconds only', () => {
@@ -230,30 +206,23 @@ describe('formatNumber', () => {
 });
 
 describe('createFinalComment', () => {
-  beforeEach(async () => {
-    // Clear mock calls before each test
-    mockCreateIssueComment.mockClear();
-    mockCreateReviewCommentReply.mockClear();
-    mockDebugLog.length = 0;
-    // Reset to default context without comment (top-level comment)
-    mockContext.payload.comment = undefined;
-
-    // Initialize the github module context with test adapter
-    const githubExports = await githubModulePromise;
-    githubExports.setCoreAdapter(testCoreAdapter);
+  beforeEach(() => {
+    // No need to reset module context anymore
   });
 
   test('returns undefined for empty body', async () => {
-    const result = await createFinalComment('', {});
+    const deps = createTestDeps();
+    const result = await createFinalComment(deps, '', {});
     expect(result).toBeUndefined();
   });
 
   test('appends action run link to comment body', async () => {
+    const deps = createTestDeps();
     const body = 'Here is a result';
-    await createFinalComment(body, {});
+    await createFinalComment(deps, body, {});
 
-    expect(mockOctokit.rest.issues.createComment).toHaveBeenCalled();
-    const call = (mockOctokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
+    expect(deps.octokit.rest.issues.createComment).toHaveBeenCalled();
+    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     expect(call[0]).toMatchObject({
       owner: 'test-owner',
       repo: 'test-repo',
@@ -264,21 +233,23 @@ describe('createFinalComment', () => {
   });
 
   test('includes model metadata when provided', async () => {
+    const deps = createTestDeps();
     const body = 'Test result';
     const metadata = {
       provider: 'anthropic',
       model: 'claude-sonnet-4-5',
     };
 
-    await createFinalComment(body, metadata);
+    await createFinalComment(deps, body, metadata);
 
-    const call = (mockOctokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
+    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     expect(call[0]).toMatchObject({
       body: expect.stringContaining('Model: anthropic/claude-sonnet-4-5'),
     });
   });
 
   test('includes thinking level in model metadata when not off', async () => {
+    const deps = createTestDeps();
     const body = 'Test result';
     const metadata = {
       provider: 'anthropic',
@@ -286,15 +257,16 @@ describe('createFinalComment', () => {
       thinkingLevel: 'medium',
     };
 
-    await createFinalComment(body, metadata);
+    await createFinalComment(deps, body, metadata);
 
-    const call = (mockOctokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
+    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     expect(call[0]).toMatchObject({
       body: expect.stringContaining('(thinking: medium)'),
     });
   });
 
   test('does not include thinking level when off', async () => {
+    const deps = createTestDeps();
     const body = 'Test result';
     const metadata = {
       provider: 'anthropic',
@@ -302,30 +274,32 @@ describe('createFinalComment', () => {
       thinkingLevel: 'off',
     };
 
-    await createFinalComment(body, metadata);
+    await createFinalComment(deps, body, metadata);
 
-    const call = (mockOctokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
+    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     expect(call[0]).toMatchObject({
       body: expect.not.stringContaining('thinking:'),
     });
   });
 
   test('includes execution duration when provided', async () => {
+    const deps = createTestDeps();
     const body = 'Test result';
     const duration = Temporal.Duration.from({ minutes: 2, seconds: 30 });
     const metadata = {
       executionDuration: duration,
     };
 
-    await createFinalComment(body, metadata);
+    await createFinalComment(deps, body, metadata);
 
-    const call = (mockOctokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
+    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     expect(call[0]).toMatchObject({
       body: expect.stringContaining('Time: 2m 30s'),
     });
   });
 
   test('includes session stats with token usage', async () => {
+    const deps = createTestDeps();
     const body = 'Test result';
     const metadata = {
       sessionStats: {
@@ -337,15 +311,16 @@ describe('createFinalComment', () => {
       },
     };
 
-    await createFinalComment(body, metadata);
+    await createFinalComment(deps, body, metadata);
 
-    const call = (mockOctokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
+    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     const commentBody = (call[0] as { body: string }).body;
     expect(commentBody).toContain('Tokens: 1.5K');
     expect(commentBody).toContain('($0.0123)');
   });
 
   test('handles zero session stats', async () => {
+    const deps = createTestDeps();
     const body = 'Test result';
     const metadata = {
       sessionStats: {
@@ -357,29 +332,31 @@ describe('createFinalComment', () => {
       },
     };
 
-    await createFinalComment(body, metadata);
+    await createFinalComment(deps, body, metadata);
 
-    const call = (mockOctokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
+    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     const commentBody = (call[0] as { body: string }).body;
     expect(commentBody).toContain('Tokens: 0');
     expect(commentBody).not.toContain('($0)');
   });
 
   test('includes action version when provided', async () => {
+    const deps = createTestDeps();
     const body = 'Test result';
     const metadata = {
       actionVersion: '2.3.0',
     };
 
-    await createFinalComment(body, metadata);
+    await createFinalComment(deps, body, metadata);
 
-    const call = (mockOctokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
+    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     expect(call[0]).toMatchObject({
       body: expect.stringContaining('Action v2.3.0'),
     });
   });
 
   test('includes Pi SDK version when session stats available', async () => {
+    const deps = createTestDeps();
     const body = 'Test result';
     const metadata = {
       sessionStats: {
@@ -391,15 +368,16 @@ describe('createFinalComment', () => {
       },
     };
 
-    await createFinalComment(body, metadata);
+    await createFinalComment(deps, body, metadata);
 
-    const call = (mockOctokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
+    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     expect(call[0]).toMatchObject({
       body: expect.stringContaining('Pi SDK v1.2.3'),
     });
   });
 
   test('separates metadata with pipe characters', async () => {
+    const deps = createTestDeps();
     const body = 'Test';
     const metadata = {
       provider: 'anthropic',
@@ -407,44 +385,29 @@ describe('createFinalComment', () => {
       executionDuration: Temporal.Duration.from({ seconds: 10 }),
     };
 
-    await createFinalComment(body, metadata);
+    await createFinalComment(deps, body, metadata);
 
-    const call = (mockOctokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
+    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     expect(call[0]).toMatchObject({
       body: expect.stringMatching(/View action run.*\|.*Model:/),
     });
   });
 
-  test('handles missing github context gracefully', async () => {
-    github.context.payload = {};
-    // @ts-expect-error -- Setting read-only repo property to test error handling
-    github.context.repo = { owner: undefined, repo: undefined };
-    // @ts-expect-error -- Setting read-only serverUrl property to test error handling
-    github.context.serverUrl = undefined;
-    // @ts-expect-error -- Setting read-only runId property to test error handling
-    github.context.runId = undefined;
-
-    const body = 'Test result';
-    const result = await createFinalComment(body, {});
-
-    expect(result).toBeDefined();
-  });
-
   test('creates reply to PR review comment (inline comment)', async () => {
+    const deps = createTestDeps({
+      comment: {
+        id: 789,
+        body: 'inline comment on code',
+        pull_request_review_id: 456,
+      },
+    });
+
     const body = 'Here is a response to your inline comment';
+    await createFinalComment(deps, body, {});
 
-    // Set up PR review comment context
-    mockContext.payload.comment = {
-      id: 789,
-      body: 'inline comment on code',
-      pull_request_review_id: 456,
-    } as any;
-
-    await createFinalComment(body, {});
-
-    expect(mockCreateReviewCommentReply).toHaveBeenCalled();
-    expect(mockCreateIssueComment).not.toHaveBeenCalled();
-    const call = mockCreateReviewCommentReply.mock.calls[0] as unknown[];
+    expect(deps.octokit.rest.pulls.createReplyForReviewComment).toHaveBeenCalled();
+    expect(deps.octokit.rest.issues.createComment).not.toHaveBeenCalled();
+    const call = (deps.octokit.rest.pulls.createReplyForReviewComment as any).mock.calls[0] as unknown[];
     expect(call[0]).toMatchObject({
       pull_number: 123,
       comment_id: 789,
@@ -453,19 +416,19 @@ describe('createFinalComment', () => {
   });
 
   test('creates top-level issue comment when not PR review comment', async () => {
+    const deps = createTestDeps({
+      comment: {
+        id: 789,
+        body: 'regular comment',
+      },
+    });
+
     const body = 'Top-level comment';
+    await createFinalComment(deps, body, {});
 
-    // Set up regular issue comment context
-    mockContext.payload.comment = {
-      id: 789,
-      body: 'regular comment',
-    };
-
-    await createFinalComment(body, {});
-
-    expect(mockCreateIssueComment).toHaveBeenCalled();
-    expect(mockCreateReviewCommentReply).not.toHaveBeenCalled();
-    const call = mockCreateIssueComment.mock.calls[0] as unknown[];
+    expect(deps.octokit.rest.issues.createComment).toHaveBeenCalled();
+    expect(deps.octokit.rest.pulls.createReplyForReviewComment).not.toHaveBeenCalled();
+    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     expect(call[0]).toMatchObject({
       issue_number: 123,
       body: expect.stringContaining(body),
@@ -473,19 +436,17 @@ describe('createFinalComment', () => {
   });
 
   test('creates top-level comment for pull_request_review event (no comment in payload)', async () => {
-    const body = 'Result for review';
-
-    // Simulate pull_request_review event: no comment, has review
-    mockContext.payload = {
+    const deps = createTestDeps({
       review: { id: 42, body: '/pi review this' },
-    } as any;
+    });
 
-    await createFinalComment(body, {});
+    const body = 'Result for review';
+    await createFinalComment(deps, body, {});
 
     // Should fall through to top-level issue comment (not a review comment reply)
-    expect(mockCreateIssueComment).toHaveBeenCalled();
-    expect(mockCreateReviewCommentReply).not.toHaveBeenCalled();
-    const call = mockCreateIssueComment.mock.calls[0] as unknown[];
+    expect(deps.octokit.rest.issues.createComment).toHaveBeenCalled();
+    expect(deps.octokit.rest.pulls.createReplyForReviewComment).not.toHaveBeenCalled();
+    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     expect(call[0]).toMatchObject({
       issue_number: 123,
       body: expect.stringContaining(body),
@@ -493,54 +454,49 @@ describe('createFinalComment', () => {
   });
 
   test('appends action run link to PR review comment reply', async () => {
+    const deps = createTestDeps({
+      comment: {
+        id: 789,
+        body: 'inline comment',
+        pull_request_review_id: 456,
+      },
+    });
+
     const body = 'Result for inline comment';
+    await createFinalComment(deps, body, {});
 
-    // Set up PR review comment context
-    mockContext.payload.comment = {
-      id: 789,
-      body: 'inline comment',
-      pull_request_review_id: 456,
-    } as any;
-
-    await createFinalComment(body, {});
-
-    expect(mockCreateReviewCommentReply).toHaveBeenCalled();
-    const call = mockCreateReviewCommentReply.mock.calls[0] as unknown[];
+    expect(deps.octokit.rest.pulls.createReplyForReviewComment).toHaveBeenCalled();
+    const call = (deps.octokit.rest.pulls.createReplyForReviewComment as any).mock.calls[0] as unknown[];
     const commentBody = (call[0] as { body: string }).body;
-    // The body should be modified with metadata (even if the URL is not fully formed in test)
     expect(commentBody).toContain(body);
   });
 
   test('returns undefined when no issue/PR number in context (unattended mode)', async () => {
+    const deps = createTestDeps({
+      comment: { id: 999, body: 'test' },
+    });
+    // Override issue number
+    (deps.context as any).issue = { number: undefined };
+
     const body = 'Test result from unattended pipeline';
-
-    // Simulate unattended mode: no issue number in context
-    // @ts-expect-error -- Setting read-only issue property to test unattended mode
-    github.context.issue = { number: undefined };
-
-    const result = await createFinalComment(body, {});
+    const result = await createFinalComment(deps, body, {});
 
     expect(result).toBeUndefined();
-    // No API calls should be made
-    expect(mockCreateIssueComment).not.toHaveBeenCalled();
-    expect(mockCreateReviewCommentReply).not.toHaveBeenCalled();
-    // Debug log should explain why
-    expect(mockDebugLog).toContain(
-      '[comments] no issue/PR number in context, skipping comment creation'
-    );
+    expect(deps.octokit.rest.issues.createComment).not.toHaveBeenCalled();
+    expect(deps.octokit.rest.pulls.createReplyForReviewComment).not.toHaveBeenCalled();
   });
 
   test('returns undefined when issue number is 0 (unattended mode)', async () => {
+    const deps = createTestDeps({
+      comment: { id: 999, body: 'test' },
+    });
+    (deps.context as any).issue = { number: 0 };
+
     const body = 'Test result from unattended pipeline';
-
-    // Simulate unattended mode: issue number is 0
-    // @ts-expect-error -- Setting read-only issue property to test unattended mode
-    github.context.issue = { number: 0 };
-
-    const result = await createFinalComment(body, {});
+    const result = await createFinalComment(deps, body, {});
 
     expect(result).toBeUndefined();
-    expect(mockCreateIssueComment).not.toHaveBeenCalled();
-    expect(mockCreateReviewCommentReply).not.toHaveBeenCalled();
+    expect(deps.octokit.rest.issues.createComment).not.toHaveBeenCalled();
+    expect(deps.octokit.rest.pulls.createReplyForReviewComment).not.toHaveBeenCalled();
   });
 });

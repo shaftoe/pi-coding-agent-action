@@ -5,12 +5,8 @@
  * queries the GitHub Actions / Checks API for workflow runs and check runs.
  */
 
-import { getGitHubContext } from '../context-accessor';
-
-function ctx() { return getGitHubContext(); }
-import { getOctokit } from '../octokit';
-import { getCoreAdapter } from '../index';
 import type {
+  GitHubModuleDeps,
   GetCIStatusParams,
   GetCIStatusDetails,
   CheckRunResult,
@@ -34,13 +30,6 @@ export type {
   WorkflowRunResult,
 };
 
-/**
- * Debug logging helper.
- */
-function debug(msg: string): void {
-  getCoreAdapter().debug(msg);
-}
-
 /** Maximum number of check runs to return. */
 const MAX_CHECK_RUNS = 50;
 
@@ -54,6 +43,7 @@ const MAX_WORKFLOW_RUNS = 50;
  * fetch the PR to get its head SHA. Otherwise fall back to the context SHA.
  */
 async function resolveHeadSha(
+  deps: GitHubModuleDeps,
   owner: string,
   repo: string,
   params: GetCIStatusParams
@@ -65,8 +55,7 @@ async function resolveHeadSha(
 
   // Fetch PR head SHA if pull_number provided
   if (params.pull_number) {
-    const octokit = getOctokit();
-    const pr = await octokit.rest.pulls.get({
+    const pr = await deps.octokit.rest.pulls.get({
       owner,
       repo,
       pull_number: params.pull_number,
@@ -75,7 +64,7 @@ async function resolveHeadSha(
   }
 
   // Fall back to context SHA
-  const sha = ctx().sha;
+  const sha = (deps.context.payload as { after?: string }).after;
   return sha || undefined;
 }
 
@@ -83,14 +72,14 @@ async function resolveHeadSha(
  * Fetch check runs for a given ref (commit SHA).
  */
 async function fetchCheckRuns(
+  deps: GitHubModuleDeps,
   owner: string,
   repo: string,
   ref: string,
   status?: string,
   conclusion?: string
 ): Promise<CheckRunResult[]> {
-  const octokit = getOctokit();
-  const response = await octokit.rest.checks.listForRef({
+  const response = await deps.octokit.rest.checks.listForRef({
     owner,
     repo,
     ref,
@@ -122,14 +111,14 @@ async function fetchCheckRuns(
  * Fetch workflow runs for a given ref (commit SHA).
  */
 async function fetchWorkflowRuns(
+  deps: GitHubModuleDeps,
   owner: string,
   repo: string,
   ref: string,
   status?: string,
   conclusion?: string
 ): Promise<WorkflowRunResult[]> {
-  const octokit = getOctokit();
-  const response = await octokit.rest.actions.listWorkflowRunsForRepo({
+  const response = await deps.octokit.rest.actions.listWorkflowRunsForRepo({
     owner,
     repo,
     head_sha: ref,
@@ -163,17 +152,21 @@ async function fetchWorkflowRuns(
  * Fetches both check runs and workflow runs for the resolved ref (SHA).
  * For pull requests, the head SHA is resolved automatically.
  *
+ * @param deps - Module dependencies.
  * @param params - Parameters for the CI status query.
  * @returns Structured details about CI status.
  */
-export async function getCIStatus(params: GetCIStatusParams): Promise<{
+export async function getCIStatus(
+  deps: GitHubModuleDeps,
+  params: GetCIStatusParams
+): Promise<{
   content: { type: 'text'; text: string }[];
   details: GetCIStatusDetails;
 }> {
-  const owner = params.owner ?? ctx().repo.owner;
-  const repo = params.repo ?? ctx().repo.repo;
+  const owner = params.owner ?? deps.context.repo.owner;
+  const repo = params.repo ?? deps.context.repo.repo;
 
-  const ref = await resolveHeadSha(owner, repo, params);
+  const ref = await resolveHeadSha(deps, owner, repo, params);
   if (!ref) {
     return {
       content: [
@@ -190,12 +183,12 @@ export async function getCIStatus(params: GetCIStatusParams): Promise<{
     };
   }
 
-  debug(`[getCIStatus] Fetching CI status for ref: ${ref}`);
+  deps.logger.debug(`[getCIStatus] Fetching CI status for ref: ${ref}`);
 
   // Fetch check runs and workflow runs in parallel
   const [checkRuns, workflowRuns] = await Promise.all([
-    fetchCheckRuns(owner, repo, ref, params.status, params.conclusion),
-    fetchWorkflowRuns(owner, repo, ref, params.status, params.conclusion),
+    fetchCheckRuns(deps, owner, repo, ref, params.status, params.conclusion),
+    fetchWorkflowRuns(deps, owner, repo, ref, params.status, params.conclusion),
   ]);
 
   // Build human-readable summary

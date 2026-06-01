@@ -59,9 +59,7 @@ const mockOctokit = {
     },
   },
 };
-mock.module('../../../../src/platform/github/octokit', () => ({
-  getOctokit: mock(() => mockOctokit),
-}));
+// octokit mock no longer needed - deps pattern
 
 // Setup default GitHub context
 const mockContext = {
@@ -82,6 +80,30 @@ mock.module('@actions/github', () => ({
   context: mockContext,
 }));
 
+import type { GitHubModuleDeps } from '../../../../src/platform/github/types';
+
+function createTestDeps(): GitHubModuleDeps {
+  return {
+    octokit: mockOctokit as any,
+    context: {
+      repo: mockContext.repo,
+      issue: mockContext.issue,
+      eventName: 'push',
+      payload: {},
+      serverUrl: mockContext.serverUrl,
+      runId: mockContext.runId,
+      workspace: '/tmp',
+    },
+    logger: {
+      debug: () => {},
+      info: () => {},
+      warning: () => {},
+      notice: () => {},
+      error: () => {},
+    },
+  };
+}
+
 // Dynamic import to ensure mocks are set before module loads
 const treeBuilderModule = import('../../../../src/platform/github/git/tree-builder.js');
 
@@ -98,7 +120,7 @@ describe('createBlobsAndTree', () => {
     const { createBlobsAndTree } = module;
     const mockLog = { debug: mock(() => {}), info: mock(() => {}) };
 
-    const result = await createBlobsAndTree({
+    const result = await createBlobsAndTree(createTestDeps(), {
       changedFiles: [{ path: 'test.txt', content: 'hello world', mode: '100644' as any }],
       deletedFiles: [],
       parentSha: 'parent-sha',
@@ -120,7 +142,7 @@ describe('createBlobsAndTree', () => {
     const { createBlobsAndTree } = module;
     const mockLog = { debug: mock(() => {}), info: mock(() => {}) };
 
-    await createBlobsAndTree({
+    await createBlobsAndTree(createTestDeps(), {
       changedFiles: [
         { path: 'file1.txt', content: 'content1', mode: '100644' as any },
         { path: 'file2.txt', content: 'content2', mode: '100644' as any },
@@ -139,7 +161,7 @@ describe('createBlobsAndTree', () => {
     const { createBlobsAndTree } = module;
     const mockLog = { debug: mock(() => {}), info: mock(() => {}) };
 
-    await createBlobsAndTree({
+    await createBlobsAndTree(createTestDeps(), {
       changedFiles: [{ path: 'test.txt', content: 'content', mode: '100644' as any }],
       deletedFiles: [],
       parentSha: 'parent-commit-sha',
@@ -166,7 +188,7 @@ describe('createBlobsAndTree', () => {
     const { createBlobsAndTree } = module;
     const mockLog = { debug: mock(() => {}), info: mock(() => {}) };
 
-    await createBlobsAndTree({
+    await createBlobsAndTree(createTestDeps(), {
       changedFiles: [],
       deletedFiles: ['deleted.txt', 'removed.txt'],
       parentSha: 'parent-sha',
@@ -189,7 +211,7 @@ describe('createBlobsAndTree', () => {
     const { createBlobsAndTree } = module;
     const mockLog = { debug: mock(() => {}), info: mock(() => {}) };
 
-    await createBlobsAndTree({
+    await createBlobsAndTree(createTestDeps(), {
       changedFiles: [{ path: 'new.txt', content: 'new content', mode: '100644' as any }],
       deletedFiles: ['old.txt'],
       parentSha: 'parent-sha',
@@ -215,7 +237,7 @@ describe('createBlobsAndTree', () => {
 
     const binaryContent = Buffer.from([0x00, 0x01, 0x02, 0xff]).toString('binary');
 
-    await createBlobsAndTree({
+    await createBlobsAndTree(createTestDeps(), {
       changedFiles: [{ path: 'binary.bin', content: binaryContent, mode: '100644' as any }],
       deletedFiles: [],
       parentSha: 'parent-sha',
@@ -235,7 +257,7 @@ describe('createBlobsAndTree', () => {
     const { createBlobsAndTree } = module;
     const mockLog = { debug: mock(() => {}), info: mock(() => {}) };
 
-    await createBlobsAndTree({
+    await createBlobsAndTree(createTestDeps(), {
       changedFiles: [
         { path: 'path/with spaces/file.txt', content: 'content', mode: '100644' as any },
       ],
@@ -254,7 +276,7 @@ describe('createBlobsAndTree', () => {
     const { createBlobsAndTree } = module;
     const mockLog = { debug: mock(() => {}), info: mock(() => {}) };
 
-    await createBlobsAndTree({
+    await createBlobsAndTree(createTestDeps(), {
       changedFiles: [{ path: 'empty.txt', content: '', mode: '100644' as any }],
       deletedFiles: [],
       parentSha: 'parent-sha',
@@ -278,7 +300,7 @@ describe('createBlobsAndTree', () => {
       info: mock(() => {}),
     };
 
-    await createBlobsAndTree({
+    await createBlobsAndTree(createTestDeps(), {
       changedFiles: [{ path: 'test.txt', content: 'content', mode: '100644' as any }],
       deletedFiles: [],
       parentSha: 'parent-sha',
@@ -293,7 +315,7 @@ describe('createBlobsAndTree', () => {
     const { createBlobsAndTree } = module;
     const mockLog = { debug: mock(() => {}), info: mock(() => {}) };
 
-    const result = await createBlobsAndTree({
+    const result = await createBlobsAndTree(createTestDeps(), {
       changedFiles: [{ path: 'test.txt', content: 'content', mode: '100644' as any }],
       deletedFiles: [],
       parentSha: 'parent-sha',
@@ -308,7 +330,7 @@ describe('createBlobsAndTree', () => {
     const { createBlobsAndTree } = module;
     const mockLog = { debug: mock(() => {}), info: mock(() => {}) };
 
-    await createBlobsAndTree({
+    await createBlobsAndTree(createTestDeps(), {
       changedFiles: [
         { path: 'src/nested/deep/file.txt', content: 'nested content', mode: '100644' as any },
       ],

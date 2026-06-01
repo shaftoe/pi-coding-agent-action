@@ -4,37 +4,26 @@
  * Reads the current GitHub Actions context (issue, pull request, or comment)
  * and provides helpers to build the prompt sent to the Pi agent.
  *
- * Thread data fetching and PR diff operations live in the {@link ./tools/}
- * subpackage.
+ * All functions accept a {@link GitHubModuleDeps} parameter for explicit
+ * dependency injection — no module-level singletons or `@actions/*` imports.
  */
 
-import * as github from '@actions/github';
 import { Temporal } from '@js-temporal/polyfill';
 import { DEFAULT_TRIGGER } from './constants';
 import { isPR, getContextType } from './context-utils';
-import { getCoreAdapter, getModulePlatformContext } from './index';
-import type { IssueOrPullRequestContext } from './types';
+import type { GitHubModuleDeps, IssueOrPullRequestContext } from './types';
 
 /**
- * Debug logging helper.
- */
-function debug(msg: string): void {
-  getCoreAdapter().debug(msg);
-}
-
-/**
- * Get the platform context, falling back to @actions/github singleton.
+ * Get the trigger command for stripping from comments.
  *
- * This allows the module to work with injected context (via createGitHubPlatformProvider)
- * or the legacy @actions/github singleton for backward compatibility.
+ * Lazily retrieves the trigger input from the logger (which is the CoreAdapter
+ * in production).
+ *
+ * @returns The trigger string (default '/pi' if not specified).
  */
-function ctx(): typeof github.context {
-  try {
-    const pc = getModulePlatformContext();
-    return pc as unknown as typeof github.context;
-  } catch {
-    return github.context;
-  }
+function getTrigger(deps: GitHubModuleDeps): string {
+  const adapter = deps.logger as { getInput?: (name: string) => string };
+  return adapter.getInput?.('trigger') ?? DEFAULT_TRIGGER;
 }
 
 /**
@@ -42,25 +31,13 @@ function ctx(): typeof github.context {
  * from the event payload. Each extractor returns a timestamp string suitable
  * for `Temporal.Instant.from()`, or `undefined` if unavailable.
  */
-const TIMESTAMP_SOURCES: Record<string, (p: typeof github.context.payload) => string | undefined> =
-  {
-    issue_comment: p => p.comment?.created_at,
-    pull_request_review_comment: p => p.comment?.created_at,
-    pull_request_review: p => p.review?.submitted_at,
-    issues: p => p.issue?.updated_at,
-    pull_request: p => p.pull_request?.updated_at,
-  };
-
-/**
- * Get the trigger command for stripping from comments.
- *
- * Lazily retrieves the trigger input to avoid module-level evaluation issues.
- *
- * @returns The trigger string (default '/pi' if not specified).
- */
-function getTrigger(): string {
-  return getCoreAdapter().getInput('trigger') || DEFAULT_TRIGGER;
-}
+const TIMESTAMP_SOURCES: Record<string, (p: Record<string, unknown>) => string | undefined> = {
+  issue_comment: p => (p.comment as { created_at?: string })?.created_at,
+  pull_request_review_comment: p => (p.comment as { created_at?: string })?.created_at,
+  pull_request_review: p => (p.review as { submitted_at?: string })?.submitted_at,
+  issues: p => (p.issue as { updated_at?: string })?.updated_at,
+  pull_request: p => (p.pull_request as { updated_at?: string })?.updated_at,
+};
 
 /**
  * Extract the start timestamp from the GitHub event payload.
@@ -68,15 +45,18 @@ function getTrigger(): string {
  * Uses the timestamp of the triggering event to measure the total time from
  * user action to completion.
  *
+ * @param deps - Module dependencies.
  * @returns The start instant, or `undefined` if it cannot be determined.
  */
-export function getStartTimeFromContext(): Temporal.Instant | undefined {
-  const { eventName, payload } = ctx();
+export function getStartTimeFromContext(deps: GitHubModuleDeps): Temporal.Instant | undefined {
+  const { eventName, payload } = deps.context;
 
   // Record-based dispatch: event name → timestamp field extractor
   const extractor = TIMESTAMP_SOURCES[eventName];
   if (!extractor) {
-    debug(`[getStartTimeFromContext] No timestamp source for event type: ${eventName}`);
+    deps.logger.debug(
+      `[getStartTimeFromContext] No timestamp source for event type: ${eventName}`
+    );
     return undefined;
   }
 
@@ -100,11 +80,11 @@ export type { IssueOrPullRequestContext, IssueOrPRThread, ThreadComment, ReviewC
  */
 const CONTEXT_EXTRACTORS: Record<
   'issue' | 'pull_request',
-  (payload: typeof github.context.payload) => IssueOrPullRequestContext | undefined
+  (payload: Record<string, unknown>) => IssueOrPullRequestContext | undefined
 > = {
   issue: payload => {
-    const issue = payload.issue;
-    if (!issue?.title) {
+    const issue = payload.issue as { title?: string; number?: number; body?: string } | undefined;
+    if (!issue?.title || issue.number === undefined) {
       return undefined;
     }
     return {
@@ -114,8 +94,10 @@ const CONTEXT_EXTRACTORS: Record<
     };
   },
   pull_request: payload => {
-    const pr = payload.pull_request;
-    if (!pr?.title) {
+    const pr = payload.pull_request as
+      | { title?: string; number?: number; body?: string }
+      | undefined;
+    if (!pr?.title || pr.number === undefined) {
       return undefined;
     }
     return {
@@ -126,8 +108,10 @@ const CONTEXT_EXTRACTORS: Record<
   },
 };
 
-export function getIssueOrPullRequestContext(): IssueOrPullRequestContext | undefined {
-  const contextType = getContextType();
+export function getIssueOrPullRequestContext(
+  deps: GitHubModuleDeps
+): IssueOrPullRequestContext | undefined {
+  const contextType = getContextType(deps);
   if (!contextType) {
     return undefined;
   }
@@ -137,18 +121,23 @@ export function getIssueOrPullRequestContext(): IssueOrPullRequestContext | unde
     return undefined;
   }
 
-  return extractor(ctx().payload);
+  return extractor(deps.context.payload);
 }
 
 /**
  * Enrich a prompt string with issue/PR context when available.
  *
+ * @param deps - Module dependencies.
  * @param instruction - The raw instruction text.
  * @param label - Label for the instruction section (e.g. "Comment/Instruction" or "Instruction").
- * @returns The enrichied prompt, or the original instruction if no context is available.
+ * @returns The enriched prompt, or the original instruction if no context is available.
  */
-function enrichWithContext(instruction: string, label: string): string {
-  const issueOrPrContext = getIssueOrPullRequestContext();
+function enrichWithContext(
+  deps: GitHubModuleDeps,
+  instruction: string,
+  label: string
+): string {
+  const issueOrPrContext = getIssueOrPullRequestContext(deps);
   if (issueOrPrContext) {
     const { title, body, number } = issueOrPrContext;
     const contextParts: string[] = [`Issue/PR #${number}: ${title}`];
@@ -174,34 +163,39 @@ function enrichWithContext(instruction: string, label: string): string {
  * In both cases, if an issue/PR is available in the current context, its title
  * and description are prepended for additional context.
  *
+ * @param deps - Module dependencies.
+ * @param promptInput - Optional explicit prompt input override.
  * @returns The assembled prompt string, or `undefined` if no prompt source was
  *          found.
  */
-export async function getPrompt(promptInput?: string): Promise<string | undefined> {
+export async function getPrompt(
+  deps: GitHubModuleDeps,
+  promptInput?: string
+): Promise<string | undefined> {
   // Prefer explicit prompt input over comment-based extraction
   if (promptInput) {
     const trimmed = promptInput.trim();
     if (!trimmed) {
-      getCoreAdapter().notice('prompt input is empty, skipping');
+      deps.logger.notice('prompt input is empty, skipping');
       return undefined;
     }
-    return enrichWithContext(trimmed, 'Instruction');
+    return enrichWithContext(deps, trimmed, 'Instruction');
   }
 
   // Fall back to comment-based prompt
-  const comment = await getComment();
+  const comment = await getComment(deps);
   if (!comment) {
-    getCoreAdapter().notice('no comment found in context, skipping');
+    deps.logger.notice('no comment found in context, skipping');
     return undefined;
   }
 
   const prompt = comment.body;
   if (!prompt) {
-    getCoreAdapter().notice('no prompt found in comment, skipping');
+    deps.logger.notice('no prompt found in comment, skipping');
     return undefined;
   }
 
-  return enrichWithContext(prompt, 'Comment/Instruction');
+  return enrichWithContext(deps, prompt, 'Comment/Instruction');
 }
 
 /**
@@ -215,24 +209,28 @@ interface TriggeringComment {
   body: string;
 }
 
-async function getComment(): Promise<TriggeringComment | undefined> {
-  const comment = ctx().payload.comment;
-  const review = ctx().payload.review;
+async function getComment(deps: GitHubModuleDeps): Promise<TriggeringComment | undefined> {
+  const { payload } = deps.context;
+  const comment = payload.comment as { id?: number; body?: string } | undefined;
+  const review = payload.review as { id?: number; body?: string } | undefined;
 
   // For pull_request_review events, the body is on the review object, not comment
   if (!comment && review) {
-    if (!review.body) {
+    if (!review.body || review.id === undefined) {
       return;
     }
 
-    const body = (review.body as string).replace(getTrigger(), '').trim();
+    const body = review.body.replace(getTrigger(deps), '').trim();
+    if (review.id === undefined) {
+      return;
+    }
     return { id: review.id, body };
   }
 
-  if (!comment) {
+  if (!comment || comment.id === undefined) {
     return;
   }
 
-  const body = comment.body.replace(getTrigger(), '').trim();
+  const body = (comment.body as string).replace(getTrigger(deps), '').trim();
   return { id: comment.id, body };
 }

@@ -8,11 +8,7 @@
  * testing without side effects.
  */
 
-import * as github from '@actions/github';
-import { getGitHubContext } from '../context-accessor';
-
-function ctx() { return getGitHubContext(); }
-import { getOctokit } from '../octokit';
+import type { GitHubModuleDeps } from '../types';
 import { MAX_TITLE_LENGTH } from '../constants';
 import {
   createLogger,
@@ -21,8 +17,6 @@ import {
   createCommitAndUpdateBranch,
   buildFileMap,
 } from '../git/index';
-
-const log = createLogger();
 
 export interface UpdatePullRequestParams {
   pull_number?: number;
@@ -52,16 +46,19 @@ export interface UpdatePullRequestDetails {
 /**
  * Update an existing pull request's title and/or body via the GitHub REST API.
  *
+ * @param deps - Module dependencies.
  * @param pullNumber - PR number.
  * @param updates - Object with optional title and/or body.
  * @returns An object containing the updated PR URL.
  */
 async function updatePullRequestMetadata(
+  deps: GitHubModuleDeps,
   pullNumber: number,
   updates: { title?: string; body?: string }
 ): Promise<{ titleUpdated: boolean; bodyUpdated: boolean }> {
-  const owner = ctx().repo.owner;
-  const repo = ctx().repo.repo;
+  const owner = deps.context.repo.owner;
+  const repo = deps.context.repo.repo;
+  const log = createLogger(deps);
 
   const updateParams: {
     title?: string;
@@ -81,8 +78,7 @@ async function updatePullRequestMetadata(
 
   log.debug(`Updating PR #${pullNumber} metadata...`);
 
-  const octokit = getOctokit();
-  await octokit.rest.pulls.update({
+  await deps.octokit.rest.pulls.update({
     owner,
     repo,
     pull_number: pullNumber,
@@ -112,7 +108,7 @@ export function validateUpdatePullRequestParams(params: UpdatePullRequestParams)
   // Ensure at least one update parameter is provided (besides dryRun)
   const { title, body, message, pull_number } = params;
   const hasContentUpdate = title !== undefined || body !== undefined || message !== undefined;
-  const hasPRContext = pull_number !== undefined || github.context.issue?.number;
+  const hasPRContext = pull_number !== undefined;
 
   if (!hasContentUpdate && !hasPRContext) {
     throw new Error(
@@ -129,6 +125,7 @@ export function validateUpdatePullRequestParams(params: UpdatePullRequestParams)
  * title and/or body. When `dryRun` is `true` the operation is simulated and no
  * GitHub resources are modified.
  *
+ * @param deps - Module dependencies.
  * @param params - Parameters controlling PR number, title, body, and dry-run.
  * @returns The tool result containing a human-readable message and structured
  *          details about the updated PR (or dry-run output).
@@ -136,15 +133,17 @@ export function validateUpdatePullRequestParams(params: UpdatePullRequestParams)
  *                 GitHub API call fails.
  */
 export async function updatePullRequest(
+  deps: GitHubModuleDeps,
   params: UpdatePullRequestParams
 ): Promise<UpdatePullRequestResult> {
   const { pull_number, title, body, message, dryRun } = params;
+  const log = createLogger(deps);
 
   // Validate input parameters early
   validateUpdatePullRequestParams(params);
 
   // Resolve PR number from context if not provided
-  const resolvedPullNumber = pull_number ?? ctx().issue?.number;
+  const resolvedPullNumber = pull_number ?? deps.context.issue?.number;
   if (!resolvedPullNumber) {
     throw new Error(
       'Pull request number not provided and not available in context. ' +
@@ -158,12 +157,11 @@ export async function updatePullRequest(
   log.debug(`DryRun: ${dryRun ?? false}`);
 
   // Fetch PR details
-  const octokit = getOctokit();
-  const owner = ctx().repo.owner;
-  const repo = ctx().repo.repo;
+  const owner = deps.context.repo.owner;
+  const repo = deps.context.repo.repo;
 
   log.debug(`Fetching PR #${resolvedPullNumber}...`);
-  const prData = await octokit.rest.pulls.get({
+  const prData = await deps.octokit.rest.pulls.get({
     owner,
     repo,
     pull_number: resolvedPullNumber,
@@ -189,11 +187,11 @@ export async function updatePullRequest(
 
   // Get files that exist in the current PR head tree (for comparison)
   log.debug(`Getting PR head tree...`);
-  const headFiles = await buildFileMap(headSha);
+  const headFiles = await buildFileMap(deps, headSha);
   log.debug(`Found ${headFiles.size} files in PR head`);
 
   // Scan for changes (do this before dry run check so dry run can report them)
-  const { changedFiles, deletedFiles } = await scanForChanges(headFiles, log);
+  const { changedFiles, deletedFiles } = await scanForChanges(deps, headFiles, log);
 
   // Dry run mode - report what would happen without making changes
   if (dryRun) {
@@ -218,11 +216,11 @@ export async function updatePullRequest(
       parts.push(`- No code changes detected`);
     }
 
-    const message = parts.join('\n');
-    log.debug(message);
+    const dryRunMessage = parts.join('\n');
+    log.debug(dryRunMessage);
 
     return {
-      content: [{ type: 'text' as const, text: message }],
+      content: [{ type: 'text' as const, text: dryRunMessage }],
       details: {
         pullRequestNumber: resolvedPullNumber,
         pullRequestUrl: prUrl,
@@ -236,7 +234,7 @@ export async function updatePullRequest(
   let commitSha: string | undefined;
   if (changedFiles.length > 0 || deletedFiles.length > 0) {
     // Create blobs and tree
-    const treeSha = await createBlobsAndTree({
+    const treeSha = await createBlobsAndTree(deps, {
       changedFiles,
       deletedFiles,
       parentSha: headSha,
@@ -258,7 +256,7 @@ export async function updatePullRequest(
     }
 
     // Create commit and update branch
-    commitSha = await createCommitAndUpdateBranch({
+    commitSha = await createCommitAndUpdateBranch(deps, {
       treeSha,
       parentSha: headSha,
       branchName: headBranch,
@@ -281,7 +279,7 @@ export async function updatePullRequest(
     if (body !== undefined) {
       updateParams.body = body;
     }
-    const metadataResult = await updatePullRequestMetadata(resolvedPullNumber, updateParams);
+    const metadataResult = await updatePullRequestMetadata(deps, resolvedPullNumber, updateParams);
     titleUpdated = metadataResult.titleUpdated;
     bodyUpdated = metadataResult.bodyUpdated;
 

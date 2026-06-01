@@ -23,9 +23,10 @@ import { fetchPRDiff } from './tools/pr-diff';
 import { createReview } from './tools/review';
 import { getCIStatus } from './tools/get-ci-status';
 import { getWorkflowRunLogs } from './tools/get-workflow-run-logs';
-import { setOctokit, setPlatformContext } from './index';
 import type { Temporal } from '@js-temporal/polyfill';
+import type { Logger } from '../../types';
 import type { PlatformProvider, PlatformType, PlatformContext } from '../types';
+import type { GitHubModuleDeps } from './types';
 import type { CommentMetadata } from '../../types';
 import type { CreateReactionType } from './reactions';
 import type { IssueOrPRThread, GetIssueOrPRThreadParams } from './types';
@@ -78,6 +79,8 @@ export interface GitHubPlatformDeps {
   octokit: ReturnType<typeof import('@actions/github').getOctokit>;
   /** Platform context extracted from the CI/CD environment or webhook. */
   context: PlatformContext;
+  /** Logger for debug/info/warning output. */
+  logger: Logger;
 }
 
 /**
@@ -96,7 +99,7 @@ export interface GitHubPlatformDeps {
 export function createGitHubPlatformProvider(deps?: GitHubPlatformDeps): PlatformProvider {
   const type = detectPlatform();
 
-  // Set module-level deps so sub-functions can access them
+  // Build the resolved context
   const resolvedContext: PlatformContext = deps?.context ?? {
     repo: github.context.repo,
     issue: github.context.issue,
@@ -107,10 +110,44 @@ export function createGitHubPlatformProvider(deps?: GitHubPlatformDeps): Platfor
     workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
   };
 
-  if (deps?.octokit) {
-    setOctokit(deps.octokit);
+  // Resolve the logger
+  let logger: Logger;
+  if (deps?.logger) {
+    logger = deps.logger;
+  } else {
+    // No deps provided — use a silent logger as fallback.
+    // In production, deps.logger is always provided.
+    logger = {
+      debug: (/* msg */) => {},  // eslint-disable-line @typescript-eslint/no-empty-function
+      info: (/* msg */) => {},   // eslint-disable-line @typescript-eslint/no-empty-function
+      warning: (/* msg */) => {},// eslint-disable-line @typescript-eslint/no-empty-function
+      notice: (/* msg */) => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+      error: (/* msg */) => {},  // eslint-disable-line @typescript-eslint/no-empty-function
+    };
   }
-  setPlatformContext(resolvedContext);
+
+  // Resolve octokit
+  let octokit: GitHubPlatformDeps['octokit'];
+  if (deps?.octokit) {
+    octokit = deps.octokit;
+  } else {
+    // No deps provided — create from @actions/github singleton (backward compat)
+    if (typeof github.getOctokit === 'function') {
+      octokit = github.getOctokit(github.context as any);
+    } else {
+      throw new Error(
+        'No Octokit provided and @actions/github.getOctokit is not available. ' +
+        'Provide deps.octokit when calling createGitHubPlatformProvider().'
+      );
+    }
+  }
+
+  // Build the deps bag that will be threaded through all sub-functions
+  const moduleDeps: GitHubModuleDeps = {
+    octokit,
+    context: resolvedContext,
+    logger,
+  };
 
   return {
     type,
@@ -120,63 +157,63 @@ export function createGitHubPlatformProvider(deps?: GitHubPlatformDeps): Platfor
     },
 
     async addReaction(): Promise<CreateReactionType | undefined> {
-      return addReaction();
+      return addReaction(moduleDeps);
     },
 
     async deleteReaction(reaction: CreateReactionType | undefined): Promise<void> {
-      await deleteReaction(reaction);
+      await deleteReaction(moduleDeps, reaction);
     },
 
     async createFinalComment(body: string, metadata: CommentMetadata): Promise<void> {
-      await createFinalComment(body, metadata);
+      await createFinalComment(moduleDeps, body, metadata);
     },
 
     async getPrompt(inputPrompt?: string): Promise<string | undefined> {
-      return getPrompt(inputPrompt);
+      return getPrompt(moduleDeps, inputPrompt);
     },
 
     getStartTime(): Temporal.Instant | undefined {
-      return getStartTimeFromContext();
+      return getStartTimeFromContext(moduleDeps);
     },
 
     async createPullRequest(
       params: CreatePullRequestParams
     ): Promise<{ content: { type: 'text'; text: string }[]; details: CreatePullRequestDetails }> {
-      return createPullRequest(params);
+      return createPullRequest(moduleDeps, params);
     },
 
     async updatePullRequest(
       params: UpdatePullRequestParams
     ): Promise<{ content: { type: 'text'; text: string }[]; details: UpdatePullRequestDetails }> {
-      return updatePullRequest(params);
+      return updatePullRequest(moduleDeps, params);
     },
 
     async getIssueOrPRThread(
       params?: GetIssueOrPRThreadParams
     ): Promise<IssueOrPRThread | undefined> {
-      return getIssueOrPRThread(params);
+      return getIssueOrPRThread(moduleDeps, params);
     },
 
     async getPRDiff(owner: string, repo: string, pullNumber: number, ignoreFiles?: string[]): Promise<string> {
-      return fetchPRDiff(owner, repo, pullNumber, ignoreFiles);
+      return fetchPRDiff(moduleDeps, owner, repo, pullNumber, ignoreFiles);
     },
 
     async createReview(
       params: CreateReviewParams
     ): Promise<{ content: { type: 'text'; text: string }[]; details: CreateReviewDetails }> {
-      return createReview(params);
+      return createReview(moduleDeps, params);
     },
 
     async getCIStatus(
       params: GetCIStatusParams
     ): Promise<{ content: { type: 'text'; text: string }[]; details: GetCIStatusDetails }> {
-      return getCIStatus(params);
+      return getCIStatus(moduleDeps, params);
     },
 
     async getWorkflowRunLogs(
       params: GetWorkflowRunLogsParams
     ): Promise<{ content: { type: 'text'; text: string }[]; details: GetWorkflowRunLogsDetails }> {
-      return getWorkflowRunLogs(params);
+      return getWorkflowRunLogs(moduleDeps, params);
     },
   };
 }

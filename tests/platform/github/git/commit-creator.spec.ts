@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, mock, beforeEach } from 'bun:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -59,9 +59,7 @@ const mockOctokit = {
     },
   },
 };
-mock.module('../../../../src/platform/github/octokit', () => ({
-  getOctokit: mock(() => mockOctokit),
-}));
+// octokit singleton mock no longer needed - deps pattern
 
 // Setup default GitHub context
 const mockContext = {
@@ -82,36 +80,32 @@ mock.module('@actions/github', () => ({
   context: mockContext,
 }));
 
-// Import module context helper for test isolation
-import { resetModuleContext } from '../../../../src/platform/github';
+import type { GitHubModuleDeps } from '../../../../src/platform/github/types';
 
 // We need a mutable actor for the appendCoAuthoredBy tests
 let testActor: string | undefined = 'test-user';
 
-// Re-mock @actions/github with mutable actor (must override the earlier mock)
-mock.module('@actions/github', () => ({
-  context: new Proxy(mockContext, {
-    get(target, prop) {
-      if (prop === 'actor') {
-        return testActor;
-      }
-      return (target as any)[prop];
+function createTestDeps(payloadOverrides?: Record<string, unknown>): GitHubModuleDeps {
+  return {
+    octokit: mockOctokit as any,
+    context: {
+      repo: mockContext.repo,
+      issue: mockContext.issue,
+      eventName: 'push',
+      payload: { actor: testActor, ...payloadOverrides },
+      serverUrl: mockContext.serverUrl,
+      runId: mockContext.runId,
+      workspace: '/tmp',
     },
-  }),
-}));
-
-// Set up mock CoreAdapter so createLogger() -> getCoreAdapter() works
-const mockCoreAdapter = {
-  debug: mock(() => {}),
-  info: mock(() => {}),
-  warning: mock(() => {}),
-  notice: mock(() => {}),
-  setFailed: mock(() => {}),
-  setOutput: mock(() => {}),
-  getInput: mockGetInput,
-};
-
-resetModuleContext(mockCoreAdapter as any);
+    logger: {
+      debug: mock(() => {}),
+      info: mock(() => {}),
+      warning: mock(() => {}),
+      notice: mock(() => {}),
+      error: mock(() => {}),
+    },
+  };
+}
 
 // Dynamic import to ensure mocks are set before module loads
 const commitCreatorModule = import('../../../../src/platform/github/git/commit-creator.js');
@@ -122,19 +116,13 @@ describe('createCommitAndUpdateBranch', () => {
     mockUpdateRef.mockClear();
     // Reset to default context
     mockContext.repo = { owner: 'test-owner', repo: 'test-repo' };
-    // Ensure module context is initialized for each test
-    resetModuleContext(mockCoreAdapter as any);
-  });
-
-  afterEach(() => {
-    resetModuleContext(undefined);
   });
 
   test('creates a commit and updates branch reference', async () => {
     const module = await commitCreatorModule;
     const { createCommitAndUpdateBranch } = module;
 
-    const result = await createCommitAndUpdateBranch({
+    const result = await createCommitAndUpdateBranch(createTestDeps(), {
       treeSha: 'tree-sha-abc',
       parentSha: 'parent-sha-def',
       branchName: 'test-branch',
@@ -161,7 +149,7 @@ describe('createCommitAndUpdateBranch', () => {
     const module = await commitCreatorModule;
     const { createCommitAndUpdateBranch } = module;
 
-    await createCommitAndUpdateBranch({
+    await createCommitAndUpdateBranch(createTestDeps(), {
       treeSha: 'tree-sha-abc',
       parentSha: 'parent-sha-def',
       branchName: 'feature-branch',
@@ -177,7 +165,7 @@ describe('createCommitAndUpdateBranch', () => {
     const module = await commitCreatorModule;
     const { createCommitAndUpdateBranch } = module;
 
-    await createCommitAndUpdateBranch({
+    await createCommitAndUpdateBranch(createTestDeps(), {
       treeSha: 'tree-sha-abc',
       parentSha: 'parent-sha-def',
       branchName: 'main',
@@ -194,7 +182,7 @@ describe('createCommitAndUpdateBranch', () => {
     const { createCommitAndUpdateBranch } = module;
 
     const message = 'Fix: handle special chars: émojis 🎉 and "quotes"';
-    await createCommitAndUpdateBranch({
+    await createCommitAndUpdateBranch(createTestDeps(), {
       treeSha: 'tree-sha-abc',
       parentSha: 'parent-sha-def',
       branchName: 'test',
@@ -219,7 +207,7 @@ describe('createCommitAndUpdateBranch', () => {
       info: mock(() => {}),
     };
 
-    await createCommitAndUpdateBranch({
+    await createCommitAndUpdateBranch(createTestDeps(), {
       treeSha: 'tree-sha-abc',
       parentSha: 'parent-sha-def',
       branchName: 'test',
@@ -234,7 +222,7 @@ describe('createCommitAndUpdateBranch', () => {
     const module = await commitCreatorModule;
     const { createCommitAndUpdateBranch } = module;
 
-    await createCommitAndUpdateBranch({
+    await createCommitAndUpdateBranch(createTestDeps(), {
       treeSha: 'tree-sha-abc',
       parentSha: 'parent-sha-def',
       branchName: 'test',
@@ -249,7 +237,7 @@ describe('createCommitAndUpdateBranch', () => {
     const module = await commitCreatorModule;
     const { createCommitAndUpdateBranch } = module;
 
-    const result = await createCommitAndUpdateBranch({
+    const result = await createCommitAndUpdateBranch(createTestDeps(), {
       treeSha: 'tree-sha-abc',
       parentSha: 'parent-sha-def',
       branchName: 'test',
@@ -263,7 +251,7 @@ describe('createCommitAndUpdateBranch', () => {
     const module = await commitCreatorModule;
     const { createCommitAndUpdateBranch } = module;
 
-    await createCommitAndUpdateBranch({
+    await createCommitAndUpdateBranch(createTestDeps(), {
       treeSha: 'tree-sha-abc',
       parentSha: 'parent-sha-def',
       branchName: 'feature/sub/branch',
@@ -284,7 +272,7 @@ describe('createCommitAndUpdateBranch', () => {
 
     testActor = 'octocat';
 
-    await createCommitAndUpdateBranch({
+    await createCommitAndUpdateBranch(createTestDeps(), {
       treeSha: 'tree-sha-abc',
       parentSha: 'parent-sha-def',
       branchName: 'test',
@@ -304,7 +292,7 @@ describe('createCommitAndUpdateBranch', () => {
 
     testActor = '';
 
-    await createCommitAndUpdateBranch({
+    await createCommitAndUpdateBranch(createTestDeps(), {
       treeSha: 'tree-sha-abc',
       parentSha: 'parent-sha-def',
       branchName: 'test',
@@ -334,7 +322,7 @@ describe('appendCoAuthoredBy', () => {
     const { appendCoAuthoredBy } = module;
 
     testActor = 'alice';
-    const result = appendCoAuthoredBy('Fix the bug');
+    const result = appendCoAuthoredBy(createTestDeps(), 'Fix the bug');
 
     expect(result).toBe('Fix the bug\n\nCo-authored-by: alice <alice@users.noreply.github.com>');
   });
@@ -344,7 +332,7 @@ describe('appendCoAuthoredBy', () => {
     const { appendCoAuthoredBy } = module;
 
     testActor = '';
-    const result = appendCoAuthoredBy('Fix the bug');
+    const result = appendCoAuthoredBy(createTestDeps(), 'Fix the bug');
 
     expect(result).toBe('Fix the bug');
   });
@@ -354,7 +342,7 @@ describe('appendCoAuthoredBy', () => {
     const { appendCoAuthoredBy } = module;
 
     testActor = undefined;
-    const result = appendCoAuthoredBy('Fix the bug');
+    const result = appendCoAuthoredBy(createTestDeps(), 'Fix the bug');
 
     expect(result).toBe('Fix the bug');
   });
@@ -365,7 +353,7 @@ describe('appendCoAuthoredBy', () => {
 
     testActor = 'bob';
     const message = 'Fix critical bug\n\nThis fixes the edge case in auth.';
-    const result = appendCoAuthoredBy(message);
+    const result = appendCoAuthoredBy(createTestDeps(), message);
 
     expect(result).toBe(
       'Fix critical bug\n\nThis fixes the edge case in auth.\n\nCo-authored-by: bob <bob@users.noreply.github.com>'

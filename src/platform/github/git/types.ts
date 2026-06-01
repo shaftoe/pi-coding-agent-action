@@ -5,7 +5,6 @@
  * provides the GitHub-specific logger factory.
  */
 
-import { getCoreAdapter } from '../index';
 import type { FileMode, TreeEntry, Logger } from '../../../git/types';
 
 // Re-export shared types so consumers within the GitHub module can import
@@ -15,12 +14,11 @@ export type { FileMode, TreeEntry, Logger };
 /**
  * Create a logger with a custom emoji prefix.
  *
- * The logger lazily fetches the CoreAdapter on first call to avoid
- * initialization order issues when modules are loaded.
+ * The logger uses the provided deps for logging output.
  */
-export function createLogger(emoji = '🔀'): Logger {
+export function createLogger(deps: { logger: Logger }, emoji = '🔀'): Logger {
   return {
-    debug: (msg: string): void => getCoreAdapter().debug(`${emoji} ${msg}`),
-    info: (msg: string): void => getCoreAdapter().info(`${emoji} ${msg}`),
+    debug: (msg: string): void => deps.logger.debug(`${emoji} ${msg}`),
+    info: (msg: string): void => deps.logger.info(`${emoji} ${msg}`),
   };
 }

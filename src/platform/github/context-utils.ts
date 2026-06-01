@@ -1,45 +1,39 @@
 /**
  * @file Shared utility functions for GitHub context operations.
+ *
+ * All functions accept a {@link GitHubModuleDeps} parameter for explicit
+ * dependency injection — no module-level singletons or `@actions/*` imports.
  */
 
-import * as github from '@actions/github';
-import { getModulePlatformContext } from './index';
-
-/**
- * Get the platform context, falling back to @actions/github singleton.
- */
-function ctx(): typeof github.context {
-  try {
-    const pc = getModulePlatformContext();
-    return pc as unknown as typeof github.context;
-  } catch {
-    return github.context;
-  }
-}
+import type { GitHubModuleDeps } from './types';
 
 /**
  * Determine if the current GitHub context is a pull request.
  *
+ * @param deps - Module dependencies.
  * @returns `true` if the event type is `pull_request` or the payload contains a
  *          `pull_request` object.
  */
-export function isPR(): boolean {
-  const eventType = ctx().eventName;
-  return eventType === 'pull_request' || ctx().payload.pull_request !== undefined;
+export function isPR(deps: GitHubModuleDeps): boolean {
+  const { eventName, payload } = deps.context;
+  return eventName === 'pull_request' || payload.pull_request !== undefined;
 }
 
 /**
  * Determine whether the current context originated from an issue or a pull
  * request.
  *
+ * @param deps - Module dependencies.
  * @returns `'issue'`, `'pull_request'`, or `undefined` if the context cannot be
  *          classified.
  */
-export function getContextType(): 'issue' | 'pull_request' | undefined {
-  if (isPR()) {
+export function getContextType(
+  deps: GitHubModuleDeps
+): 'issue' | 'pull_request' | undefined {
+  if (isPR(deps)) {
     return 'pull_request';
   }
-  if (ctx().eventName === 'issue_comment' || ctx().eventName === 'issues') {
+  if (deps.context.eventName === 'issue_comment' || deps.context.eventName === 'issues') {
     return 'issue';
   }
   return undefined;

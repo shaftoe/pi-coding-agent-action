@@ -104,9 +104,7 @@ const mockOctokit = {
     },
   },
 };
-mock.module('../../../src/platform/github/octokit', () => ({
-  getOctokit: mock(() => mockOctokit),
-}));
+// octokit mock no longer needed - deps pattern
 
 // Setup default GitHub context
 const mockContext = {
@@ -143,7 +141,24 @@ const testCoreAdapter = {
 // Dynamic import to ensure mocks are set before module loads
 const pullRequestUpdateModulePromise =
   import('../../../src/platform/github/tools/pull-request-update.js');
-const githubModulePromise = import('../../../src/platform/github/index.js');
+
+import type { GitHubModuleDeps } from '../../../src/platform/github/types';
+
+function createTestDeps(): GitHubModuleDeps {
+  return {
+    octokit: mockOctokit as any,
+    context: {
+      repo: mockContext.repo,
+      issue: mockContext.issue,
+      eventName: mockContext.eventName,
+      payload: mockContext.payload,
+      serverUrl: mockContext.serverUrl,
+      runId: mockContext.runId,
+      workspace: '/tmp',
+    },
+    logger: testCoreAdapter,
+  };
+}
 
 // Cache the module after first import
 let pullRequestUpdateModule: any | null = null;
@@ -166,18 +181,13 @@ describe('updatePullRequest - integration tests', () => {
     mockContext.issue = { number: 42 };
     mockContext.eventName = 'pull_request';
     mockContext.payload = {};
-
-    // Reset module context fully to clear any leaked platform context
-    // from other test files (e.g. provider.spec.ts sets issue.number=123)
-    const githubExports = await githubModulePromise;
-    githubExports.resetModuleContext(testCoreAdapter);
   });
 
   test('updates PR title successfully', async () => {
     const module = await getModule();
     const { updatePullRequest } = module;
 
-    const result = await updatePullRequest({
+    const result = await updatePullRequest(createTestDeps(), {
       title: 'Updated PR title',
     });
 
@@ -194,7 +204,7 @@ describe('updatePullRequest - integration tests', () => {
     const module = await getModule();
     const { updatePullRequest } = module;
 
-    const result = await updatePullRequest({
+    const result = await updatePullRequest(createTestDeps(), {
       body: 'Updated PR description',
     });
 
@@ -211,7 +221,7 @@ describe('updatePullRequest - integration tests', () => {
     const module = await getModule();
     const { updatePullRequest } = module;
 
-    const result = await updatePullRequest({
+    const result = await updatePullRequest(createTestDeps(), {
       title: 'New title',
       body: 'New body',
     });
@@ -231,7 +241,7 @@ describe('updatePullRequest - integration tests', () => {
     const module = await getModule();
     const { updatePullRequest } = module;
 
-    const result = await updatePullRequest({
+    const result = await updatePullRequest(createTestDeps(), {
       pull_number: 999,
       title: 'Custom PR',
     });
@@ -248,7 +258,7 @@ describe('updatePullRequest - integration tests', () => {
     const module = await getModule();
     const { updatePullRequest } = module;
 
-    const result = await updatePullRequest({
+    const result = await updatePullRequest(createTestDeps(), {
       title: 'Context PR',
     });
 
@@ -267,9 +277,9 @@ describe('updatePullRequest - integration tests', () => {
     // @ts-expect-error - Testing with undefined issue
     mockContext.issue = undefined;
 
-    // With the new context accessor, the error message is more descriptive
+    // With the new deps pattern, the error message is more descriptive
     await expect(
-      updatePullRequest({
+      updatePullRequest(createTestDeps(), {
         title: 'Test',
       })
     ).rejects.toThrow('Pull request number not provided');
@@ -279,7 +289,9 @@ describe('updatePullRequest - integration tests', () => {
     const module = await getModule();
     const { updatePullRequest } = module;
 
-    const result = await updatePullRequest({});
+    const result = await updatePullRequest(createTestDeps(), {
+      title: 'Return details test',
+    });
 
     expect(result.details.pullRequestNumber).toBe(42);
     expect(result.details.pullRequestUrl).toBe('https://github.com/test-owner/test-repo/pull/42');
@@ -291,7 +303,7 @@ describe('updatePullRequest - integration tests', () => {
     const module = await getModule();
     const { updatePullRequest } = module;
 
-    const result = await updatePullRequest({
+    const result = await updatePullRequest(createTestDeps(), {
       title: 'Success test',
     });
 
@@ -307,14 +319,14 @@ describe('updatePullRequest - integration tests', () => {
 
     mockPullsGet.mockImplementationOnce(() => Promise.reject(new Error('PR not found')));
 
-    await expect(updatePullRequest({})).rejects.toThrow();
+    await expect(updatePullRequest(createTestDeps(), { title: 'Fail test' })).rejects.toThrow();
   });
 
   test('updates PR with dryRun=true', async () => {
     const module = await getModule();
     const { updatePullRequest } = module;
 
-    const result = await updatePullRequest({
+    const result = await updatePullRequest(createTestDeps(), {
       title: 'Dry run title',
       dryRun: true,
     });

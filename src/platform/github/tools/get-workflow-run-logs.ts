@@ -5,12 +5,8 @@
  * queries the GitHub Actions API for job logs of a specific workflow run.
  */
 
-import { getGitHubContext } from '../context-accessor';
-
-function ctx() { return getGitHubContext(); }
-import { getOctokit } from '../octokit';
-import { getCoreAdapter } from '../index';
 import type {
+  GitHubModuleDeps,
   GetWorkflowRunLogsParams,
   GetWorkflowRunLogsDetails,
   JobLog,
@@ -22,13 +18,6 @@ export type {
   GetWorkflowRunLogsDetails,
   JobLog,
 };
-
-/**
- * Debug logging helper.
- */
-function debug(msg: string): void {
-  getCoreAdapter().debug(msg);
-}
 
 /** Default max log bytes (50 KB). */
 const DEFAULT_MAX_LOG_BYTES = 51_200;
@@ -42,22 +31,25 @@ const MAX_LOG_BYTES = 1_048_576;
  * Lists all jobs for the run and downloads their logs. Logs are
  * concatenated and truncated if they exceed `max_bytes`.
  *
+ * @param deps - Module dependencies.
  * @param params - Parameters including the run ID and optional byte limit.
  * @returns Structured details about the workflow run logs.
  */
-export async function getWorkflowRunLogs(params: GetWorkflowRunLogsParams): Promise<{
+export async function getWorkflowRunLogs(
+  deps: GitHubModuleDeps,
+  params: GetWorkflowRunLogsParams
+): Promise<{
   content: { type: 'text'; text: string }[];
   details: GetWorkflowRunLogsDetails;
 }> {
-  const owner = params.owner ?? ctx().repo.owner;
-  const repo = params.repo ?? ctx().repo.repo;
+  const owner = params.owner ?? deps.context.repo.owner;
+  const repo = params.repo ?? deps.context.repo.repo;
   const maxBytes = Math.min(params.max_bytes ?? DEFAULT_MAX_LOG_BYTES, MAX_LOG_BYTES);
 
-  debug(`[getWorkflowRunLogs] Fetching logs for run ${params.run_id}`);
+  deps.logger.debug(`[getWorkflowRunLogs] Fetching logs for run ${params.run_id}`);
 
   // List jobs for the workflow run
-  const octokit = getOctokit();
-  const response = await octokit.rest.actions.listJobsForWorkflowRun({
+  const response = await deps.octokit.rest.actions.listJobsForWorkflowRun({
     owner,
     repo,
     run_id: params.run_id,
@@ -110,7 +102,7 @@ export async function getWorkflowRunLogs(params: GetWorkflowRunLogsParams): Prom
 
     let logText: string;
     try {
-      const logResponse = await octokit.rest.actions.downloadJobLogsForWorkflowRun({
+      const logResponse = await deps.octokit.rest.actions.downloadJobLogsForWorkflowRun({
         owner,
         repo,
         job_id: job.id,

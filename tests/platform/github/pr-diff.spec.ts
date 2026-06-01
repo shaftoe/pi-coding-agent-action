@@ -2,9 +2,31 @@
  * @file Tests for PR diff filtering logic.
  */
 
-import { describe, expect, test, beforeAll } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { filterDiffByIgnoreFiles, matchesIgnorePattern } from '../../../src/platform/github/tools/pr-diff';
-import { resetModuleContext } from '../../../src/platform/github';
+import type { GitHubModuleDeps } from '../../../src/platform/github/types';
+
+const noopLogger = {
+  debug: () => {},
+  info: () => {},
+  warning: () => {},
+  notice: () => {},
+  error: () => {},
+};
+
+const testDeps: GitHubModuleDeps = {
+  octokit: {} as any,
+  context: {
+    repo: { owner: 'test-owner', repo: 'test-repo' },
+    issue: { number: 42 },
+    eventName: 'issue_comment',
+    payload: {},
+    serverUrl: 'https://github.com',
+    runId: 123456789,
+    workspace: '/tmp',
+  },
+  logger: noopLogger,
+};
 
 const SAMPLE_DIFF = `diff --git a/src/index.ts b/src/index.ts
 index abc1234..def5678 100644
@@ -81,22 +103,15 @@ describe('matchesIgnorePattern', () => {
   });
 });
 
-beforeAll(() => {
-  resetModuleContext({
-    debug: () => {},
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any);
-});
-
 describe('filterDiffByIgnoreFiles', () => {
   test('returns original diff when ignoreFiles is empty', () => {
     const diff = SAMPLE_DIFF;
-    const result = filterDiffByIgnoreFiles(diff, []);
+    const result = filterDiffByIgnoreFiles(testDeps, diff, []);
     expect(result).toBe(diff);
   });
 
   test('filters out files matching a directory prefix', () => {
-    const result = filterDiffByIgnoreFiles(SAMPLE_DIFF, ['dist/']);
+    const result = filterDiffByIgnoreFiles(testDeps, SAMPLE_DIFF, ['dist/']);
     expect(result).not.toContain('diff --git a/dist/bundle.js');
     expect(result).not.toContain('diff --git a/dist/secondary.js');
     expect(result).not.toContain('// bundled');
@@ -106,13 +121,13 @@ describe('filterDiffByIgnoreFiles', () => {
   });
 
   test('filters out an exact file path', () => {
-    const result = filterDiffByIgnoreFiles(SAMPLE_DIFF, ['package-lock.json']);
+    const result = filterDiffByIgnoreFiles(testDeps, SAMPLE_DIFF, ['package-lock.json']);
     expect(result).not.toContain('diff --git a/package-lock.json');
     expect(result).toContain('diff --git a/src/index.ts');
   });
 
   test('filters multiple patterns at once', () => {
-    const result = filterDiffByIgnoreFiles(SAMPLE_DIFF, ['dist/', 'package-lock.json']);
+    const result = filterDiffByIgnoreFiles(testDeps, SAMPLE_DIFF, ['dist/', 'package-lock.json']);
     // Should keep only src/ files
     expect(result).toContain('diff --git a/src/index.ts');
     expect(result).toContain('diff --git a/src/utils/helpers.ts');
@@ -121,7 +136,7 @@ describe('filterDiffByIgnoreFiles', () => {
   });
 
   test('preserves file content for kept files', () => {
-    const result = filterDiffByIgnoreFiles(SAMPLE_DIFF, ['dist/', 'package-lock.json']);
+    const result = filterDiffByIgnoreFiles(testDeps, SAMPLE_DIFF, ['dist/', 'package-lock.json']);
     expect(result).toContain('import { bar }');
     expect(result).toContain('export const newHelper');
   });
@@ -134,12 +149,12 @@ new file mode 100644
 @@ -0,0 +1,1 @@
 +console.log("hello");
 `;
-    const result = filterDiffByIgnoreFiles(singleFileDiff, ['dist/']);
+    const result = filterDiffByIgnoreFiles(testDeps, singleFileDiff, ['dist/']);
     expect(result).not.toContain('diff --git');
   });
 
   test('handles diff with no matching files to filter', () => {
-    const result = filterDiffByIgnoreFiles(SAMPLE_DIFF, ['nonexistent/']);
+    const result = filterDiffByIgnoreFiles(testDeps, SAMPLE_DIFF, ['nonexistent/']);
     expect(result).toBe(SAMPLE_DIFF);
   });
 });

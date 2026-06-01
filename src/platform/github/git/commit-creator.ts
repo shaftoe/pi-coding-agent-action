@@ -4,11 +4,8 @@
  * Creates commits on trees and updates branch references.
  */
 
-import { getGitHubContext } from '../context-accessor';
-
-function ctx() { return getGitHubContext(); }
-import { getOctokit } from '../octokit';
 import { createLogger } from './types';
+import type { GitHubModuleDeps } from '../types';
 import type { Logger } from '../../../git/types';
 
 /**
@@ -19,11 +16,12 @@ import type { Logger } from '../../../git/types';
  * available (e.g. running outside of GitHub Actions), the original message
  * is returned unchanged.
  *
+ * @param deps - Module dependencies.
  * @param message - The original commit message.
  * @returns The commit message with a Co-authored-by trailer appended.
  */
-export function appendCoAuthoredBy(message: string): string {
-  const actor = ctx().actor;
+export function appendCoAuthoredBy(deps: GitHubModuleDeps, message: string): string {
+  const actor = (deps.context.payload as { actor?: string }).actor;
   if (!actor) {
     return message;
   }
@@ -49,21 +47,22 @@ export interface CreateCommitAndUpdateBranchParams {
 /**
  * Create a commit on the given tree and point the branch reference at it.
  *
+ * @param deps - Module dependencies.
  * @param params - Parameters controlling the commit creation and branch update operation.
  * @returns The SHA of the new commit.
  */
 export async function createCommitAndUpdateBranch(
+  deps: GitHubModuleDeps,
   params: CreateCommitAndUpdateBranchParams
 ): Promise<string> {
-  const { treeSha, parentSha, branchName, message, log = createLogger() } = params;
-  const octokit = getOctokit();
-  const owner = ctx().repo.owner;
-  const repo = ctx().repo.repo;
+  const { treeSha, parentSha, branchName, message, log = createLogger(deps) } = params;
+  const owner = deps.context.repo.owner;
+  const repo = deps.context.repo.repo;
 
   // Create a single commit with the new tree
   log.debug(`Creating commit...`);
-  const commitMessage = appendCoAuthoredBy(message);
-  const commit = await octokit.rest.git.createCommit({
+  const commitMessage = appendCoAuthoredBy(deps, message);
+  const commit = await deps.octokit.rest.git.createCommit({
     owner,
     repo,
     message: commitMessage,
@@ -74,7 +73,7 @@ export async function createCommitAndUpdateBranch(
 
   // Update the branch reference to point to the new commit
   log.debug(`Updating branch reference...`);
-  await octokit.rest.git.updateRef({
+  await deps.octokit.rest.git.updateRef({
     owner,
     repo,
     ref: `heads/${branchName}`,

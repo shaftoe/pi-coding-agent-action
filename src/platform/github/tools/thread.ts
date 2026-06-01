@@ -6,33 +6,22 @@
  * `get_issue_or_pr_thread` Pi tool via the platform provider.
  */
 
-import { getGitHubContext } from '../context-accessor';
-
-function ctx() { return getGitHubContext(); }
-import { getOctokit } from '../octokit';
 import { MAX_COMMENTS, MAX_REVIEW_COMMENTS } from '../constants';
-import { getCoreAdapter } from '../index';
-import type { ThreadComment, ReviewComment, IssueOrPRThread, GetIssueOrPRThreadParams } from '../types';
+import type { GitHubModuleDeps, ThreadComment, ReviewComment, IssueOrPRThread, GetIssueOrPRThreadParams } from '../types';
 import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
 
-/**
- * Debug logging helper.
- */
-function debug(msg: string): void {
-  getCoreAdapter().debug(msg);
-}
-
 function resolveThreadParams(
+  deps: GitHubModuleDeps,
   params?: GetIssueOrPRThreadParams
 ): { owner: string; repo: string; issueNumber: number; maxComments: number } | undefined {
   const { owner, repo, issue_number, max_comments = MAX_COMMENTS } = params ?? {};
 
-  const resolvedOwner = owner ?? ctx().repo.owner;
-  const resolvedRepo = repo ?? ctx().repo.repo;
-  const resolvedIssueNumber = issue_number ?? ctx().issue.number;
+  const resolvedOwner = owner ?? deps.context.repo.owner;
+  const resolvedRepo = repo ?? deps.context.repo.repo;
+  const resolvedIssueNumber = issue_number ?? deps.context.issue.number;
 
   if (!resolvedOwner || !resolvedRepo || !resolvedIssueNumber) {
-    debug(`[getIssueOrPRThread] Missing owner, repo, or issue_number`);
+    deps.logger.debug(`[getIssueOrPRThread] Missing owner, repo, or issue_number`);
     return undefined;
   }
 
@@ -45,6 +34,7 @@ function resolveThreadParams(
 }
 
 async function fetchIssueData(
+  deps: GitHubModuleDeps,
   owner: string,
   repo: string,
   issueNumber: number
@@ -52,8 +42,7 @@ async function fetchIssueData(
   issue: RestEndpointMethodTypes.RestEndpointMethodTypes['issues']['get']['response']['data'];
   isPullRequest: boolean;
 }> {
-  const octokit = getOctokit();
-  const issueData = await octokit.rest.issues.get({
+  const issueData = await deps.octokit.rest.issues.get({
     owner,
     repo,
     issue_number: issueNumber,
@@ -66,6 +55,7 @@ async function fetchIssueData(
 }
 
 async function fetchPRData(
+  deps: GitHubModuleDeps,
   owner: string,
   repo: string,
   issueNumber: number
@@ -73,28 +63,31 @@ async function fetchPRData(
   RestEndpointMethodTypes.RestEndpointMethodTypes['pulls']['get']['response']['data'] | undefined
 > {
   try {
-    const octokit = getOctokit();
-    const prData = await octokit.rest.pulls.get({
+    const prData = await deps.octokit.rest.pulls.get({
       owner,
       repo,
       pull_number: issueNumber,
     });
     return prData.data;
   } catch (_e) {
-    debug(`[getIssueOrPRThread] Failed to fetch PR data, continuing`);
+    deps.logger.debug(`[getIssueOrPRThread] Failed to fetch PR data, continuing`);
     return undefined;
   }
 }
 
-function transformComment(comment: {
-  id: number;
-  user?: { login?: string | null; type?: string | null } | null;
-  created_at: string;
-  updated_at: string | null;
-  body?: string | null;
-}): ThreadComment {
+function transformComment(
+  deps: GitHubModuleDeps,
+  comment: {
+    id: number;
+    user?: { login?: string | null; type?: string | null } | null;
+    created_at: string;
+    updated_at: string | null;
+    body?: string | null;
+  }
+): ThreadComment {
   const triggeringCommentId =
-    ctx().payload.comment?.id ?? ctx().payload.review?.id;
+    (deps.context.payload.comment as { id?: number } | undefined)?.id ??
+    (deps.context.payload.review as { id?: number } | undefined)?.id;
 
   const baseComment: ThreadComment = {
     id: comment.id,
@@ -114,6 +107,7 @@ function transformComment(comment: {
 }
 
 async function fetchThreadComments(
+  deps: GitHubModuleDeps,
   owner: string,
   repo: string,
   issueNumber: number,
@@ -124,8 +118,7 @@ async function fetchThreadComments(
   const perPage = Math.min(maxComments, MAX_COMMENTS);
 
   while (comments.length < maxComments) {
-    const octokit = getOctokit();
-    const commentsData = await octokit.rest.issues.listComments({
+    const commentsData = await deps.octokit.rest.issues.listComments({
       owner,
       repo,
       issue_number: issueNumber,
@@ -141,7 +134,7 @@ async function fetchThreadComments(
       if (comments.length >= maxComments) {
         break;
       }
-      comments.push(transformComment(comment));
+      comments.push(transformComment(deps, comment));
     }
 
     if (commentsData.data.length < perPage) {
@@ -160,6 +153,7 @@ async function fetchThreadComments(
  * via `octokit.rest.pulls.listReviewComments()`. These are distinct from
  * issue-level comments — they carry file path and line information.
  *
+ * @param deps - Module dependencies.
  * @param owner - Repository owner.
  * @param repo - Repository name.
  * @param pullNumber - Pull request number.
@@ -167,19 +161,19 @@ async function fetchThreadComments(
  * @returns Array of review comments, or empty array on error.
  */
 async function fetchPRReviewComments(
+  deps: GitHubModuleDeps,
   owner: string,
   repo: string,
   pullNumber: number,
   maxReviewComments: number = MAX_REVIEW_COMMENTS
 ): Promise<ReviewComment[]> {
   try {
-    const octokit = getOctokit();
     const reviewComments: ReviewComment[] = [];
     let page = 1;
     const perPage = Math.min(maxReviewComments, MAX_REVIEW_COMMENTS);
 
     while (reviewComments.length < maxReviewComments) {
-      const response = await octokit.rest.pulls.listReviewComments({
+      const response = await deps.octokit.rest.pulls.listReviewComments({
         owner,
         repo,
         pull_number: pullNumber,
@@ -216,7 +210,7 @@ async function fetchPRReviewComments(
 
     return reviewComments;
   } catch (_e) {
-    debug(`[fetchPRReviewComments] Failed to fetch review comments, continuing`);
+    deps.logger.debug(`[fetchPRReviewComments] Failed to fetch review comments, continuing`);
     return [];
   }
 }
@@ -275,15 +269,17 @@ function buildThreadResult(
  * For pull requests, also fetches inline review comments (comments on
  * specific lines of the diff) in addition to issue-level comments.
  *
+ * @param deps - Module dependencies.
  * @param params - Optional parameters to override the default owner, repo,
  *                 issue number, or comment limit.
  * @returns The full thread data, or `undefined` if the issue/PR could not be
  *          resolved or was not found (404).
  */
 export async function getIssueOrPRThread(
+  deps: GitHubModuleDeps,
   params?: GetIssueOrPRThreadParams
 ): Promise<IssueOrPRThread | undefined> {
-  const resolvedParams = resolveThreadParams(params);
+  const resolvedParams = resolveThreadParams(deps, params);
   if (!resolvedParams) {
     return undefined;
   }
@@ -291,9 +287,9 @@ export async function getIssueOrPRThread(
   const { owner, repo, issueNumber, maxComments } = resolvedParams;
 
   try {
-    const { issue, isPullRequest } = await fetchIssueData(owner, repo, issueNumber);
+    const { issue, isPullRequest } = await fetchIssueData(deps, owner, repo, issueNumber);
 
-    const prData = isPullRequest ? await fetchPRData(owner, repo, issueNumber) : undefined;
+    const prData = isPullRequest ? await fetchPRData(deps, owner, repo, issueNumber) : undefined;
 
     // Fetch issue-level comments and PR review comments in parallel for PRs
     let reviewComments: ReviewComment[] = [];
@@ -301,19 +297,19 @@ export async function getIssueOrPRThread(
 
     if (isPullRequest) {
       const [issueComments, prReviewComments] = await Promise.all([
-        fetchThreadComments(owner, repo, issueNumber, maxComments),
-        fetchPRReviewComments(owner, repo, issueNumber),
+        fetchThreadComments(deps, owner, repo, issueNumber, maxComments),
+        fetchPRReviewComments(deps, owner, repo, issueNumber),
       ]);
       comments = issueComments;
       reviewComments = prReviewComments;
     } else {
-      comments = await fetchThreadComments(owner, repo, issueNumber, maxComments);
+      comments = await fetchThreadComments(deps, owner, repo, issueNumber, maxComments);
     }
 
     return buildThreadResult(issue, isPullRequest, prData, comments, reviewComments);
   } catch (error) {
     if (error instanceof Error && 'status' in error && error.status === 404) {
-      debug(`[getIssueOrPRThread] Issue/PR #${issueNumber} not found`);
+      deps.logger.debug(`[getIssueOrPRThread] Issue/PR #${issueNumber} not found`);
       return undefined;
     }
     throw error;

@@ -10,9 +10,9 @@ import {
   deleteReaction,
   createFinalComment,
   getPrompt,
-  setCoreAdapter,
   getStartTimeFromContext,
   type CreateReactionType,
+  type GitHubModuleDeps,
 } from '../platform/github';
 import type { GitAdapter, CommentMetadata, CoreAdapter } from '../types';
 
@@ -24,28 +24,37 @@ import type { GitAdapter, CommentMetadata, CoreAdapter } from '../types';
  * and self-hosted Forgejo instances.
  */
 export class RealGitAdapter implements GitAdapter {
-  constructor(private readonly core: CoreAdapter) {
-    // Set the module-level CoreAdapter for use by github functions and Pi tools
-    setCoreAdapter(core);
+  private readonly deps: GitHubModuleDeps;
+
+  constructor(
+    private readonly core: CoreAdapter,
+    octokit: GitHubModuleDeps['octokit'],
+    context: GitHubModuleDeps['context']
+  ) {
+    this.deps = {
+      octokit,
+      context,
+      logger: core,
+    };
   }
 
   async addReaction() {
-    return addReaction();
+    return addReaction(this.deps);
   }
 
   async deleteReaction(reaction: CreateReactionType | undefined) {
-    await deleteReaction(reaction);
+    await deleteReaction(this.deps, reaction);
   }
 
   async createFinalComment(body: string, metadata: CommentMetadata): Promise<void> {
-    await createFinalComment(body, metadata);
+    await createFinalComment(this.deps, body, metadata);
   }
 
   async getPrompt(inputPrompt?: string): Promise<string | undefined> {
-    return getPrompt(inputPrompt);
+    return getPrompt(this.deps, inputPrompt);
   }
 
   getStartTime(): Temporal.Instant | undefined {
-    return getStartTimeFromContext();
+    return getStartTimeFromContext(this.deps);
   }
 }

@@ -9,12 +9,9 @@
  * (workspace root, platform ignore patterns) applied.
  */
 
-import { getGitHubContext } from '../context-accessor';
-
-function ctx() { return getGitHubContext(); }
-import { getOctokit } from '../octokit';
 import { GITHUB_IGNORE_PATTERNS } from '../constants';
 import { createLogger } from './types';
+import type { GitHubModuleDeps } from '../types';
 import type { Logger } from '../../../git/types';
 import { scanForChanges as sharedScanForChanges, scanDirectory } from '../../../git/file-scanner';
 import type { ChangeScanResult, ScanDirectoryParams } from '../../../git/file-scanner';
@@ -26,20 +23,22 @@ export { scanDirectory };
 /**
  * Fetch blob content from GitHub.
  *
+ * @param deps - Module dependencies.
  * @param owner - Repository owner.
  * @param repo - Repository name.
  * @param sha - Blob SHA.
+ * @param log - Logger instance.
  * @returns The decoded UTF-8 content, or null if fetching fails.
  */
 async function fetchBlobContent(
+  deps: GitHubModuleDeps,
   owner: string,
   repo: string,
   sha: string,
   log: Logger
 ): Promise<string | null> {
   try {
-    const octokit = getOctokit();
-    const blob = await octokit.rest.git.getBlob({
+    const blob = await deps.octokit.rest.git.getBlob({
       owner,
       repo,
       file_sha: sha,
@@ -59,23 +58,24 @@ async function fetchBlobContent(
  * Fetches the tree and optionally fetches blob contents for comparison.
  * This is the GitHub-specific counterpart to the platform-agnostic scanner.
  *
+ * @param deps - Module dependencies.
  * @param treeSha - SHA of the tree to fetch.
  * @param fetchContents - Whether to fetch blob contents (default: true).
  * @param log - Logger instance for debug output.
  * @returns Map of path -> { sha, content }.
  */
 export async function buildFileMap(
+  deps: GitHubModuleDeps,
   treeSha: string,
   fetchContents = true,
-  log: Logger = createLogger()
+  log: Logger = createLogger(deps)
 ): Promise<Map<string, { sha: string; content: string | null }>> {
-  const octokit = getOctokit();
-  const owner = ctx().repo.owner;
-  const repo = ctx().repo.repo;
+  const owner = deps.context.repo.owner;
+  const repo = deps.context.repo.repo;
 
   log.debug(`fetching tree: ${treeSha}`);
 
-  const tree = await octokit.rest.git.getTree({
+  const tree = await deps.octokit.rest.git.getTree({
     owner,
     repo,
     tree_sha: treeSha,
@@ -90,7 +90,7 @@ export async function buildFileMap(
     if (item.type === 'blob' && item.sha) {
       let content: string | null = null;
       if (fetchContents) {
-        content = await fetchBlobContent(owner, repo, item.sha, log);
+        content = await fetchBlobContent(deps, owner, repo, item.sha, log);
       }
       fileMap.set(item.path, { sha: item.sha, content });
     }
@@ -107,13 +107,15 @@ export async function buildFileMap(
  * This is a GitHub-aware wrapper around the shared `scanForChanges` that
  * supplies the GitHub workspace root and platform-specific ignore patterns.
  *
+ * @param deps - Module dependencies.
  * @param referenceFiles - Map of reference file paths to their SHA and content.
  * @param log - Logger instance for debug output.
  * @returns An object containing changed files and deleted files.
  */
 export async function scanForChanges(
+  deps: GitHubModuleDeps,
   referenceFiles: Map<string, { sha: string; content: string | null }>,
-  log: Logger = createLogger()
+  log: Logger = createLogger(deps)
 ): Promise<ChangeScanResult> {
   return sharedScanForChanges(referenceFiles, log, {
     repoRoot: process.env.GITHUB_WORKSPACE,

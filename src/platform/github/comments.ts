@@ -4,13 +4,14 @@
  * Provides wrappers around Octokit endpoints for creating comments on issues/PRs
  * and replies to PR review comments. Supports appending an action-run link to the
  * final comment posted by the Pi agent.
+ *
+ * All functions accept a {@link GitHubModuleDeps} parameter for explicit
+ * dependency injection — no module-level singletons or `@actions/*` imports.
  */
 
-import * as github from '@actions/github';
 import RestEndpointMethodTypes from '@octokit/plugin-rest-endpoint-methods';
 import { Temporal } from '@js-temporal/polyfill';
-import { getOctokit } from './octokit';
-import { getCoreAdapter, getModulePlatformContext } from './index';
+import type { GitHubModuleDeps } from './types';
 import type { SessionStats } from '../../types';
 
 /**
@@ -38,21 +39,71 @@ export type CreateCommentType =
   | RestEndpointMethodTypes.RestEndpointMethodTypes['pulls']['createReplyForReviewComment']['response'];
 
 /**
- * Debug logging helper.
+ * Check if the current comment is a pull request review comment (inline comment).
+ *
+ * PR review comments have a `pull_request_review_id` field in the payload.
+ *
+ * @param deps - Module dependencies.
+ * @returns `true` if the comment is a PR review comment, `false` otherwise.
  */
-function debug(msg: string): void {
-  getCoreAdapter().debug(msg);
+function isPullRequestReviewComment(deps: GitHubModuleDeps): boolean {
+  const comment = deps.context.payload.comment as
+    | { pull_request_review_id?: number }
+    | undefined;
+  return comment?.pull_request_review_id !== undefined;
 }
 
 /**
- * Get the platform context, falling back to @actions/github singleton.
+ * Create a comment on the current issue or pull request, or reply to an inline PR review comment.
+ *
+ * For inline PR review comments, creates a threaded reply. For regular comments,
+ * creates a top-level comment on the issue/PR.
+ *
+ * @param deps - Module dependencies.
+ * @param body - The Markdown body of the comment.
+ * @returns The Octokit response, or `undefined` if `body` is empty.
  */
-function ctx(): typeof github.context {
-  try {
-    const pc = getModulePlatformContext();
-    return pc as unknown as typeof github.context;
-  } catch {
-    return github.context;
+async function createComment(
+  deps: GitHubModuleDeps,
+  body: string
+): Promise<CreateCommentType | undefined> {
+  if (!body) {
+    return;
+  }
+
+  const issueNumber = deps.context.issue.number;
+  if (!issueNumber) {
+    deps.logger.debug('[comments] no issue/PR number in context, skipping comment creation');
+    return undefined;
+  }
+
+  const octokit = deps.octokit;
+  const { owner, repo } = deps.context.repo;
+
+  // Check if this is a reply to a PR review comment (inline comment)
+  if (isPullRequestReviewComment(deps)) {
+    const comment = deps.context.payload.comment as { id?: number } | undefined;
+    if (!comment || comment.id === undefined) {
+      deps.logger.debug('[comments] no comment found for review reply');
+      return undefined;
+    }
+
+    deps.logger.debug('[comments] creating reply to PR review comment');
+    return octokit.rest.pulls.createReplyForReviewComment({
+      owner,
+      repo,
+      pull_number: issueNumber,
+      comment_id: comment.id,
+      body,
+    });
+  } else {
+    deps.logger.debug('[comments] creating top-level issue/PR comment');
+    return octokit.rest.issues.createComment({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      body,
+    });
   }
 }
 
@@ -88,67 +139,6 @@ export function formatExecutionTime(duration: Temporal.Duration): string {
 }
 
 /**
- * Check if the current comment is a pull request review comment (inline comment).
- *
- * PR review comments have a `pull_request_review_id` field in the payload.
- *
- * @returns `true` if the comment is a PR review comment, `false` otherwise.
- */
-function isPullRequestReviewComment(): boolean {
-  const comment = ctx().payload.comment;
-  return comment?.pull_request_review_id !== undefined;
-}
-
-/**
- * Create a comment on the current issue or pull request, or reply to an inline PR review comment.
- *
- * For inline PR review comments, creates a threaded reply. For regular comments,
- * creates a top-level comment on the issue/PR.
- *
- * @param body - The Markdown body of the comment.
- * @returns The Octokit response, or `undefined` if `body` is empty.
- */
-async function createComment(body: string): Promise<CreateCommentType | undefined> {
-  if (!body) {
-    return;
-  }
-
-  const issueNumber = ctx().issue.number;
-  if (!issueNumber) {
-    debug('[comments] no issue/PR number in context, skipping comment creation');
-    return undefined;
-  }
-
-  const octokit = getOctokit();
-
-  // Check if this is a reply to a PR review comment (inline comment)
-  if (isPullRequestReviewComment()) {
-    const comment = ctx().payload.comment;
-    if (!comment) {
-      debug('[comments] no comment found for review reply');
-      return undefined;
-    }
-
-    debug('[comments] creating reply to PR review comment');
-    return octokit.rest.pulls.createReplyForReviewComment({
-      owner: ctx().repo.owner,
-      repo: ctx().repo.repo,
-      pull_number: issueNumber,
-      comment_id: comment.id,
-      body,
-    });
-  } else {
-    debug('[comments] creating top-level issue/PR comment');
-    return octokit.rest.issues.createComment({
-      owner: ctx().repo.owner,
-      repo: ctx().repo.repo,
-      issue_number: issueNumber,
-      body,
-    });
-  }
-}
-
-/**
  * Format a number with appropriate suffix (K for thousands, M for millions).
  *
  * @param value - Number to format
@@ -172,11 +162,13 @@ export function formatNumber(value: number): string {
  * Automatically appends a "View action run" link pointing to the GitHub Actions
  * run that produced the comment, along with optional Pi metadata.
  *
+ * @param deps - Module dependencies.
  * @param body - The Markdown body of the comment.
  * @param metadata - Optional metadata to include in the footer.
  * @returns The Octokit response, or `undefined` if `body` is empty.
  */
 export async function createFinalComment(
+  deps: GitHubModuleDeps,
   body: string,
   metadata?: CommentMetadata
 ): Promise<CreateCommentType | undefined> {
@@ -185,10 +177,9 @@ export async function createFinalComment(
   }
 
   // Build the action run URL
-  const context = ctx();
-  const serverUrl = context.serverUrl || 'https://github.com';
-  const { owner, repo } = context.repo;
-  const runId = context.runId;
+  const serverUrl = deps.context.serverUrl || 'https://github.com';
+  const { owner, repo } = deps.context.repo;
+  const runId = deps.context.runId;
 
   let finalBody = body;
   if (owner && repo && runId) {
@@ -230,5 +221,5 @@ export async function createFinalComment(
     finalBody = `${body}\n\n---\n\n${metadataParts.join(' | ')}`;
   }
 
-  return createComment(finalBody);
+  return createComment(deps, finalBody);
 }

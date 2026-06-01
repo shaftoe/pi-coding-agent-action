@@ -5,6 +5,34 @@
  * files can import types without creating circular dependencies.
  */
 
+import type { Logger } from '../../types';
+import type { PlatformContext } from '../types';
+
+type OctokitInstance = ReturnType<typeof import('@actions/github').getOctokit>;
+
+/**
+ * Explicit dependency bag for GitHub module functions.
+ *
+ * Every function in `src/platform/github/` receives this as its first
+ * parameter instead of reaching for singletons or `@actions/*` globals.
+ * Constructed once in `createGitHubPlatformProvider` and threaded through.
+ */
+export interface GitHubModuleDeps {
+  /** Pre-authenticated Octokit REST client. */
+  readonly octokit: OctokitInstance;
+  /** Platform context (repo, issue, event payload, …). */
+  readonly context: PlatformContext;
+  /** Logger for debug/info/warning output. */
+  readonly logger: Logger;
+}
+
+/**
+ * Extract the Octokit type from the deps so consumers don't need to
+ * import `@actions/github` just for the type.
+ */
+export type { OctokitInstance };
+
+
 export interface IssueOrPullRequestContext {
   title: string;
   body?: string;

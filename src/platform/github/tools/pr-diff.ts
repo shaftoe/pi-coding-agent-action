@@ -6,15 +6,7 @@
  * the platform provider.
  */
 
-import { getCoreAdapter } from '../index';
-import { getOctokit } from '../octokit';
-
-/**
- * Debug logging helper.
- */
-function debug(msg: string): void {
-  getCoreAdapter().debug(msg);
-}
+import type { GitHubModuleDeps } from '../types';
 
 /**
  * Check whether a diff file path matches any of the ignore patterns.
@@ -48,11 +40,16 @@ export function matchesIgnorePattern(filePath: string, ignoreFiles: string[]): b
  * This function splits on those boundaries and keeps only the hunks
  * whose file paths do not match any ignore pattern.
  *
+ * @param deps - Module dependencies (for logging).
  * @param diff - The raw unified diff string.
  * @param ignoreFiles - Patterns of files to exclude.
  * @returns The filtered diff string.
  */
-export function filterDiffByIgnoreFiles(diff: string, ignoreFiles: string[]): string {
+export function filterDiffByIgnoreFiles(
+  deps: GitHubModuleDeps,
+  diff: string,
+  ignoreFiles: string[]
+): string {
   if (!ignoreFiles || ignoreFiles.length === 0) {
     return diff;
   }
@@ -79,7 +76,7 @@ export function filterDiffByIgnoreFiles(diff: string, ignoreFiles: string[]): st
 
   const filtered = header + kept.join('');
   if (filtered !== diff) {
-    debug(`[filterDiffByIgnoreFiles] Filtered diff: ${diff.length} -> ${filtered.length} bytes`);
+    deps.logger.debug(`[filterDiffByIgnoreFiles] Filtered diff: ${diff.length} -> ${filtered.length} bytes`);
   }
   return filtered;
 }
@@ -94,6 +91,7 @@ export function filterDiffByIgnoreFiles(diff: string, ignoreFiles: string[]): st
  * Note: line-count and byte truncation is handled by the calling tool,
  * not here.
  *
+ * @param deps - Module dependencies.
  * @param owner - Repository owner.
  * @param repo - Repository name.
  * @param pullNumber - Pull request number.
@@ -101,12 +99,12 @@ export function filterDiffByIgnoreFiles(diff: string, ignoreFiles: string[]): st
  * @returns The diff string, or empty string if the PR has no diff.
  */
 export async function fetchPRDiff(
+  deps: GitHubModuleDeps,
   owner: string,
   repo: string,
   pullNumber: number,
   ignoreFiles?: string[]): Promise<string> {
-  const octokit = getOctokit();
-  const response = await octokit.rest.pulls.get({
+  const response = await deps.octokit.rest.pulls.get({
     owner,
     repo,
     pull_number: pullNumber,
@@ -120,7 +118,7 @@ export async function fetchPRDiff(
 
   // Filter out ignored files
   if (ignoreFiles && ignoreFiles.length > 0) {
-    diff = filterDiffByIgnoreFiles(diff, ignoreFiles);
+    diff = filterDiffByIgnoreFiles(deps, diff, ignoreFiles);
   }
 
   return diff;
