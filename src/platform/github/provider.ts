@@ -81,6 +81,11 @@ export interface GitHubPlatformDeps {
   context: PlatformContext;
   /** Logger for debug/info/warning output. */
   logger: Logger;
+  /**
+   * Trigger command string (e.g. '/pi') for stripping invocation prefixes.
+   * When omitted, defaults to '/pi'.
+   */
+  trigger?: string;
 }
 
 /**
@@ -145,11 +150,15 @@ export function createGitHubPlatformProvider(deps?: GitHubPlatformDeps): Platfor
     }
   }
 
+  // Resolve the trigger
+  const trigger = deps?.trigger;
+
   // Build the deps bag that will be threaded through all sub-functions
   const moduleDeps: GitHubModuleDeps = {
     octokit,
     context: resolvedContext,
     logger,
+    ...(trigger !== undefined ? { trigger } : {}),
   };
 
   return {

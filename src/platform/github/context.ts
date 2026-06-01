@@ -16,14 +16,13 @@ import type { GitHubModuleDeps, IssueOrPullRequestContext } from './types';
 /**
  * Get the trigger command for stripping from comments.
  *
- * Lazily retrieves the trigger input from the logger (which is the CoreAdapter
- * in production).
+ * Reads the trigger directly from the deps bag. When omitted,
+ * falls back to {@link DEFAULT_TRIGGER}.
  *
  * @returns The trigger string (default '/pi' if not specified).
  */
 function getTrigger(deps: GitHubModuleDeps): string {
-  const adapter = deps.logger as { getInput?: (name: string) => string };
-  return adapter.getInput?.('trigger') ?? DEFAULT_TRIGGER;
+  return deps.trigger ?? DEFAULT_TRIGGER;
 }
 
 /**
@@ -221,9 +220,6 @@ async function getComment(deps: GitHubModuleDeps): Promise<TriggeringComment | u
     }
 
     const body = review.body.replace(getTrigger(deps), '').trim();
-    if (review.id === undefined) {
-      return;
-    }
     return { id: review.id, body };
   }
 

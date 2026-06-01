@@ -48,10 +48,12 @@ export async function run() {
   };
 
   // Create the platform provider with explicit deps (no singletons)
+  const triggerValue = coreAdapter.getInput('trigger');
   const platformProvider = createGitHubPlatformProvider({
     octokit,
     context: platformContext,
     logger: coreAdapter,
+    ...(triggerValue ? { trigger: triggerValue } : {}),
   });
 
   // Create the git adapter with explicit deps

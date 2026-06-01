@@ -50,13 +50,13 @@ function createTestDeps(
       ...contextOverrides,
     },
     logger: {
-      getInput: () => '/pi',
       debug: noop,
       info: noop,
       warning: noop,
       notice: noop,
       error: noop,
-    } as any,
+    },
+    trigger: '/pi',
   };
 }
 
