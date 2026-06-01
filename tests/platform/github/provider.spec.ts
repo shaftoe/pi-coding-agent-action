@@ -64,6 +64,30 @@ import {
   detectPlatform,
   createGitHubPlatformProvider,
 } from '../../../src/platform/github/provider';
+import type { GitHubPlatformDeps } from '../../../src/platform/github/provider';
+
+function makeMockDeps(overrides?: Partial<GitHubPlatformDeps>): GitHubPlatformDeps {
+  return {
+    octokit: {} as GitHubPlatformDeps['octokit'],
+    context: {
+      repo: { owner: 'test-owner', repo: 'test-repo' },
+      issue: { number: 123 },
+      eventName: 'issue_comment',
+      payload: {} as Record<string, unknown>,
+      serverUrl: 'https://github.com',
+      runId: 123456789,
+      workspace: process.cwd(),
+    },
+    logger: {
+      debug: () => {},
+      info: () => {},
+      warning: () => {},
+      notice: () => {},
+      error: () => {},
+    },
+    ...overrides,
+  };
+}
 
 describe('detectPlatform', () => {
   const originalServerUrl = process.env.GITHUB_SERVER_URL;
@@ -140,7 +164,7 @@ describe('detectPlatform', () => {
 describe('createGitHubPlatformProvider', () => {
   test('returns a PlatformProvider', () => {
     process.env.GITHUB_SERVER_URL = 'https://github.com';
-    const provider = createGitHubPlatformProvider({ octokit: {} as any, context: mockContext as any, logger: { debug: () => {}, info: () => {}, warning: () => {}, notice: () => {}, error: () => {} } });
+    const provider = createGitHubPlatformProvider(makeMockDeps());
     expect(provider).toBeDefined();
     expect(typeof provider.addReaction).toBe('function');
     expect(typeof provider.deleteReaction).toBe('function');
@@ -154,20 +178,20 @@ describe('createGitHubPlatformProvider', () => {
 
   test('has a type property matching the detected platform', () => {
     process.env.GITHUB_SERVER_URL = 'https://github.com';
-    const provider = createGitHubPlatformProvider({ octokit: {} as any, context: mockContext as any, logger: { debug: () => {}, info: () => {}, warning: () => {}, notice: () => {}, error: () => {} } });
+    const provider = createGitHubPlatformProvider(makeMockDeps());
     expect(['github', 'codeberg', 'forgejo']).toContain(provider.type);
   });
 
   test('has a type of github in default CI environment', () => {
     process.env.GITHUB_SERVER_URL = 'https://github.com';
-    const provider = createGitHubPlatformProvider({ octokit: {} as any, context: mockContext as any, logger: { debug: () => {}, info: () => {}, warning: () => {}, notice: () => {}, error: () => {} } });
+    const provider = createGitHubPlatformProvider(makeMockDeps());
     expect(provider.type).toBe('github');
   });
 
   test('has type codeberg when GITHUB_SERVER_URL is codeberg', () => {
     const original = process.env.GITHUB_SERVER_URL;
     process.env.GITHUB_SERVER_URL = 'https://codeberg.org';
-    const provider = createGitHubPlatformProvider({ octokit: {} as any, context: mockContext as any, logger: { debug: () => {}, info: () => {}, warning: () => {}, notice: () => {}, error: () => {} } });
+    const provider = createGitHubPlatformProvider(makeMockDeps());
     expect(provider.type).toBe('codeberg');
     process.env.GITHUB_SERVER_URL = original;
   });
@@ -175,14 +199,14 @@ describe('createGitHubPlatformProvider', () => {
   test('has type forgejo when GITHUB_SERVER_URL contains forgejo', () => {
     const original = process.env.GITHUB_SERVER_URL;
     process.env.GITHUB_SERVER_URL = 'https://forgejo.mycompany.com';
-    const provider = createGitHubPlatformProvider({ octokit: {} as any, context: mockContext as any, logger: { debug: () => {}, info: () => {}, warning: () => {}, notice: () => {}, error: () => {} } });
+    const provider = createGitHubPlatformProvider(makeMockDeps());
     expect(provider.type).toBe('forgejo');
     process.env.GITHUB_SERVER_URL = original;
   });
 
   test('type property is immutable from TypeScript perspective (readonly)', () => {
     process.env.GITHUB_SERVER_URL = 'https://github.com';
-    const provider = createGitHubPlatformProvider({ octokit: {} as any, context: mockContext as any, logger: { debug: () => {}, info: () => {}, warning: () => {}, notice: () => {}, error: () => {} } });
+    const provider = createGitHubPlatformProvider(makeMockDeps());
     // The type property is typed as readonly in TypeScript but can be
     // reassigned at runtime in JavaScript. Verify it starts correct.
     expect(provider.type).toBe('github');
@@ -190,7 +214,7 @@ describe('createGitHubPlatformProvider', () => {
 
   test('type is captured at creation time and not affected by later env changes', () => {
     process.env.GITHUB_SERVER_URL = 'https://github.com';
-    const provider = createGitHubPlatformProvider({ octokit: {} as any, context: mockContext as any, logger: { debug: () => {}, info: () => {}, warning: () => {}, notice: () => {}, error: () => {} } });
+    const provider = createGitHubPlatformProvider(makeMockDeps());
     expect(provider.type).toBe('github');
     // Change env after creation
     process.env.GITHUB_SERVER_URL = 'https://codeberg.org';
@@ -202,7 +226,7 @@ describe('createGitHubPlatformProvider', () => {
 describe('PlatformProvider interface compliance', () => {
   test('provider implements all required methods', () => {
     process.env.GITHUB_SERVER_URL = 'https://github.com';
-    const provider = createGitHubPlatformProvider({ octokit: {} as any, context: mockContext as any, logger: { debug: () => {}, info: () => {}, warning: () => {}, notice: () => {}, error: () => {} } });
+    const provider = createGitHubPlatformProvider(makeMockDeps());
 
     const requiredMethods: (keyof PlatformProvider)[] = [
       'addReaction',

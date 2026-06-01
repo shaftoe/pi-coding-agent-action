@@ -31,4 +31,8 @@ export {
   type JobLog,
 } from './types';
 
-export { detectPlatform, createGitHubPlatformProvider } from './github/index';
+export {
+  detectPlatform,
+  createGitHubPlatformProvider,
+  type GitHubPlatformDeps,
+} from './github/index';

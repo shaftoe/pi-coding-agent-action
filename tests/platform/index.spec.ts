@@ -57,7 +57,33 @@ process.env.GITHUB_EVENT_PATH = path.join(
 fs.writeFileSync(process.env.GITHUB_EVENT_PATH, JSON.stringify({}));
 
 // Import after mocks are set up
-import { detectPlatform, createGitHubPlatformProvider } from '../../src/platform';
+import {
+  detectPlatform,
+  createGitHubPlatformProvider,
+  type GitHubPlatformDeps,
+} from '../../src/platform';
+
+function makeMockDeps(): GitHubPlatformDeps {
+  return {
+    octokit: {} as GitHubPlatformDeps['octokit'],
+    context: {
+      repo: { owner: 'test-owner', repo: 'test-repo' },
+      issue: { number: 123 },
+      eventName: 'issue_comment',
+      payload: {} as Record<string, unknown>,
+      serverUrl: 'https://github.com',
+      runId: 123456789,
+      workspace: process.cwd(),
+    },
+    logger: {
+      debug: () => {},
+      info: () => {},
+      warning: () => {},
+      notice: () => {},
+      error: () => {},
+    },
+  };
+}
 
 describe('platform barrel exports', () => {
   test('exports detectPlatform function', () => {
@@ -69,25 +95,7 @@ describe('platform barrel exports', () => {
   });
 
   test('createGitHubPlatformProvider returns a valid provider', () => {
-    const provider = createGitHubPlatformProvider({
-      octokit: {} as any,
-      context: {
-        repo: { owner: 'test-owner', repo: 'test-repo' },
-        issue: { number: 123 },
-        eventName: 'issue_comment',
-        payload: {},
-        serverUrl: 'https://github.com',
-        runId: 123456789,
-        workspace: '/tmp',
-      },
-      logger: {
-        debug: () => {},
-        info: () => {},
-        warning: () => {},
-        notice: () => {},
-        error: () => {},
-      },
-    });
+    const provider = createGitHubPlatformProvider(makeMockDeps());
     expect(provider).toBeDefined();
     expect(['github', 'codeberg', 'forgejo']).toContain(provider.type);
     expect(typeof provider.getContext).toBe('function');

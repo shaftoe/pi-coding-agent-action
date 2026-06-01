@@ -12,7 +12,6 @@
  * - Anything else → throws an error (unsupported platform)
  */
 
-import * as github from '@actions/github';
 import { addReaction, deleteReaction } from './reactions';
 import { createFinalComment } from './comments';
 import { getPrompt, getStartTimeFromContext } from './context';
@@ -95,60 +94,16 @@ export interface GitHubPlatformDeps {
  * instances since all three use the same CI/CD environment variables and
  * GitHub-compatible REST APIs.
  *
- * @param deps - Optional explicit dependencies (Octokit + context).
- *               When provided, the provider is fully decoupled from
- *               `@actions/github` globals. When omitted, falls back to
- *               the `@actions/github` singleton for backward compatibility.
+ * @param deps - Explicit dependencies (Octokit + context + logger).
  * @returns A PlatformProvider instance.
  */
-export function createGitHubPlatformProvider(deps?: GitHubPlatformDeps): PlatformProvider {
+export function createGitHubPlatformProvider(deps: GitHubPlatformDeps): PlatformProvider {
   const type = detectPlatform();
 
-  // Build the resolved context
-  const githubContext = github.context as { actor?: string; sha?: string };
-  const resolvedContext: PlatformContext = deps?.context ?? {
-    repo: github.context.repo,
-    issue: github.context.issue,
-    eventName: github.context.eventName,
-    payload: github.context.payload,
-    serverUrl: github.context.serverUrl || 'https://github.com',
-    runId: github.context.runId,
-    workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
-    ...(githubContext.actor !== undefined ? { actor: githubContext.actor } : {}),
-    ...(githubContext.sha !== undefined ? { sha: githubContext.sha } : {}),
-  };
-
-  // Resolve the logger
-  let logger: Logger;
-  if (deps?.logger) {
-    logger = deps.logger;
-  } else {
-    // No deps provided — use a silent logger as fallback.
-    // In production, deps.logger is always provided.
-    logger = {
-      debug: (/* msg */) => {},  // eslint-disable-line @typescript-eslint/no-empty-function
-      info: (/* msg */) => {},   // eslint-disable-line @typescript-eslint/no-empty-function
-      warning: (/* msg */) => {},// eslint-disable-line @typescript-eslint/no-empty-function
-      notice: (/* msg */) => {}, // eslint-disable-line @typescript-eslint/no-empty-function
-      error: (/* msg */) => {},  // eslint-disable-line @typescript-eslint/no-empty-function
-    };
-  }
-
-  // Resolve octokit
-  let octokit: GitHubPlatformDeps['octokit'];
-  if (deps?.octokit) {
-    octokit = deps.octokit;
-  } else {
-    // No deps provided — create from @actions/github singleton (backward compat)
-    if (typeof github.getOctokit === 'function') {
-      octokit = github.getOctokit(github.context as any);
-    } else {
-      throw new Error(
-        'No Octokit provided and @actions/github.getOctokit is not available. ' +
-        'Provide deps.octokit when calling createGitHubPlatformProvider().'
-      );
-    }
-  }
+  // Use the provided deps directly — no fallbacks
+  const resolvedContext = deps.context;
+  const logger = deps.logger;
+  const octokit = deps.octokit;
 
   // Resolve the trigger
   const trigger = deps?.trigger;
