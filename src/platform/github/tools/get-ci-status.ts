@@ -64,8 +64,7 @@ async function resolveHeadSha(
   }
 
   // Fall back to context SHA
-  const sha = (deps.context.payload as { after?: string }).after;
-  return sha || undefined;
+  return deps.context.sha || undefined;
 }
 
 /**

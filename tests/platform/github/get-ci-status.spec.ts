@@ -99,14 +99,15 @@ const mockOctokit = {
 
 import type { GitHubModuleDeps } from '../../../src/platform/github/types';
 
-function createTestDeps(payloadOverrides?: Record<string, unknown>): GitHubModuleDeps {
+function createTestDeps(payloadOverrides?: Record<string, unknown>, withSha = true): GitHubModuleDeps {
   return {
     octokit: mockOctokit as any,
     context: {
       repo: mockContext.repo,
       issue: mockContext.issue,
       eventName: 'pull_request',
-      payload: { after: 'context-sha-12345678', ...payloadOverrides },
+      ...(withSha ? { sha: 'context-sha-12345678' } : {}),
+      payload: { ...payloadOverrides },
       serverUrl: mockContext.serverUrl,
       runId: mockContext.runId,
       workspace: '/tmp',
@@ -194,7 +195,7 @@ describe('getCIStatus - platform implementation', () => {
     test('returns error message when context SHA is empty', async () => {
       const fn = await getModule();
 
-      const result = await fn(createTestDeps({ after: '' }), {});
+      const result = await fn(createTestDeps({}, false), {});
 
       expect(result.content[0].text).toContain('Could not resolve ref');
       expect(result.details.ref).toBe('');

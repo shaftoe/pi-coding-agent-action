@@ -79,6 +79,10 @@ export interface PlatformContext {
   runId: number;
   /** The workspace directory path */
   workspace: string;
+  /** The user/actor who triggered the workflow (e.g. for Co-authored-by trailers). */
+  actor?: string;
+  /** The commit SHA of the triggering event. */
+  sha?: string;
 }
 
 /**

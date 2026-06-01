@@ -100,6 +100,7 @@ export function createGitHubPlatformProvider(deps?: GitHubPlatformDeps): Platfor
   const type = detectPlatform();
 
   // Build the resolved context
+  const githubContext = github.context as { actor?: string; sha?: string };
   const resolvedContext: PlatformContext = deps?.context ?? {
     repo: github.context.repo,
     issue: github.context.issue,
@@ -108,6 +109,8 @@ export function createGitHubPlatformProvider(deps?: GitHubPlatformDeps): Platfor
     serverUrl: github.context.serverUrl || 'https://github.com',
     runId: github.context.runId,
     workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
+    ...(githubContext.actor !== undefined ? { actor: githubContext.actor } : {}),
+    ...(githubContext.sha !== undefined ? { sha: githubContext.sha } : {}),
   };
 
   // Resolve the logger

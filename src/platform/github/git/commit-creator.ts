@@ -21,7 +21,7 @@ import type { Logger } from '../../../git/types';
  * @returns The commit message with a Co-authored-by trailer appended.
  */
 export function appendCoAuthoredBy(deps: GitHubModuleDeps, message: string): string {
-  const actor = (deps.context.payload as { actor?: string }).actor;
+  const actor = deps.context.actor;
   if (!actor) {
     return message;
   }

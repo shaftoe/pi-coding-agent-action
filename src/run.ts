@@ -34,6 +34,7 @@ export async function run() {
   const octokit = github.getOctokit(coreAdapter.getInput('github_token'));
 
   // Build PlatformContext from the @actions/github singleton
+  const githubCtx = github.context as { actor?: string; sha?: string };
   const platformContext = {
     repo: github.context.repo,
     issue: github.context.issue,
@@ -42,6 +43,8 @@ export async function run() {
     serverUrl: github.context.serverUrl || 'https://github.com',
     runId: github.context.runId,
     workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
+    ...(githubCtx.actor !== undefined ? { actor: githubCtx.actor } : {}),
+    ...(githubCtx.sha !== undefined ? { sha: githubCtx.sha } : {}),
   };
 
   // Create the platform provider with explicit deps (no singletons)
