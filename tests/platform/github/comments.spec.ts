@@ -499,4 +499,36 @@ describe('createFinalComment', () => {
     expect(deps.octokit.rest.issues.createComment).not.toHaveBeenCalled();
     expect(deps.octokit.rest.pulls.createReplyForReviewComment).not.toHaveBeenCalled();
   });
+
+  test('returns undefined when review comment has pull_request_review_id but no comment id', async () => {
+    const deps = createTestDeps({
+      comment: {
+        body: 'inline comment',
+        pull_request_review_id: 456,
+        // id is intentionally missing
+      },
+    });
+
+    const body = 'Response to review';
+    const result = await createFinalComment(deps, body, {});
+
+    expect(result).toBeUndefined();
+    expect(deps.octokit.rest.issues.createComment).not.toHaveBeenCalled();
+    expect(deps.octokit.rest.pulls.createReplyForReviewComment).not.toHaveBeenCalled();
+  });
+
+  test('returns undefined when review comment has pull_request_review_id but comment id is undefined', async () => {
+    const deps = createTestDeps({
+      comment: {
+        // id is intentionally missing
+        body: 'inline comment',
+        pull_request_review_id: 456,
+      },
+    });
+
+    const body = 'Response to review';
+    const result = await createFinalComment(deps, body, {});
+
+    expect(result).toBeUndefined();
+  });
 });

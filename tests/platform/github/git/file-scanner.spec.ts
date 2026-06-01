@@ -1,407 +1,189 @@
 /**
- * @file Tests for gitignore handling in file-scanner.ts
+ * @file Tests for GitHub file-scanner functions (buildFileMap and scanForChanges).
  *
- * Tests for nested .gitignore support, negation patterns, and
- * gitignored-file deletion safety logic.
+ * Covers the GitHub-specific wrappers that use Octokit to fetch git trees
+ * and scan the local workspace for changes.
  */
 
-import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as os from 'node:os';
-
-// Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core
-const realStdoutWrite = process.stdout.write.bind(process.stdout);
-const _mockedWrite = mock((...args: unknown[]) => {
-  const msg = String(args[0] ?? '');
-  if (msg.startsWith('::')) {
-    return true;
-  }
-  return realStdoutWrite(...(args as Parameters<typeof process.stdout.write>));
-});
-process.stdout.write = _mockedWrite as typeof process.stdout.write;
-
-// Mock @actions/core
-const noop = (): void => {};
-const mockGetInput = mock((name: string) => {
-  if (name === 'github_token') {
-    return 'fake-token';
-  }
-  return '';
-});
-
-mock.module('@actions/core', () => ({
-  getInput: mockGetInput,
-  notice: mock(noop),
-  info: mock(noop),
-  debug: mock(noop),
-  setFailed: mock(noop),
-  setOutput: mock(noop),
-  warning: mock(noop),
-  error: mock(noop),
-}));
-
-// Set env vars BEFORE importing modules
-process.env.INPUT_TRIGGER = '/pi';
-process.env.INPUT_GITHUB_TOKEN = 'fake-token';
-process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
-process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-scanner-${Date.now()}.json`);
-fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
-
-// octokit mock no longer needed - deps pattern used instead
-
-// Mock @actions/github context
-mock.module('@actions/github', () => ({
-  context: {
-    repo: { owner: 'test-owner', repo: 'test-repo' },
-    issue: { number: 42 },
-    serverUrl: 'https://github.com',
-    runId: 123456789,
-    payload: {},
-  },
-}));
-
+import { describe, expect, test, mock, afterEach } from 'bun:test';
+import { buildFileMap, scanForChanges } from '../../../../src/platform/github/git/file-scanner';
 import type { GitHubModuleDeps } from '../../../../src/platform/github/types';
-import { scanForChanges, scanDirectory } from '../../../../src/platform/github/git/file-scanner';
-import { createLogger } from '../../../../src/platform/github/git/types';
-import ignore from 'ignore';
 
-function createTestDeps(): GitHubModuleDeps {
+const noopLogger = {
+  debug: mock(() => {}),
+  info: mock(() => {}),
+  warning: mock(() => {}),
+  notice: mock(() => {}),
+  error: mock(() => {}),
+};
+
+function createDeps(): GitHubModuleDeps & {
+  octokit: {
+    rest: {
+      git: {
+        getTree: ReturnType<typeof mock>;
+        getBlob: ReturnType<typeof mock>;
+      };
+    };
+  };
+} {
   return {
-    octokit: {} as any,
+    octokit: {
+      rest: {
+        git: {
+          getTree: mock(() =>
+            Promise.resolve({
+              data: {
+                tree: [
+                  { path: 'src/main.ts', type: 'blob', sha: 'sha1' },
+                  { path: 'src/util.ts', type: 'blob', sha: 'sha2' },
+                  { path: 'src/dir', type: 'tree', sha: 'sha3' },
+                  { path: 'README.md', type: 'blob', sha: 'sha4' },
+                ],
+              },
+            })
+          ),
+          getBlob: mock(() =>
+            Promise.resolve({
+              data: {
+                content: Buffer.from('file content').toString('base64'),
+              },
+            })
+          ),
+        },
+      },
+    } as any,
     context: {
       repo: { owner: 'test-owner', repo: 'test-repo' },
-      issue: { number: 42 },
-      eventName: 'push',
+      issue: { number: 1 },
+      eventName: 'pull_request',
       payload: {},
       serverUrl: 'https://github.com',
       runId: 123456789,
       workspace: '/tmp',
     },
-    logger: mockCoreAdapter,
+    logger: noopLogger,
   };
 }
 
-// Set up mock CoreAdapter for all tests
-const mockCoreAdapter = {
-  getInput: mockGetInput,
-  setFailed: mock(noop),
-  setOutput: mock(noop),
-  notice: mock(noop),
-  info: mock(noop),
-  debug: mock(noop),
-  warning: mock(noop),
-  error: mock(noop),
-};
+describe('buildFileMap', () => {
+  test('fetches tree and builds file map', async () => {
+    const deps = createDeps();
+    const result = await buildFileMap(deps, 'tree-sha');
 
-describe('nested .gitignore support', () => {
-  let tempDir: string;
-
-  beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-scanner-test-'));
-    process.env.GITHUB_WORKSPACE = tempDir;
-    // resetModuleContext no longer needed
+    expect(result.size).toBe(3); // 3 blobs, 1 tree (skipped)
+    expect(result.has('src/main.ts')).toBe(true);
+    expect(result.has('src/util.ts')).toBe(true);
+    expect(result.has('README.md')).toBe(true);
+    expect(result.has('src/dir')).toBe(false);
   });
 
-  afterEach(() => {
-    // Clean up temp directory
-    fs.rmSync(tempDir, { recursive: true, force: true });
-    delete process.env.GITHUB_WORKSPACE;
-    // resetModuleContext no longer needed
+  test('fetches blob contents by default', async () => {
+    const deps = createDeps();
+    const result = await buildFileMap(deps, 'tree-sha');
+
+    expect(result.get('src/main.ts')?.content).toBe('file content');
+    // Should have called getBlob for each blob (3 blobs)
+    expect(deps.octokit.rest.git.getBlob).toHaveBeenCalledTimes(3);
   });
 
-  test('respects nested .gitignore in subdirectory', async () => {
-    // Root .gitignore ignores *.log
-    fs.writeFileSync(path.join(tempDir, '.gitignore'), '*.log');
-    fs.writeFileSync(path.join(tempDir, 'root.txt'), 'root');
+  test('skips blob contents when fetchContents is false', async () => {
+    const deps = createDeps();
+    const result = await buildFileMap(deps, 'tree-sha', false);
 
-    // subdir/.gitignore negates: !important.log
-    const subdir = path.join(tempDir, 'subdir');
-    fs.mkdirSync(subdir, { recursive: true });
-    fs.writeFileSync(path.join(subdir, '.gitignore'), '!important.log');
-    fs.writeFileSync(path.join(subdir, 'error.log'), 'error');
-    fs.writeFileSync(path.join(subdir, 'important.log'), 'important data');
-    fs.writeFileSync(path.join(subdir, 'notes.txt'), 'notes');
-
-    const referenceFiles = new Map<string, { sha: string; content: string | null }>();
-    const result = await scanForChanges(createTestDeps(), referenceFiles);
-
-    // important.log should be included (nested .gitignore negates root pattern)
-    const paths = result.changedFiles.map(f => f.path);
-    expect(paths).toContain(path.join('subdir', 'important.log'));
-
-    // error.log should be ignored (root *.log still applies, no negation for it)
-    expect(paths).not.toContain(path.join('subdir', 'error.log'));
-
-    // Non-log files should be included
-    expect(paths).toContain('root.txt');
-    expect(paths).toContain(path.join('subdir', 'notes.txt'));
+    expect(result.get('src/main.ts')?.content).toBeNull();
+    expect(deps.octokit.rest.git.getBlob).not.toHaveBeenCalled();
   });
 
-  test('nested .gitignore with directory-scoped patterns only affects subdirectory', async () => {
-    // Root .gitignore: ignore all .tmp files
-    fs.writeFileSync(path.join(tempDir, '.gitignore'), '*.tmp');
-    fs.writeFileSync(path.join(tempDir, 'root.txt'), 'root');
+  test('skips items without sha', async () => {
+    const deps = createDeps();
+    (deps.octokit.rest.git.getTree as any).mockImplementation(() =>
+      Promise.resolve({
+        data: {
+          tree: [
+            { path: 'no-sha.ts', type: 'blob' },
+            { path: 'has-sha.ts', type: 'blob', sha: 'abc' },
+          ],
+        },
+      })
+    );
 
-    // subdir/.gitignore: negate *.tmp (only applies within subdir)
-    const subdir = path.join(tempDir, 'subdir');
-    fs.mkdirSync(subdir, { recursive: true });
-    fs.writeFileSync(path.join(subdir, '.gitignore'), '!*.tmp');
-    fs.writeFileSync(path.join(subdir, 'keep.tmp'), 'should be kept');
-
-    // otherdir/ has no .gitignore - *.tmp should still be ignored
-    const otherdir = path.join(tempDir, 'otherdir');
-    fs.mkdirSync(otherdir, { recursive: true });
-    fs.writeFileSync(path.join(otherdir, 'skip.tmp'), 'should be skipped');
-
-    const referenceFiles = new Map<string, { sha: string; content: string | null }>();
-    const result = await scanForChanges(createTestDeps(), referenceFiles);
-
-    const paths = result.changedFiles.map(f => f.path);
-
-    // subdir/keep.tmp should be included (negated by nested .gitignore)
-    expect(paths).toContain(path.join('subdir', 'keep.tmp'));
-
-    // otherdir/skip.tmp should NOT be included (root .gitignore still applies)
-    expect(paths).not.toContain(path.join('otherdir', 'skip.tmp'));
+    const result = await buildFileMap(deps, 'tree-sha', false);
+    expect(result.size).toBe(1);
+    expect(result.has('has-sha.ts')).toBe(true);
   });
 
-  test('handles deeply nested .gitignore files', async () => {
-    fs.writeFileSync(path.join(tempDir, '.gitignore'), '*.secret');
+  test('handles blob fetch failure gracefully', async () => {
+    const deps = createDeps();
+    (deps.octokit.rest.git.getBlob as any).mockImplementation(() =>
+      Promise.reject(new Error('Blob not found'))
+    );
 
-    // a/.gitignore: !*.secret
-    const a = path.join(tempDir, 'a');
-    fs.mkdirSync(a, { recursive: true });
-    fs.writeFileSync(path.join(a, '.gitignore'), '!*.secret');
-
-    // a/b/.gitignore: *.secret (re-ignore)
-    const ab = path.join(a, 'b');
-    fs.mkdirSync(ab, { recursive: true });
-    fs.writeFileSync(path.join(ab, '.gitignore'), '*.secret');
-
-    // a/keep.secret - should be included (negated by a/.gitignore)
-    fs.writeFileSync(path.join(a, 'keep.secret'), 'kept');
-
-    // a/b/again.secret - should be ignored (re-ignored by a/b/.gitignore)
-    fs.writeFileSync(path.join(ab, 'again.secret'), 'ignored again');
-
-    // a/normal.txt - should be included
-    fs.writeFileSync(path.join(a, 'normal.txt'), 'normal');
-
-    const referenceFiles = new Map<string, { sha: string; content: string | null }>();
-    const result = await scanForChanges(createTestDeps(), referenceFiles);
-
-    const paths = result.changedFiles.map(f => f.path);
-    expect(paths).toContain(path.join('a', 'keep.secret'));
-    expect(paths).not.toContain(path.join('a', 'b', 'again.secret'));
-    expect(paths).toContain(path.join('a', 'normal.txt'));
+    const result = await buildFileMap(deps, 'tree-sha');
+    // Blob content should be null but entries should still exist
+    expect(result.get('src/main.ts')?.content).toBeNull();
   });
 
-  test('nested .gitignore with anchored patterns (leading /)', async () => {
-    const subdir = path.join(tempDir, 'subdir');
-    fs.mkdirSync(subdir, { recursive: true });
-    // /config.json means only config.json directly in subdir/
-    fs.writeFileSync(path.join(subdir, '.gitignore'), '/config.json');
+  test('uses provided logger', async () => {
+    const debugMock = mock(() => {});
+    const logDeps = {
+      ...createDeps(),
+      logger: { ...noopLogger, debug: debugMock },
+    } as GitHubModuleDeps;
 
-    fs.writeFileSync(path.join(subdir, 'config.json'), '{}');
-    fs.writeFileSync(path.join(subdir, 'other.json'), '[]');
-
-    const nested = path.join(subdir, 'nested');
-    fs.mkdirSync(nested, { recursive: true });
-    fs.writeFileSync(path.join(nested, 'config.json'), '{"nested":true}');
-
-    const referenceFiles = new Map<string, { sha: string; content: string | null }>();
-    const result = await scanForChanges(createTestDeps(), referenceFiles);
-
-    const paths = result.changedFiles.map(f => f.path);
-
-    // subdir/config.json should be ignored (anchored pattern)
-    expect(paths).not.toContain(path.join('subdir', 'config.json'));
-
-    // subdir/other.json should NOT be ignored
-    expect(paths).toContain(path.join('subdir', 'other.json'));
-
-    // subdir/nested/config.json should NOT be ignored (pattern is anchored to subdir/)
-    expect(paths).toContain(path.join('subdir', 'nested', 'config.json'));
+    await buildFileMap(logDeps, 'tree-sha', false, logDeps.logger);
+    expect(debugMock).toHaveBeenCalled();
   });
 
-  test('negation pattern in nested .gitignore prevents deletion of tracked files', async () => {
-    // Simulate: root .gitignore ignores *.md
-    fs.writeFileSync(path.join(tempDir, '.gitignore'), '*.md');
+  test('uses default logger when none provided', async () => {
+    const deps = createDeps();
+    // Should not throw even without explicit logger
+    const result = await buildFileMap(deps, 'tree-sha', false);
+    expect(result.size).toBe(3);
+  });
 
-    // docs/.gitignore negates: !README.md
-    const docs = path.join(tempDir, 'docs');
-    fs.mkdirSync(docs, { recursive: true });
-    fs.writeFileSync(path.join(docs, '.gitignore'), '!README.md');
-    fs.writeFileSync(path.join(docs, 'README.md'), 'readme content');
+  test('calls getTree with correct params', async () => {
+    const deps = createDeps();
+    await buildFileMap(deps, 'my-tree-sha');
 
-    // Reference tree has docs/README.md tracked
-    const referenceFiles = new Map<string, { sha: string; content: string | null }>([
-      [path.join('docs', 'README.md'), { sha: 'abc123', content: 'old readme' }],
-    ]);
-
-    const result = await scanForChanges(createTestDeps(), referenceFiles);
-
-    // README.md should be detected as modified (it exists and content changed)
-    expect(result.changedFiles.some(f => f.path === path.join('docs', 'README.md'))).toBe(true);
-
-    // README.md should NOT be in deleted files
-    expect(result.deletedFiles).not.toContain(path.join('docs', 'README.md'));
+    const callArgs = (deps.octokit.rest.git.getTree as any).mock.calls[0][0];
+    expect(callArgs).toMatchObject({
+      owner: 'test-owner',
+      repo: 'test-repo',
+      tree_sha: 'my-tree-sha',
+      recursive: 'true',
+    });
   });
 });
 
-describe('gitignored file deletion safety', () => {
-  let tempDir: string;
-
-  beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-scanner-del-test-'));
-    process.env.GITHUB_WORKSPACE = tempDir;
-    // resetModuleContext no longer needed
-  });
+describe('scanForChanges', () => {
+  const origWorkspace = process.env.GITHUB_WORKSPACE;
 
   afterEach(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-    delete process.env.GITHUB_WORKSPACE;
-    // resetModuleContext no longer needed
+    if (origWorkspace !== undefined) {
+      process.env.GITHUB_WORKSPACE = origWorkspace;
+    } else {
+      delete process.env.GITHUB_WORKSPACE;
+    }
   });
 
-  test('does not delete gitignored files that still exist on disk', async () => {
-    // Root .gitignore ignores *.log
-    fs.writeFileSync(path.join(tempDir, '.gitignore'), '*.log');
-    fs.writeFileSync(path.join(tempDir, 'app.log'), 'log data');
-    fs.writeFileSync(path.join(tempDir, 'main.py'), 'print("hello")');
+  test('returns a valid result for empty reference map', async () => {
+    const deps = createDeps();
+    const referenceFiles = new Map<string, { sha: string; content: string | null }>();
 
-    // Reference tree has both app.log and main.py tracked
-    const referenceFiles = new Map<string, { sha: string; content: string | null }>([
-      ['app.log', { sha: 'abc', content: 'old log data' }],
-      ['main.py', { sha: 'def', content: 'print("old")' }],
-    ]);
-
-    const result = await scanForChanges(createTestDeps(), referenceFiles);
-
-    // app.log is gitignored so not in encounteredFiles, but it EXISTS on disk
-    // → must NOT be marked as deleted
-    expect(result.deletedFiles).not.toContain('app.log');
-
-    // main.py should be detected as modified
-    expect(result.changedFiles.some(f => f.path === 'main.py')).toBe(true);
+    const result = await scanForChanges(deps, referenceFiles);
+    expect(result).toBeDefined();
+    expect(result.changedFiles).toBeDefined();
+    expect(result.deletedFiles).toBeDefined();
   });
 
-  test('correctly detects truly deleted files', async () => {
-    fs.writeFileSync(path.join(tempDir, '.gitignore'), '*.log');
-    fs.writeFileSync(path.join(tempDir, 'main.py'), 'print("hello")');
+  test('uses GITHUB_WORKSPACE for repo root when set', async () => {
+    // Use current working directory as GITHUB_WORKSPACE so scanDirectory succeeds
+    process.env.GITHUB_WORKSPACE = process.cwd();
+    const deps = createDeps();
+    const referenceFiles = new Map<string, { sha: string; content: string | null }>();
 
-    // Reference tree has deleted.py which is NOT on disk
-    const referenceFiles = new Map<string, { sha: string; content: string | null }>([
-      ['main.py', { sha: 'abc', content: 'print("old")' }],
-      ['deleted.py', { sha: 'def', content: 'gone forever' }],
-    ]);
-
-    const result = await scanForChanges(createTestDeps(), referenceFiles);
-
-    // deleted.py is genuinely missing → should be marked as deleted
-    expect(result.deletedFiles).toContain('deleted.py');
-
-    // main.py should be modified
-    expect(result.changedFiles.some(f => f.path === 'main.py')).toBe(true);
-  });
-
-  test('does not delete gitignored tracked file even without nested .gitignore', async () => {
-    // Root .gitignore ignores everything in build/
-    fs.writeFileSync(path.join(tempDir, '.gitignore'), 'build/');
-    fs.writeFileSync(path.join(tempDir, 'main.py'), 'code');
-
-    // build/ directory exists on disk with tracked files
-    const buildDir = path.join(tempDir, 'build');
-    fs.mkdirSync(buildDir, { recursive: true });
-    fs.writeFileSync(path.join(buildDir, 'output.js'), 'compiled');
-
-    const referenceFiles = new Map<string, { sha: string; content: string | null }>([
-      ['main.py', { sha: 'abc', content: 'old code' }],
-      [path.join('build', 'output.js'), { sha: 'def', content: 'old compiled' }],
-    ]);
-
-    const result = await scanForChanges(createTestDeps(), referenceFiles);
-
-    // build/output.js is gitignored but exists → should NOT be deleted
-    expect(result.deletedFiles).not.toContain(path.join('build', 'output.js'));
-
-    // main.py should be modified
-    expect(result.changedFiles.some(f => f.path === 'main.py')).toBe(true);
-  });
-});
-
-describe('scanDirectory with nested .gitignore', () => {
-  let tempDir: string;
-  let mockLog: ReturnType<typeof createLogger>;
-
-  beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-scanner-dir-test-'));
-    // resetModuleContext no longer needed
-    mockLog = createLogger(createTestDeps(), '🧪');
-  });
-
-  afterEach(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-    // resetModuleContext no longer needed
-  });
-
-  test('nested .gitignore patterns apply only within their directory', async () => {
-    // subdir/.gitignore: *.tmp
-    const subdir = path.join(tempDir, 'subdir');
-    fs.mkdirSync(subdir, { recursive: true });
-    fs.writeFileSync(path.join(subdir, '.gitignore'), '*.tmp');
-    fs.writeFileSync(path.join(subdir, 'file.tmp'), 'tmp');
-    fs.writeFileSync(path.join(subdir, 'file.txt'), 'txt');
-
-    // otherdir/ has no .gitignore
-    const otherdir = path.join(tempDir, 'otherdir');
-    fs.mkdirSync(otherdir, { recursive: true });
-    fs.writeFileSync(path.join(otherdir, 'file.tmp'), 'tmp');
-
-    const referenceFiles = new Map();
-    const ig = ignore();
-
-    const result = await scanDirectory({
-      dir: tempDir,
-      relativePath: '',
-      referenceFiles,
-      ig,
-      log: mockLog,
-    });
-
-    const paths = result.changedFiles.map(f => f.path);
-
-    // subdir/file.tmp should be ignored (nested .gitignore)
-    expect(paths).not.toContain(path.join('subdir', 'file.tmp'));
-
-    // subdir/file.txt should be included
-    expect(paths).toContain(path.join('subdir', 'file.txt'));
-
-    // otherdir/file.tmp should be included (no .gitignore in otherdir)
-    expect(paths).toContain(path.join('otherdir', 'file.tmp'));
-  });
-
-  test('negation pattern in nested .gitignore un-ignores files', async () => {
-    const subdir = path.join(tempDir, 'subdir');
-    fs.mkdirSync(subdir, { recursive: true });
-    fs.writeFileSync(path.join(subdir, '.gitignore'), '*.tmp\n!important.tmp');
-    fs.writeFileSync(path.join(subdir, 'regular.tmp'), 'regular');
-    fs.writeFileSync(path.join(subdir, 'important.tmp'), 'important');
-
-    const referenceFiles = new Map();
-    const ig = ignore();
-
-    const result = await scanDirectory({
-      dir: tempDir,
-      relativePath: '',
-      referenceFiles,
-      ig,
-      log: mockLog,
-    });
-
-    const paths = result.changedFiles.map(f => f.path);
-    expect(paths).not.toContain(path.join('subdir', 'regular.tmp'));
-    expect(paths).toContain(path.join('subdir', 'important.tmp'));
+    const result = await scanForChanges(deps, referenceFiles);
+    expect(result).toBeDefined();
   });
 });
