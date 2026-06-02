@@ -61,7 +61,7 @@ function createTestDeps(): GitHubModuleDeps {
       payload: {},
       serverUrl: 'https://github.com',
       runId: 123456789,
-      workspace: '/tmp',
+      workspace: process.cwd(),
     },
     logger: {
       debug: debugLogger,
@@ -99,8 +99,18 @@ describe('scanForChanges', () => {
     mockDebugLog.length = 0;
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-utils-test-'));
     mockLog = createLogger(createTestDeps(), '🧪');
-    process.env.GITHUB_WORKSPACE = tempDir;
   });
+
+  /** Helper that returns deps with workspace pointing at the temp directory. */
+  function tempDeps(): GitHubModuleDeps {
+    return {
+      ...createTestDeps(),
+      context: {
+        ...createTestDeps().context,
+        workspace: tempDir,
+      },
+    };
+  }
 
   test('detects new files', async () => {
     // Create a new file in temp directory
@@ -109,7 +119,7 @@ describe('scanForChanges', () => {
 
     const referenceFiles = new Map();
 
-    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
+    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
 
     expect(result.changedFiles).toHaveLength(1);
     expect(result.changedFiles[0]).toBeDefined();
@@ -125,7 +135,7 @@ describe('scanForChanges', () => {
     const testFile = path.join(tempDir, 'test.txt');
     fs.writeFileSync(testFile, 'new content');
 
-    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
+    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
 
     expect(result.changedFiles).toHaveLength(1);
     expect(result.changedFiles[0]).toBeDefined();
@@ -140,7 +150,7 @@ describe('scanForChanges', () => {
     const testFile = path.join(tempDir, 'unchanged.txt');
     fs.writeFileSync(testFile, 'same content');
 
-    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
+    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
 
     expect(result.changedFiles).toHaveLength(0);
     expect(result.deletedFiles).toHaveLength(0);
@@ -156,7 +166,7 @@ describe('scanForChanges', () => {
     const remainingFile = path.join(tempDir, 'remaining.txt');
     fs.writeFileSync(remainingFile, 'still here');
 
-    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
+    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
 
     expect(result.changedFiles).toHaveLength(0);
     expect(result.deletedFiles).toHaveLength(1);
@@ -172,7 +182,7 @@ describe('scanForChanges', () => {
 
     const referenceFiles = new Map();
 
-    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
+    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
 
     expect(result.changedFiles).toHaveLength(1);
     expect(result.changedFiles[0]).toBeDefined();
@@ -192,7 +202,7 @@ describe('scanForChanges', () => {
 
     const referenceFiles = new Map();
 
-    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
+    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
 
     // .gitignore and included.txt should be found (ignored files are skipped)
     expect(result.changedFiles).toHaveLength(2);
@@ -204,7 +214,7 @@ describe('scanForChanges', () => {
     const referenceFiles = new Map();
     fs.writeFileSync(path.join(tempDir, 'test.txt'), 'content');
 
-    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
+    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
 
     expect(result.changedFiles).toHaveLength(1);
   });
@@ -231,7 +241,7 @@ describe('scanForChanges', () => {
 
     const referenceFiles = new Map();
 
-    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
+    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
 
     // All files should be detected as new
     expect(result.changedFiles).toHaveLength(7);
@@ -308,7 +318,7 @@ describe('scanForChanges', () => {
       [path.join('docs', 'api.md'), { sha: 'mno', content: '# API Reference' }],
     ]);
 
-    const result = await scanForChanges(createTestDeps(), referenceFiles, mockLog);
+    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
 
     // 3 modified, 1 new, 2 deleted
     expect(result.changedFiles).toHaveLength(4);

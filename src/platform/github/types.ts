@@ -29,6 +29,11 @@ export interface GitHubModuleDeps {
    * from comment bodies. When omitted, defaults to {@link DEFAULT_TRIGGER}.
    */
   readonly trigger?: string;
+  /**
+   * Branch name template for generating branch names.
+   * When provided, overrides the default template.
+   */
+  readonly branchNameTemplate?: string;
 }
 
 /**

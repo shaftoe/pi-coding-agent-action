@@ -40,7 +40,12 @@ import type { GetWorkflowRunLogsParams, GetWorkflowRunLogsDetails } from './tool
  *
  * @returns The detected platform type.
  */
-export function detectPlatform(): PlatformType {
+export function detectPlatform(explicitType?: PlatformType): PlatformType {
+  // When an explicit type is provided, skip env-var detection.
+  if (explicitType) {
+    return explicitType;
+  }
+
   const serverUrl = process.env.GITHUB_SERVER_URL;
   if (!serverUrl) {
     throw new Error('GITHUB_SERVER_URL environment variable is not set. Cannot detect platform.');
@@ -85,6 +90,15 @@ export interface GitHubPlatformDeps {
    * When omitted, defaults to '/pi'.
    */
   trigger?: string;
+  /**
+   * Override platform detection. When omitted, detected from GITHUB_SERVER_URL.
+   */
+  platformType?: PlatformType;
+  /**
+   * Branch name template for generating branch names in pull-request creation.
+   * When omitted, uses the default template.
+   */
+  branchNameTemplate?: string;
 }
 
 /**
@@ -98,7 +112,7 @@ export interface GitHubPlatformDeps {
  * @returns A PlatformProvider instance.
  */
 export function createGitHubPlatformProvider(deps: GitHubPlatformDeps): PlatformProvider {
-  const type = detectPlatform();
+  const type = detectPlatform(deps.platformType);
 
   // Use the provided deps directly — no fallbacks
   const resolvedContext = deps.context;
@@ -114,6 +128,7 @@ export function createGitHubPlatformProvider(deps: GitHubPlatformDeps): Platform
     context: resolvedContext,
     logger,
     ...(trigger !== undefined ? { trigger } : {}),
+    ...(deps.branchNameTemplate !== undefined ? { branchNameTemplate: deps.branchNameTemplate } : {}),
   };
 
   return {

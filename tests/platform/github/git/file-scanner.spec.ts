@@ -5,7 +5,7 @@
  * and scan the local workspace for changes.
  */
 
-import { describe, expect, test, mock, afterEach } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 import { buildFileMap, scanForChanges } from '../../../../src/platform/github/git/file-scanner';
 import type { GitHubModuleDeps } from '../../../../src/platform/github/types';
 
@@ -157,18 +157,14 @@ describe('buildFileMap', () => {
 });
 
 describe('scanForChanges', () => {
-  const origWorkspace = process.env.GITHUB_WORKSPACE;
-
-  afterEach(() => {
-    if (origWorkspace !== undefined) {
-      process.env.GITHUB_WORKSPACE = origWorkspace;
-    } else {
-      delete process.env.GITHUB_WORKSPACE;
-    }
-  });
-
   test('returns a valid result for empty reference map', async () => {
-    const deps = createDeps();
+    const deps = {
+      ...createDeps(),
+      context: {
+        ...createDeps().context,
+        workspace: process.cwd(),
+      },
+    };
     const referenceFiles = new Map<string, { sha: string; content: string | null }>();
 
     const result = await scanForChanges(deps, referenceFiles);
@@ -177,10 +173,14 @@ describe('scanForChanges', () => {
     expect(result.deletedFiles).toBeDefined();
   });
 
-  test('uses GITHUB_WORKSPACE for repo root when set', async () => {
-    // Use current working directory as GITHUB_WORKSPACE so scanDirectory succeeds
-    process.env.GITHUB_WORKSPACE = process.cwd();
-    const deps = createDeps();
+  test('uses deps.context.workspace for repo root', async () => {
+    const deps = {
+      ...createDeps(),
+      context: {
+        ...createDeps().context,
+        workspace: process.cwd(),
+      },
+    };
     const referenceFiles = new Map<string, { sha: string; content: string | null }>();
 
     const result = await scanForChanges(deps, referenceFiles);

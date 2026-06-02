@@ -36,9 +36,13 @@ interface ExtensionResolutionResult {
  * Resolve extension sources to their filesystem paths.
  *
  * @param extensions - Optional array of extension sources (npm packages, git repos, or local paths).
+ * @param cwd        - Working directory. Defaults to `process.cwd()`.
  * @returns A promise resolving to the extension paths and loading info.
  */
-export async function resolveExtensions(extensions?: string[]): Promise<ExtensionResolutionResult> {
+export async function resolveExtensions(
+  extensions?: string[],
+  cwd?: string
+): Promise<ExtensionResolutionResult> {
   const paths: string[] = [];
   const info: ExtensionLoadingInfo = {
     requested: extensions ?? [],
@@ -51,8 +55,9 @@ export async function resolveExtensions(extensions?: string[]): Promise<Extensio
   }
 
   const settingsManager = SettingsManager.inMemory();
+  const resolvedCwd = cwd ?? process.cwd();
   const pkgManager = new DefaultPackageManager({
-    cwd: process.cwd(),
+    cwd: resolvedCwd,
     agentDir: getAgentDir(),
     settingsManager,
   });
@@ -93,16 +98,20 @@ export async function getResourceLoader(
   const extensions = config?.extensions;
   const loadBuiltinExtensions = config?.loadBuiltinExtensions ?? true;
 
-  const { paths: additionalExtensionPaths, info: extensionInfo } =
-    await resolveExtensions(extensions);
+  const { paths: additionalExtensionPaths, info: extensionInfo } = await resolveExtensions(
+    extensions,
+    config?.cwd
+  );
 
   const extensionFactories = [createLoggingFactory(logger, extensionInfo)];
   if (loadBuiltinExtensions) {
     extensionFactories.unshift(createToolsFactory(provider, config));
   }
 
+  const cwd = config?.cwd ?? process.cwd();
+
   const loader = new DefaultResourceLoader({
-    cwd: process.cwd(),
+    cwd,
     agentDir: getAgentDir(),
     extensionFactories,
     additionalExtensionPaths,

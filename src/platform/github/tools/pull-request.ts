@@ -349,7 +349,7 @@ export async function createPullRequest(
   validateCreatePullRequestParams(params);
 
   // Auto-generate branch name from template and validate
-  const template = process.env.INPUT_BRANCH_NAME_TEMPLATE ?? '';
+  const template = deps.branchNameTemplate ?? '';
   const head = generateBranchName(deps, title, template);
   validateBranchName(head);
 

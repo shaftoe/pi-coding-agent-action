@@ -135,6 +135,21 @@ export type PiAgentFactory = (
 ) => PiAgent;
 
 /**
+ * Callbacks for streaming output during agent execution.
+ *
+ * Abstracts how real-time thinking deltas and prompt-completion signals
+ * are delivered, so library code never calls `process.stdout.write`
+ * directly. The GitHub Action frontend routes events to stdout;
+ * alternative frontends (web UI, GitHub App) can route to SSE/WebSocket.
+ */
+export interface AgentEvents {
+  /** Called for each thinking delta during agent execution. */
+  onThinkingDelta?(delta: string): void;
+  /** Called once after the prompt completes (e.g. to flush newlines). */
+  onPromptComplete?(): void;
+}
+
+/**
  * Subset of configuration used by the PR-diff tool.
  */
 export interface DiffConfig {
@@ -157,6 +172,8 @@ export interface ResourceLoaderConfig extends DiffConfig {
   loadBuiltinExtensions?: boolean;
   /** Override the default system prompt. */
   systemPrompt?: string;
+  /** Working directory. Defaults to `process.cwd()`. */
+  cwd?: string;
 }
 
 /**
@@ -182,6 +199,14 @@ export interface PiConfig extends DiffConfig {
   autoCompaction?: boolean;
   /** Override the default system prompt. */
   systemPrompt?: string;
+  /**
+   * Override the directory where the Pi SDK looks for package assets
+   * (e.g. export templates). When set, `PI_PACKAGE_DIR` is pointed here
+   * before export operations.
+   */
+  packageDir?: string;
+  /** Working directory. Defaults to `process.cwd()`. */
+  cwd?: string;
 }
 
 /**

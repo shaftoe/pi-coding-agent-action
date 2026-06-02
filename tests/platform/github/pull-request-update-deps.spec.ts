@@ -83,7 +83,7 @@ function createUpdateDeps(): GitHubModuleDeps & {
       payload: {},
       serverUrl: 'https://github.com',
       runId: 123456789,
-      workspace: '/tmp',
+      workspace: process.cwd(),
     },
     logger: {
       debug: mock(() => {}),

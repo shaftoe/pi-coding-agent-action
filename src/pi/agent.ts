@@ -7,14 +7,20 @@
  */
 
 import { AuthStorage, createAgentSession, ModelRegistry } from '@earendil-works/pi-coding-agent';
-import * as path from 'node:path';
 import { getResourceLoader } from './resource-loader';
 import { getVersion } from './logging';
 
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
-import type { PromptResult, SessionStats, Logger, PiConfig, ResourceLoaderConfig } from '../types';
+import type {
+  PromptResult,
+  SessionStats,
+  Logger,
+  PiConfig,
+  ResourceLoaderConfig,
+  AgentEvents,
+} from '../types';
 import type { PlatformProvider } from '../platform';
 
 /**
@@ -33,6 +39,7 @@ export class Agent {
   private logger: Logger;
   private platformProvider: PlatformProvider;
   private config: PiConfig;
+  private events: AgentEvents;
 
   /**
    * Create a new Pi agent.
@@ -40,12 +47,19 @@ export class Agent {
    * @param core              - The CoreAdapter for logging and debug output.
    * @param platformProvider  - The platform provider for custom tool operations.
    * @param config            - The action configuration.
+   * @param events            - Optional streaming event callbacks.
    * @throws {Error} If the requested model cannot be found in the registry.
    */
-  constructor(logger: Logger, platformProvider: PlatformProvider, config: PiConfig) {
+  constructor(
+    logger: Logger,
+    platformProvider: PlatformProvider,
+    config: PiConfig,
+    events?: AgentEvents
+  ) {
     this.logger = logger;
     this.platformProvider = platformProvider;
     this.config = config;
+    this.events = events ?? {};
     this.thinkingLevel = (config.thinkingLevel ?? 'off') as ThinkingLevel;
     this.modelRegistry = ModelRegistry.create(this.authStorage);
 
@@ -151,8 +165,8 @@ export class Agent {
           this.outputChunks.push(event.assistantMessageEvent.delta);
           break;
         case 'thinking_delta':
-          // We write the thinking into action logs directly
-          process.stdout.write(event.assistantMessageEvent.delta);
+          // Route thinking delta through the events interface
+          this.events.onThinkingDelta?.(event.assistantMessageEvent.delta);
           break;
         default:
           break;
@@ -175,7 +189,7 @@ export class Agent {
     }
 
     await this.session.prompt(text);
-    process.stdout.write('\n'); // ensure new line after prompt, usually missing from agent
+    this.events.onPromptComplete?.();
 
     const result = this.outputChunks.join('');
     const sessionStats = this.getSessionStats();
@@ -204,9 +218,18 @@ export class Agent {
     // package.json instead of the SDK's. The build script copies the SDK's
     // export-html assets into dist/pi-sdk/, and we point the SDK there via
     // PI_PACKAGE_DIR (its supported escape hatch for bundled deployments).
+    //
+    // When config.packageDir is set, it is used as PI_PACKAGE_DIR;
+    // otherwise no env-var manipulation is performed (the SDK resolves
+    // its own package directory).
+    const pkgDir = this.config.packageDir;
+    if (!pkgDir) {
+      return await this.session.exportToHtml(outputPath);
+    }
+
     const previousPiPackageDir = process.env.PI_PACKAGE_DIR;
     try {
-      process.env.PI_PACKAGE_DIR = path.join(__dirname, 'pi-sdk');
+      process.env.PI_PACKAGE_DIR = pkgDir;
       return await this.session.exportToHtml(outputPath);
     } finally {
       if (previousPiPackageDir !== undefined) {

@@ -118,7 +118,7 @@ export async function scanForChanges(
   log: Logger = createLogger(deps)
 ): Promise<ChangeScanResult> {
   return sharedScanForChanges(referenceFiles, log, {
-    repoRoot: process.env.GITHUB_WORKSPACE,
+    repoRoot: deps.context.workspace,
     ignorePatterns: GITHUB_IGNORE_PATTERNS,
   });
 }

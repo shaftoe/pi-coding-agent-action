@@ -154,7 +154,7 @@ function createTestDeps(): GitHubModuleDeps {
       payload: mockContext.payload,
       serverUrl: mockContext.serverUrl,
       runId: mockContext.runId,
-      workspace: '/tmp',
+      workspace: process.cwd(),
     },
     logger: testCoreAdapter,
   };
