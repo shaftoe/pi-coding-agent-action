@@ -206,8 +206,17 @@ export interface PiConfig extends DiffConfig {
    * Override the directory where the Pi SDK looks for package assets
    * (e.g. export templates). When set, `PI_PACKAGE_DIR` is pointed here
    * before export operations.
+   *
+   * Only used when the SDK is bundled; when the SDK is installed via npm
+   * (external mode) the SDK resolves its own package directory.
    */
   packageDir?: string;
+  /**
+   * Specific Pi SDK version to install and use (e.g. "0.78.0").
+   * When set, the action installs this version at runtime via npm.
+   * When empty/undefined, uses the version bundled with the action.
+   */
+  piVersion?: string;
   /** Working directory. Defaults to `process.cwd()`. */
   cwd?: string;
 }

@@ -7,7 +7,6 @@
  * their own implementation.
  */
 
-import * as path from 'node:path';
 import * as core from '@actions/core';
 import type { PiConfig } from '../types';
 
@@ -97,6 +96,9 @@ export function gatherActionsConfig(): PiConfig {
   const autoCompactionInput = core.getInput('auto_compaction');
   const autoCompaction = autoCompactionInput ? autoCompactionInput.toLowerCase() === 'true' : false; // default to false
 
+  const piVersionInput = core.getInput('pi_version');
+  const piVersion = piVersionInput?.trim() || undefined;
+
   const diffMaxLinesInput = core.getInput('diff_max_lines');
   const parsedLines = diffMaxLinesInput ? parseInt(diffMaxLinesInput, 10) : NaN;
   const diffMaxLines = parsedLines > 0 ? parsedLines : undefined;
@@ -126,10 +128,11 @@ export function gatherActionsConfig(): PiConfig {
     ...(diffMaxLines ? { diffMaxLines } : {}),
     ...(diffMaxBytes ? { diffMaxBytes } : {}),
     ...(diffIgnorePatterns?.length ? { diffIgnorePatterns } : {}),
+    ...(piVersion ? { piVersion } : {}),
     /**
-     * Set packageDir so the Agent can point PI_PACKAGE_DIR at the bundled
-     * SDK assets when running from the GitHub Action's dist/index.js.
+     * packageDir is intentionally omitted: the SDK is now installed via npm
+     * (external mode), so its own getPackageDir() resolves correctly.
+     * The field is kept on PiConfig for backward compatibility.
      */
-    packageDir: path.join(__dirname, 'pi-sdk'),
   };
 }

@@ -30,6 +30,11 @@ export async function run() {
   const config = gatherActionsConfig();
   const outputSink = new ActionsOutputSink();
 
+  // Log the requested Pi SDK version (if specified) for visibility.
+  if (config.piVersion) {
+    core.info(`[config] Pi SDK version requested: ${config.piVersion}`);
+  }
+
   // Create Octokit from the github_token input
   const octokit = github.getOctokit(coreAdapter.getInput('github_token'));
 

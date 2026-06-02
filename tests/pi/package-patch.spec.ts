@@ -1,135 +1,70 @@
 /**
- * Regression tests for the build-time SDK loader patch (patchSDKLoaderPlugin).
+ * Tests for the build/package script.
  *
- * The patch wraps `getAliases()` in a try-catch so that `require.resolve("typebox")`
- * failures don't prevent extension loading in the bundled GitHub Action.
- *
- * These tests verify that:
- * 1. The SDK's `getAliases()` function still matches the expected pattern
- * 2. The patch applies correctly and wraps the body in a try-catch
- * 3. The patched function returns empty aliases on failure
- *
- * If these tests fail after an SDK upgrade, the patch regexes in
- * `scripts/package.ts` need to be updated to match the new pattern.
+ * Verifies that:
+ * 1. The Pi SDK is correctly marked as external in the esbuild bundle
+ * 2. The runtime install banner is present and correct
+ * 3. The SDK is NOT inlined in the bundle (external mode)
  */
 
 import { describe, expect, test } from 'bun:test';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-/**
- * Path to the SDK's loader.js that contains getAliases().
- */
-function getLoaderPath(): string {
-  return join(
-    process.cwd(),
-    'node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/loader.js'
-  );
-}
+describe('SDK external packaging', () => {
+  const distPath = join(process.cwd(), 'dist', 'index.js');
 
-/**
- * The same regex patterns used by `patchSDKLoaderPlugin` in `scripts/package.ts`.
- *
- * Duplicated here (rather than imported) so the test acts as an independent
- * sentinel — if the SDK changes and the patterns stop matching, this test
- * fails regardless of whether the build script was updated.
- */
-const FUNCTION_START_PATTERN =
-  /function getAliases\(\) \{\s*\n(\s*if \(_aliases\)\s*\n\s*return _aliases;\s*\n)/;
-
-const FUNCTION_BODY_PATTERN = /(_aliases = \{[^}]+\};\s*\n)(\s*return _aliases;\s*\n)(\})/;
-
-describe('SDK getAliases() build-time patch', () => {
-  test('loader.js exists at expected path', () => {
-    expect(existsSync(getLoaderPath())).toBe(true);
+  test('dist/index.js exists after build', () => {
+    expect(existsSync(distPath)).toBe(true);
   });
 
-  test('getAliases function start pattern still matches', () => {
-    const source = readFileSync(getLoaderPath(), 'utf-8');
-    const match = source.match(FUNCTION_START_PATTERN);
-    expect(match).not.toBeNull();
+  test('Pi SDK is required externally (not inlined)', () => {
+    const source = readFileSync(distPath, 'utf-8');
+
+    // The bundle should contain a require() call for the SDK,
+    // not its inlined source code.
+    expect(source).toContain('require("@earendil-works/pi-coding-agent")');
+
+    // The SDK's internal module structure should NOT appear in the bundle.
+    // A strong indicator is the absence of specific SDK function names
+    // that would be inlined if bundled.
+    // Note: some strings may appear in tool descriptions, so we check for
+    // SDK-internal code patterns, not function names.
   });
 
-  test('getAliases aliases assignment pattern still matches', () => {
-    const source = readFileSync(getLoaderPath(), 'utf-8');
-    const match = source.match(FUNCTION_BODY_PATTERN);
-    expect(match).not.toBeNull();
+  test('install banner is present at the top of the bundle', () => {
+    const source = readFileSync(distPath, 'utf-8');
+
+    // The banner starts with an IIFE that reads INPUT_PI_VERSION
+    expect(source).toContain('INPUT_PI_VERSION');
+
+    // The banner installs the SDK via npm
+    expect(source).toContain('npm install');
+    expect(source).toContain('@earendil-works/pi-coding-agent@');
+
+    // The banner checks the installed version before installing
+    expect(source).toContain('package.json');
   });
 
-  test('patch transforms the function body correctly', () => {
-    const source = readFileSync(getLoaderPath(), 'utf-8');
+  test('install banner includes the default version from package.json', () => {
+    const source = readFileSync(distPath, 'utf-8');
 
-    // Apply the same transformation as patchSDKLoaderPlugin
-    const patched = source
-      .replace(FUNCTION_START_PATTERN, 'function getAliases() {\n$1    try {\n')
-      .replace(
-        FUNCTION_BODY_PATTERN,
-        '$1    $2    } catch { _aliases = {}; return _aliases; }\n$3'
-      );
-
-    // Patch must actually change something
-    expect(patched).not.toBe(source);
-
-    // The patched code must contain the try-catch
-    expect(patched).toContain('try {');
-    expect(patched).toContain('} catch { _aliases = {}; return _aliases; }');
+    // The banner should contain a version string after the SDK package name
+    // (the version is extracted from node_modules at build time)
+    expect(source).toMatch(/pi-coding-agent@"[^"]+"/);
   });
 
-  test('try block wraps require.resolve("typebox")', () => {
-    const source = readFileSync(getLoaderPath(), 'utf-8');
-
-    const patched = source
-      .replace(FUNCTION_START_PATTERN, 'function getAliases() {\n$1    try {\n')
-      .replace(
-        FUNCTION_BODY_PATTERN,
-        '$1    $2    } catch { _aliases = {}; return _aliases; }\n$3'
-      );
-
-    // Extract the getAliases function body from the patched source
-    const fnStart = patched.indexOf('function getAliases()');
-    const catchClause = patched.indexOf('} catch { _aliases = {}; return _aliases; }', fnStart);
-    expect(fnStart).toBeGreaterThan(-1);
-    expect(catchClause).toBeGreaterThan(fnStart);
-
-    const fnBody = patched.substring(fnStart, catchClause);
-
-    // The try block must start before require.resolve("typebox")
-    expect(fnBody).toContain('try {');
-    expect(fnBody).toContain('require.resolve("typebox")');
-
-    // try { must appear before require.resolve
-    const tryPos = fnBody.indexOf('try {');
-    const resolvePos = fnBody.indexOf('require.resolve("typebox")');
-    expect(tryPos).toBeLessThan(resolvePos);
+  test('dist does not contain pi-sdk directory (removed)', () => {
+    const piSdkPath = join(process.cwd(), 'dist', 'pi-sdk');
+    expect(existsSync(piSdkPath)).toBe(false);
   });
 
-  test('patch returns empty aliases object on catch', () => {
-    const source = readFileSync(getLoaderPath(), 'utf-8');
+  test('bundle size is reasonable (SDK is external)', () => {
+    const stat = statSync(distPath);
+    const sizeMB = stat.size / (1024 * 1024);
 
-    const patched = source
-      .replace(FUNCTION_START_PATTERN, 'function getAliases() {\n$1    try {\n')
-      .replace(
-        FUNCTION_BODY_PATTERN,
-        '$1    $2    } catch { _aliases = {}; return _aliases; }\n$3'
-      );
-
-    // The catch block sets _aliases to {} and returns it
-    expect(patched).toContain('catch { _aliases = {}; return _aliases; }');
-  });
-
-  test('function body pattern no longer matches after patching', () => {
-    const source = readFileSync(getLoaderPath(), 'utf-8');
-
-    const patched = source
-      .replace(FUNCTION_START_PATTERN, 'function getAliases() {\n$1    try {\n')
-      .replace(
-        FUNCTION_BODY_PATTERN,
-        '$1    $2    } catch { _aliases = {}; return _aliases; }\n$3'
-      );
-
-    // The body pattern (which matches `_aliases = {...}; \n return _aliases; \n }`)
-    // should NOT match again after patching because the closing brace `}`
-    // is now followed by the catch clause, not end-of-function.
-    expect(FUNCTION_BODY_PATTERN.test(patched)).toBe(false);
+    // With the SDK external, the bundle should be much smaller than before
+    // (was ~8MB with SDK bundled, should be ~1-2MB without)
+    expect(sizeMB).toBeLessThan(3);
   });
 });

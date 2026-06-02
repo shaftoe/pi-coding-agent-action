@@ -99,4 +99,17 @@ describe('version resolution logic', () => {
     // unknown when neither available
     expect(resolveActionVersion(undefined, undefined)).toBe('unknown');
   });
+
+  test('clearPiVersionCache resets the cached version', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getPiVersion, clearPiVersionCache } = require('../src/version');
+    const first = getPiVersion();
+    clearPiVersionCache();
+    // After clearing cache, the next call re-reads the version
+    const second = getPiVersion();
+    // Both should return the same value (since nothing changed),
+    // but the cache was cleared between calls
+    expect(first).toBe(second);
+    expect(typeof first).toBe('string');
+  });
 });

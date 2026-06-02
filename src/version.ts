@@ -86,9 +86,13 @@ export function getActionVersion(): string {
  * Read the Pi SDK package version at runtime.
  *
  * Resolution order:
- * 1. The esbuild-injected `__PI_CODING_AGENT_VERSION__` identifier (when bundled).
- * 2. The `version` field from the Pi SDK's `package.json`.
- * 3. Falls back to `'unknown'`.
+ * 1. The SDK package.json next to the installed SDK (in `node_modules/`).
+ *    This reflects the actual runtime version, which may differ from the
+ *    build-time version when `pi_version` is specified.
+ * 2. The esbuild-injected `__PI_CODING_AGENT_VERSION__` identifier (when
+ *    bundled, as a fallback when the SDK is not yet installed).
+ * 3. The `version` field from the Pi SDK's `package.json` in the project root.
+ * 4. Falls back to `'unknown'`.
  */
 export function getPiVersion(): string {
   if (_piVersion !== undefined) {
@@ -97,9 +101,28 @@ export function getPiVersion(): string {
 
   let version = 'unknown';
 
-  // Check for esbuild-injected define first — esbuild replaces the bare
-  // __PI_CODING_AGENT_VERSION__ identifier with a version-string literal
-  // at bundle time.
+  // Try to read from the runtime-installed SDK.  When the action runs from
+  // dist/index.js, __dirname is the dist/ directory and the SDK is installed
+  // in dist/node_modules/@earendil-works/pi-coding-agent/.
+  try {
+    // Use require.resolve to find the SDK regardless of where node_modules is.
+    // This works both when the SDK is installed via npm (in dist/node_modules)
+    // and during development (in project root node_modules).
+    const sdkEntry = require.resolve(
+      '@earendil-works/pi-coding-agent/package.json'
+    );
+    const pkg = JSON.parse(readFileSync(sdkEntry, 'utf-8'));
+    const v: string | undefined = pkg.version;
+    if (v !== undefined) {
+      version = v;
+      _piVersion = version;
+      return version;
+    }
+  } catch {
+    // SDK package.json not resolvable — fall through
+  }
+
+  // Check for esbuild-injected define (the version baked in at build time).
   if (typeof __PI_CODING_AGENT_VERSION__ !== 'undefined') {
     version = __PI_CODING_AGENT_VERSION__;
   } else {
@@ -125,4 +148,13 @@ export function getPiVersion(): string {
 
   _piVersion = version;
   return version;
+}
+
+/**
+ * Clear the cached Pi version so the next call to getPiVersion() re-reads it.
+ *
+ * Useful in tests where the SDK install state changes between test cases.
+ */
+export function clearPiVersionCache(): void {
+  _piVersion = undefined;
 }

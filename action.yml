@@ -90,6 +90,11 @@ inputs:
     required: false
     default: 'false'
 
+  pi_version:
+    description: 'Pi SDK version to install and use (e.g. "0.78.0"). Defaults to the version bundled with this action release. When set, the action installs the specified version at runtime via npm, which adds a few seconds of startup time.'
+    required: false
+    default: ''
+
 runs:
   using: 'node24'
   main: 'dist/index.js'

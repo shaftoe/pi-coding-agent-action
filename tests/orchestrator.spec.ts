@@ -1424,4 +1424,40 @@ describe('ActionOrchestrator', () => {
     });
 
   });
+
+  describe('pi_version configuration', () => {
+    test('defaults to undefined when not provided', async () => {
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.piVersion).toBeUndefined();
+    });
+
+    test('passes piVersion when provided', async () => {
+      const orchestrator = createOrchestrator({ piVersion: '0.77.0' });
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          piVersion: '0.77.0',
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+
+    test('handles latest version string', async () => {
+      const orchestrator = createOrchestrator({ piVersion: '0.99.0' });
+      await orchestrator.execute();
+
+      expect(mockPiFactory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          piVersion: '0.99.0',
+        }),
+        mockCore,
+        mockProvider
+      );
+    });
+  });
 });

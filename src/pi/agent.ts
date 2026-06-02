@@ -253,41 +253,38 @@ export class Agent {
    * Uses the Pi SDK's built-in HTML export (same renderer as `/share`).
    * Must be called after {@link run} so the session has content.
    *
-   * When the action runs from its bundled `dist/index.js`, the SDK's
-   * `getPackageDir()` walks up from `__dirname` and finds the action's
-   * `package.json` instead of the SDK's. Setting `PI_PACKAGE_DIR` tells
-   * the SDK where its own package root is so it can locate template files
-   * like `dist/core/export-html/template.html`.
+   * The SDK is installed via npm (external mode), so `getPackageDir()`
+   * correctly resolves the SDK's own package root and finds template
+   * files like `dist/core/export-html/template.html`.
    *
    * @param outputPath - Path to write the HTML file to.
    * @returns The path to the written file.
    */
   async exportSessionHtml(outputPath: string): Promise<string> {
-    // When the action runs from its bundled dist/index.js, the SDK's
-    // getPackageDir() walks up from __dirname and finds the action's
-    // package.json instead of the SDK's. The build script copies the SDK's
-    // export-html assets into dist/pi-sdk/, and we point the SDK there via
-    // PI_PACKAGE_DIR (its supported escape hatch for bundled deployments).
+    // When the SDK is installed via npm (external mode), its getPackageDir()
+    // walks up from its own __dirname and correctly finds its package.json.
+    // No PI_PACKAGE_DIR override is needed.
     //
-    // When config.packageDir is set, it is used as PI_PACKAGE_DIR;
-    // otherwise no env-var manipulation is performed (the SDK resolves
-    // its own package directory).
-    const pkgDir = this.config.packageDir;
-    if (!pkgDir) {
-      return await this.session.exportToHtml(outputPath);
-    }
-
-    const previousPiPackageDir = process.env.PI_PACKAGE_DIR;
-    try {
-      process.env.PI_PACKAGE_DIR = pkgDir;
-      return await this.session.exportToHtml(outputPath);
-    } finally {
-      if (previousPiPackageDir !== undefined) {
-        process.env.PI_PACKAGE_DIR = previousPiPackageDir;
-      } else {
-        delete process.env.PI_PACKAGE_DIR;
+    // Legacy: when the SDK was bundled, getPackageDir() would find the
+    // action's package.json instead. The config.packageDir + PI_PACKAGE_DIR
+    // override was needed to point it at dist/pi-sdk/. This is no longer
+    // required.
+    if (this.config.packageDir) {
+      // Still support packageDir for any custom deployment that needs it
+      const previousPiPackageDir = process.env.PI_PACKAGE_DIR;
+      try {
+        process.env.PI_PACKAGE_DIR = this.config.packageDir;
+        return await this.session.exportToHtml(outputPath);
+      } finally {
+        if (previousPiPackageDir !== undefined) {
+          process.env.PI_PACKAGE_DIR = previousPiPackageDir;
+        } else {
+          delete process.env.PI_PACKAGE_DIR;
+        }
       }
     }
+
+    return await this.session.exportToHtml(outputPath);
   }
 
   /**
