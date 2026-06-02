@@ -203,11 +203,10 @@ export async function createFinalComment(
     // Add token usage if available
     if (metadata?.sessionStats) {
       const { totalTokens, cost } = metadata.sessionStats;
-      let tokenInfo = `Tokens: ${formatNumber(totalTokens)}`;
+      metadataParts.push(`Tokens: ${formatNumber(totalTokens)}`);
       if (cost > 0) {
-        tokenInfo += ` ($${cost.toFixed(4)})`;
+        metadataParts.push(`Cost: $${cost.toFixed(4)}`);
       }
-      metadataParts.push(tokenInfo);
     }
 
     if (metadata?.sessionStats?.version) {

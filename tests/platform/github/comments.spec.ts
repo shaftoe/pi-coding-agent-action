@@ -316,7 +316,7 @@ describe('createFinalComment', () => {
     const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     const commentBody = (call[0] as { body: string }).body;
     expect(commentBody).toContain('Tokens: 1.5K');
-    expect(commentBody).toContain('($0.0123)');
+    expect(commentBody).toContain('Cost: $0.0123');
   });
 
   test('handles zero session stats', async () => {
@@ -337,7 +337,7 @@ describe('createFinalComment', () => {
     const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     const commentBody = (call[0] as { body: string }).body;
     expect(commentBody).toContain('Tokens: 0');
-    expect(commentBody).not.toContain('($0)');
+    expect(commentBody).not.toContain('Cost: $0');
   });
 
   test('includes action version when provided', async () => {
