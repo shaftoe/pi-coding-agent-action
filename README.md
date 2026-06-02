@@ -4,6 +4,8 @@
 
 A CI/CD action that integrates [Pi coding agent](https://pi.dev) with git hosting platform workflows. Works with **GitHub**, **Codeberg**, and self-hosted **Forgejo** instances — any platform that provides GitHub-compatible APIs and CI/CD environment variables.
 
+The action bundles the latest version of Pi. Dependencies (including Pi itself) are [updated daily](./.github/workflows/daily-deps-update.yml) to keep up with new releases.
+
 Inspired by OpenCode's [GitHub action](https://opencode.ai/docs/github/).
 
 ## Features
