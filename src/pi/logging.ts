@@ -7,6 +7,7 @@
 
 import type { Logger } from '../types';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { getPiVersion } from '../version';
 
 /**
  * Captured information about extension loading, passed from resource-loader
@@ -20,11 +21,6 @@ export interface ExtensionLoadingInfo {
   /** Warnings encountered during extension loading. */
   warnings: string[];
 }
-
-/**
- * Injected at build time because Pi SDK 'VERSION' doesn't play well with bundles
- */
-declare const __PI_CODING_AGENT_VERSION__: string;
 
 export const loggingFactory = (
   pi: ExtensionAPI,
@@ -75,7 +71,7 @@ export const loggingFactory = (
 
   pi.on('before_agent_start', async (event, ctx) => {
     logger.startGroup?.('🤖 Agent Session settings');
-    logger.info(`  Running @earendil-works/pi-coding-agent@${getVersion()}`);
+    logger.info(`  Running @earendil-works/pi-coding-agent@${getPiVersion()}`);
     logger.info('─────────────────────────────────────────────────────────────────────');
 
     const model = ctx.model;
@@ -157,10 +153,6 @@ export function truncateText(text: string, maxLength: number): string {
     return truncated.substring(0, lastSpace) + '...';
   }
   return truncated + '...';
-}
-
-export function getVersion(): string {
-  return typeof __PI_CODING_AGENT_VERSION__ === 'string' ? __PI_CODING_AGENT_VERSION__ : 'unknown';
 }
 
 /**

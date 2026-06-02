@@ -18,7 +18,6 @@
  */
 
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
-import { readFileSync } from 'node:fs';
 import type { Agent } from '../../src/pi/agent.js';
 import type { PlatformProvider } from '../../src/platform';
 
@@ -30,15 +29,7 @@ const E2E_TIMEOUT = 10_000;
 // ============================================================================
 
 // E2E tests run directly with bun test, bypassing the build step.
-// We must define build-time constants manually to match production behavior.
-const piVersion = JSON.parse(
-  readFileSync('node_modules/@earendil-works/pi-coding-agent/package.json', 'utf-8')
-).version;
-
-declare global {
-  var __PI_CODING_AGENT_VERSION__: string;
-}
-globalThis.__PI_CODING_AGENT_VERSION__ = piVersion;
+// The version module reads package.json at runtime, so no global setup needed.
 
 // ============================================================================
 // Mock GitHub Dependencies (we only test Pi SDK integration)

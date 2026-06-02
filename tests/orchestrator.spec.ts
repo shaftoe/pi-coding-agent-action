@@ -9,11 +9,6 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-// Provide a default version for tests (build-time constant)
-declare global {
-  var __VERSION__: string;
-}
-globalThis.__VERSION__ = 'test-version';
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
 import { Temporal } from '@js-temporal/polyfill';
 import { ActionOrchestrator } from '../src/orchestrator';

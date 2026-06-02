@@ -24,8 +24,7 @@ import {
   type SessionStats,
 } from './types';
 import type { CreateReactionType, PlatformProvider } from './platform';
-
-declare const __VERSION__: string;
+import { getActionVersion } from './version';
 
 /**
  * Orchestrates the Pi agent execution flow.
@@ -53,7 +52,7 @@ export class ActionOrchestrator {
    *         so they never prevent setFailed from running.
    */
   async execute(): Promise<void> {
-    this.logger.info(`running action v${__VERSION__}`);
+    this.logger.info(`running action v${getActionVersion()}`);
     const startTime = this.git.getStartTime() ?? Temporal.Now.instant();
     let reaction: CreateReactionType | undefined;
     let prompt: string | undefined;
@@ -180,7 +179,7 @@ export class ActionOrchestrator {
     this.outputSink.setOutput('duration_seconds', executionDuration.total('seconds'));
 
     const metadata: CommentMetadata = {
-      actionVersion: __VERSION__,
+      actionVersion: getActionVersion(),
       provider: config.provider,
       model: config.model,
       thinkingLevel: config.thinkingLevel,

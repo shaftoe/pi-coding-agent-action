@@ -8,7 +8,7 @@
 
 import { AuthStorage, createAgentSession, ModelRegistry } from '@earendil-works/pi-coding-agent';
 import { getResourceLoader } from './resource-loader';
-import { getVersion } from './logging';
+import { getPiVersion } from '../version';
 
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 import type { Api, Model } from '@earendil-works/pi-ai';
@@ -272,7 +272,7 @@ export class Agent {
         outputTokens: stats.tokens.output,
         totalTokens: stats.tokens.total,
         cost: stats.cost,
-        version: getVersion(),
+        version: getPiVersion(),
       };
     } catch (_error) {
       // Session stats are metadata - don't fail the action if unavailable

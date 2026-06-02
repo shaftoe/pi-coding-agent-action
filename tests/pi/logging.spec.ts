@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { truncateText, getVersion, ExtensionLoadingInfo } from '../../src/pi/logging';
+import { truncateText, ExtensionLoadingInfo } from '../../src/pi/logging';
+import { getPiVersion } from '../../src/version';
 import { createLoggingFactory } from '../../src/pi/logging';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { CoreAdapter } from '../../src/types';
@@ -68,12 +69,12 @@ describe('truncateText', () => {
   });
 });
 
-describe('getVersion', () => {
+describe('getPiVersion', () => {
   test('returns a valid version string', () => {
-    // The global constant is defined at build time via esbuild.
-    // When running tests without the esbuild define, it returns 'unknown'.
-    // On some CI platforms Bun resolves it to the pi-coding-agent package version.
-    const result = getVersion();
+    // The version is resolved at runtime from package.json.
+    // When running tests with bun, it reads the Pi SDK's package.json.
+    // Falls back to 'unknown' if not found.
+    const result = getPiVersion();
     expect(typeof result).toBe('string');
     expect(result.length).toBeGreaterThan(0);
   });
