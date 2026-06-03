@@ -50,6 +50,9 @@ Refer to [the official Pi documentation](https://github.com/badlogic/pi-mono/tre
 >    uses: shaftoe/pi-coding-agent-action@v2.19.0
 > ```
 
+> [!CAUTION]
+> **GitHub `GITHUB_TOKEN` cannot push changes to files under `.github/workflows/`.** This is a [GitHub security restriction](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication) — even when the workflow has `contents: write` (or `workflows: write`) permission, the automatic `GITHUB_TOKEN` is **never** allowed to create or modify workflow files. If you need Pi to create PRs that touch `.github/workflows/*.yml`, you must provide a [Personal Access Token (PAT)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) with the `workflow` scope instead of the default `GITHUB_TOKEN`.
+
 ## Bundled Dependencies
 
 The action is bundled into a single `dist/index.js` via [esbuild](https://esbuild.github.io/) so no `node_modules` are needed at runtime. Non-code Pi SDK assets (HTML templates, theme JSON) are copied to `dist/pi-sdk/` and resolved via the `PI_PACKAGE_DIR` environment variable.
