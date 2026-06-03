@@ -204,8 +204,13 @@ export async function createFinalComment(
     if (metadata?.sessionStats) {
       const { totalTokens, cost } = metadata.sessionStats;
       metadataParts.push(`Tokens: ${formatNumber(totalTokens)}`);
-      if (cost > 0) {
-        metadataParts.push(`Cost: $${cost.toFixed(4)}`);
+
+      // some pay-as-you-go providers (e.g. ppq.ai) may represent spending cost as
+      // negative (to maybe avoid confusing the user for the account-balance left?)
+      const sessionCost = Math.abs(cost);
+
+      if (sessionCost > 0) {
+        metadataParts.push(`Cost: $${sessionCost.toFixed(4)}`);
       }
     }
 
