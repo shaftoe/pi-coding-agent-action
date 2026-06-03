@@ -18,17 +18,17 @@
  *   E2E_BASEURL_CUSTOM   – base URL (default: "https://openrouter.ai/api/v1")
  *   E2E_API_CUSTOM       – API type (default: "openai-completions")
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 export default function (pi: ExtensionAPI) {
   const provider = process.env.E2E_PROVIDER_CUSTOM;
   const modelId = process.env.E2E_MODEL_CUSTOM;
-  const baseUrl = process.env.E2E_BASEURL_CUSTOM ?? "https://openrouter.ai/api/v1";
-  const api = process.env.E2E_API_CUSTOM ?? "openai-completions";
+  const baseUrl = process.env.E2E_BASEURL_CUSTOM ?? 'https://openrouter.ai/api/v1';
+  const api = process.env.E2E_API_CUSTOM ?? 'openai-completions';
 
   if (!provider || !modelId) {
     throw new Error(
-      "custom-provider test extension: E2E_PROVIDER_CUSTOM and E2E_MODEL_CUSTOM env vars are required"
+      'custom-provider test extension: E2E_PROVIDER_CUSTOM and E2E_MODEL_CUSTOM env vars are required'
     );
   }
 
@@ -45,13 +45,13 @@ export default function (pi: ExtensionAPI) {
     // here satisfies the SDK's provider-config validation which requires
     // apiKey or oauth when models are defined.  The "$"-prefix tells the
     // SDK to read the value from the named env var.
-    apiKey: "$E2E_TOKEN_CUSTOM",
+    apiKey: '$E2E_TOKEN_CUSTOM',
     models: [
       {
         id: modelId,
         name: `E2E Custom Test (${modelId})`,
         reasoning: false,
-        input: ["text" as const],
+        input: ['text' as const],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: 128000,
         maxTokens: 4096,

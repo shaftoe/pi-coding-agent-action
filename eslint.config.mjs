@@ -50,7 +50,7 @@ export default [
   },
   // All src code
   {
-    files: ["src/**/*.ts"],
+    files: ["packages/*/src/**/*.ts"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -75,7 +75,7 @@ export default [
   },
   // Library code: enforce boundary — no @actions/* imports
   {
-    files: ["src/orchestrator.ts", "src/pi/**/*.ts", "src/types.ts"],
+    files: ["packages/pi-orchestrator/src/orchestrator.ts", "packages/pi-orchestrator/src/pi/**/*.ts", "packages/pi-orchestrator/src/types.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -85,6 +85,25 @@ export default [
               group: ["@actions/*"],
               message:
                 "Library code (orchestrator, pi/, types) must not import @actions/* directly. Use Logger/OutputSink interfaces instead.",
+              allowTypeImports: false,
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // Platform GitHub code: only @actions/github allowed (not @actions/core)
+  {
+    files: ["packages/pi-platform-github/src/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@actions/core",
+              message:
+                "pi-platform-github uses @actions/github for API types only — @actions/core is for the action entry point.",
               allowTypeImports: false,
             },
           ],
@@ -113,7 +132,7 @@ export default [
       ...sharedRules,
     },
   },
-  // Tests
+  // Tests (root e2e + fixtures)
   {
     files: ["tests/**/*.ts"],
     languageOptions: {
@@ -122,6 +141,28 @@ export default [
         ecmaVersion: "latest",
         sourceType: "module",
         project: path.join(__dirname, "tests/tsconfig.json"),
+      },
+      globals: {
+        node: true,
+      },
+    },
+    plugins: {
+      "@typescript-eslint": typescriptEslint,
+    },
+    rules: {
+      ...sharedRules,
+      ...testOverrides,
+    },
+  },
+  // Tests (per-package)
+  {
+    files: ["packages/*/tests/**/*.ts"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module",
+        project: path.join(__dirname, "tsconfig.json"),
       },
       globals: {
         node: true,

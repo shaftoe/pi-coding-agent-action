@@ -1,0 +1,22 @@
+{
+  "name": "@alexanderfortin/pi-orchestrator",
+  "version": "2.19.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pi/*": "./src/pi/*.ts",
+    "./pi/tools/*": "./src/pi/tools/*.ts"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.78.0",
+    "@earendil-works/pi-ai": ">=0.78.0",
+    "@earendil-works/pi-agent-core": ">=0.78.0"
+  },
+  "dependencies": {
+    "@js-temporal/polyfill": "^0.5.1",
+    "ignore": "^7.0.5",
+    "typebox": "^1.1.39"
+  }
+}

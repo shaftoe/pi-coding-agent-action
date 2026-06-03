@@ -35,7 +35,7 @@
 
 import { describe, expect, test, mock } from 'bun:test';
 import { resolve } from 'node:path';
-import type { PlatformProvider } from '../../src/platform';
+import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
 
 const E2E_TIMEOUT = 60_000;
 
@@ -44,30 +44,6 @@ const E2E_TIMEOUT = 60_000;
 // ============================================================================
 
 const noop = (): void => {};
-
-const mockGetInput = mock((name: string): string => {
-  const defaults: Record<string, string> = {
-    github_token: 'fake-token',
-    trigger: '/pi',
-    max_comments: '100',
-    provider: '',
-    model: '',
-    token: '',
-    thinking_level: '',
-    prompt: '',
-  };
-  return defaults[name] ?? '';
-});
-
-mock.module('@actions/core', () => ({
-  getInput: mockGetInput,
-  notice: noop,
-  info: noop,
-  debug: noop,
-  setFailed: noop,
-  setOutput: noop,
-  warning: noop,
-}));
 
 const mockGitHubContext = {
   eventName: 'issue_comment' as const,
@@ -207,7 +183,7 @@ if (!canRun) {
     test(
       'extension registers provider, model is found, LLM call succeeds',
       async () => {
-        const { Agent } = await import('../../src/pi/agent.js');
+        const { Agent } = await import('@alexanderfortin/pi-orchestrator');
 
         const agent = new Agent(logger, mockPlatformProvider, {
           model: E2E_MODEL,
@@ -240,7 +216,7 @@ if (!canRun) {
     test(
       'custom provider model is NOT found without the extension',
       async () => {
-        const { Agent } = await import('../../src/pi/agent.js');
+        const { Agent } = await import('@alexanderfortin/pi-orchestrator');
 
         // Create an agent referencing the custom model but WITHOUT the extension.
         // Since TEST_PROVIDER is "e2e-custom-<provider>", it is never a built-in
@@ -262,7 +238,7 @@ if (!canRun) {
     test(
       'multiple prompts on the same session work',
       async () => {
-        const { Agent } = await import('../../src/pi/agent.js');
+        const { Agent } = await import('@alexanderfortin/pi-orchestrator');
 
         const agent = new Agent(logger, mockPlatformProvider, {
           model: E2E_MODEL,

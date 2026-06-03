@@ -1,0 +1,25 @@
+{
+  "name": "@alexanderfortin/pi-action",
+  "version": "2.19.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./src/run.ts"
+    }
+  },
+  "dependencies": {
+    "@alexanderfortin/pi-orchestrator": "workspace:*",
+    "@alexanderfortin/pi-platform-github": "workspace:*",
+    "@actions/core": "^3.0.1",
+    "@actions/github": "^9.1.1",
+    "@earendil-works/pi-coding-agent": "^0.78.0",
+    "@earendil-works/pi-ai": "^0.78.0",
+    "@earendil-works/pi-agent-core": "^0.78.0",
+    "@js-temporal/polyfill": "^0.5.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}

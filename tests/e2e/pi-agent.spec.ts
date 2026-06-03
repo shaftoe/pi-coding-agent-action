@@ -18,8 +18,8 @@
  */
 
 import { describe, expect, test, mock } from 'bun:test';
-import type { Agent } from '../../src/pi/agent.js';
-import type { PlatformProvider } from '../../src/platform';
+import type { Agent } from '@alexanderfortin/pi-orchestrator';
+import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
 
 // E2E tests involve real LLM API calls — give them a generous timeout.
 const E2E_TIMEOUT = 60_000;
@@ -34,8 +34,6 @@ const E2E_TIMEOUT = 60_000;
 // ============================================================================
 // Mock GitHub Dependencies (we only test Pi SDK integration)
 // ============================================================================
-
-// Mock @actions/core
 const mockGetInput = mock((name: string): string => {
   const defaults: Record<string, string> = {
     github_token: 'fake-token',
@@ -57,7 +55,7 @@ const mockDebug = mock();
 const mockWarning = mock();
 const mockError = mock();
 
-import type { CoreAdapter } from '../../src/types.ts';
+import type { CoreAdapter } from '@alexanderfortin/pi-orchestrator';
 
 const mockCoreAdapter: CoreAdapter = {
   getInput: mockGetInput,
@@ -138,16 +136,6 @@ const mockPlatformProvider: PlatformProvider = {
   }),
 };
 
-mock.module('@actions/core', () => ({
-  getInput: mockGetInput,
-  notice: mockNotice,
-  info: mockInfo,
-  debug: mockDebug,
-  setFailed: mockSetFailed,
-  setOutput: mock(),
-  warning: mockWarning,
-}));
-
 // Mock @actions/github context
 const mockGitHubContext = {
   eventName: 'issue_comment' as const,
@@ -226,7 +214,7 @@ function validateE2EEnvVars() {
  */
 async function createAgent(): Promise<Agent> {
   const { provider, model, token } = validateE2EEnvVars();
-  const { Agent } = await import('../../src/pi/agent.js');
+  const { Agent } = await import('@alexanderfortin/pi-orchestrator');
   return new Agent(mockCoreAdapter, mockPlatformProvider, {
     model,
     provider,
@@ -292,7 +280,7 @@ if (!E2E_ENABLED) {
         'invalid model throws during ready (model resolution deferred after extension load)',
         async () => {
           const { token, provider } = validateE2EEnvVars();
-          const { Agent } = await import('../../src/pi/agent.js');
+          const { Agent } = await import('@alexanderfortin/pi-orchestrator');
 
           const agent = new Agent(mockCoreAdapter, mockPlatformProvider, {
             model: 'invalid-model-xyz',

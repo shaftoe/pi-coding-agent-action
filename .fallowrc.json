@@ -1,7 +1,23 @@
 {
-  "entry": ["src/index.ts"],
-  "ignorePatterns": ["dist/**", "coverage/**", "node_modules/**", "scripts/**", "src/import-meta-url.js", "src/lib/keep-a-changelog.js"],
-  "ignoreDependencies": ["@alexanderfortin/semantic-release-keep-a-changelog"],
+  "entry": [
+    "packages/pi-action/src/run.ts",
+    "packages/pi-orchestrator/src/index.ts",
+    "packages/pi-platform-github/src/index.ts"
+  ],
+  "ignorePatterns": [
+    "dist/**",
+    "coverage/**",
+    "node_modules/**",
+    "scripts/**",
+    "packages/pi-action/src/import-meta-url.js"
+  ],
+  "ignoreDependencies": [
+    "@alexanderfortin/semantic-release-keep-a-changelog",
+    "bun-types",
+    "@earendil-works/pi-coding-agent",
+    "@js-temporal/polyfill",
+    "ignore"
+  ],
   "rules": {
     "unused-exports": "warn",
     "unused-files": "warn",
