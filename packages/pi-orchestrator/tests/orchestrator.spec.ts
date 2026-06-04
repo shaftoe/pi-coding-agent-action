@@ -19,6 +19,13 @@ import type {
   PiConfig,
 } from '@alexanderfortin/pi-orchestrator';
 import type { CreateReactionType, PlatformProvider } from '@alexanderfortin/pi-orchestrator';
+import {
+  setAgentRunResult,
+  setAgentRunError,
+  setAddReactionReturn,
+  getFinalCommentCall,
+  expectFactoryCalledWith,
+} from './orchestrator/helpers';
 
 describe('ActionOrchestrator', () => {
   let mockCore: CoreAdapter;
@@ -175,15 +182,11 @@ describe('ActionOrchestrator', () => {
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          provider: 'anthropic',
-          model: 'claude-sonnet-4-5',
-          token: 'test-token',
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-5',
+        token: 'test-token',
+      });
     });
 
     test('retrieves prompt from git platform', async () => {
@@ -200,13 +203,9 @@ describe('ActionOrchestrator', () => {
       expect(mockGit.getPrompt).toHaveBeenCalledWith('Review this code');
 
       // Verify the config was forwarded with the prompt input
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          promptInput: 'Review this code',
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        promptInput: 'Review this code',
+      });
     });
 
     test('adds reaction before Pi execution', async () => {
@@ -246,11 +245,9 @@ describe('ActionOrchestrator', () => {
       const orchestrator = createOrchestrator({ thinkingLevel: '' });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({ thinkingLevel: '' }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        thinkingLevel: '',
+      });
     });
 
     test('sends prompt to Pi agent', async () => {
@@ -264,9 +261,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('deletes reaction after successful execution', async () => {
-      const mockReaction = { data: { id: 456 } } as CreateReactionType;
-      const addReactionMock = mock(async () => mockReaction);
-      mockGit.addReaction = addReactionMock as any;
+      const mockReaction = setAddReactionReturn(mockGit, 456);
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -282,10 +277,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('does not log agent session completed banner when run throws', async () => {
-      const runMock = mock(async () => {
-        throw new Error('API error');
-      });
-      mockPiAgent.run = runMock as any;
+      setAgentRunError(mockPiAgent, new Error('API error'));
 
       const orchestrator = createOrchestrator();
 
@@ -297,22 +289,14 @@ describe('ActionOrchestrator', () => {
     });
 
     test('creates final comment with result', async () => {
-      const runMock = mock(async () => ({
-        result: 'Your tests are ready!',
-        sessionStats: undefined,
-        error: undefined,
-      }));
-      mockPiAgent.run = runMock as any;
+      setAgentRunResult(mockPiAgent, { result: 'Your tests are ready!' });
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      const calls = (mockGit.createFinalComment as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      const callArgs = calls[0];
-
-      expect(callArgs[0]).toBe('Your tests are ready!');
-      expect(callArgs[1]).toMatchObject({
+      const [text, metadata] = getFinalCommentCall(mockGit);
+      expect(text).toBe('Your tests are ready!');
+      expect(metadata).toMatchObject({
         provider: 'anthropic',
         model: 'claude-sonnet-4-5',
         executionDuration: expect.any(Temporal.Duration),
@@ -320,20 +304,14 @@ describe('ActionOrchestrator', () => {
     });
 
     test('posts default completion comment when agent returns empty result', async () => {
-      const runMock = mock(async () => ({
-        result: '',
-        sessionStats: undefined,
-        error: undefined,
-      }));
-      mockPiAgent.run = runMock as any;
+      setAgentRunResult(mockPiAgent, { result: '' });
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       // Should always post a comment even when result is empty
-      const calls = (mockGit.createFinalComment as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      expect(calls[0][0]).toBe('✅ Agent session completed');
+      const [text] = getFinalCommentCall(mockGit);
+      expect(text).toBe('✅ Agent session completed');
     });
 
     test('logs completion banner after session html export', async () => {
@@ -353,16 +331,12 @@ describe('ActionOrchestrator', () => {
 
     test('includes execution duration in final comment metadata', async () => {
       const startTime = Temporal.Now.instant();
-      const getStartTimeMock = mock(() => startTime);
-      mockGit.getStartTime = getStartTimeMock as any;
+      mockGit.getStartTime = mock(() => startTime) as any;
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      const calls = (mockGit.createFinalComment as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      const metadata = calls[0][1];
-
+      const [, metadata] = getFinalCommentCall(mockGit);
       expect(metadata.executionDuration).toBeDefined();
       expect(metadata.executionDuration).toBeInstanceOf(Temporal.Duration);
     });
@@ -371,10 +345,7 @@ describe('ActionOrchestrator', () => {
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      const calls = (mockGit.createFinalComment as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      const metadata = calls[0][1];
-
+      const [, metadata] = getFinalCommentCall(mockGit);
       expect(metadata.actionVersion).toBeDefined();
       expect(typeof metadata.actionVersion).toBe('string');
       expect(metadata.actionVersion).not.toBe('unknown');
@@ -389,22 +360,14 @@ describe('ActionOrchestrator', () => {
         cost: 0.001,
         version: '0.99.0-test',
       };
-      const runMock = mock(async () => ({
-        result: 'Done!',
-        sessionStats,
-        error: undefined,
-      }));
-      mockPiAgent.run = runMock as any;
+      setAgentRunResult(mockPiAgent, { result: 'Done!', sessionStats });
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      const calls = (mockGit.createFinalComment as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      const metadata = calls[0][1];
-
+      const [, metadata] = getFinalCommentCall(mockGit);
       expect(metadata.sessionStats).toBeDefined();
-      expect(metadata.sessionStats.version).toBe('0.99.0-test');
+      expect((metadata.sessionStats as { version: string }).version).toBe('0.99.0-test');
     });
 
     test('uses github start time when available', async () => {
@@ -419,16 +382,12 @@ describe('ActionOrchestrator', () => {
     });
 
     test('uses current time when github start time unavailable', async () => {
-      const getStartTimeMock = mock(() => undefined);
-      mockGit.getStartTime = getStartTimeMock as any;
+      mockGit.getStartTime = mock(() => undefined) as any;
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      const calls = (mockGit.createFinalComment as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      const metadata = calls[0][1];
-
+      const [, metadata] = getFinalCommentCall(mockGit);
       // Duration should still be set (calculated from current time)
       expect(metadata.executionDuration).toBeDefined();
     });
@@ -437,10 +396,7 @@ describe('ActionOrchestrator', () => {
   describe('error handling', () => {
     test('catches Pi agent errors and finalizes with error message', async () => {
       const error = new Error('API quota exceeded');
-      const runMock = mock(async () => {
-        throw error;
-      });
-      mockPiAgent.run = runMock as any;
+      setAgentRunError(mockPiAgent, error);
 
       const orchestrator = createOrchestrator();
 
@@ -458,10 +414,7 @@ describe('ActionOrchestrator', () => {
 
     test('calls core.setFailed on error', async () => {
       const error = new Error('Network timeout');
-      const runMock = mock(async () => {
-        throw error;
-      });
-      mockPiAgent.run = runMock as any;
+      setAgentRunError(mockPiAgent, error);
 
       const orchestrator = createOrchestrator();
 
@@ -471,14 +424,8 @@ describe('ActionOrchestrator', () => {
     });
 
     test('deletes reaction even when Pi execution fails', async () => {
-      const mockReaction = { data: { id: 789 } } as CreateReactionType;
-      const addReactionMock = mock(async () => mockReaction);
-      mockGit.addReaction = addReactionMock as any;
-
-      const runMock = mock(async () => {
-        throw new Error('Failed');
-      });
-      mockPiAgent.run = runMock as any;
+      const mockReaction = setAddReactionReturn(mockGit, 789);
+      setAgentRunError(mockPiAgent, new Error('Failed'));
 
       const orchestrator = createOrchestrator();
 
@@ -488,10 +435,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('handles non-Error objects thrown by Pi', async () => {
-      const runMock = mock(async () => {
-        throw 'String error';
-      });
-      mockPiAgent.run = runMock as any;
+      setAgentRunError(mockPiAgent, 'String error');
 
       const orchestrator = createOrchestrator();
 
@@ -502,10 +446,7 @@ describe('ActionOrchestrator', () => {
 
     test('re-throws the original error after finalization', async () => {
       const error = new Error('Original error');
-      const runMock = mock(async () => {
-        throw error;
-      });
-      mockPiAgent.run = runMock as any;
+      setAgentRunError(mockPiAgent, error);
 
       const orchestrator = createOrchestrator();
 
@@ -513,10 +454,9 @@ describe('ActionOrchestrator', () => {
     });
 
     test('silently ignores GitHub addReaction errors and continues execution', async () => {
-      const addReactionMock = mock(async () => {
+      mockGit.addReaction = mock(async () => {
         throw new Error('Failed to add reaction');
-      });
-      mockGit.addReaction = addReactionMock as any;
+      }) as any;
 
       const orchestrator = createOrchestrator();
 
@@ -534,32 +474,21 @@ describe('ActionOrchestrator', () => {
 
   describe('session-level error handling (PromptResult.error)', () => {
     test('posts error comment when session ends with quota error', async () => {
-      const runMock = mock(async () => ({
-        result: '',
-        sessionStats: undefined,
-        error: '429 Usage limit reached for 5 hour. Your limit will reset at 2026-06-02 19:05:44',
-      }));
-      mockPiAgent.run = runMock as any;
+      const sessionError =
+        '429 Usage limit reached for 5 hour. Your limit will reset at 2026-06-02 19:05:44';
+      setAgentRunResult(mockPiAgent, { error: sessionError });
 
       const orchestrator = createOrchestrator();
 
       // Should NOT throw — the error is reported via the result, not via exception
       await expect(orchestrator.execute()).resolves.toBeUndefined();
 
-      const calls = (mockGit.createFinalComment as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      expect(calls[0][0]).toBe(
-        '❌ Agent session ended with error: 429 Usage limit reached for 5 hour. Your limit will reset at 2026-06-02 19:05:44'
-      );
+      const [text] = getFinalCommentCall(mockGit);
+      expect(text).toBe(`❌ Agent session ended with error: ${sessionError}`);
     });
 
     test('marks action as failed when session ends with error', async () => {
-      const runMock = mock(async () => ({
-        result: '',
-        sessionStats: undefined,
-        error: '429 Usage limit reached',
-      }));
-      mockPiAgent.run = runMock as any;
+      setAgentRunResult(mockPiAgent, { error: '429 Usage limit reached' });
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -570,12 +499,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('sets success output to false when session ends with error', async () => {
-      const runMock = mock(async () => ({
-        result: '',
-        sessionStats: undefined,
-        error: 'insufficient_quota',
-      }));
-      mockPiAgent.run = runMock as any;
+      setAgentRunResult(mockPiAgent, { error: 'insufficient_quota' });
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -584,12 +508,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('does not log success banner when session ends with error', async () => {
-      const runMock = mock(async () => ({
-        result: '',
-        sessionStats: undefined,
-        error: 'quota exceeded',
-      }));
-      mockPiAgent.run = runMock as any;
+      setAgentRunResult(mockPiAgent, { error: 'quota exceeded' });
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -600,19 +519,16 @@ describe('ActionOrchestrator', () => {
     });
 
     test('includes partial result in error comment when agent produced output', async () => {
-      const runMock = mock(async () => ({
+      setAgentRunResult(mockPiAgent, {
         result: 'I have created the PR. Now let me run the tests…',
-        sessionStats: undefined,
         error: '429 rate limit exceeded',
-      }));
-      mockPiAgent.run = runMock as any;
+      });
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      const calls = (mockGit.createFinalComment as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      expect(calls[0][0]).toBe(
+      const [text] = getFinalCommentCall(mockGit);
+      expect(text).toBe(
         'I have created the PR. Now let me run the tests…\n\n---\n\n❌ Agent session ended with error: 429 rate limit exceeded'
       );
     });
@@ -625,29 +541,17 @@ describe('ActionOrchestrator', () => {
         cost: 0.02,
         version: '1.0.0',
       };
-      const runMock = mock(async () => ({
-        result: '',
-        sessionStats,
-        error: 'quota exceeded',
-      }));
-      mockPiAgent.run = runMock as any;
+      setAgentRunResult(mockPiAgent, { error: 'quota exceeded', sessionStats });
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      const calls = (mockGit.createFinalComment as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      const metadata = calls[0][1];
+      const [, metadata] = getFinalCommentCall(mockGit);
       expect(metadata.sessionStats).toEqual(sessionStats);
     });
 
     test('still runs session exports when session ends with error', async () => {
-      const runMock = mock(async () => ({
-        result: '',
-        sessionStats: undefined,
-        error: 'quota exceeded',
-      }));
-      mockPiAgent.run = runMock as any;
+      setAgentRunResult(mockPiAgent, { error: 'quota exceeded' });
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -656,16 +560,8 @@ describe('ActionOrchestrator', () => {
     });
 
     test('deletes reaction when session ends with error', async () => {
-      const mockReaction = { data: { id: 999 } } as CreateReactionType;
-      const addReactionMock = mock(async () => mockReaction);
-      mockGit.addReaction = addReactionMock as any;
-
-      const runMock = mock(async () => ({
-        result: '',
-        sessionStats: undefined,
-        error: 'quota exceeded',
-      }));
-      mockPiAgent.run = runMock as any;
+      const mockReaction = setAddReactionReturn(mockGit, 999);
+      setAgentRunResult(mockPiAgent, { error: 'quota exceeded' });
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -685,8 +581,7 @@ describe('ActionOrchestrator', () => {
 
   describe('error handling for missing prompt', () => {
     test('throws error when no prompt found', async () => {
-      const getPromptMock = mock(async () => undefined);
-      mockGit.getPrompt = getPromptMock as any;
+      mockGit.getPrompt = mock(async () => undefined) as any;
 
       const orchestrator = createOrchestrator();
 
@@ -694,8 +589,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('calls core.setFailed when no prompt found', async () => {
-      const getPromptMock = mock(async () => undefined);
-      mockGit.getPrompt = getPromptMock as any;
+      mockGit.getPrompt = mock(async () => undefined) as any;
 
       const orchestrator = createOrchestrator();
 
@@ -707,8 +601,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('finalizes with error message when no prompt found', async () => {
-      const getPromptMock = mock(async () => undefined);
-      mockGit.getPrompt = getPromptMock as any;
+      mockGit.getPrompt = mock(async () => undefined) as any;
 
       const orchestrator = createOrchestrator();
 
@@ -725,8 +618,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('does not proceed with Pi execution when no prompt found', async () => {
-      const getPromptMock = mock(async () => undefined);
-      mockGit.getPrompt = getPromptMock as any;
+      mockGit.getPrompt = mock(async () => undefined) as any;
 
       const orchestrator = createOrchestrator();
 
@@ -739,30 +631,23 @@ describe('ActionOrchestrator', () => {
 
   describe('extensions configuration', () => {
     test('passes extensions config to Pi agent factory', async () => {
-      const orchestrator = createOrchestrator({
-        extensions: ['npm:package-one', 'git:github.com/user/repo', './local-path.ts'],
-      });
+      const extensions = ['npm:package-one', 'git:github.com/user/repo', './local-path.ts'];
+      const orchestrator = createOrchestrator({ extensions });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          extensions: ['npm:package-one', 'git:github.com/user/repo', './local-path.ts'],
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { extensions });
     });
 
     test('omits extensions when not in config', async () => {
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.not.objectContaining({
-          extensions: expect.any(Array),
-        }),
+      expectFactoryCalledWith(
+        mockPiFactory,
         mockCore,
-        mockProvider
+        mockProvider,
+        { extensions: expect.any(Array) },
+        { not: true }
       );
     });
   });
@@ -772,80 +657,51 @@ describe('ActionOrchestrator', () => {
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          loadBuiltinExtensions: true,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        loadBuiltinExtensions: true,
+      });
     });
 
     test('parses true value correctly', async () => {
-      const orchestrator = createOrchestrator({
-        loadBuiltinExtensions: true,
-      });
+      const orchestrator = createOrchestrator({ loadBuiltinExtensions: true });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          loadBuiltinExtensions: true,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        loadBuiltinExtensions: true,
+      });
     });
 
     test('parses false value correctly', async () => {
-      const orchestrator = createOrchestrator({
-        loadBuiltinExtensions: false,
-      });
+      const orchestrator = createOrchestrator({ loadBuiltinExtensions: false });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          loadBuiltinExtensions: false,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        loadBuiltinExtensions: false,
+      });
     });
 
     test('handles case-insensitive true values', async () => {
-      const orchestrator = createOrchestrator({
-        loadBuiltinExtensions: true,
-      });
+      const orchestrator = createOrchestrator({ loadBuiltinExtensions: true });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          loadBuiltinExtensions: true,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        loadBuiltinExtensions: true,
+      });
     });
 
     test('handles case-insensitive false values', async () => {
-      const orchestrator = createOrchestrator({
-        loadBuiltinExtensions: false,
-      });
+      const orchestrator = createOrchestrator({ loadBuiltinExtensions: false });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          loadBuiltinExtensions: false,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        loadBuiltinExtensions: false,
+      });
     });
   });
 
   describe('edge cases', () => {
     test('handles empty prompt string as missing prompt error', async () => {
-      const getPromptMock = mock(async () => '');
-      mockGit.getPrompt = getPromptMock as any;
+      mockGit.getPrompt = mock(async () => '') as any;
 
       const orchestrator = createOrchestrator();
 
@@ -861,8 +717,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('handles reaction returning undefined', async () => {
-      const addReactionMock = mock(async () => undefined);
-      mockGit.addReaction = addReactionMock as any;
+      mockGit.addReaction = mock(async () => undefined) as any;
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -875,22 +730,13 @@ describe('ActionOrchestrator', () => {
       const orchestrator = createOrchestrator({ thinkingLevel: '   ' });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({ thinkingLevel: '   ' }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { thinkingLevel: '   ' });
     });
   });
 
   describe('error handling - session stats', () => {
     test('continues execution when run returns undefined sessionStats', async () => {
-      const runMock = mock(async () => ({
-        result: 'Here are your tests!',
-        sessionStats: undefined,
-        error: undefined,
-      }));
-      mockPiAgent.run = runMock as any;
+      setAgentRunResult(mockPiAgent, { result: 'Here are your tests!' });
 
       const orchestrator = createOrchestrator();
 
@@ -898,10 +744,7 @@ describe('ActionOrchestrator', () => {
       await expect(orchestrator.execute()).resolves.toBeUndefined();
 
       // Comment should still be created without stats
-      expect(mockGit.createFinalComment).toHaveBeenCalled();
-      const calls = (mockGit.createFinalComment as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      const metadata = calls[0][1];
+      const [, metadata] = getFinalCommentCall(mockGit);
       expect(metadata.sessionStats).toBeUndefined();
 
       // Prompt was still called
@@ -916,21 +759,13 @@ describe('ActionOrchestrator', () => {
         cost: 0.001,
         version: '2.18.0',
       };
-      const runMock = mock(async () => ({
-        result: 'Here are your tests!',
-        sessionStats,
-        error: undefined,
-      }));
-      mockPiAgent.run = runMock as any;
+      setAgentRunResult(mockPiAgent, { result: 'Here are your tests!', sessionStats });
 
       const orchestrator = createOrchestrator();
 
       await expect(orchestrator.execute()).resolves.toBeUndefined();
 
-      // Comment should be created with stats
-      const calls = (mockGit.createFinalComment as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      const metadata = calls[0][1];
+      const [, metadata] = getFinalCommentCall(mockGit);
       expect(metadata.sessionStats).toEqual(sessionStats);
     });
 
@@ -938,9 +773,7 @@ describe('ActionOrchestrator', () => {
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      const calls = (mockGit.createFinalComment as any).mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      const metadata = calls[0][1];
+      const [, metadata] = getFinalCommentCall(mockGit);
 
       // actionVersion should be a non-empty, non-unknown version string
       expect(metadata.actionVersion).toBeDefined();
@@ -952,10 +785,7 @@ describe('ActionOrchestrator', () => {
   describe('error handling - finalize failures', () => {
     test('re-throws error after finalize succeeds in catch block', async () => {
       const error = new Error('Prompt failed');
-      const runMock = mock(async () => {
-        throw error;
-      });
-      mockPiAgent.run = runMock as any;
+      setAgentRunError(mockPiAgent, error);
 
       const orchestrator = createOrchestrator();
 
@@ -968,15 +798,10 @@ describe('ActionOrchestrator', () => {
     test('fails action when finalize in catch block throws', async () => {
       const error = new Error('Prompt failed');
       const finalizeError = new Error('Failed to post comment');
-      const runMock = mock(async () => {
-        throw error;
-      });
-      mockPiAgent.run = runMock as any;
-
-      const createFinalCommentMock = mock(async () => {
+      setAgentRunError(mockPiAgent, error);
+      mockGit.createFinalComment = mock(async () => {
         throw finalizeError;
-      });
-      mockGit.createFinalComment = createFinalCommentMock as any;
+      }) as any;
 
       const orchestrator = createOrchestrator();
 
@@ -992,10 +817,7 @@ describe('ActionOrchestrator', () => {
 
     test('calls setFailed after finalize succeeds', async () => {
       const error = new Error('API timeout');
-      const runMock = mock(async () => {
-        throw error;
-      });
-      mockPiAgent.run = runMock as any;
+      setAgentRunError(mockPiAgent, error);
 
       const orchestrator = createOrchestrator();
 
@@ -1008,12 +830,7 @@ describe('ActionOrchestrator', () => {
 
   describe('action outputs', () => {
     test('sets response output with agent result', async () => {
-      const runMock = mock(async () => ({
-        result: 'Your tests are ready!',
-        sessionStats: undefined,
-        error: undefined,
-      }));
-      mockPiAgent.run = runMock as any;
+      setAgentRunResult(mockPiAgent, { result: 'Your tests are ready!' });
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -1029,10 +846,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('sets success output to false on error', async () => {
-      const runMock = mock(async () => {
-        throw new Error('API error');
-      });
-      mockPiAgent.run = runMock as any;
+      setAgentRunError(mockPiAgent, new Error('API error'));
 
       const orchestrator = createOrchestrator();
 
@@ -1049,12 +863,7 @@ describe('ActionOrchestrator', () => {
         totalTokens: 700,
         cost: 0.042,
       };
-      const runMock = mock(async () => ({
-        result: 'Done!',
-        sessionStats,
-        error: undefined,
-      }));
-      mockPiAgent.run = runMock as any;
+      setAgentRunResult(mockPiAgent, { result: 'Done!', sessionStats });
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -1065,12 +874,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('does not set token/cost outputs when session stats unavailable', async () => {
-      const runMock = mock(async () => ({
-        result: 'Done!',
-        sessionStats: undefined,
-        error: undefined,
-      }));
-      mockPiAgent.run = runMock as any;
+      setAgentRunResult(mockPiAgent, { result: 'Done!' });
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -1082,8 +886,7 @@ describe('ActionOrchestrator', () => {
 
     test('sets duration_seconds output', async () => {
       const startTime = Temporal.Instant.from('2024-01-15T10:30:00Z');
-      const getStartTimeMock = mock(() => startTime);
-      mockGit.getStartTime = getStartTimeMock as any;
+      mockGit.getStartTime = mock(() => startTime) as any;
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -1098,12 +901,7 @@ describe('ActionOrchestrator', () => {
         totalTokens: 1500,
         cost: 0.05,
       };
-      const runMock = mock(async () => ({
-        result: 'Analysis complete',
-        sessionStats,
-        error: undefined,
-      }));
-      mockPiAgent.run = runMock as any;
+      setAgentRunResult(mockPiAgent, { result: 'Analysis complete', sessionStats });
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -1126,25 +924,21 @@ describe('ActionOrchestrator', () => {
       });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          baseUrl: 'https://my-proxy.example.com/v1',
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        baseUrl: 'https://my-proxy.example.com/v1',
+      });
     });
 
     test('omits baseUrl when input is empty', async () => {
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.not.objectContaining({
-          baseUrl: expect.any(String),
-        }),
+      expectFactoryCalledWith(
+        mockPiFactory,
         mockCore,
-        mockProvider
+        mockProvider,
+        { baseUrl: expect.any(String) },
+        { not: true }
       );
     });
   });
@@ -1154,39 +948,21 @@ describe('ActionOrchestrator', () => {
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          exportSessionHtml: true,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { exportSessionHtml: true });
     });
 
     test('parses true value correctly', async () => {
       const orchestrator = createOrchestrator({ exportSessionHtml: true });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          exportSessionHtml: true,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { exportSessionHtml: true });
     });
 
     test('parses false value correctly', async () => {
       const orchestrator = createOrchestrator({ exportSessionHtml: false });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          exportSessionHtml: false,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { exportSessionHtml: false });
     });
 
     test('calls exportSessionHtml on agent when enabled', async () => {
@@ -1204,10 +980,9 @@ describe('ActionOrchestrator', () => {
     });
 
     test('continues execution when exportSessionHtml throws', async () => {
-      const failingExport = mock(async () => {
+      mockPiAgent.exportSessionHtml = mock(async () => {
         throw new Error('export failed');
-      });
-      mockPiAgent.exportSessionHtml = failingExport as any;
+      }) as any;
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -1229,41 +1004,25 @@ describe('ActionOrchestrator', () => {
       });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          diffMaxLines: 500,
-          diffMaxBytes: 204800,
-          diffIgnorePatterns: ['dist/'],
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        diffMaxLines: 500,
+        diffMaxBytes: 204800,
+        diffIgnorePatterns: ['dist/'],
+      });
     });
 
     test('passes diffMaxLines when provided', async () => {
       const orchestrator = createOrchestrator({ diffMaxLines: 500 });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          diffMaxLines: 500,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { diffMaxLines: 500 });
     });
 
     test('passes diffMaxBytes when provided', async () => {
       const orchestrator = createOrchestrator({ diffMaxBytes: 204800 });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          diffMaxBytes: 204800,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { diffMaxBytes: 204800 });
     });
 
     test('passes diffIgnorePatterns when provided', async () => {
@@ -1272,13 +1031,9 @@ describe('ActionOrchestrator', () => {
       });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          diffIgnorePatterns: ['dist/', 'package-lock.json', 'yarn.lock'],
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        diffIgnorePatterns: ['dist/', 'package-lock.json', 'yarn.lock'],
+      });
     });
 
     test('omits diff config when inputs are empty', async () => {
@@ -1374,13 +1129,9 @@ describe('ActionOrchestrator', () => {
       const orchestrator = createOrchestrator({ loadedTools: ['get_pr_diff'] });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          loadedTools: ['get_pr_diff'],
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        loadedTools: ['get_pr_diff'],
+      });
     });
 
     test('parses comma-separated tool names', async () => {
@@ -1389,13 +1140,9 @@ describe('ActionOrchestrator', () => {
       });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          loadedTools: ['get_pr_diff', 'create_pull_request_review'],
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        loadedTools: ['get_pr_diff', 'create_pull_request_review'],
+      });
     });
 
     test('trims whitespace around tool names', async () => {
@@ -1404,13 +1151,9 @@ describe('ActionOrchestrator', () => {
       });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          loadedTools: ['get_pr_diff', 'create_pull_request_review', 'read'],
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        loadedTools: ['get_pr_diff', 'create_pull_request_review', 'read'],
+      });
     });
 
     test('filters out empty items from trailing commas', async () => {
@@ -1419,26 +1162,18 @@ describe('ActionOrchestrator', () => {
       });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          loadedTools: ['get_pr_diff', 'create_pull_request_review'],
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        loadedTools: ['get_pr_diff', 'create_pull_request_review'],
+      });
     });
 
     test('deduplicates duplicate tool names', async () => {
       const orchestrator = createOrchestrator({ loadedTools: ['read', 'write'] });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          loadedTools: ['read', 'write'],
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, {
+        loadedTools: ['read', 'write'],
+      });
     });
 
     test('handles whitespace-only input as undefined', async () => {
@@ -1455,39 +1190,21 @@ describe('ActionOrchestrator', () => {
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          exportSessionJsonl: false,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { exportSessionJsonl: false });
     });
 
     test('parses true value correctly', async () => {
       const orchestrator = createOrchestrator({ exportSessionJsonl: true });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          exportSessionJsonl: true,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { exportSessionJsonl: true });
     });
 
     test('parses false value correctly', async () => {
       const orchestrator = createOrchestrator({ exportSessionJsonl: false });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          exportSessionJsonl: false,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { exportSessionJsonl: false });
     });
 
     test('calls exportSessionJsonl on agent when enabled', async () => {
@@ -1505,10 +1222,9 @@ describe('ActionOrchestrator', () => {
     });
 
     test('continues execution when exportSessionJsonl throws', async () => {
-      const failingExport = mock(async () => {
+      mockPiAgent.exportSessionJsonl = mock(async () => {
         throw new Error('jsonl export failed');
-      });
-      mockPiAgent.exportSessionJsonl = failingExport as any;
+      }) as any;
 
       const orchestrator = createOrchestrator({ exportSessionJsonl: true });
       await orchestrator.execute();
@@ -1536,39 +1252,21 @@ describe('ActionOrchestrator', () => {
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          autoCompaction: false,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { autoCompaction: false });
     });
 
     test('parses true value correctly', async () => {
       const orchestrator = createOrchestrator({ autoCompaction: true });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          autoCompaction: true,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { autoCompaction: true });
     });
 
     test('parses false value correctly', async () => {
       const orchestrator = createOrchestrator({ autoCompaction: false });
       await orchestrator.execute();
 
-      expect(mockPiFactory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          autoCompaction: false,
-        }),
-        mockCore,
-        mockProvider
-      );
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { autoCompaction: false });
     });
   });
 });

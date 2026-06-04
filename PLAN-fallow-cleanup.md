@@ -20,8 +20,12 @@ Strategy: incremental, one PR-sized step at a time, interleavable with other wor
     `get-workflow-run-logs`, `update-pr`, `tools.spec`, `execution-utils`)
   - **Result:** −8 clone groups, −735 duplicated LOC (13.3% → 10.6%);
     all 171 tests pass; `bun run validate` clean
-- [ ] **Step 1.2** — `packages/pi-orchestrator/tests/orchestrator/helpers.ts`
+- [x] **Step 1.2** — `packages/pi-orchestrator/tests/orchestrator/helpers.ts`
   - Target 18 clone groups / 202 lines in `orchestrator.spec.ts`
+  - **Done:** added 5 helpers (`setAgentRunResult`, `setAgentRunError`, `setAddReactionReturn`,
+    `getFinalCommentCall`, `expectFactoryCalledWith`) and refactored ~30 call sites
+  - **Result:** orchestrator.spec.ts internal clones dropped from 18 groups / 202 lines
+    → 5 groups / 44 lines; all 97 tests pass; `bun run validate` clean
 - [ ] **Step 1.3** — `packages/pi-orchestrator/tests/pi/helpers.ts`
   - Consolidate 5 groups / 85 lines in `agent-logic.spec.ts` + `resource-loader.spec.ts` self-dupes
 - [ ] **Step 1.4** — `packages/pi-platform-github/tests/helpers.ts`
@@ -54,7 +58,14 @@ Strategy: incremental, one PR-sized step at a time, interleavable with other wor
   exposing `mockExtensionContext` and `createMockProvider(overrides?, options?)`.
   Replaced ~70-line boilerplate block in 9 specs. Fallow duplication dropped from
   3,333 LOC / 110 groups → 2,598 LOC / 102 groups. `bun run validate` clean.
-  Awaiting user validation before proceeding to Step 1.2.
+
+- **Step 1.2** (done) — created `packages/pi-orchestrator/tests/orchestrator/helpers.ts`
+  with 5 helpers (`setAgentRunResult`, `setAgentRunError`, `setAddReactionReturn`,
+  `getFinalCommentCall`, `expectFactoryCalledWith`). Refactored ~30 call sites in
+  `orchestrator.spec.ts`. Orchestrator internal clones: 18 groups / 202 lines →
+  5 groups / 44 lines. Overall: 2,598 LOC / 102 groups → 2,323 LOC / 89 groups
+  (10.6% → 9.6%). `bun run validate` clean; 97 tests pass.
+  Awaiting user validation before proceeding to Step 1.3.
 
 ## Guardrails (from AGENTS.md)
 
