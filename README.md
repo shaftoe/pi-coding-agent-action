@@ -85,7 +85,7 @@ Dependencies (including Pi itself) are [updated regularly](./.github/workflows/d
 ### Interactive Workflows
 
 - Create a GitHub workflow which triggers when comments are added (e.g., `issue_comment`)
-- Filter by `if` to only run on the trigger phrase (e.g., `contains(github.event.comment.body, '/pi')`)
+- Filter by `if` to only run on the trigger phrase (e.g., `startsWith(github.event.comment.body, '/pi ')`)
 - Add `actions/setup-node` as prerequisite step (Node version >= `v22.x`)
 - Finally, add `shaftoe/pi-coding-agent-action`
 
@@ -105,7 +105,7 @@ permissions:
 
 jobs:
   pi-agent:
-    if: contains(github.event.comment.body, '/pi')
+    if: startsWith(github.event.comment.body, '/pi ')
     runs-on: ubuntu-latest
     steps:
       - name: Setup Node
