@@ -176,6 +176,162 @@ describe('Agent', () => {
       );
     });
 
+    test('detects session-level error from last assistant message', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      const mockSession = {
+        getSessionStats: () => ({
+          tokens: { input: 10, output: 0, total: 10 },
+          cost: 0,
+        }),
+        prompt: async () => {},
+        subscribe: () => {},
+        state: {
+          messages: [
+            { role: 'user', content: 'Hello', timestamp: 0 },
+            {
+              role: 'assistant',
+              content: [],
+              stopReason: 'error',
+              errorMessage: '429 Usage limit reached for 5 hour',
+              timestamp: 1,
+            },
+          ],
+        },
+      };
+      agent['session'] = mockSession as any;
+
+      const result = await agent.run('Hello');
+      expect(result.error).toBe('429 Usage limit reached for 5 hour');
+      expect(result.result).toBe('');
+    });
+
+    test('returns undefined error when session completed normally', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      const mockSession = {
+        getSessionStats: () => ({
+          tokens: { input: 100, output: 50, total: 150 },
+          cost: 0.001,
+        }),
+        prompt: async () => {},
+        subscribe: () => {},
+        state: {
+          messages: [
+            { role: 'user', content: 'Hello', timestamp: 0 },
+            {
+              role: 'assistant',
+              content: [{ type: 'text', text: 'Hi there!' }],
+              stopReason: 'stop',
+              timestamp: 1,
+            },
+          ],
+        },
+      };
+      agent['session'] = mockSession as any;
+
+      const result = await agent.run('Hello');
+      expect(result.error).toBeUndefined();
+    });
+
+    test('returns undefined error when last assistant has toolUse stopReason', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      const mockSession = {
+        getSessionStats: () => ({
+          tokens: { input: 100, output: 50, total: 150 },
+          cost: 0.001,
+        }),
+        prompt: async () => {},
+        subscribe: () => {},
+        state: {
+          messages: [
+            { role: 'user', content: 'Hello', timestamp: 0 },
+            {
+              role: 'assistant',
+              content: [],
+              stopReason: 'toolUse',
+              timestamp: 1,
+            },
+            { role: 'toolResult', toolCallId: 'x', content: [], isError: false, timestamp: 2 },
+          ],
+        },
+      };
+      agent['session'] = mockSession as any;
+
+      const result = await agent.run('Hello');
+      expect(result.error).toBeUndefined();
+    });
+
+    test('ignores earlier errors when last assistant succeeded (after retry)', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      const mockSession = {
+        getSessionStats: () => ({
+          tokens: { input: 100, output: 50, total: 150 },
+          cost: 0.001,
+        }),
+        prompt: async () => {},
+        subscribe: () => {},
+        state: {
+          messages: [
+            { role: 'user', content: 'Hello', timestamp: 0 },
+            {
+              role: 'assistant',
+              content: [],
+              stopReason: 'error',
+              errorMessage: '503 overloaded',
+              timestamp: 1,
+            },
+            {
+              role: 'assistant',
+              content: [{ type: 'text', text: 'Success after retry!' }],
+              stopReason: 'stop',
+              timestamp: 2,
+            },
+          ],
+        },
+      };
+      agent['session'] = mockSession as any;
+
+      const result = await agent.run('Hello');
+      expect(result.error).toBeUndefined();
+    });
+
+    test('returns error when session has only error messages', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      const mockSession = {
+        getSessionStats: () => ({
+          tokens: { input: 10, output: 0, total: 10 },
+          cost: 0,
+        }),
+        prompt: async () => {},
+        subscribe: () => {},
+        state: {
+          messages: [
+            { role: 'user', content: 'Hello', timestamp: 0 },
+            {
+              role: 'assistant',
+              content: [],
+              stopReason: 'error',
+              errorMessage: 'quota exceeded',
+              timestamp: 1,
+            },
+          ],
+        },
+      };
+      agent['session'] = mockSession as any;
+
+      const result = await agent.run('Hello');
+      expect(result.error).toBe('quota exceeded');
+    });
+
     test('returns PromptResult with sessionStats', async () => {
       const agent = createRealAgent();
       await agent.ready();
@@ -201,6 +357,7 @@ describe('Agent', () => {
           cost: 0.00123,
           version: expect.any(String),
         },
+        error: undefined,
       });
     });
 
@@ -222,6 +379,7 @@ describe('Agent', () => {
       expect(result).toEqual({
         result: '',
         sessionStats: undefined,
+        error: undefined,
       });
     });
 
@@ -250,6 +408,7 @@ describe('Agent', () => {
           cost: 0,
           version: expect.any(String),
         },
+        error: undefined,
       });
     });
 
@@ -278,6 +437,7 @@ describe('Agent', () => {
           cost: 1.2345,
           version: expect.any(String),
         },
+        error: undefined,
       });
     });
   });

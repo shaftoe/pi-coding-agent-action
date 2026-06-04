@@ -230,7 +230,8 @@ export class Agent {
    * Run the agent with the given prompt and return the accumulated text response with session statistics.
    *
    * @param text - The prompt text to send. Must be non-empty.
-   * @returns The full assistant text response and session statistics.
+   * @returns The full assistant text response, session statistics, and any
+   *          session-level error that ended the run early.
    * @throws {Error} If `text` is falsy.
    */
   async run(text: string | undefined): Promise<PromptResult> {
@@ -243,8 +244,50 @@ export class Agent {
 
     const result = this.outputChunks.join('');
     const sessionStats = this.getSessionStats();
+    const error = this.getSessionError();
 
-    return { result, sessionStats };
+    return { result, sessionStats, error };
+  }
+
+  /**
+   * Check if the session ended with an unrecoverable provider error.
+   *
+   * The Pi SDK resolves `session.prompt()` normally even when the provider
+   * returns an error (e.g., 429 quota exceeded, rate limit, auth failure).
+   * The error is captured in the last assistant message's `stopReason` and
+   * `errorMessage` fields. This method inspects the session state to detect
+   * such errors so the orchestrator can report them to the user.
+   *
+   * Only the *last* assistant message is checked — if the session recovered
+   * from an earlier error (via auto-retry), the last message will have a
+   * non-error `stopReason` and this method returns `undefined`.
+   *
+   * @returns The error message if the session ended with an error, `undefined` otherwise.
+   */
+  private getSessionError(): string | undefined {
+    if (!this.session) {
+      return undefined;
+    }
+
+    try {
+      const messages = this.session.state.messages;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i];
+        if (!msg) {
+          continue;
+        }
+        if (msg.role === 'assistant') {
+          if (msg.stopReason === 'error' && msg.errorMessage) {
+            return msg.errorMessage;
+          }
+          // Last assistant message is not an error → session completed normally.
+          return undefined;
+        }
+      }
+    } catch {
+      // Don't fail the action if we can't introspect session state.
+    }
+    return undefined;
   }
 
   /**

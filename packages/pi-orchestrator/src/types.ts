@@ -120,6 +120,17 @@ export interface PromptResult {
   result: string;
   /** Session statistics including token usage, if available */
   sessionStats: SessionStats | undefined;
+  /**
+   * Session-level error that ended the agent run early (e.g., provider
+   * quota exceeded, rate limit, authentication failure).
+   *
+   * The Pi SDK resolves `session.prompt()` normally even when the provider
+   * returns an unrecoverable error — the error is captured in the last
+   * assistant message's `stopReason` and `errorMessage` fields. When this
+   * field is set, the orchestrator should report the error to the user
+   * instead of posting a misleading success comment.
+   */
+  error: string | undefined;
 }
 
 /**

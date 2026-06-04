@@ -72,7 +72,7 @@ export class ActionOrchestrator {
       }
 
       const pi = this.piAgentFactory(this.config, this.logger, this.platformProvider);
-      const { result, sessionStats } = await pi.run(prompt);
+      const { result, sessionStats, error } = await pi.run(prompt);
 
       const exportPromises: Promise<void>[] = [];
       if (this.config.exportSessionHtml) {
@@ -86,6 +86,24 @@ export class ActionOrchestrator {
         this.logger.debug('[session-jsonl] export disabled by configuration');
       }
       await Promise.all(exportPromises);
+
+      // Handle session-level errors (e.g., provider quota exceeded, rate
+      // limit). The Pi SDK resolves prompt() normally on these errors, so
+      // we detect them via the PromptResult.error field and report them
+      // as a failed run rather than posting a misleading success comment.
+      if (error) {
+        this.logger.info('\n');
+        this.logger.info('════════════════════════════════════════════════════════════════');
+        this.logger.info(`❌ Agent session ended with error: ${error}`);
+        this.logger.info('════════════════════════════════════════════════════════════════');
+
+        const body = result
+          ? `${result}\n\n---\n\n❌ Agent session ended with error: ${error}`
+          : `❌ Agent session ended with error: ${error}`;
+        await this.finalize(body, this.config, startTime, reaction, sessionStats, false);
+        this.outputSink.setFailed(new Error(error));
+        return;
+      }
 
       this.logger.info('\n');
       this.logger.info('════════════════════════════════════════════════════════════════');

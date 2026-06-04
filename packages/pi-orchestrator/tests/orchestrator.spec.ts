@@ -117,6 +117,7 @@ describe('ActionOrchestrator', () => {
     const runMock = mock(async () => ({
       result: 'Here are your tests!',
       sessionStats: undefined,
+      error: undefined,
     }));
     const exportSessionHtmlMock = mock(async (outputPath: string) => outputPath);
     const exportSessionJsonlMock = mock(async (outputPath: string) => outputPath);
@@ -299,6 +300,7 @@ describe('ActionOrchestrator', () => {
       const runMock = mock(async () => ({
         result: 'Your tests are ready!',
         sessionStats: undefined,
+        error: undefined,
       }));
       mockPiAgent.run = runMock as any;
 
@@ -321,6 +323,7 @@ describe('ActionOrchestrator', () => {
       const runMock = mock(async () => ({
         result: '',
         sessionStats: undefined,
+        error: undefined,
       }));
       mockPiAgent.run = runMock as any;
 
@@ -389,6 +392,7 @@ describe('ActionOrchestrator', () => {
       const runMock = mock(async () => ({
         result: 'Done!',
         sessionStats,
+        error: undefined,
       }));
       mockPiAgent.run = runMock as any;
 
@@ -525,6 +529,148 @@ describe('ActionOrchestrator', () => {
         'Here are your tests!',
         expect.any(Object)
       );
+    });
+  });
+
+  describe('session-level error handling (PromptResult.error)', () => {
+    test('posts error comment when session ends with quota error', async () => {
+      const runMock = mock(async () => ({
+        result: '',
+        sessionStats: undefined,
+        error: '429 Usage limit reached for 5 hour. Your limit will reset at 2026-06-02 19:05:44',
+      }));
+      mockPiAgent.run = runMock as any;
+
+      const orchestrator = createOrchestrator();
+
+      // Should NOT throw — the error is reported via the result, not via exception
+      await expect(orchestrator.execute()).resolves.toBeUndefined();
+
+      const calls = (mockGit.createFinalComment as any).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      expect(calls[0][0]).toBe(
+        '❌ Agent session ended with error: 429 Usage limit reached for 5 hour. Your limit will reset at 2026-06-02 19:05:44'
+      );
+    });
+
+    test('marks action as failed when session ends with error', async () => {
+      const runMock = mock(async () => ({
+        result: '',
+        sessionStats: undefined,
+        error: '429 Usage limit reached',
+      }));
+      mockPiAgent.run = runMock as any;
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      expect(mockOutputSink.setFailed).toHaveBeenCalledWith(
+        expect.objectContaining({ message: '429 Usage limit reached' })
+      );
+    });
+
+    test('sets success output to false when session ends with error', async () => {
+      const runMock = mock(async () => ({
+        result: '',
+        sessionStats: undefined,
+        error: 'insufficient_quota',
+      }));
+      mockPiAgent.run = runMock as any;
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('success', false);
+    });
+
+    test('does not log success banner when session ends with error', async () => {
+      const runMock = mock(async () => ({
+        result: '',
+        sessionStats: undefined,
+        error: 'quota exceeded',
+      }));
+      mockPiAgent.run = runMock as any;
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
+      expect(infoCalls).not.toContain('✅ Agent session completed');
+      expect(infoCalls).toContain('❌ Agent session ended with error: quota exceeded');
+    });
+
+    test('includes partial result in error comment when agent produced output', async () => {
+      const runMock = mock(async () => ({
+        result: 'I have created the PR. Now let me run the tests…',
+        sessionStats: undefined,
+        error: '429 rate limit exceeded',
+      }));
+      mockPiAgent.run = runMock as any;
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const calls = (mockGit.createFinalComment as any).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      expect(calls[0][0]).toBe(
+        'I have created the PR. Now let me run the tests…\n\n---\n\n❌ Agent session ended with error: 429 rate limit exceeded'
+      );
+    });
+
+    test('includes session stats in error comment metadata', async () => {
+      const sessionStats = {
+        inputTokens: 500,
+        outputTokens: 100,
+        totalTokens: 600,
+        cost: 0.02,
+        version: '1.0.0',
+      };
+      const runMock = mock(async () => ({
+        result: '',
+        sessionStats,
+        error: 'quota exceeded',
+      }));
+      mockPiAgent.run = runMock as any;
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const calls = (mockGit.createFinalComment as any).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      const metadata = calls[0][1];
+      expect(metadata.sessionStats).toEqual(sessionStats);
+    });
+
+    test('still runs session exports when session ends with error', async () => {
+      const runMock = mock(async () => ({
+        result: '',
+        sessionStats: undefined,
+        error: 'quota exceeded',
+      }));
+      mockPiAgent.run = runMock as any;
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      expect(mockPiAgent.exportSessionHtml).toHaveBeenCalled();
+    });
+
+    test('deletes reaction when session ends with error', async () => {
+      const mockReaction = { data: { id: 999 } } as CreateReactionType;
+      const addReactionMock = mock(async () => mockReaction);
+      mockGit.addReaction = addReactionMock as any;
+
+      const runMock = mock(async () => ({
+        result: '',
+        sessionStats: undefined,
+        error: 'quota exceeded',
+      }));
+      mockPiAgent.run = runMock as any;
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      expect(mockGit.deleteReaction).toHaveBeenCalledWith(mockReaction);
     });
   });
 
@@ -742,6 +888,7 @@ describe('ActionOrchestrator', () => {
       const runMock = mock(async () => ({
         result: 'Here are your tests!',
         sessionStats: undefined,
+        error: undefined,
       }));
       mockPiAgent.run = runMock as any;
 
@@ -772,6 +919,7 @@ describe('ActionOrchestrator', () => {
       const runMock = mock(async () => ({
         result: 'Here are your tests!',
         sessionStats,
+        error: undefined,
       }));
       mockPiAgent.run = runMock as any;
 
@@ -863,6 +1011,7 @@ describe('ActionOrchestrator', () => {
       const runMock = mock(async () => ({
         result: 'Your tests are ready!',
         sessionStats: undefined,
+        error: undefined,
       }));
       mockPiAgent.run = runMock as any;
 
@@ -903,6 +1052,7 @@ describe('ActionOrchestrator', () => {
       const runMock = mock(async () => ({
         result: 'Done!',
         sessionStats,
+        error: undefined,
       }));
       mockPiAgent.run = runMock as any;
 
@@ -918,6 +1068,7 @@ describe('ActionOrchestrator', () => {
       const runMock = mock(async () => ({
         result: 'Done!',
         sessionStats: undefined,
+        error: undefined,
       }));
       mockPiAgent.run = runMock as any;
 
@@ -950,6 +1101,7 @@ describe('ActionOrchestrator', () => {
       const runMock = mock(async () => ({
         result: 'Analysis complete',
         sessionStats,
+        error: undefined,
       }));
       mockPiAgent.run = runMock as any;
 
