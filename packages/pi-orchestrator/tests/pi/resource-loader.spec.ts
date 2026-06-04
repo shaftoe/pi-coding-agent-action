@@ -101,26 +101,44 @@ process.env.INPUT_TRIGGER = '/pi';
 process.env.INPUT_GITHUB_TOKEN = 'fake-token';
 process.env.INPUT_MAX_COMMENTS = '100';
 
+/**
+ * Install a mock `resolveExtensionSources` on `DefaultPackageManager.prototype`
+ * that returns one enabled extension per source. Returns the mock function
+ * and the cleanup function that restores the original implementation.
+ */
+function installMockResolveExtensionSources(): {
+  mockFn: ReturnType<typeof mock>;
+  restore: () => void;
+} {
+  const original = DefaultPackageManager.prototype.resolveExtensionSources;
+  const mockFn = mock(async (sources: string[]) => ({
+    extensions: sources.map((source, index) => ({
+      source,
+      path: `/tmp/extensions/${source.replace(/[^a-z0-9]/g, '-')}-${index}`,
+      enabled: true,
+    })),
+  }));
+  DefaultPackageManager.prototype.resolveExtensionSources = mockFn as any;
+  return {
+    mockFn,
+    restore: () => {
+      DefaultPackageManager.prototype.resolveExtensionSources = original;
+    },
+  };
+}
+
 describe('resolveExtensions', () => {
   let mockResolveExtensionSources: ReturnType<typeof mock>;
-  let originalResolveExtensionSources: typeof DefaultPackageManager.prototype.resolveExtensionSources;
+  let restoreResolveExtensionSources: () => void;
 
   beforeEach(() => {
-    // Store original method and mock it
-    originalResolveExtensionSources = DefaultPackageManager.prototype.resolveExtensionSources;
-    mockResolveExtensionSources = mock(async (sources: string[]) => ({
-      extensions: sources.map((source, index) => ({
-        source,
-        path: `/tmp/extensions/${source.replace(/[^a-z0-9]/g, '-')}-${index}`,
-        enabled: true,
-      })),
-    }));
-    DefaultPackageManager.prototype.resolveExtensionSources = mockResolveExtensionSources;
+    const installed = installMockResolveExtensionSources();
+    mockResolveExtensionSources = installed.mockFn;
+    restoreResolveExtensionSources = installed.restore;
   });
 
   afterEach(() => {
-    // Restore original method
-    DefaultPackageManager.prototype.resolveExtensionSources = originalResolveExtensionSources;
+    restoreResolveExtensionSources();
   });
 
   describe('when no extensions provided', () => {
@@ -286,21 +304,14 @@ describe('resolveExtensions', () => {
 
 describe('getResourceLoader', () => {
   let mockResolveExtensionSources: ReturnType<typeof mock>;
-  let originalResolveExtensionSources: typeof DefaultPackageManager.prototype.resolveExtensionSources;
+  let restoreResolveExtensionSources: () => void;
   let mockReload: ReturnType<typeof mock>;
   let originalReload: typeof DefaultResourceLoader.prototype.reload;
 
   beforeEach(() => {
-    // Store original method and mock it
-    originalResolveExtensionSources = DefaultPackageManager.prototype.resolveExtensionSources;
-    mockResolveExtensionSources = mock(async (sources: string[]) => ({
-      extensions: sources.map((source, index) => ({
-        source,
-        path: `/tmp/extensions/${source.replace(/[^a-z0-9]/g, '-')}-${index}`,
-        enabled: true,
-      })),
-    }));
-    DefaultPackageManager.prototype.resolveExtensionSources = mockResolveExtensionSources;
+    const installed = installMockResolveExtensionSources();
+    mockResolveExtensionSources = installed.mockFn;
+    restoreResolveExtensionSources = installed.restore;
 
     // Mock reload method to avoid CLI extension loading errors in tests
     // The Pi SDK's reload() tries to access CLI extension paths that
@@ -312,7 +323,7 @@ describe('getResourceLoader', () => {
 
   afterEach(() => {
     // Restore original methods
-    DefaultPackageManager.prototype.resolveExtensionSources = originalResolveExtensionSources;
+    restoreResolveExtensionSources();
     DefaultResourceLoader.prototype.reload = originalReload;
   });
 

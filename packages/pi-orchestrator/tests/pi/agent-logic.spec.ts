@@ -6,6 +6,46 @@
 
 import { describe, expect, test, mock } from 'bun:test';
 import { resolve } from 'node:path';
+import { buildMockSession, injectMockSession, userHelloMessage } from './helpers/agent-session';
+
+/**
+ * Build a `CoreAdapter` whose `.info(msg)` calls push `msg` into the returned
+ * array. Replaces the `infoMessages` capture pattern duplicated across tests.
+ */
+function createCoreWithInfoCapture(): { core: any; messages: string[] } {
+  const messages: string[] = [];
+  const core = {
+    ...mockCoreAdapter,
+    info: mock((msg: string) => {
+      messages.push(msg);
+    }),
+  };
+  return { core, messages };
+}
+
+/**
+ * Build a `CoreAdapter` whose `.error(msg)` calls push `msg` into the returned
+ * array. Replaces the `errorMessages` capture pattern duplicated across tests.
+ */
+function createCoreWithErrorCapture(): { core: any; messages: string[] } {
+  const messages: string[] = [];
+  const core = {
+    ...mockCoreAdapter,
+    error: mock((msg: string) => {
+      messages.push(msg);
+    }),
+  };
+  return { core, messages };
+}
+
+/** Default agent config used by most tests in this file. */
+const defaultAgentConfig = {
+  model: 'claude-sonnet-4-5',
+  provider: 'anthropic',
+  token: 'test-token',
+  thinkingLevel: 'off',
+  promptInput: '',
+} as const;
 
 // Mock @actions/core to provide required inputs before importing Agent
 const noop = (): void => {};
@@ -180,16 +220,12 @@ describe('Agent', () => {
       const agent = createRealAgent();
       await agent.ready();
 
-      const mockSession = {
-        getSessionStats: () => ({
-          tokens: { input: 10, output: 0, total: 10 },
-          cost: 0,
-        }),
-        prompt: async () => {},
-        subscribe: () => {},
-        state: {
+      injectMockSession(
+        agent,
+        buildMockSession({
+          stats: { input: 10, output: 0, total: 10, cost: 0 },
           messages: [
-            { role: 'user', content: 'Hello', timestamp: 0 },
+            userHelloMessage,
             {
               role: 'assistant',
               content: [],
@@ -198,9 +234,8 @@ describe('Agent', () => {
               timestamp: 1,
             },
           ],
-        },
-      };
-      agent['session'] = mockSession as any;
+        })
+      );
 
       const result = await agent.run('Hello');
       expect(result.error).toBe('429 Usage limit reached for 5 hour');
@@ -211,16 +246,11 @@ describe('Agent', () => {
       const agent = createRealAgent();
       await agent.ready();
 
-      const mockSession = {
-        getSessionStats: () => ({
-          tokens: { input: 100, output: 50, total: 150 },
-          cost: 0.001,
-        }),
-        prompt: async () => {},
-        subscribe: () => {},
-        state: {
+      injectMockSession(
+        agent,
+        buildMockSession({
           messages: [
-            { role: 'user', content: 'Hello', timestamp: 0 },
+            userHelloMessage,
             {
               role: 'assistant',
               content: [{ type: 'text', text: 'Hi there!' }],
@@ -228,9 +258,8 @@ describe('Agent', () => {
               timestamp: 1,
             },
           ],
-        },
-      };
-      agent['session'] = mockSession as any;
+        })
+      );
 
       const result = await agent.run('Hello');
       expect(result.error).toBeUndefined();
@@ -240,16 +269,11 @@ describe('Agent', () => {
       const agent = createRealAgent();
       await agent.ready();
 
-      const mockSession = {
-        getSessionStats: () => ({
-          tokens: { input: 100, output: 50, total: 150 },
-          cost: 0.001,
-        }),
-        prompt: async () => {},
-        subscribe: () => {},
-        state: {
+      injectMockSession(
+        agent,
+        buildMockSession({
           messages: [
-            { role: 'user', content: 'Hello', timestamp: 0 },
+            userHelloMessage,
             {
               role: 'assistant',
               content: [],
@@ -258,9 +282,8 @@ describe('Agent', () => {
             },
             { role: 'toolResult', toolCallId: 'x', content: [], isError: false, timestamp: 2 },
           ],
-        },
-      };
-      agent['session'] = mockSession as any;
+        })
+      );
 
       const result = await agent.run('Hello');
       expect(result.error).toBeUndefined();
@@ -270,16 +293,11 @@ describe('Agent', () => {
       const agent = createRealAgent();
       await agent.ready();
 
-      const mockSession = {
-        getSessionStats: () => ({
-          tokens: { input: 100, output: 50, total: 150 },
-          cost: 0.001,
-        }),
-        prompt: async () => {},
-        subscribe: () => {},
-        state: {
+      injectMockSession(
+        agent,
+        buildMockSession({
           messages: [
-            { role: 'user', content: 'Hello', timestamp: 0 },
+            userHelloMessage,
             {
               role: 'assistant',
               content: [],
@@ -294,9 +312,8 @@ describe('Agent', () => {
               timestamp: 2,
             },
           ],
-        },
-      };
-      agent['session'] = mockSession as any;
+        })
+      );
 
       const result = await agent.run('Hello');
       expect(result.error).toBeUndefined();
@@ -306,16 +323,12 @@ describe('Agent', () => {
       const agent = createRealAgent();
       await agent.ready();
 
-      const mockSession = {
-        getSessionStats: () => ({
-          tokens: { input: 10, output: 0, total: 10 },
-          cost: 0,
-        }),
-        prompt: async () => {},
-        subscribe: () => {},
-        state: {
+      injectMockSession(
+        agent,
+        buildMockSession({
+          stats: { input: 10, output: 0, total: 10, cost: 0 },
           messages: [
-            { role: 'user', content: 'Hello', timestamp: 0 },
+            userHelloMessage,
             {
               role: 'assistant',
               content: [],
@@ -324,9 +337,8 @@ describe('Agent', () => {
               timestamp: 1,
             },
           ],
-        },
-      };
-      agent['session'] = mockSession as any;
+        })
+      );
 
       const result = await agent.run('Hello');
       expect(result.error).toBe('quota exceeded');
@@ -336,16 +348,13 @@ describe('Agent', () => {
       const agent = createRealAgent();
       await agent.ready();
 
-      // Mock the session to return known stats
-      const mockStats = {
-        getSessionStats: () => ({
-          tokens: { input: 100, output: 50, total: 150 },
-          cost: 0.00123,
-        }),
-        prompt: async () => {},
-        subscribe: () => {},
-      };
-      agent['session'] = mockStats as any;
+      injectMockSession(
+        agent,
+        buildMockSession({
+          stats: { input: 100, output: 50, total: 150, cost: 0.00123 },
+          messages: [],
+        })
+      );
 
       const result = await agent.run('Hello');
       expect(result).toEqual({
@@ -366,14 +375,13 @@ describe('Agent', () => {
       await agent.ready();
 
       // Mock the session to throw an error on getSessionStats
-      const mockSession = {
+      const throwingSession = {
+        ...buildMockSession({ messages: [] }),
         getSessionStats: () => {
           throw new Error('SDK internal error');
         },
-        prompt: async () => {},
-        subscribe: () => {},
       };
-      agent['session'] = mockSession as any;
+      injectMockSession(agent, throwingSession);
 
       const result = await agent.run('Hello');
       expect(result).toEqual({
@@ -387,16 +395,13 @@ describe('Agent', () => {
       const agent = createRealAgent();
       await agent.ready();
 
-      // Mock the session to return zero values
-      const mockStats = {
-        getSessionStats: () => ({
-          tokens: { input: 0, output: 0, total: 0 },
-          cost: 0,
-        }),
-        prompt: async () => {},
-        subscribe: () => {},
-      };
-      agent['session'] = mockStats as any;
+      injectMockSession(
+        agent,
+        buildMockSession({
+          stats: { input: 0, output: 0, total: 0, cost: 0 },
+          messages: [],
+        })
+      );
 
       const result = await agent.run('Hello');
       expect(result).toEqual({
@@ -416,16 +421,13 @@ describe('Agent', () => {
       const agent = createRealAgent();
       await agent.ready();
 
-      // Mock the session to return large values
-      const mockStats = {
-        getSessionStats: () => ({
-          tokens: { input: 100000, output: 50000, total: 150000 },
-          cost: 1.2345,
-        }),
-        prompt: async () => {},
-        subscribe: () => {},
-      };
-      agent['session'] = mockStats as any;
+      injectMockSession(
+        agent,
+        buildMockSession({
+          stats: { input: 100000, output: 50000, total: 150000, cost: 1.2345 },
+          messages: [],
+        })
+      );
 
       const result = await agent.run('Hello');
       expect(result).toEqual({
@@ -472,20 +474,10 @@ describe('Agent', () => {
     });
 
     test('succeeds when loadedTools has valid tool names', async () => {
-      const infoMessages: string[] = [];
-      const testCore = {
-        ...mockCoreAdapter,
-        info: mock((msg: string) => {
-          infoMessages.push(msg);
-        }),
-      };
+      const { core: testCore, messages: infoMessages } = createCoreWithInfoCapture();
 
       const agent = new Agent(testCore as any, mockPlatformProvider, {
-        model: 'claude-sonnet-4-5',
-        provider: 'anthropic',
-        token: 'test-token',
-        thinkingLevel: 'off',
-        promptInput: '',
+        ...defaultAgentConfig,
         // 'read' is a built-in Pi SDK tool that is always available
         loadedTools: ['read'],
       });
@@ -550,20 +542,10 @@ describe('Agent', () => {
 
   describe('autoCompaction', () => {
     test('enables auto-compaction on session when config.autoCompaction is true', async () => {
-      const infoMessages: string[] = [];
-      const testCore = {
-        ...mockCoreAdapter,
-        info: mock((msg: string) => {
-          infoMessages.push(msg);
-        }),
-      };
+      const { core: testCore, messages: infoMessages } = createCoreWithInfoCapture();
 
       const agent = new Agent(testCore as any, mockPlatformProvider, {
-        model: 'claude-sonnet-4-5',
-        provider: 'anthropic',
-        token: 'test-token',
-        thinkingLevel: 'off',
-        promptInput: '',
+        ...defaultAgentConfig,
         autoCompaction: true,
       });
 
@@ -573,20 +555,10 @@ describe('Agent', () => {
     });
 
     test('does not enable auto-compaction when config.autoCompaction is false', async () => {
-      const infoMessages: string[] = [];
-      const testCore = {
-        ...mockCoreAdapter,
-        info: mock((msg: string) => {
-          infoMessages.push(msg);
-        }),
-      };
+      const { core: testCore, messages: infoMessages } = createCoreWithInfoCapture();
 
       const agent = new Agent(testCore as any, mockPlatformProvider, {
-        model: 'claude-sonnet-4-5',
-        provider: 'anthropic',
-        token: 'test-token',
-        thinkingLevel: 'off',
-        promptInput: '',
+        ...defaultAgentConfig,
         autoCompaction: false,
       });
 
@@ -596,22 +568,9 @@ describe('Agent', () => {
     });
 
     test('does not enable auto-compaction when config.autoCompaction is undefined', async () => {
-      const infoMessages: string[] = [];
-      const testCore = {
-        ...mockCoreAdapter,
-        info: mock((msg: string) => {
-          infoMessages.push(msg);
-        }),
-      };
+      const { core: testCore, messages: infoMessages } = createCoreWithInfoCapture();
 
-      const agent = new Agent(testCore as any, mockPlatformProvider, {
-        model: 'claude-sonnet-4-5',
-        provider: 'anthropic',
-        token: 'test-token',
-        thinkingLevel: 'off',
-        promptInput: '',
-        // autoCompaction omitted
-      });
+      const agent = new Agent(testCore as any, mockPlatformProvider, defaultAgentConfig);
 
       await agent.ready();
 
@@ -621,23 +580,13 @@ describe('Agent', () => {
 
   describe('extension error logging', () => {
     test('logs extension loading errors from getExtensions().errors', async () => {
-      const errorMessages: string[] = [];
-      const testCore = {
-        ...mockCoreAdapter,
-        error: mock((msg: string) => {
-          errorMessages.push(msg);
-        }),
-      };
+      const { core: testCore, messages: errorMessages } = createCoreWithErrorCapture();
 
       // Use the intentionally broken extension fixture
       const brokenExtensionPath = resolve(__dirname, '../fixtures/extensions/broken-extension.ts');
 
       const agent = new Agent(testCore as any, mockPlatformProvider, {
-        model: 'claude-sonnet-4-5',
-        provider: 'anthropic',
-        token: 'test-token',
-        thinkingLevel: 'off',
-        promptInput: '',
+        ...defaultAgentConfig,
         extensions: [brokenExtensionPath],
       });
 
@@ -653,23 +602,10 @@ describe('Agent', () => {
     });
 
     test('no extension errors logged when all extensions load cleanly', async () => {
-      const errorMessages: string[] = [];
-      const testCore = {
-        ...mockCoreAdapter,
-        error: mock((msg: string) => {
-          errorMessages.push(msg);
-        }),
-      };
+      const { core: testCore, messages: errorMessages } = createCoreWithErrorCapture();
 
       // Create agent without any extensions
-      const agent = new Agent(testCore as any, mockPlatformProvider, {
-        model: 'claude-sonnet-4-5',
-        provider: 'anthropic',
-        token: 'test-token',
-        thinkingLevel: 'off',
-        promptInput: '',
-        // No extensions
-      });
+      const agent = new Agent(testCore as any, mockPlatformProvider, defaultAgentConfig);
 
       await agent.ready();
 

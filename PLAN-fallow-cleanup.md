@@ -26,8 +26,17 @@ Strategy: incremental, one PR-sized step at a time, interleavable with other wor
     `getFinalCommentCall`, `expectFactoryCalledWith`) and refactored ~30 call sites
   - **Result:** orchestrator.spec.ts internal clones dropped from 18 groups / 202 lines
     → 5 groups / 44 lines; all 97 tests pass; `bun run validate` clean
-- [ ] **Step 1.3** — `packages/pi-orchestrator/tests/pi/helpers.ts`
+- [x] **Step 1.3** — `packages/pi-orchestrator/tests/pi/helpers/agent-session.ts`
   - Consolidate 5 groups / 85 lines in `agent-logic.spec.ts` + `resource-loader.spec.ts` self-dupes
+  - **Done:**
+    - Added `helpers/agent-session.ts` with `buildMockSession`, `injectMockSession`,
+      `userHelloMessage`
+    - Inlined `createCoreWithInfoCapture`/`createCoreWithErrorCapture` helpers and a
+      `defaultAgentConfig` constant in `agent-logic.spec.ts` (9 sites refactored)
+    - Extracted `installMockResolveExtensionSources` in `resource-loader.spec.ts` (2 sites)
+  - **Result:** agent-logic.spec.ts internal clones eliminated (5 groups / 85 lines → 0);
+    resource-loader.spec.ts self-clones eliminated (2 groups / 19 lines → 0);
+    all 49 tests pass; `bun run validate` clean
 - [ ] **Step 1.4** — `packages/pi-platform-github/tests/helpers.ts`
   - get-ci-status / get-workflow-run-logs shared setup; `comments.spec.ts`, `context.spec.ts`, `thread.spec.ts`
 - [ ] **Step 1.5** — Cross-package test helpers
@@ -65,7 +74,15 @@ Strategy: incremental, one PR-sized step at a time, interleavable with other wor
   `orchestrator.spec.ts`. Orchestrator internal clones: 18 groups / 202 lines →
   5 groups / 44 lines. Overall: 2,598 LOC / 102 groups → 2,323 LOC / 89 groups
   (10.6% → 9.6%). `bun run validate` clean; 97 tests pass.
-  Awaiting user validation before proceeding to Step 1.3.
+
+- **Step 1.3** (done) — created `packages/pi-orchestrator/tests/pi/helpers/agent-session.ts`
+  with `buildMockSession` / `injectMockSession` / `userHelloMessage`. Added local
+  helpers in `agent-logic.spec.ts` for info/error capture and a shared
+  `defaultAgentConfig`. Extracted `installMockResolveExtensionSources` in
+  `resource-loader.spec.ts`. Both target files now have 0 internal clones.
+  Overall: 2,323 LOC / 89 groups → 2,144 LOC / 83 groups (9.6% → 8.9%).
+  `bun run validate` clean; 49 tests pass.
+  Awaiting user validation before proceeding to Step 1.4.
 
 ## Guardrails (from AGENTS.md)
 
