@@ -6,52 +6,9 @@
  */
 
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as os from 'node:os';
-
-// Swallow ::notice:: / ::warning:: / ::debug:: annotations
-const realStdoutWrite = process.stdout.write.bind(process.stdout);
-const _mockedWrite = mock((...args: any[]) => {
-  const msg = String(args[0] ?? '');
-  if (msg.startsWith('::')) {
-    return true;
-  }
-  return realStdoutWrite(...(args as Parameters<typeof process.stdout.write>));
-});
-process.stdout.write = _mockedWrite as typeof process.stdout.write;
-
-const noop = (): void => {};
-
-// Mock @actions/core via shared helper
-import { registerCoreMock, coreMock } from '../../pi-orchestrator/tests/helpers/core-mock';
-registerCoreMock();
+import { setupGitHubTestEnv, createTestDeps, coreMock } from './helpers/github-test-env';
+setupGitHubTestEnv({ envPathPrefix: 'gh-event-ci' });
 const mockDebug = coreMock.debug;
-
-// Mock @actions/github context
-const mockContext = {
-  repo: {
-    owner: 'test-owner',
-    repo: 'test-repo',
-  },
-  issue: {
-    number: 42,
-  },
-  serverUrl: 'https://github.com',
-  runId: 123456789,
-  eventName: 'pull_request',
-  sha: 'context-sha-12345678',
-  payload: {},
-};
-mock.module('@actions/github', () => ({
-  context: mockContext,
-}));
-
-// Set env vars before importing modules
-process.env.INPUT_GITHUB_TOKEN = 'fake-token';
-process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
-process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-ci-${Date.now()}.json`);
-fs.writeFileSync(process.env.GITHUB_EVENT_PATH, JSON.stringify({}));
 
 // Mock octokit
 const mockPullsGet = mock(() =>
@@ -91,34 +48,6 @@ const mockOctokit = {
 };
 // octokit singleton mock no longer needed - deps pattern used instead
 
-import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
-
-function createTestDeps(
-  payloadOverrides?: Record<string, unknown>,
-  withSha = true
-): GitHubModuleDeps {
-  return {
-    octokit: mockOctokit as any,
-    context: {
-      repo: mockContext.repo,
-      issue: mockContext.issue,
-      eventName: 'pull_request',
-      ...(withSha ? { sha: 'context-sha-12345678' } : {}),
-      payload: { ...payloadOverrides },
-      serverUrl: mockContext.serverUrl,
-      runId: mockContext.runId,
-      workspace: '/tmp',
-    },
-    logger: {
-      debug: mockDebug,
-      info: noop,
-      warning: noop,
-      notice: noop,
-      error: noop,
-    },
-  };
-}
-
 // Lazy import after mocks are set up
 const getCIStatusModulePromise = import('@alexanderfortin/pi-platform-github');
 
@@ -151,7 +80,7 @@ describe('getCIStatus - platform implementation', () => {
   describe('ref resolution', () => {
     test('uses explicit ref when provided', async () => {
       const fn = await getModule();
-      const result = await fn(createTestDeps(), { ref: 'explicit-ref-abc' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'explicit-ref-abc' });
 
       expect(mockPullsGet).not.toHaveBeenCalled();
       expect(result.details.ref).toBe('explicit-ref-abc');
@@ -159,7 +88,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('resolves head SHA from pull_number', async () => {
       const fn = await getModule();
-      const result = await fn(createTestDeps(), { pull_number: 99 });
+      const result = await fn(createTestDeps(mockOctokit), { pull_number: 99 });
 
       expect(mockPullsGet).toHaveBeenCalledWith({
         owner: 'test-owner',
@@ -171,7 +100,10 @@ describe('getCIStatus - platform implementation', () => {
 
     test('prefers explicit ref over pull_number', async () => {
       const fn = await getModule();
-      const result = await fn(createTestDeps(), { ref: 'explicit-ref', pull_number: 99 });
+      const result = await fn(createTestDeps(mockOctokit), {
+        ref: 'explicit-ref',
+        pull_number: 99,
+      });
 
       expect(mockPullsGet).not.toHaveBeenCalled();
       expect(result.details.ref).toBe('explicit-ref');
@@ -179,7 +111,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('falls back to context SHA when no ref or pull_number', async () => {
       const fn = await getModule();
-      const result = await fn(createTestDeps(), {});
+      const result = await fn(createTestDeps(mockOctokit), {});
 
       expect(mockPullsGet).not.toHaveBeenCalled();
       expect(result.details.ref).toBe('context-sha-12345678');
@@ -188,7 +120,7 @@ describe('getCIStatus - platform implementation', () => {
     test('returns error message when context SHA is empty', async () => {
       const fn = await getModule();
 
-      const result = await fn(createTestDeps({}, false), {});
+      const result = await fn(createTestDeps(mockOctokit, { withSha: false }), {});
 
       expect(result.content[0].text).toContain('Could not resolve ref');
       expect(result.details.ref).toBe('');
@@ -198,7 +130,11 @@ describe('getCIStatus - platform implementation', () => {
 
     test('uses owner/repo from params when provided', async () => {
       const fn = await getModule();
-      await fn(createTestDeps(), { owner: 'custom-owner', repo: 'custom-repo', ref: 'abc' });
+      await fn(createTestDeps(mockOctokit), {
+        owner: 'custom-owner',
+        repo: 'custom-repo',
+        ref: 'abc',
+      });
 
       expect(mockChecksListForRef).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -210,7 +146,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('uses owner/repo from context when not provided', async () => {
       const fn = await getModule();
-      await fn(createTestDeps(), { ref: 'abc' });
+      await fn(createTestDeps(mockOctokit), { ref: 'abc' });
 
       expect(mockChecksListForRef).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -245,7 +181,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { ref: 'abc12345' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc12345' });
 
       expect(mockChecksListForRef).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -279,7 +215,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { ref: 'abc' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc' });
 
       expect(result.details.check_runs[0].conclusion).toBeNull();
       expect(result.details.check_runs[0].started_at).toBeNull();
@@ -287,7 +223,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('passes status filter to API', async () => {
       const fn = await getModule();
-      await fn(createTestDeps(), { ref: 'abc', status: 'completed' });
+      await fn(createTestDeps(mockOctokit), { ref: 'abc', status: 'completed' });
 
       expect(mockChecksListForRef).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -298,7 +234,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('passes filter: "all" when conclusion is provided', async () => {
       const fn = await getModule();
-      await fn(createTestDeps(), { ref: 'abc', conclusion: 'failure' });
+      await fn(createTestDeps(mockOctokit), { ref: 'abc', conclusion: 'failure' });
 
       expect(mockChecksListForRef).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -348,7 +284,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { ref: 'abc', conclusion: 'failure' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc', conclusion: 'failure' });
 
       expect(result.details.check_runs).toHaveLength(1);
       expect(result.details.check_runs[0].name).toBe('test');
@@ -375,7 +311,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { ref: 'abc12345' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc12345' });
 
       expect(result.content[0].text).toContain('https://details.example.com/1');
     });
@@ -408,7 +344,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { ref: 'abc' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc' });
 
       expect(mockListWorkflowRuns).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -423,7 +359,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('passes status filter to workflow runs API', async () => {
       const fn = await getModule();
-      await fn(createTestDeps(), { ref: 'abc', status: 'in_progress' });
+      await fn(createTestDeps(mockOctokit), { ref: 'abc', status: 'in_progress' });
 
       expect(mockListWorkflowRuns).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -482,7 +418,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { ref: 'abc', conclusion: 'failure' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc', conclusion: 'failure' });
 
       expect(result.details.workflow_runs).toHaveLength(1);
       expect(result.details.workflow_runs[0].name).toBe('Deploy');
@@ -512,7 +448,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { ref: 'abc' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc' });
 
       expect(result.details.workflow_runs[0].name).toBe('deploy.yml');
     });
@@ -541,7 +477,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { ref: 'abc' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc' });
 
       expect(result.details.workflow_runs[0].name).toBe('unknown');
       expect(result.details.workflow_runs[0].status).toBe('unknown');
@@ -573,7 +509,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { ref: 'abc' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc' });
 
       // Structured data should contain the full SHA
       expect(result.details.workflow_runs[0].head_sha).toBe(
@@ -605,7 +541,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { ref: 'abc' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc' });
 
       expect(result.details.workflow_runs[0].started_at).toBe('2024-02-01T00:00:00Z');
     });
@@ -617,7 +553,7 @@ describe('getCIStatus - platform implementation', () => {
     test('shows "No check runs" message when no results', async () => {
       const fn = await getModule();
       // Default mocks return empty arrays
-      const result = await fn(createTestDeps(), { ref: 'abc12345' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc12345' });
 
       expect(result.content[0].text).toContain(
         'No check runs or workflow runs found for this ref.'
@@ -645,7 +581,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { ref: 'abc12345' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc12345' });
 
       expect(result.content[0].text).toContain('❌');
       expect(result.content[0].text).toContain('build: completed (failure)');
@@ -676,7 +612,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { ref: 'abc12345' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc12345' });
 
       expect(result.content[0].text).toContain('✅');
       expect(result.content[0].text).toContain('CI [push]');
@@ -685,7 +621,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('includes short SHA in header', async () => {
       const fn = await getModule();
-      const result = await fn(createTestDeps(), { ref: 'abcdef1234567890' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abcdef1234567890' });
 
       expect(result.content[0].text).toContain('CI Status for abcdef12');
     });
@@ -711,7 +647,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { ref: 'abc' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc' });
 
       // "in_progress" should not be followed by a conclusion in parentheses
       expect(result.content[0].text).toContain('running: in_progress');
@@ -764,7 +700,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { ref: 'abc12345' });
+      const result = await fn(createTestDeps(mockOctokit), { ref: 'abc12345' });
 
       expect(result.details.check_runs).toHaveLength(1);
       expect(result.details.workflow_runs).toHaveLength(1);

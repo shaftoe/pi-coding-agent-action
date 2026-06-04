@@ -1,30 +1,12 @@
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
-// Swallow ::notice:: / ::warning:: / ::debug:: annotations
-const realStdoutWrite = process.stdout.write.bind(process.stdout);
-
-const _mockedWrite = mock((...args: any[]) => {
-  const msg = String(args[0] ?? '');
-  if (msg.startsWith('::')) {
-    return true;
-  }
-  return realStdoutWrite(...(args as Parameters<typeof process.stdout.write>));
-});
-process.stdout.write = _mockedWrite as typeof process.stdout.write;
-
-const noop = (): void => {};
-
-// Mock @actions/core via shared helper (transitive only — pi-platform-github
-// does not import @actions/core, but the action entry point does)
-import { registerCoreMock } from '../../pi-orchestrator/tests/helpers/core-mock';
-registerCoreMock();
-
-mock.module('@actions/github', () => ({
-  context: {},
-}));
+import { setupGitHubTestEnv } from './helpers/github-test-env';
+setupGitHubTestEnv({ envPathPrefix: 'gh-event-ctx' });
 
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 import type { PlatformContext } from '@alexanderfortin/pi-orchestrator';
+
+const noop = (): void => {};
 
 function createTestDeps(contextOverrides: Partial<PlatformContext> = {}): GitHubModuleDeps {
   const payload: Record<string, unknown> =

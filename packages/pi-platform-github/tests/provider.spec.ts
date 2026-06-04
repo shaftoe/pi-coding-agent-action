@@ -5,48 +5,10 @@
  * public API surface.
  */
 
-import { describe, expect, test, mock } from 'bun:test';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as os from 'node:os';
+import { describe, expect, test } from 'bun:test';
 
-// Swallow ::notice:: / ::warning:: / ::debug:: annotations
-const realStdoutWrite = process.stdout.write.bind(process.stdout);
-const _mockedWrite = mock((...args: unknown[]) => {
-  const msg = String(args[0] ?? '');
-  if (msg.startsWith('::')) {
-    return true;
-  }
-  return realStdoutWrite(...(args as Parameters<typeof process.stdout.write>));
-});
-process.stdout.write = _mockedWrite as typeof process.stdout.write;
-
-// Mock @actions/github context only — pi-platform-github does not import @actions/core.
-// We suppress ::notice:: / ::warning:: / ::debug:: stdout annotations via a
-// process.stdout.write wrapper (see above) instead.
-const mockContext = {
-  repo: {
-    owner: 'test-owner',
-    repo: 'test-repo',
-  },
-  issue: {
-    number: 123,
-  },
-  serverUrl: 'https://github.com',
-  runId: 123456789,
-  eventName: 'issue_comment',
-  payload: {} as Record<string, unknown>,
-};
-mock.module('@actions/github', () => ({
-  context: mockContext,
-  getOctokit: () => ({ rest: {} }),
-}));
-
-// Set env vars before importing modules
-process.env.INPUT_GITHUB_TOKEN = 'fake-token';
-process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
-process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-platform-${Date.now()}.json`);
-fs.writeFileSync(process.env.GITHUB_EVENT_PATH, JSON.stringify({}));
+import { setupGitHubTestEnv } from './helpers/github-test-env';
+setupGitHubTestEnv({ envPathPrefix: 'gh-event-platform' });
 
 // Import after mocks are set up
 import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';

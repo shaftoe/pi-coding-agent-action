@@ -1,22 +1,9 @@
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
 
-// Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core
-const realStdoutWrite = process.stdout.write.bind(process.stdout);
-const _mockedWrite = mock((...args: any[]) => {
-  const msg = String(args[0] ?? '');
-  if (msg.startsWith('::')) {
-    return true;
-  }
-  return realStdoutWrite(...(args as Parameters<typeof process.stdout.write>));
-});
-process.stdout.write = _mockedWrite as typeof process.stdout.write;
+import { setupGitHubTestEnv } from './helpers/github-test-env';
+setupGitHubTestEnv({ envPathPrefix: 'gh-event-comments' });
 
 const noop = (): void => {};
-
-// Mock @actions/core via shared helper (transitive only — pi-platform-github
-// does not import @actions/core, but the action entry point does)
-import { registerCoreMock } from '../../pi-orchestrator/tests/helpers/core-mock';
-registerCoreMock();
 
 mock.module('@actions/github', () => ({
   context: {},
@@ -84,6 +71,31 @@ function createTestDeps(payload: Record<string, unknown> = {}): GitHubModuleDeps
 }
 
 const { formatExecutionTime, formatNumber, createFinalComment } = await commentsModule;
+
+/**
+ * Run `createFinalComment` with the given deps/body/metadata, then return
+ * the first `issues.createComment` call's first argument (the comment body
+ * is at `.body`). Replaces the repeated `mock.calls[0]` extraction pattern.
+ */
+async function runFinalComment(
+  deps: ReturnType<typeof createTestDeps>,
+  body: string,
+  metadata: Record<string, unknown> = {}
+): Promise<Record<string, unknown>> {
+  await createFinalComment(deps, body, metadata);
+  const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
+  return call[0] as Record<string, unknown>;
+}
+
+/** Convenience: get the body string from a `createComment` call. */
+async function runFinalCommentBody(
+  deps: ReturnType<typeof createTestDeps>,
+  body: string,
+  metadata: Record<string, unknown> = {}
+): Promise<string> {
+  const arg = await runFinalComment(deps, body, metadata);
+  return arg.body as string;
+}
 
 describe('formatExecutionTime', () => {
   test('formats seconds only', () => {
@@ -211,11 +223,10 @@ describe('createFinalComment', () => {
   test('appends action run link to comment body', async () => {
     const deps = createTestDeps();
     const body = 'Here is a result';
-    await createFinalComment(deps, body, {});
+    const arg = await runFinalComment(deps, body, {});
 
     expect(deps.octokit.rest.issues.createComment).toHaveBeenCalled();
-    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
-    expect(call[0]).toMatchObject({
+    expect(arg).toMatchObject({
       owner: 'test-owner',
       repo: 'test-repo',
       body: expect.stringContaining(
@@ -232,10 +243,9 @@ describe('createFinalComment', () => {
       model: 'claude-sonnet-4-5',
     };
 
-    await createFinalComment(deps, body, metadata);
+    const arg = await runFinalComment(deps, body, metadata);
 
-    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
-    expect(call[0]).toMatchObject({
+    expect(arg).toMatchObject({
       body: expect.stringContaining('Model: anthropic/claude-sonnet-4-5'),
     });
   });
@@ -249,10 +259,9 @@ describe('createFinalComment', () => {
       thinkingLevel: 'medium',
     };
 
-    await createFinalComment(deps, body, metadata);
+    const arg = await runFinalComment(deps, body, metadata);
 
-    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
-    expect(call[0]).toMatchObject({
+    expect(arg).toMatchObject({
       body: expect.stringContaining('(thinking: medium)'),
     });
   });
@@ -266,10 +275,9 @@ describe('createFinalComment', () => {
       thinkingLevel: 'off',
     };
 
-    await createFinalComment(deps, body, metadata);
+    const arg = await runFinalComment(deps, body, metadata);
 
-    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
-    expect(call[0]).toMatchObject({
+    expect(arg).toMatchObject({
       body: expect.not.stringContaining('thinking:'),
     });
   });
@@ -282,17 +290,16 @@ describe('createFinalComment', () => {
       executionDuration: duration,
     };
 
-    await createFinalComment(deps, body, metadata);
+    const arg = await runFinalComment(deps, body, metadata);
 
-    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
-    expect(call[0]).toMatchObject({
+    expect(arg).toMatchObject({
       body: expect.stringContaining('Time: 2m 30s'),
     });
   });
 
   test('includes session stats with token usage', async () => {
     const deps = createTestDeps();
-    const body = 'Test result';
+    const body_ = 'Test result';
     const metadata = {
       sessionStats: {
         inputTokens: 1000,
@@ -303,17 +310,15 @@ describe('createFinalComment', () => {
       },
     };
 
-    await createFinalComment(deps, body, metadata);
+    const body = await runFinalCommentBody(deps, body_, metadata);
 
-    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
-    const commentBody = (call[0] as { body: string }).body;
-    expect(commentBody).toContain('Tokens: 1.5K ');
-    expect(commentBody).toContain('Cost: $0.01 ');
+    expect(body).toContain('Tokens: 1.5K ');
+    expect(body).toContain('Cost: $0.01 ');
   });
 
   test('includes session stats with token usage (rounds up)', async () => {
     const deps = createTestDeps();
-    const body = 'Test result';
+    const body_ = 'Test result';
     const metadata = {
       sessionStats: {
         inputTokens: 2000,
@@ -324,17 +329,15 @@ describe('createFinalComment', () => {
       },
     };
 
-    await createFinalComment(deps, body, metadata);
+    const body = await runFinalCommentBody(deps, body_, metadata);
 
-    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
-    const commentBody = (call[0] as { body: string }).body;
-    expect(commentBody).toContain('Tokens: 2.0K ');
-    expect(commentBody).toContain('Cost: $0.02 ');
+    expect(body).toContain('Tokens: 2.0K ');
+    expect(body).toContain('Cost: $0.02 ');
   });
 
   test('handles zero session stats', async () => {
     const deps = createTestDeps();
-    const body = 'Test result';
+    const body_ = 'Test result';
     const metadata = {
       sessionStats: {
         inputTokens: 0,
@@ -345,12 +348,10 @@ describe('createFinalComment', () => {
       },
     };
 
-    await createFinalComment(deps, body, metadata);
+    const body = await runFinalCommentBody(deps, body_, metadata);
 
-    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
-    const commentBody = (call[0] as { body: string }).body;
-    expect(commentBody).toContain('Tokens: 0');
-    expect(commentBody).not.toContain('Cost: $0');
+    expect(body).toContain('Tokens: 0');
+    expect(body).not.toContain('Cost: $0');
   });
 
   test('includes action version when provided', async () => {
@@ -360,10 +361,9 @@ describe('createFinalComment', () => {
       actionVersion: '2.3.0',
     };
 
-    await createFinalComment(deps, body, metadata);
+    const arg = await runFinalComment(deps, body, metadata);
 
-    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
-    expect(call[0]).toMatchObject({
+    expect(arg).toMatchObject({
       body: expect.stringContaining('Action v2.3.0'),
     });
   });
@@ -381,10 +381,9 @@ describe('createFinalComment', () => {
       },
     };
 
-    await createFinalComment(deps, body, metadata);
+    const arg = await runFinalComment(deps, body, metadata);
 
-    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
-    expect(call[0]).toMatchObject({
+    expect(arg).toMatchObject({
       body: expect.stringContaining('Pi SDK v1.2.3'),
     });
   });
@@ -398,10 +397,9 @@ describe('createFinalComment', () => {
       executionDuration: Temporal.Duration.from({ seconds: 10 }),
     };
 
-    await createFinalComment(deps, body, metadata);
+    const arg = await runFinalComment(deps, body, metadata);
 
-    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
-    expect(call[0]).toMatchObject({
+    expect(arg).toMatchObject({
       body: expect.stringMatching(/View action run.*\|.*Model:/),
     });
   });
@@ -438,12 +436,11 @@ describe('createFinalComment', () => {
     });
 
     const body = 'Top-level comment';
-    await createFinalComment(deps, body, {});
+    const arg = await runFinalComment(deps, body, {});
 
     expect(deps.octokit.rest.issues.createComment).toHaveBeenCalled();
     expect(deps.octokit.rest.pulls.createReplyForReviewComment).not.toHaveBeenCalled();
-    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
-    expect(call[0]).toMatchObject({
+    expect(arg).toMatchObject({
       issue_number: 123,
       body: expect.stringContaining(body),
     });
@@ -455,13 +452,12 @@ describe('createFinalComment', () => {
     });
 
     const body = 'Result for review';
-    await createFinalComment(deps, body, {});
 
     // Should fall through to top-level issue comment (not a review comment reply)
+    const arg = await runFinalComment(deps, body, {});
     expect(deps.octokit.rest.issues.createComment).toHaveBeenCalled();
     expect(deps.octokit.rest.pulls.createReplyForReviewComment).not.toHaveBeenCalled();
-    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
-    expect(call[0]).toMatchObject({
+    expect(arg).toMatchObject({
       issue_number: 123,
       body: expect.stringContaining(body),
     });

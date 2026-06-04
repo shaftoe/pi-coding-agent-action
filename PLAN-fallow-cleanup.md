@@ -82,7 +82,15 @@ Strategy: incremental, one PR-sized step at a time, interleavable with other wor
   `resource-loader.spec.ts`. Both target files now have 0 internal clones.
   Overall: 2,323 LOC / 89 groups → 2,144 LOC / 83 groups (9.6% → 8.9%).
   `bun run validate` clean; 49 tests pass.
-  Awaiting user validation before proceeding to Step 1.4.
+
+- **Step 1.4** (done) — created `packages/pi-platform-github/tests/helpers/github-test-env.ts`
+  with `setupGitHubTestEnv()`, `createTestDeps()`, `coreMock`, `lazyLoadModule()`.
+  Refactored 8 spec files: get-ci-status, get-workflow-run-logs (35-line clone killed),
+  comments (+ inline `runFinalComment`/`runFinalCommentBody` helpers), context,
+  provider, pull-request-logic, pull-request-update-integration, pull-request-update-logic,
+  git/commit-creator, git/tree-builder. Overall: 2,144 LOC / 83 groups → 1,655 LOC / 68
+  groups (8.9% → 6.8%). `bun run validate` clean; 916 tests pass.
+  Awaiting user validation before proceeding to Step 1.5.
 
 ## Guardrails (from AGENTS.md)
 

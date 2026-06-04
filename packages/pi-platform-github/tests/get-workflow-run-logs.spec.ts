@@ -6,51 +6,9 @@
  */
 
 import { describe, expect, test, mock, beforeEach, beforeAll } from 'bun:test';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as os from 'node:os';
-
-// Swallow ::notice:: / ::warning:: / ::debug:: annotations
-const realStdoutWrite = process.stdout.write.bind(process.stdout);
-const _mockedWrite = mock((...args: any[]) => {
-  const msg = String(args[0] ?? '');
-  if (msg.startsWith('::')) {
-    return true;
-  }
-  return realStdoutWrite(...(args as Parameters<typeof process.stdout.write>));
-});
-process.stdout.write = _mockedWrite as typeof process.stdout.write;
-
-const noop = (): void => {};
-
-// Mock @actions/core via shared helper
-import { registerCoreMock, coreMock } from '../../pi-orchestrator/tests/helpers/core-mock';
-registerCoreMock();
+import { setupGitHubTestEnv, createTestDeps, coreMock } from './helpers/github-test-env';
+setupGitHubTestEnv({ envPathPrefix: 'gh-event-logs' });
 const mockDebug = coreMock.debug;
-
-// Mock @actions/github context
-const mockContext = {
-  repo: {
-    owner: 'test-owner',
-    repo: 'test-repo',
-  },
-  issue: {
-    number: 42,
-  },
-  serverUrl: 'https://github.com',
-  runId: 123456789,
-  eventName: 'pull_request',
-  payload: {},
-};
-mock.module('@actions/github', () => ({
-  context: mockContext,
-}));
-
-// Set env vars before importing modules
-process.env.INPUT_GITHUB_TOKEN = 'fake-token';
-process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
-process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-logs-${Date.now()}.json`);
-fs.writeFileSync(process.env.GITHUB_EVENT_PATH, JSON.stringify({}));
 
 // Mock octokit
 const mockListJobsForWorkflowRun = mock(() =>
@@ -70,30 +28,6 @@ const mockOctokit = {
   },
 };
 // octokit singleton mock no longer needed - deps pattern used instead
-
-import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
-
-function createTestDeps(payloadOverrides?: Record<string, unknown>): GitHubModuleDeps {
-  return {
-    octokit: mockOctokit as any,
-    context: {
-      repo: { owner: 'test-owner', repo: 'test-repo' },
-      issue: { number: 42 },
-      eventName: 'push',
-      payload: payloadOverrides ?? {},
-      serverUrl: 'https://github.com',
-      runId: 123456789,
-      workspace: '/tmp',
-    },
-    logger: {
-      debug: mockDebug,
-      info: noop,
-      warning: noop,
-      notice: noop,
-      error: noop,
-    },
-  };
-}
 
 // Lazy import after mocks are set up
 const logsModulePromise = import('@alexanderfortin/pi-platform-github');
@@ -126,7 +60,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       const fn = await getModule();
       mockListJobsForWorkflowRun.mockImplementation(() => Promise.resolve({ data: { jobs: [] } }));
 
-      const result = await fn(createTestDeps(), { run_id: 999 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), { run_id: 999 });
 
       expect(result.content[0].text).toContain('No jobs found for workflow run 999');
       expect(result.details.run_id).toBe(999);
@@ -167,7 +101,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       );
       mockDownloadJobLogs.mockImplementation(() => Promise.resolve({ data: 'log output\n' }));
 
-      const result = await fn(createTestDeps(), { run_id: 100 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), { run_id: 100 });
 
       expect(mockListJobsForWorkflowRun).toHaveBeenCalledWith({
         owner: 'test-owner',
@@ -200,7 +134,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       );
       mockDownloadJobLogs.mockImplementation(() => Promise.resolve({ data: 'deploy log' }));
 
-      const result = await fn(createTestDeps(), { run_id: 100 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), { run_id: 100 });
 
       const job = result.details.jobs[0];
       expect(job.id).toBe(300);
@@ -230,7 +164,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       );
       mockDownloadJobLogs.mockImplementation(() => Promise.resolve({ data: '' }));
 
-      const result = await fn(createTestDeps(), { run_id: 100 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), { run_id: 100 });
 
       expect(result.details.jobs[0].status).toBe('unknown');
     });
@@ -239,7 +173,11 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       const fn = await getModule();
       mockListJobsForWorkflowRun.mockImplementation(() => Promise.resolve({ data: { jobs: [] } }));
 
-      await fn(createTestDeps(), { run_id: 100, owner: 'custom', repo: 'repo' });
+      await fn(createTestDeps(mockOctokit, { eventName: 'push' }), {
+        run_id: 100,
+        owner: 'custom',
+        repo: 'repo',
+      });
 
       expect(mockListJobsForWorkflowRun).toHaveBeenCalledWith({
         owner: 'custom',
@@ -288,7 +226,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
         return Promise.resolve({ data: log });
       });
 
-      const result = await fn(createTestDeps(), { run_id: 100 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), { run_id: 100 });
 
       expect(mockDownloadJobLogs).toHaveBeenCalledTimes(2);
       expect(mockDownloadJobLogs).toHaveBeenCalledWith(expect.objectContaining({ job_id: 401 }));
@@ -319,7 +257,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
         Promise.resolve({ data: { message: 'not a string' } })
       );
 
-      const result = await fn(createTestDeps(), { run_id: 100 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), { run_id: 100 });
 
       expect(result.details.jobs[0].log).toBe('{"message":"not a string"}');
     });
@@ -363,7 +301,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
         return Promise.reject(new Error('Logs expired'));
       });
 
-      const result = await fn(createTestDeps(), { run_id: 100 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), { run_id: 100 });
 
       // First job should have its log
       expect(result.details.jobs[0].log).toBe('build log output');
@@ -398,7 +336,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       );
       mockDownloadJobLogs.mockImplementation(() => Promise.resolve({ data: longLog }));
 
-      const result = await fn(createTestDeps(), { run_id: 100 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), { run_id: 100 });
 
       // The log should be truncated since 60000 > 51200
       expect(result.details.jobs[0].truncated).toBe(true);
@@ -427,7 +365,10 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       mockDownloadJobLogs.mockImplementation(() => Promise.resolve({ data: bigLog }));
 
       // Request 2MB, but cap at 1MB
-      const result = await fn(createTestDeps(), { run_id: 100, max_bytes: 2_000_000 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), {
+        run_id: 100,
+        max_bytes: 2_000_000,
+      });
 
       expect(result.details.jobs[0].truncated).toBe(true);
       // log is 2MB, budget capped at 1MB: log must be truncated
@@ -458,7 +399,10 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       );
       mockDownloadJobLogs.mockImplementation(() => Promise.resolve({ data: log }));
 
-      const result = await fn(createTestDeps(), { run_id: 100, max_bytes: 100 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), {
+        run_id: 100,
+        max_bytes: 100,
+      });
 
       expect(result.details.jobs[0].truncated).toBe(true);
       expect(result.details.truncated).toBe(true);
@@ -486,7 +430,10 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       );
       mockDownloadJobLogs.mockImplementation(() => Promise.resolve({ data: 'short log' }));
 
-      const result = await fn(createTestDeps(), { run_id: 100, max_bytes: 10000 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), {
+        run_id: 100,
+        max_bytes: 10000,
+      });
 
       expect(result.details.jobs[0].truncated).toBe(false);
       expect(result.details.truncated).toBe(false);
@@ -515,7 +462,10 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       mockDownloadJobLogs.mockImplementation(() => Promise.resolve({ data: log }));
 
       // Use a budget smaller than the full log (30 bytes) but large enough for prefix (16 bytes) + partial tail
-      const result = await fn(createTestDeps(), { run_id: 100, max_bytes: 25 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), {
+        run_id: 100,
+        max_bytes: 25,
+      });
 
       expect(result.details.jobs[0].truncated).toBe(true);
       // Should snap to a newline boundary (not cut mid-line)
@@ -562,7 +512,10 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       mockDownloadJobLogs.mockImplementation(() => Promise.resolve({ data: 'x'.repeat(200) }));
 
       // Give a budget that only covers ~2 jobs' worth of log
-      const result = await fn(createTestDeps(), { run_id: 100, max_bytes: 250 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), {
+        run_id: 100,
+        max_bytes: 250,
+      });
 
       const truncatedCount = result.details.jobs.filter((j: any) => j.truncated).length;
       expect(truncatedCount).toBeGreaterThanOrEqual(1);
@@ -588,7 +541,10 @@ describe('getWorkflowRunLogs - platform implementation', () => {
         })
       );
 
-      const result = await fn(createTestDeps(), { run_id: 100, max_bytes: 0 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), {
+        run_id: 100,
+        max_bytes: 0,
+      });
 
       expect(result.details.jobs[0].truncated).toBe(true);
       expect(result.details.jobs[0].log).toContain('byte budget exhausted');
@@ -625,7 +581,10 @@ describe('getWorkflowRunLogs - platform implementation', () => {
         .mockImplementationOnce(() => Promise.resolve({ data: 'hello' }))
         .mockImplementationOnce(() => Promise.resolve({ data: 'world' }));
 
-      const result = await fn(createTestDeps(), { run_id: 100, max_bytes: 10000 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), {
+        run_id: 100,
+        max_bytes: 10000,
+      });
 
       expect(result.details.total_bytes).toBe(
         Buffer.byteLength('hello', 'utf8') + Buffer.byteLength('world', 'utf8')
@@ -656,7 +615,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       );
       mockDownloadJobLogs.mockImplementation(() => Promise.resolve({ data: 'output\n' }));
 
-      const result = await fn(createTestDeps(), { run_id: 42 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), { run_id: 42 });
 
       expect(result.content[0].text).toContain('Workflow Run #42');
     });
@@ -681,7 +640,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       );
       mockDownloadJobLogs.mockImplementation(() => Promise.resolve({ data: 'error line\n' }));
 
-      const result = await fn(createTestDeps(), { run_id: 100 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), { run_id: 100 });
 
       expect(result.content[0].text).toContain('Job: build (failure)');
       expect(result.content[0].text).toContain('❌');
@@ -707,7 +666,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       );
       mockDownloadJobLogs.mockImplementation(() => Promise.resolve({ data: 'still running\n' }));
 
-      const result = await fn(createTestDeps(), { run_id: 100 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), { run_id: 100 });
 
       expect(result.content[0].text).toContain('Job: running (in_progress)');
       expect(result.content[0].text).toContain('🔄');
@@ -735,7 +694,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
         Promise.resolve({ data: 'Line 1\nLine 2\nLine 3\n' })
       );
 
-      const result = await fn(createTestDeps(), { run_id: 100 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), { run_id: 100 });
 
       expect(result.content[0].text).toContain('Line 1\nLine 2\nLine 3');
     });
@@ -767,7 +726,10 @@ describe('getWorkflowRunLogs - platform implementation', () => {
       mockDownloadJobLogs.mockImplementation(() => Promise.resolve({ data: log }));
 
       // Small budget that will force truncation across multi-byte boundaries
-      const result = await fn(createTestDeps(), { run_id: 100, max_bytes: 20 });
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), {
+        run_id: 100,
+        max_bytes: 20,
+      });
 
       expect(result.details.jobs[0].truncated).toBe(true);
       // The truncated log should be valid UTF-8 (no replacement characters)

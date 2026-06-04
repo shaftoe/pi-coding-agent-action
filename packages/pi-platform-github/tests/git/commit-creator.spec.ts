@@ -1,24 +1,7 @@
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as os from 'node:os';
 
-// Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core
-const realStdoutWrite = process.stdout.write.bind(process.stdout);
-const _mockedWrite = mock((...args: unknown[]) => {
-  const msg = String(args[0] ?? '');
-  if (msg.startsWith('::')) {
-    return true;
-  }
-  return realStdoutWrite(...(args as Parameters<typeof process.stdout.write>));
-});
-process.stdout.write = _mockedWrite as typeof process.stdout.write;
-
-// Set env vars BEFORE importing commit-creator.ts
-process.env.INPUT_GITHUB_TOKEN = 'fake-token';
-process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
-process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-${Date.now()}.json`);
-fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
+import { setupGitHubTestEnv } from '../helpers/github-test-env';
+setupGitHubTestEnv({ envPathPrefix: 'gh-event-commit' });
 
 // Mock octokit
 const mockCreateCommit = mock(() =>
