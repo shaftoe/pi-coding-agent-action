@@ -8,96 +8,12 @@
 
 import { describe, expect, test, mock } from 'bun:test';
 import { getPRDiffToolFactory } from '@alexanderfortin/pi-orchestrator';
-import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
-import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { DiffConfig } from '@alexanderfortin/pi-orchestrator';
+import { mockExtensionContext as mockCtx, createMockProvider } from '../../helpers/tool-mocks';
 
-// Minimal mock ExtensionContext for tool execute signature
-const mockCtx = {
-  ui: {},
-  hasUI: false,
-  cwd: '/tmp',
-  sessionManager: {},
-  modelRegistry: {},
-  model: undefined,
-  isIdle: () => true,
-  signal: undefined,
-  abort: () => {},
-  hasPendingMessages: () => false,
-  shutdown: () => {},
-  getContextUsage: () => undefined,
-  compact: () => {},
-  getSystemPrompt: () => '',
-} as unknown as ExtensionContext;
-
-// Mock platform provider factory
-const createMockProvider = (overrides?: Partial<PlatformProvider>): PlatformProvider => ({
-  type: 'github',
-  getContext: () => ({
-    repo: { owner: 'test-owner', repo: 'test-repo' },
-    issue: { number: 42 },
-    eventName: 'pull_request',
-    payload: {},
-    serverUrl: 'https://github.com',
-    runId: 123,
-    workspace: '/tmp',
-  }),
-  addReaction: async () => undefined,
-  deleteReaction: async () => {},
-  createFinalComment: async () => {},
-  getPrompt: async () => undefined,
-  getStartTime: () => undefined,
-  createPullRequest: async () => ({
-    content: [{ type: 'text' as const, text: 'PR created' }],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: '',
-      baseBranch: '',
-      dryRun: false,
-    },
-  }),
-  updatePullRequest: async () => ({
-    content: [{ type: 'text' as const, text: 'PR updated' }],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: '',
-      baseBranch: '',
-      dryRun: false,
-    },
-  }),
-  getIssueOrPRThread: async () => undefined,
-  getPRDiff: async () => '',
-  createReview: async () => ({
-    content: [{ type: 'text' as const, text: 'Review created' }],
-    details: {
-      reviewId: 1,
-      reviewUrl: '',
-      pullRequestNumber: 1,
-      event: 'COMMENT',
-      commentCount: 1,
-    },
-  }),
-  getCIStatus: async () => ({
-    content: [{ type: 'text' as const, text: 'CI status fetched' }],
-    details: {
-      ref: 'abc123',
-      check_runs: [],
-      workflow_runs: [],
-    },
-  }),
-  getWorkflowRunLogs: async () => ({
-    content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
-    details: {
-      run_id: 0,
-      jobs: [],
-      total_bytes: 0,
-      truncated: false,
-    },
-  }),
-  ...overrides,
-});
+// get_pr_diff runs in the pull_request event context with PR #42
+// (some assertions rely on that default pull_number).
+const providerOptions = { issueNumber: 42, eventName: 'pull_request' as const };
 
 const SAMPLE_DIFF = `diff --git a/src/index.ts b/src/index.ts
 index abc1234..def5678 100644
@@ -118,7 +34,7 @@ describe('get_pr_diff tool - execution', () => {
 
   test('execute returns diff from provider', async () => {
     const getPRDiff = mock(async () => SAMPLE_DIFF);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const tool = getPRDiffToolFactory(provider);
 
     const result = await tool.execute(
@@ -139,7 +55,7 @@ describe('get_pr_diff tool - execution', () => {
 
   test('execute forwards ignore_files to provider', async () => {
     const getPRDiff = mock(async () => SAMPLE_DIFF);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const tool = getPRDiffToolFactory(provider);
 
     await tool.execute(
@@ -162,7 +78,7 @@ describe('get_pr_diff tool - execution', () => {
 
   test('execute passes undefined ignore_files when not provided', async () => {
     const getPRDiff = mock(async () => SAMPLE_DIFF);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const tool = getPRDiffToolFactory(provider);
 
     await tool.execute(
@@ -179,7 +95,7 @@ describe('get_pr_diff tool - execution', () => {
 
   test('execute merges default ignore patterns with caller-provided ones', async () => {
     const getPRDiff = mock(async () => SAMPLE_DIFF);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const config = { diffIgnorePatterns: ['dist/', 'node_modules/'] } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
@@ -208,7 +124,7 @@ describe('get_pr_diff tool - execution', () => {
 
   test('execute uses default ignore patterns when caller provides none', async () => {
     const getPRDiff = mock(async () => SAMPLE_DIFF);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const config = { diffIgnorePatterns: ['dist/', 'package-lock.json'] } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
@@ -226,7 +142,7 @@ describe('get_pr_diff tool - execution', () => {
 
   test('execute includes ignored_files in details when provided', async () => {
     const getPRDiff = mock(async () => SAMPLE_DIFF);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const tool = getPRDiffToolFactory(provider);
 
     const result = await tool.execute(
@@ -247,7 +163,7 @@ describe('get_pr_diff tool - execution', () => {
 
   test('execute omits ignored_files from details when not provided', async () => {
     const getPRDiff = mock(async () => SAMPLE_DIFF);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const tool = getPRDiffToolFactory(provider);
 
     const result = await tool.execute(
@@ -263,7 +179,7 @@ describe('get_pr_diff tool - execution', () => {
 
   test('execute returns no-diff message when provider returns empty', async () => {
     const getPRDiff = mock(async () => '');
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const tool = getPRDiffToolFactory(provider);
 
     const result = await tool.execute(
@@ -283,7 +199,7 @@ describe('get_pr_diff tool - execution', () => {
     const getPRDiff = mock(async () => {
       throw new Error('API rate limit exceeded');
     });
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const tool = getPRDiffToolFactory(provider);
 
     await expect(
@@ -300,7 +216,7 @@ describe('get_pr_diff tool - execution', () => {
   test('execute truncates diff when max_lines is exceeded', async () => {
     const longDiff = Array.from({ length: 50 }, (_, i) => `line ${i}`).join('\n');
     const getPRDiff = mock(async () => longDiff);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const tool = getPRDiffToolFactory(provider);
 
     const result = await tool.execute(
@@ -322,7 +238,7 @@ describe('get_pr_diff tool - execution', () => {
     // Create a diff that is ~500 bytes
     const byteDiff = Array.from({ length: 50 }, (_, i) => `line ${i} with some content`).join('\n');
     const getPRDiff = mock(async () => byteDiff);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const config = { diffMaxBytes: 200 } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
@@ -349,7 +265,7 @@ describe('get_pr_diff tool - execution', () => {
       '\n'
     );
     const getPRDiff = mock(async () => bigDiff);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const config = { diffMaxBytes: 500 } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
@@ -369,7 +285,7 @@ describe('get_pr_diff tool - execution', () => {
     // Create a diff that will be byte-truncated to fewer lines than maxLines
     const byteDiff = Array.from({ length: 100 }, (_, i) => `line ${i} with content`).join('\n');
     const getPRDiff = mock(async () => byteDiff);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const config = { diffMaxBytes: 300 } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
@@ -394,7 +310,7 @@ describe('get_pr_diff tool - execution', () => {
   test('execute uses diffConfig maxLines when no max_lines param provided', async () => {
     const longDiff = Array.from({ length: 50 }, (_, i) => `line ${i}`).join('\n');
     const getPRDiff = mock(async () => longDiff);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const config = { diffMaxLines: 5 } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
@@ -418,7 +334,7 @@ describe('get_pr_diff tool - execution', () => {
       (_, i) => `line ${i}: 🎉🎉🎉 日本語テスト émoji`
     ).join('\n');
     const getPRDiff = mock(async () => multiByteDiff);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const config = { diffMaxBytes: 80 } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
@@ -444,7 +360,7 @@ describe('get_pr_diff tool - execution', () => {
       '\n'
     );
     const getPRDiff = mock(async () => bigDiff);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const config = { diffMaxBytes: 500 } as DiffConfig;
     const tool = getPRDiffToolFactory(provider, config);
 
@@ -465,7 +381,7 @@ describe('get_pr_diff tool - execution', () => {
 
   test('execute uses context defaults when owner/repo/pull_number not provided', async () => {
     const getPRDiff = mock(async () => SAMPLE_DIFF);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const tool = getPRDiffToolFactory(provider);
 
     await tool.execute('call-8', {}, undefined, undefined, mockCtx);
@@ -479,7 +395,7 @@ describe('get_pr_diff tool - execution', () => {
 
   test('execute returns cancellation result when signal is aborted', async () => {
     const getPRDiff = mock(async () => SAMPLE_DIFF);
-    const provider = createMockProvider({ getPRDiff });
+    const provider = createMockProvider({ getPRDiff }, providerOptions);
     const tool = getPRDiffToolFactory(provider);
 
     const controller = new AbortController();

@@ -32,7 +32,7 @@ registerCoreMock();
 coreMock.getInput.mockImplementation(() => '/pi');
 
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
+import { createMockProvider } from '../helpers/tool-mocks';
 
 // Dynamic import to ensure env vars and mocks are set before module loads
 const toolsModule = import('@alexanderfortin/pi-orchestrator');
@@ -59,72 +59,7 @@ interface TestTool {
 }
 
 // Mock platform provider for tools
-const mockProvider: PlatformProvider = {
-  type: 'github',
-  getContext: () => ({
-    repo: { owner: 'test-owner', repo: 'test-repo' },
-    issue: { number: 1 },
-    eventName: 'issue_comment',
-    payload: {},
-    serverUrl: 'https://github.com',
-    runId: 123,
-    workspace: '/tmp',
-  }),
-  addReaction: async () => undefined,
-  deleteReaction: async () => {},
-  createFinalComment: async () => {},
-  getPrompt: async () => undefined,
-  getStartTime: () => undefined,
-  createPullRequest: async () => ({
-    content: [{ type: 'text' as const, text: 'PR created' }],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: '',
-      baseBranch: '',
-      dryRun: false,
-    },
-  }),
-  updatePullRequest: async () => ({
-    content: [{ type: 'text' as const, text: 'PR updated' }],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: '',
-      baseBranch: '',
-      dryRun: false,
-    },
-  }),
-  getIssueOrPRThread: async () => undefined,
-  getPRDiff: async () => '',
-  createReview: async () => ({
-    content: [{ type: 'text' as const, text: 'Review created' }],
-    details: {
-      reviewId: 1,
-      reviewUrl: '',
-      pullRequestNumber: 1,
-      event: 'COMMENT',
-      commentCount: 1,
-    },
-  }),
-  getCIStatus: async () => ({
-    content: [{ type: 'text' as const, text: 'CI status fetched' }],
-    details: {
-      ref: 'abc123',
-      check_runs: [],
-      workflow_runs: [],
-    },
-  }),
-  getWorkflowRunLogs: async () => ({
-    content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
-    details: {
-      run_id: 0,
-      jobs: [],
-      total_bytes: 0,
-      truncated: false,
-    },
-  }),
-};
+const mockProvider = createMockProvider();
 
 function captureRegisteredTools() {
   const tools: unknown[] = [];

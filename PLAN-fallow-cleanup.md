@@ -1,0 +1,64 @@
+# Plan: fallow-cleanup
+
+Goal: make `bun run fallow` exit 0 (dupes ✓ and health ✓).
+Strategy: incremental, one PR-sized step at a time, interleavable with other work.
+
+## Current state (baseline)
+
+- ✅ Dead code: clean
+- ❌ Duplication: 3,333 LOC / 13.3% across 36 files (110 clone groups)
+- ❌ Complexity: 57 functions above threshold; MI 92.3 (good)
+- Refactoring targets: `pull-request-update.ts`, `get-workflow-run-logs.ts`
+
+## Phase 1 — Test helpers (kills ~80% of duplication)
+
+- [x] **Step 1.1** — `packages/pi-orchestrator/tests/helpers/tool-mocks.ts`
+  - Extract the 36-line tool-execution scaffold repeated 8×
+  - Removes clone group `dup:f0b84422` + several larger groups
+  - **Done:** added `tests/helpers/tool-mocks.ts` and updated 9 spec files
+    (`create-pr`, `create-review`, `get-ci-status`, `get-pr-diff`, `get-thread`,
+    `get-workflow-run-logs`, `update-pr`, `tools.spec`, `execution-utils`)
+  - **Result:** −8 clone groups, −735 duplicated LOC (13.3% → 10.6%);
+    all 171 tests pass; `bun run validate` clean
+- [ ] **Step 1.2** — `packages/pi-orchestrator/tests/orchestrator/helpers.ts`
+  - Target 18 clone groups / 202 lines in `orchestrator.spec.ts`
+- [ ] **Step 1.3** — `packages/pi-orchestrator/tests/pi/helpers.ts`
+  - Consolidate 5 groups / 85 lines in `agent-logic.spec.ts` + `resource-loader.spec.ts` self-dupes
+- [ ] **Step 1.4** — `packages/pi-platform-github/tests/helpers.ts`
+  - get-ci-status / get-workflow-run-logs shared setup; `comments.spec.ts`, `context.spec.ts`, `thread.spec.ts`
+- [ ] **Step 1.5** — Cross-package test helpers
+  - file-scanner.spec ↔ git.spec (35 lines); e2e specs (97 + 85 lines)
+
+## Phase 2 — Complexity hotspots (one file per PR)
+
+- [ ] **Step 2.1** — `packages/pi-platform-github/src/tools/pull-request-update.ts` (`updatePullRequest`)
+- [ ] **Step 2.2** — `packages/pi-platform-github/src/tools/get-workflow-run-logs.ts` (`getWorkflowRunLogs`)
+- [ ] **Step 2.3** — `packages/pi-action/src/adapters/config.ts` (`gatherActionsConfig`)
+- [ ] **Step 2.4** — `packages/pi-orchestrator/src/pi/tools/get-pr-diff.ts` (`execute`)
+- [ ] **Step 2.5** — `packages/pi-platform-github/src/comments.ts` (`createFinalComment`)
+- [ ] **Step 2.6** — `packages/pi-platform-github/src/tools/review.ts` (`validateCreateReviewParams`)
+- [ ] **Step 2.7** — `packages/pi-orchestrator/src/pi/tools/common.ts` (`formatThreadAsText`)
+- [ ] **Step 2.8** — `packages/pi-orchestrator/src/orchestrator.ts` (`execute`, `finalize`)
+- [ ] **Step 2.9** — `packages/pi-platform-github/src/tools/{pull-request,thread,get-ci-status}.ts`
+- [ ] **Step 2.10** — Remaining HIGH-tier (CRAP 56–156), bundled 3–5 per PR
+
+## Phase 3 — Suppressions & final tuning
+
+- [ ] **Step 3.1** Add `// fallow-ignore-next-line complexity` with justification where decomposition hurts readability
+- [ ] **Step 3.2** Confirm `bun run fallow` exits 0
+- [ ] **Step 3.3** Confirm `bun run validate` passes
+
+## Progress log
+
+- **Step 1.1** (done) — created `packages/pi-orchestrator/tests/helpers/tool-mocks.ts`
+  exposing `mockExtensionContext` and `createMockProvider(overrides?, options?)`.
+  Replaced ~70-line boilerplate block in 9 specs. Fallow duplication dropped from
+  3,333 LOC / 110 groups → 2,598 LOC / 102 groups. `bun run validate` clean.
+  Awaiting user validation before proceeding to Step 1.2.
+
+## Guardrails (from AGENTS.md)
+
+- Run `bun run validate` after every step
+- Do not edit `CHANGELOG.md`
+- Test business logic via real specs, not mocks
+- Pre-push lefthook runs dead-code check

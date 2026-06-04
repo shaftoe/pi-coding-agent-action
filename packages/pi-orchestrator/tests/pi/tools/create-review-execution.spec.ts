@@ -1,96 +1,27 @@
 import { describe, expect, test } from 'bun:test';
 import { createReviewToolFactory } from '@alexanderfortin/pi-orchestrator';
-import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
-import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { mockExtensionContext as mockCtx, createMockProvider } from '../../helpers/tool-mocks';
 
-// Minimal mock ExtensionContext for tool execute signature
-const mockCtx = {
-  ui: {},
-  hasUI: false,
-  cwd: '/tmp',
-  sessionManager: {},
-  modelRegistry: {},
-  model: undefined,
-  isIdle: () => true,
-  signal: undefined,
-  abort: () => {},
-  hasPendingMessages: () => false,
-  shutdown: () => {},
-  getContextUsage: () => undefined,
-  compact: () => {},
-  getSystemPrompt: () => '',
-} as unknown as ExtensionContext;
+// create_review tool runs in the pull_request_review_comment event context.
+const providerOptions = { eventName: 'pull_request_review_comment' };
 
-// Mock platform provider factory
-const createMockProvider = (overrides?: Partial<PlatformProvider>): PlatformProvider => ({
-  type: 'github',
-  getContext: () => ({
-    repo: { owner: 'test-owner', repo: 'test-repo' },
-    issue: { number: 1 },
-    eventName: 'pull_request_review_comment',
-    payload: {},
-    serverUrl: 'https://github.com',
-    runId: 123,
-    workspace: '/tmp',
-  }),
-  addReaction: async () => undefined,
-  deleteReaction: async () => {},
-  createFinalComment: async () => {},
-  getPrompt: async () => undefined,
-  getStartTime: () => undefined,
-  createPullRequest: async () => ({
-    content: [{ type: 'text' as const, text: 'PR created' }],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: '',
-      baseBranch: '',
-      dryRun: false,
-    },
-  }),
-  updatePullRequest: async () => ({
-    content: [{ type: 'text' as const, text: 'PR updated' }],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: '',
-      baseBranch: '',
-      dryRun: false,
-    },
-  }),
-  getIssueOrPRThread: async () => undefined,
-  getPRDiff: async () => '',
-  createReview: async () => ({
-    content: [{ type: 'text' as const, text: 'Review created' }],
-    details: {
-      reviewId: 42,
-      reviewUrl: 'https://github.com/test-owner/test-repo/pull/1#pullrequestreview-42',
-      pullRequestNumber: 1,
-      event: 'COMMENT',
-      commentCount: 1,
-    },
-  }),
-  getCIStatus: async () => ({
-    content: [{ type: 'text' as const, text: 'CI status fetched' }],
-    details: {
-      ref: 'abc123',
-      check_runs: [],
-      workflow_runs: [],
-    },
-  }),
-  getWorkflowRunLogs: async () => ({
-    content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
-    details: {
-      run_id: 0,
-      jobs: [],
-      total_bytes: 0,
-      truncated: false,
-    },
-  }),
-  ...overrides,
-});
-
-const mockProvider = createMockProvider();
+// Stub createReview so the default happy-path assertions match the original
+// fixture (reviewId: 42, full reviewUrl).
+const mockProvider = createMockProvider(
+  {
+    createReview: async () => ({
+      content: [{ type: 'text' as const, text: 'Review created' }],
+      details: {
+        reviewId: 42,
+        reviewUrl: 'https://github.com/test-owner/test-repo/pull/1#pullrequestreview-42',
+        pullRequestNumber: 1,
+        event: 'COMMENT',
+        commentCount: 1,
+      },
+    }),
+  },
+  providerOptions
+);
 const createReviewTool = createReviewToolFactory(mockProvider);
 
 describe('create_pull_request_review tool - execution', () => {

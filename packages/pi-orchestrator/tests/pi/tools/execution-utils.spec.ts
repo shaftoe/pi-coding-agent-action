@@ -6,29 +6,11 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 // Import directly from source file using namespace import to work around bun test module resolution
 import * as ToolExecution from '@alexanderfortin/pi-orchestrator';
+import { mockExtensionContext as mockCtx } from '../../helpers/tool-mocks';
 
 const { withCancellation, createCancellationResult, buildParams } = ToolExecution;
-
-// Minimal mock ExtensionContext for tool execute signature (v0.68.0+)
-const mockCtx = {
-  ui: {},
-  hasUI: false,
-  cwd: '/tmp',
-  sessionManager: {},
-  modelRegistry: {},
-  model: undefined,
-  isIdle: () => true,
-  signal: undefined,
-  abort: () => {},
-  hasPendingMessages: () => false,
-  shutdown: () => {},
-  getContextUsage: () => undefined,
-  compact: () => {},
-  getSystemPrompt: () => '',
-} as unknown as ExtensionContext;
 
 describe('tool-execution utilities', () => {
   describe('createCancellationResult', () => {

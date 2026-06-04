@@ -7,95 +7,10 @@
 
 import { describe, expect, test, mock } from 'bun:test';
 import { getWorkflowRunLogsToolFactory } from '@alexanderfortin/pi-orchestrator';
-import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
-import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { mockExtensionContext as mockCtx, createMockProvider } from '../../helpers/tool-mocks';
 
-// Minimal mock ExtensionContext for tool execute signature
-const mockCtx = {
-  ui: {},
-  hasUI: false,
-  cwd: '/tmp',
-  sessionManager: {},
-  modelRegistry: {},
-  model: undefined,
-  isIdle: () => true,
-  signal: undefined,
-  abort: () => {},
-  hasPendingMessages: () => false,
-  shutdown: () => {},
-  getContextUsage: () => undefined,
-  compact: () => {},
-  getSystemPrompt: () => '',
-} as unknown as ExtensionContext;
-
-// Mock platform provider factory
-const createMockProvider = (overrides?: Partial<PlatformProvider>): PlatformProvider => ({
-  type: 'github',
-  getContext: () => ({
-    repo: { owner: 'test-owner', repo: 'test-repo' },
-    issue: { number: 42 },
-    eventName: 'pull_request',
-    payload: {},
-    serverUrl: 'https://github.com',
-    runId: 123,
-    workspace: '/tmp',
-  }),
-  addReaction: async () => undefined,
-  deleteReaction: async () => {},
-  createFinalComment: async () => {},
-  getPrompt: async () => undefined,
-  getStartTime: () => undefined,
-  createPullRequest: async () => ({
-    content: [{ type: 'text' as const, text: 'PR created' }],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: '',
-      baseBranch: '',
-      dryRun: false,
-    },
-  }),
-  updatePullRequest: async () => ({
-    content: [{ type: 'text' as const, text: 'PR updated' }],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: '',
-      baseBranch: '',
-      dryRun: false,
-    },
-  }),
-  getIssueOrPRThread: async () => undefined,
-  getPRDiff: async () => '',
-  createReview: async () => ({
-    content: [{ type: 'text' as const, text: 'Review created' }],
-    details: {
-      reviewId: 1,
-      reviewUrl: '',
-      pullRequestNumber: 1,
-      event: 'COMMENT',
-      commentCount: 1,
-    },
-  }),
-  getCIStatus: async () => ({
-    content: [{ type: 'text' as const, text: 'CI status fetched' }],
-    details: {
-      ref: 'abc123',
-      check_runs: [],
-      workflow_runs: [],
-    },
-  }),
-  getWorkflowRunLogs: async () => ({
-    content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
-    details: {
-      run_id: 0,
-      jobs: [],
-      total_bytes: 0,
-      truncated: false,
-    },
-  }),
-  ...overrides,
-});
+// get_workflow_run_logs runs in the pull_request event context with PR #42.
+const providerOptions = { issueNumber: 42, eventName: 'pull_request' as const };
 
 const SAMPLE_WORKFLOW_LOGS = {
   run_id: 100,
@@ -130,7 +45,7 @@ describe('get_workflow_run_logs tool - execution', () => {
       content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
       details: SAMPLE_WORKFLOW_LOGS,
     }));
-    const provider = createMockProvider({ getWorkflowRunLogs });
+    const provider = createMockProvider({ getWorkflowRunLogs }, providerOptions);
     const tool = getWorkflowRunLogsToolFactory(provider);
 
     const result = await tool.execute('call-1', { run_id: 100 }, undefined, undefined, mockCtx);
@@ -148,7 +63,7 @@ describe('get_workflow_run_logs tool - execution', () => {
       content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
       details: SAMPLE_WORKFLOW_LOGS,
     }));
-    const provider = createMockProvider({ getWorkflowRunLogs });
+    const provider = createMockProvider({ getWorkflowRunLogs }, providerOptions);
     const tool = getWorkflowRunLogsToolFactory(provider);
 
     await tool.execute('call-2', { run_id: 999 }, undefined, undefined, mockCtx);
@@ -162,7 +77,7 @@ describe('get_workflow_run_logs tool - execution', () => {
       content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
       details: SAMPLE_WORKFLOW_LOGS,
     }));
-    const provider = createMockProvider({ getWorkflowRunLogs });
+    const provider = createMockProvider({ getWorkflowRunLogs }, providerOptions);
     const tool = getWorkflowRunLogsToolFactory(provider);
 
     await tool.execute('call-3', { run_id: 100, max_bytes: 10240 }, undefined, undefined, mockCtx);
@@ -176,7 +91,7 @@ describe('get_workflow_run_logs tool - execution', () => {
       content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
       details: SAMPLE_WORKFLOW_LOGS,
     }));
-    const provider = createMockProvider({ getWorkflowRunLogs });
+    const provider = createMockProvider({ getWorkflowRunLogs }, providerOptions);
     const tool = getWorkflowRunLogsToolFactory(provider);
 
     await tool.execute('call-4', { run_id: 100 }, undefined, undefined, mockCtx);
@@ -189,7 +104,7 @@ describe('get_workflow_run_logs tool - execution', () => {
     const getWorkflowRunLogs = mock(async () => {
       throw new Error('Workflow run not found');
     });
-    const provider = createMockProvider({ getWorkflowRunLogs });
+    const provider = createMockProvider({ getWorkflowRunLogs }, providerOptions);
     const tool = getWorkflowRunLogsToolFactory(provider);
 
     await expect(
@@ -202,7 +117,7 @@ describe('get_workflow_run_logs tool - execution', () => {
       content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
       details: SAMPLE_WORKFLOW_LOGS,
     }));
-    const provider = createMockProvider({ getWorkflowRunLogs });
+    const provider = createMockProvider({ getWorkflowRunLogs }, providerOptions);
     const tool = getWorkflowRunLogsToolFactory(provider);
 
     const controller = new AbortController();
