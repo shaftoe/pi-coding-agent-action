@@ -21,7 +21,7 @@ export type PlatformType = 'github' | 'codeberg' | 'forgejo';
 /**
  * Platform-agnostic context information extracted from the CI/CD environment.
  *
- * Abstractates the event payload, repository info, and other context needed
+ * Abstracts the event payload, repository info, and other context needed
  * by the action, regardless of which platform (GitHub, Codeberg, Forgejo)
  * triggered the workflow.
  */

@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, test, beforeEach } from 'bun:test';
-import { coreMock, registerCoreMock } from '../../../../tests/helpers/core-mock';
+import { coreMock, registerCoreMock } from '../../../pi-orchestrator/tests/helpers/core-mock';
 
 registerCoreMock();
 

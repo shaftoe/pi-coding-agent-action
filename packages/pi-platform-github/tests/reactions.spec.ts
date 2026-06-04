@@ -8,7 +8,7 @@ const debugLogger = (msg: string): void => {
 };
 
 // Mock @actions/core via shared helper (override debug to use debugLogger)
-import { registerCoreMock, coreMock } from '../../../tests/helpers/core-mock';
+import { registerCoreMock, coreMock } from '../../pi-orchestrator/tests/helpers/core-mock';
 registerCoreMock();
 coreMock.debug.mockImplementation(debugLogger);
 

@@ -5,7 +5,7 @@ on:
     branches:
       - develop
     paths:
-      - 'src/**'
+      - 'packages/**'
       - 'package.json'
       - 'bun.lock'
       - 'tsconfig.json'

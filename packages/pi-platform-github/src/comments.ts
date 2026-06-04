@@ -12,27 +12,16 @@
 import type { RestEndpointMethodTypes } from '@octokit/plugin-rest-endpoint-methods';
 import { Temporal } from '@js-temporal/polyfill';
 import type { GitHubModuleDeps } from './types';
-import type { SessionStats } from '@alexanderfortin/pi-orchestrator';
+import type { CommentMetadata } from '@alexanderfortin/pi-orchestrator';
 
 /**
  * Metadata to include in the comment footer.
+ *
+ * Re-exported from `@alexanderfortin/pi-orchestrator` so consumers of this
+ * module can import `CommentMetadata` from either package. The canonical
+ * definition lives in the orchestrator to keep a single source of truth.
  */
-export interface CommentMetadata {
-  /** LLM provider (e.g., "anthropic", "openai") */
-  provider?: string;
-  /** Model identifier (e.g., "claude-sonnet-4-5") */
-  model?: string;
-  /** Thinking/reasoning level (e.g., "off", "low", "medium", "high") */
-  thinkingLevel?: string;
-  /** Total execution time as a Temporal Duration */
-  executionDuration?: Temporal.Duration;
-  /** Session statistics including token usage */
-  sessionStats?: SessionStats;
-  /** Action version */
-  actionVersion?: string;
-  /** Pi SDK version */
-  piSdkVersion?: string;
-}
+export type { CommentMetadata } from '@alexanderfortin/pi-orchestrator';
 
 export type CreateCommentType =
   | RestEndpointMethodTypes['issues']['createComment']['response']

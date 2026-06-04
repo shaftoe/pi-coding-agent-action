@@ -1,6 +1,6 @@
 {
   "name": "@alexanderfortin/pi-action",
-  "version": "2.19.0",
+  "version": "2.19.1",
   "private": true,
   "type": "module",
   "main": "dist/index.js",

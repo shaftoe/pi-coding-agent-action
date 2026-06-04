@@ -27,7 +27,7 @@ process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-${Date.now()}.j
 fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
 
 // Mock @actions/core via shared helper
-import { registerCoreMock, coreMock } from '../../../../tests/helpers/core-mock';
+import { coreMock, registerCoreMock } from '../helpers/core-mock';
 registerCoreMock();
 coreMock.getInput.mockImplementation(() => '/pi');
 

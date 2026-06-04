@@ -16,7 +16,7 @@ const noop = (): void => {};
 
 // Mock @actions/core via shared helper (transitive only — pi-platform-github
 // does not import @actions/core, but the action entry point does)
-import { registerCoreMock } from '../../../tests/helpers/core-mock';
+import { registerCoreMock } from '../../pi-orchestrator/tests/helpers/core-mock';
 registerCoreMock();
 
 mock.module('@actions/github', () => ({

@@ -24,7 +24,7 @@ process.stdout.write = _mockedWrite as typeof process.stdout.write;
 const noop = (): void => {};
 
 // Mock @actions/core via shared helper
-import { registerCoreMock, coreMock } from '../../../tests/helpers/core-mock';
+import { registerCoreMock, coreMock } from '../../pi-orchestrator/tests/helpers/core-mock';
 registerCoreMock();
 const mockDebug = coreMock.debug;
 

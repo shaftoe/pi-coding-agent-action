@@ -5,7 +5,7 @@ on:
     branches:
       - v2
     paths:
-      - 'src/**'
+      - 'packages/**'
       - 'tests/**'
       - 'package.json'
       - 'bun.lock'

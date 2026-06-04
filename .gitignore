@@ -2,13 +2,13 @@
 node_modules/
 
 # Intermediate TypeScript artifacts
-src/*.js
-src/*.d.ts
-src/*.d.ts.map
-src/*.js.map
+packages/*/src/*.js
+packages/*/src/*.d.ts
+packages/*/src/*.d.ts.map
+packages/*/src/*.js.map
 
 # Shim import
-!src/import-meta-url.js
+!packages/pi-action/src/import-meta-url.js
 
 # Build artifacts (tracked via CI force-add only — do not include in PRs)
 dist/
