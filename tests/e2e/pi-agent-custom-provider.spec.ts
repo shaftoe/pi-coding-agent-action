@@ -33,121 +33,47 @@
  * reported as **skip** (not pass).
  */
 
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { resolve } from 'node:path';
-import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
+import {
+  E2E_TIMEOUT,
+  setupE2E,
+  validateE2EEnvVars,
+  isE2EEnabled,
+  registerE2ESkip,
+} from './helpers/e2e-setup';
 
-const E2E_TIMEOUT = 60_000;
-
-// ============================================================================
-// Mock GitHub Dependencies
-// ============================================================================
-
+const { platformProvider: mockPlatformProvider } = setupE2E();
 const noop = (): void => {};
-
-const mockGitHubContext = {
-  eventName: 'issue_comment' as const,
-  repo: { owner: 'test-owner', repo: 'test-repo' },
-  issue: { number: 123 },
-  serverUrl: 'https://github.com',
-  runId: 123456789,
-  payload: {
-    comment: { body: '/pi test' },
-    issue: { number: 123 },
-  },
-};
-
-mock.module('@actions/github', () => ({
-  context: mockGitHubContext,
-}));
-
-process.env.INPUT_TRIGGER = '/pi';
-process.env.INPUT_GITHUB_TOKEN = 'fake-token';
-process.env.INPUT_MAX_COMMENTS = '100';
-
-// ============================================================================
-// Mock Platform Provider
-// ============================================================================
-
-const mockPlatformProvider: PlatformProvider = {
-  type: 'github',
-  getContext: () => ({
-    repo: { owner: 'test-owner', repo: 'test-repo' },
-    issue: { number: 1 },
-    eventName: 'issue_comment',
-    payload: {},
-    serverUrl: 'https://github.com',
-    runId: 123,
-    workspace: '/tmp',
-  }),
-  addReaction: async () => undefined,
-  deleteReaction: async () => {},
-  createFinalComment: async () => {},
-  getPrompt: async () => undefined,
-  getStartTime: () => undefined,
-  createPullRequest: async () => ({
-    content: [],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: 'main',
-      baseBranch: 'main',
-      dryRun: false,
-    },
-  }),
-  updatePullRequest: async () => ({
-    content: [],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: 'main',
-      baseBranch: 'main',
-      dryRun: false,
-    },
-  }),
-  getIssueOrPRThread: async () => undefined,
-  getPRDiff: async () => '',
-  createReview: async () => ({
-    content: [{ type: 'text' as const, text: 'Review created' }],
-    details: {
-      reviewId: 1,
-      reviewUrl: '',
-      pullRequestNumber: 1,
-      event: 'COMMENT',
-      commentCount: 1,
-    },
-  }),
-  getCIStatus: async () => ({
-    content: [{ type: 'text' as const, text: 'CI status fetched' }],
-    details: { ref: 'abc123', check_runs: [], workflow_runs: [] },
-  }),
-  getWorkflowRunLogs: async () => ({
-    content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
-    details: { run_id: 0, jobs: [], total_bytes: 0, truncated: false },
-  }),
-};
-
-// ============================================================================
-// Theme initialisation (required for telemetry)
-// ============================================================================
-
-import { initTheme } from '@earendil-works/pi-coding-agent';
-try {
-  initTheme(undefined, false);
-} catch {
-  // Non-critical for E2E tests
-}
 
 // ============================================================================
 // Env-var validation at describe-time
 // ============================================================================
 
-const E2E_ENABLED = Bun.env.RUN_E2E_TESTS === '1';
-const E2E_TOKEN = Bun.env.E2E_TOKEN_CUSTOM ?? '';
-const E2E_PROVIDER = Bun.env.E2E_PROVIDER_CUSTOM ?? '';
-const E2E_MODEL = Bun.env.E2E_MODEL_CUSTOM ?? '';
+const {
+  token: E2E_TOKEN,
+  provider: E2E_PROVIDER,
+  model: E2E_MODEL,
+} = (() => {
+  try {
+    return validateE2EEnvVars(
+      {
+        token: Bun.env.E2E_TOKEN_CUSTOM ?? '',
+        provider: Bun.env.E2E_PROVIDER_CUSTOM ?? '',
+        model: Bun.env.E2E_MODEL_CUSTOM ?? '',
+      },
+      {
+        token: 'E2E_TOKEN_CUSTOM',
+        provider: 'E2E_PROVIDER_CUSTOM',
+        model: 'E2E_MODEL_CUSTOM',
+      }
+    );
+  } catch {
+    return { token: '', provider: '', model: '' };
+  }
+})();
 
-const canRun = E2E_ENABLED && E2E_TOKEN && E2E_PROVIDER && E2E_MODEL;
+const canRun = isE2EEnabled({ token: E2E_TOKEN, provider: E2E_PROVIDER, model: E2E_MODEL });
 
 /**
  * The provider name used inside the test is prefixed with "e2e-custom-".
@@ -172,12 +98,11 @@ const logger = { notice: noop, debug: noop, info: noop, warning: noop, error: no
 // Tests — conditional registration
 // ============================================================================
 
-// When env vars are missing or RUN_E2E_TESTS is not set, register one
-// test.skip so the suite reports as "skipped" instead of silently passing.
 if (!canRun) {
-  describe('E2E: Custom provider registered via extension', () => {
-    test.skip('requires RUN_E2E_TESTS=1 + E2E_TOKEN_CUSTOM, E2E_PROVIDER_CUSTOM, E2E_MODEL_CUSTOM', () => {});
-  });
+  registerE2ESkip(
+    'E2E: Custom provider registered via extension',
+    'requires RUN_E2E_TESTS=1 + E2E_TOKEN_CUSTOM, E2E_PROVIDER_CUSTOM, E2E_MODEL_CUSTOM'
+  );
 } else {
   describe('E2E: Custom provider registered via extension', () => {
     test(

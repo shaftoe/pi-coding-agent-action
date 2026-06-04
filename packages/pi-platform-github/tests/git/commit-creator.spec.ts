@@ -24,23 +24,9 @@ const mockOctokit = {
 };
 // octokit singleton mock no longer needed - deps pattern
 
-// Setup default GitHub context
-const mockContext = {
-  repo: {
-    owner: 'test-owner',
-    repo: 'test-repo',
-  },
-  issue: {
-    number: 42,
-  },
-  serverUrl: 'https://github.com',
-  runId: 123456789,
-  payload: {},
-};
-// Mock @actions/github context
-mock.module('@actions/github', () => ({
-  context: mockContext,
-}));
+import { setupGitHubContextMock, defaultMockContext } from '../helpers/github-test-env';
+const mockContext = defaultMockContext;
+setupGitHubContextMock(mockContext);
 
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 

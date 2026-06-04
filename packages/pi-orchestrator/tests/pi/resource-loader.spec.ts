@@ -6,8 +6,8 @@
 
 import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
 import { resolveExtensions, getResourceLoader } from '@alexanderfortin/pi-orchestrator';
-import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
 import { DefaultPackageManager, DefaultResourceLoader } from '@earendil-works/pi-coding-agent';
+import { createMockProvider } from '../helpers/tool-mocks';
 
 // Mock CoreAdapter for testing
 const mockCoreAdapter = {
@@ -29,72 +29,7 @@ const mockCoreAdapter = {
 };
 
 // Mock platform provider for getResourceLoader
-const mockPlatformProvider: PlatformProvider = {
-  type: 'github',
-  getContext: () => ({
-    repo: { owner: 'test-owner', repo: 'test-repo' },
-    issue: { number: 1 },
-    eventName: 'issue_comment',
-    payload: {},
-    serverUrl: 'https://github.com',
-    runId: 123,
-    workspace: '/tmp',
-  }),
-  addReaction: async () => undefined,
-  deleteReaction: async () => {},
-  createFinalComment: async () => {},
-  getPrompt: async () => undefined,
-  getStartTime: () => undefined,
-  createPullRequest: async () => ({
-    content: [],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: 'main',
-      baseBranch: 'main',
-      dryRun: false,
-    },
-  }),
-  updatePullRequest: async () => ({
-    content: [],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: 'main',
-      baseBranch: 'main',
-      dryRun: false,
-    },
-  }),
-  getIssueOrPRThread: async () => undefined,
-  getPRDiff: async () => '',
-  createReview: async () => ({
-    content: [{ type: 'text' as const, text: 'Review created' }],
-    details: {
-      reviewId: 1,
-      reviewUrl: '',
-      pullRequestNumber: 1,
-      event: 'COMMENT',
-      commentCount: 1,
-    },
-  }),
-  getCIStatus: async () => ({
-    content: [{ type: 'text' as const, text: 'CI status fetched' }],
-    details: {
-      ref: 'abc123',
-      check_runs: [],
-      workflow_runs: [],
-    },
-  }),
-  getWorkflowRunLogs: async () => ({
-    content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
-    details: {
-      run_id: 0,
-      jobs: [],
-      total_bytes: 0,
-      truncated: false,
-    },
-  }),
-};
+const mockPlatformProvider = createMockProvider();
 
 // Set env vars before importing
 process.env.INPUT_TRIGGER = '/pi';

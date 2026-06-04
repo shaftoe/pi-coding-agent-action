@@ -26,6 +26,24 @@ import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 
 export { coreMock };
 
+/**
+ * Default mock GitHub context object (no event/payload specifics) — used by
+ * `pi-platform-github` git tests that don't care about which event triggered
+ * them.
+ */
+export const defaultMockContext = {
+  repo: {
+    owner: 'test-owner',
+    repo: 'test-repo',
+  },
+  issue: {
+    number: 42,
+  },
+  serverUrl: 'https://github.com',
+  runId: 123456789,
+  payload: {} as Record<string, unknown>,
+};
+
 let stdoutStubInstalled = false;
 
 /**
@@ -96,6 +114,19 @@ export interface SetupGitHubTestEnvOptions {
   envPathPrefix?: string;
   /** Overrides applied to `defaultGitHubContext` before `mock.module`. */
   contextOverrides?: Record<string, unknown>;
+}
+
+/**
+ * Register a custom `@actions/github` context mock with an explicit context
+ * object. Use this instead of `setupGitHubTestEnv()` when a spec needs full
+ * control over the context shape (e.g. git tests that don't care about
+ * which event triggered them).
+ */
+export function setupGitHubContextMock(context: Record<string, unknown> = {}): void {
+  installStdoutAnnotationFilter();
+  registerCoreMock();
+  mock.module('@actions/github', () => ({ context }));
+  installGitHubEnv(`gh-event-${Date.now()}`);
 }
 
 /**

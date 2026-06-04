@@ -4,184 +4,30 @@
  * These tests run a real Pi SDK instance with mocked GitHub dependencies.
  * They are confidence tests that validate our integration works after Pi SDK updates.
  *
- * NOTE: These tests make real API calls to LLM provider and may incur costs.
+ * NOTE: these tests make real API calls to LLM provider and may incur costs.
  * They only run when RUN_E2E_TESTS=1 environment variable is set.
  *
  * Required environment variables:
  *   export E2E_PROVIDER           # Provider name (e.g., openrouter, zai, anthropic)
  *   export E2E_MODEL              # Model to use (e.g., google/gemma-3-4b-it:free)
  *   export E2E_TOKEN              # API key for the provider
- *   export RUN_E2E_TESTS=1         # Enable E2E tests
+ *   export RUN_E2E_TESTS=1        # Enable E2E tests
  *
  * Running the tests:
  *   bun test tests/e2e/pi-agent.spec.ts
  */
 
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { Agent } from '@alexanderfortin/pi-orchestrator';
-import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
+import {
+  E2E_TIMEOUT,
+  setupE2E,
+  validateE2EEnvVars,
+  isE2EEnabled,
+  registerE2ESkip,
+} from './helpers/e2e-setup';
 
-// E2E tests involve real LLM API calls — give them a generous timeout.
-const E2E_TIMEOUT = 60_000;
-
-// ============================================================================
-// Build-time constants (normally injected by esbuild define)
-// ============================================================================
-
-// E2E tests run directly with bun test, bypassing the build step.
-// The version module reads package.json at runtime, so no global setup needed.
-
-// ============================================================================
-// Mock GitHub Dependencies (we only test Pi SDK integration)
-// ============================================================================
-const mockGetInput = mock((name: string): string => {
-  const defaults: Record<string, string> = {
-    github_token: 'fake-token',
-    trigger: '/pi',
-    max_comments: '100',
-    provider: '',
-    model: '',
-    token: 'test-token',
-    thinking_level: '',
-    prompt: '',
-  };
-  return defaults[name] ?? '';
-});
-
-const mockSetFailed = mock();
-const mockNotice = mock();
-const mockInfo = mock();
-const mockDebug = mock();
-const mockWarning = mock();
-const mockError = mock();
-
-import type { CoreAdapter } from '@alexanderfortin/pi-orchestrator';
-
-const mockCoreAdapter: CoreAdapter = {
-  getInput: mockGetInput,
-  setFailed: mockSetFailed,
-  setOutput: mock(),
-  notice: mockNotice,
-  debug: mockDebug,
-  info: mockInfo,
-  warning: mockWarning,
-  error: mockError,
-};
-
-// Mock platform provider for Agent constructor
-const mockPlatformProvider: PlatformProvider = {
-  type: 'github',
-  getContext: () => ({
-    repo: { owner: 'test-owner', repo: 'test-repo' },
-    issue: { number: 1 },
-    eventName: 'issue_comment',
-    payload: {},
-    serverUrl: 'https://github.com',
-    runId: 123,
-    workspace: '/tmp',
-  }),
-  addReaction: async () => undefined,
-  deleteReaction: async () => {},
-  createFinalComment: async () => {},
-  getPrompt: async () => undefined,
-  getStartTime: () => undefined,
-  createPullRequest: async () => ({
-    content: [],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: 'main',
-      baseBranch: 'main',
-      dryRun: false,
-    },
-  }),
-  updatePullRequest: async () => ({
-    content: [],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: 'main',
-      baseBranch: 'main',
-      dryRun: false,
-    },
-  }),
-  getIssueOrPRThread: async () => undefined,
-  getPRDiff: async () => '',
-  createReview: async () => ({
-    content: [{ type: 'text' as const, text: 'Review created' }],
-    details: {
-      reviewId: 1,
-      reviewUrl: '',
-      pullRequestNumber: 1,
-      event: 'COMMENT',
-      commentCount: 1,
-    },
-  }),
-  getCIStatus: async () => ({
-    content: [{ type: 'text' as const, text: 'CI status fetched' }],
-    details: {
-      ref: 'abc123',
-      check_runs: [],
-      workflow_runs: [],
-    },
-  }),
-  getWorkflowRunLogs: async () => ({
-    content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
-    details: {
-      run_id: 0,
-      jobs: [],
-      total_bytes: 0,
-      truncated: false,
-    },
-  }),
-};
-
-// Mock @actions/github context
-const mockGitHubContext = {
-  eventName: 'issue_comment' as const,
-  repo: {
-    owner: 'test-owner',
-    repo: 'test-repo',
-  },
-  issue: {
-    number: 123,
-  },
-  serverUrl: 'https://github.com',
-  runId: 123456789,
-  payload: {
-    comment: {
-      body: '/pi test',
-    },
-    issue: {
-      number: 123,
-    },
-  },
-};
-
-mock.module('@actions/github', () => ({
-  context: mockGitHubContext,
-}));
-
-// Set env vars that modules might read
-process.env.INPUT_TRIGGER = '/pi';
-process.env.INPUT_GITHUB_TOKEN = 'fake-token';
-process.env.INPUT_MAX_COMMENTS = '100';
-
-// Initialize theme to enable Z.ai usage tracking in E2E tests.
-// The Pi SDK's Z.ai usage tracking (telemetry) requires theme initialization.
-// We call initTheme() directly to satisfy this requirement without needing
-// full theme loading (which we disabled with noThemes: true in resource-loader).
-// This allows telemetry to work while keeping the action headless-friendly.
-import { initTheme } from '@earendil-works/pi-coding-agent';
-
-try {
-  // Initialize theme with defaults (minimal, no file watcher)
-  initTheme(undefined, false);
-} catch {
-  // If theme init fails, it's not critical for E2E tests
-  // We intentionally ignore this error - theme initialization is for UI/telemetry
-  // which isn't critical for E2E testing purposes.
-}
+const { coreAdapter: mockCoreAdapter, platformProvider: mockPlatformProvider } = setupE2E();
 
 // ============================================================================
 // Test Helpers
@@ -191,29 +37,26 @@ try {
  * Validate and return E2E test environment variables.
  * @throws {Error} If required environment variables are missing.
  */
-function validateE2EEnvVars() {
-  const token = Bun.env.E2E_TOKEN;
-  const provider = Bun.env.E2E_PROVIDER;
-  const model = Bun.env.E2E_MODEL;
-
-  if (!token) {
-    throw new Error('E2E_TOKEN environment variable is required for E2E tests');
-  }
-  if (!provider) {
-    throw new Error('E2E_PROVIDER environment variable is required for E2E tests');
-  }
-  if (!model) {
-    throw new Error('E2E_MODEL environment variable is required for E2E tests');
-  }
-
-  return { token, provider, model };
+function validateLocalE2EEnvVars() {
+  return validateE2EEnvVars(
+    {
+      token: Bun.env.E2E_TOKEN ?? '',
+      provider: Bun.env.E2E_PROVIDER ?? '',
+      model: Bun.env.E2E_MODEL ?? '',
+    },
+    {
+      token: 'E2E_TOKEN',
+      provider: 'E2E_PROVIDER',
+      model: 'E2E_MODEL',
+    }
+  );
 }
 
 /**
  * Create a new Agent instance with test configuration.
  */
 async function createAgent(): Promise<Agent> {
-  const { provider, model, token } = validateE2EEnvVars();
+  const { provider, model, token } = validateLocalE2EEnvVars();
   const { Agent } = await import('@alexanderfortin/pi-orchestrator');
   return new Agent(mockCoreAdapter, mockPlatformProvider, {
     model,
@@ -228,8 +71,11 @@ async function createAgent(): Promise<Agent> {
 // Env-var gating at describe-time
 // ============================================================================
 
-const E2E_ENABLED =
-  Bun.env.RUN_E2E_TESTS === '1' && Bun.env.E2E_TOKEN && Bun.env.E2E_PROVIDER && Bun.env.E2E_MODEL;
+const E2E_ENABLED = isE2EEnabled({
+  token: Bun.env.E2E_TOKEN,
+  provider: Bun.env.E2E_PROVIDER,
+  model: Bun.env.E2E_MODEL,
+});
 
 // ============================================================================
 // E2E Tests
@@ -238,9 +84,10 @@ const E2E_ENABLED =
 // When env vars are missing or RUN_E2E_TESTS is not set, register one
 // test.skip so the suite reports as "skipped" instead of silently passing.
 if (!E2E_ENABLED) {
-  describe('E2E: Real Pi Agent with Mocked GitHub', () => {
-    test.skip('requires RUN_E2E_TESTS=1 + E2E_TOKEN, E2E_PROVIDER, E2E_MODEL', () => {});
-  });
+  registerE2ESkip(
+    'E2E: Real Pi Agent with Mocked GitHub',
+    'requires RUN_E2E_TESTS=1 + E2E_TOKEN, E2E_PROVIDER, E2E_MODEL'
+  );
 } else {
   describe('E2E: Real Pi Agent with Mocked GitHub', () => {
     describe('basic functionality', () => {
@@ -279,7 +126,7 @@ if (!E2E_ENABLED) {
       test(
         'invalid model throws during ready (model resolution deferred after extension load)',
         async () => {
-          const { token, provider } = validateE2EEnvVars();
+          const { token, provider } = validateLocalE2EEnvVars();
           const { Agent } = await import('@alexanderfortin/pi-orchestrator');
 
           const agent = new Agent(mockCoreAdapter, mockPlatformProvider, {

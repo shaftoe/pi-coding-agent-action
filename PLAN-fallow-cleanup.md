@@ -90,7 +90,17 @@ Strategy: incremental, one PR-sized step at a time, interleavable with other wor
   provider, pull-request-logic, pull-request-update-integration, pull-request-update-logic,
   git/commit-creator, git/tree-builder. Overall: 2,144 LOC / 83 groups → 1,655 LOC / 68
   groups (8.9% → 6.8%). `bun run validate` clean; 916 tests pass.
-  Awaiting user validation before proceeding to Step 1.5.
+
+- **Step 1.5** (done) — created `tests/e2e/helpers/e2e-setup.ts` exporting
+  `setupE2E()`, `createE2EPlatformProvider()`, `createE2ECoreAdapter()`,
+  `validateE2EEnvVars()`, `isE2EEnabled()`, `registerE2ESkip()`. Added
+  `defaultMockContext` + `setupGitHubContextMock()` to `github-test-env.ts`.
+  Refactored: tests/e2e/pi-agent.spec.ts (351→221 LOC), tests/e2e/pi-agent-custom-provider.spec.ts
+  (263→122 LOC), resource-loader.spec.ts (uses createMockProvider),
+  agent-logic.spec.ts (uses createMockProvider), git/commit-creator.spec.ts,
+  git/tree-builder.spec.ts. Overall: 1,655 LOC / 68 groups → 1,270 LOC / 60
+  groups (6.8% → 5.3%). `bun run validate` clean; 916 tests pass.
+  Awaiting user validation before proceeding to Phase 2.
 
 ## Guardrails (from AGENTS.md)
 

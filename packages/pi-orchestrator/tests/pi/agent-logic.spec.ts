@@ -7,6 +7,7 @@
 import { describe, expect, test, mock } from 'bun:test';
 import { resolve } from 'node:path';
 import { buildMockSession, injectMockSession, userHelloMessage } from './helpers/agent-session';
+import { createMockProvider } from '../helpers/tool-mocks';
 
 /**
  * Build a `CoreAdapter` whose `.info(msg)` calls push `msg` into the returned
@@ -84,26 +85,7 @@ const mockCoreAdapter = {
 };
 
 // Create a mock PlatformProvider for tests
-const mockPlatformProvider: any = {
-  type: 'github',
-  getContext: () => ({
-    repo: { owner: 'test-owner', repo: 'test-repo' },
-    issue: { number: 1 },
-    eventName: 'issue_comment',
-    payload: {},
-    serverUrl: 'https://github.com',
-    runId: 123,
-    workspace: '/tmp',
-  }),
-  addReaction: async () => undefined,
-  deleteReaction: async () => {},
-  createFinalComment: async () => {},
-  getPrompt: async () => undefined,
-  getStartTime: () => undefined,
-  createPullRequest: async () => ({ content: [], details: {} }),
-  updatePullRequest: async () => ({ content: [], details: {} }),
-  getIssueOrPRThread: async () => undefined,
-};
+const mockPlatformProvider = createMockProvider();
 
 /**
  * Create a standard agent instance for testing (calls real ready()).
