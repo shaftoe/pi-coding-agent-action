@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **orchestrator**: report provider errors (quota/rate-limit) when session ends early (#239)
-
 ## [2.19.1] - 2026-06-03
 
 ### Changed
