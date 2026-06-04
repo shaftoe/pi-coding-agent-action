@@ -1,33 +1,29 @@
 # AGENTS.md
 
-## Architecture Overview
+## Repository Layout
 
-The action uses a **testable adapter pattern** to separate business logic from external dependencies:
+Monorepo managed with Bun workspaces (`packages/*`):
 
-1. **Orchestrator** (`ActionOrchestrator`) - Contains all business logic:
-   - Configuration gathering from inputs
-   - Prompt retrieval from the git hosting platform
-   - Reaction lifecycle management
-   - Pi agent execution
-   - Error handling and finalization
+- **`packages/pi-orchestrator`** (`@alexanderfortin/pi-orchestrator`) — Reusable, platform-agnostic orchestration core. Consumed by the action and by other apps (e.g. GitHub App / web clients).
+  - `src/orchestrator.ts` — `ActionOrchestrator`: prompt retrieval, reaction lifecycle, Pi agent execution, error handling.
+  - `src/platform/` — `PlatformProvider` interface, `PlatformContext`, `PlatformType` enum.
+  - `src/pi/` — Pi agent factory, prompt building, logging, and tool factories (`src/pi/tools/`) registered via the `ExtensionAPI`. Tools receive a `PlatformProvider` through DI (`createToolsFactory(provider)`).
+  - `src/git/` — Platform-agnostic git utilities (file scanner, constants, types).
 
-2. **Adapters** - Abstract external dependencies:
-   - `CoreAdapter` - Wraps `@actions/core` operations
-   - `GitAdapter` - Wraps git hosting platform API operations
-   - `PiAgentFactory` - Creates Pi agent instances (receives `PlatformProvider` for tool DI)
+- **`packages/pi-platform-github`** (`@alexanderfortin/pi-platform-github`) — GitHub/Codeberg/Forgejo implementation of `PlatformProvider`. Depends on `pi-orchestrator`.
+  - `src/provider.ts` — `createGitHubPlatformProvider()`.
+  - `src/tools/` — GitHub-specific tools (CI status, workflow logs, PR create/update, reviews, thread, diff).
+  - `src/git/` — GitHub git operations (commit creator, tree builder, file scanner).
+  - `src/{reactions,comments,context,context-utils,constants}.ts` — Supporting modules.
+  - Platform detection via `detectPlatform()` (uses `GITHUB_SERVER_URL` env var).
 
-3. **Platform Abstraction** (`src/platform/`) - Multi-platform support:
-   - `PlatformProvider` interface - Abstracts platform-specific operations
-   - `PlatformContext` - Platform-agnostic context (repo, event, payload)
-   - `PlatformType` - Enum of supported platforms (github, codeberg, forgejo)
-   - `src/platform/github/` - GitHub/Codeberg/Forgejo implementation (API client, reactions, comments, PR operations)
-   - `createGitHubPlatformProvider()` - Default provider for GitHub/Codeberg/Forgejo
-   - Platform detection via `detectPlatform()` (uses `GITHUB_SERVER_URL` env var)
+- **`packages/pi-action`** (`@alexanderfortin/pi-action`, private) — GitHub Action entry point. Depends on both packages above.
+  - `src/run.ts` — Action entrypoint.
+  - `src/adapters/` — GitHub-Actions-specific adapters: `CoreAdapter` (`@actions/core`), `GitAdapter`, `PiAgentAdapter`, `ConfigAdapter`, `OutputSink`.
+  - `scripts/package.ts` — esbuild bundling for the action release artifact.
 
-4. **Testability** - The orchestrator can be tested with mock adapters, enabling:
-   - Unit testing of orchestration flow
-   - Verification of error handling behavior
-   - Testing of edge cases without external dependencies
+- **`tests/`** (root) — E2E tests (`tests/e2e/`) and shared fixtures (`tests/fixtures/`).
+- **`scripts/`** (root) — Repo-level tooling (changelog, version sync, readme deps).
 
 ## Important Notes for Agents
 
@@ -35,19 +31,19 @@ The action uses a **testable adapter pattern** to separate business logic from e
    ```bash
    bun run validate
    ```
-   This runs: ESLint, TypeScript type checking, and Prettier formatting.
+   This runs ESLint, TypeScript type checking, and Prettier formatting.
 
-2. **Test Convention**: All test files are located under `./tests` and follow the Bun naming convention `*.spec.ts`. When adding new tests, create them in the appropriate subdirectory under `tests/` (e.g., `tests/platform/github/`, `tests/pi/`, `tests/platform/`) and use the `.spec.ts` extension.
+2. **Test Convention**: Tests live in each package's `tests/` directory (`packages/<pkg>/tests/`) plus root `tests/` for e2e/fixtures. All test files use the Bun `*.spec.ts` convention.
 
-3. **Orchestrator Testing**: Business logic is tested in `tests/orchestrator.spec.ts`. When modifying orchestration behavior, update these tests. Do **not** test mocks directly—test the actual business logic flow.
+3. **Orchestrator Testing**: Business logic is tested in `packages/pi-orchestrator/tests/orchestrator.spec.ts`. When modifying orchestration behavior, update these tests. Do **not** test mocks directly—test the actual business logic flow.
 
-4. **Extension Pattern**: The action extends Pi with custom tools (`create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`) via the `ExtensionAPI` in `src/pi/tools/index.ts`. Tools receive a `PlatformProvider` through dependency injection (via `createToolsFactory(provider)`), keeping the Pi module decoupled from the platform implementation.
+4. **Extension Pattern**: Tools are split across packages: tool factories and the `ExtensionAPI` plumbing live in `packages/pi-orchestrator/src/pi/tools/`; platform-specific tool implementations live in `packages/pi-platform-github/src/tools/`. The orchestrator remains decoupled from any platform via the `PlatformProvider` interface.
 
-5. **Centralized Logging**: Tool execution logging is centralized in `src/pi/logging.ts` using SDK events (`tool_execution_start`, `tool_execution_end`). Tools check `signal?.aborted` directly and return `details.cancelled: true` for cancellations.
+5. **Centralized Logging**: Tool execution logging is centralized in `packages/pi-orchestrator/src/pi/logging.ts` using SDK events (`tool_execution_start`, `tool_execution_end`). Tools check `signal?.aborted` directly and return `details.cancelled: true` for cancellations.
 
 6. **Test Coverage**: The project uses `bun test` for testing. Maintain and expand test coverage when making changes. Focus on behavior verification, not implementation details.
 
-7. **Prefer Bun package manager over npm or others**
+7. **Prefer Bun package manager** over npm or others.
 
 8. **Fallow (codebase intelligence)**: The project uses [Fallow](https://docs.fallow.tools/) for dead code detection, duplication analysis, and complexity hotspot tracking. Key scripts:
    - `bun run fallow` — run all analyses
