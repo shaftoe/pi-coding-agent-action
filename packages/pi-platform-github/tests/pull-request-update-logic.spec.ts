@@ -46,6 +46,69 @@ interface _UpdatePullRequestParams {
   dryRun?: boolean;
 }
 
+describe('generateCommitMessage', () => {
+  test('returns explicit message as-is when truthy', async () => {
+    const module = await getModule();
+    const { generateCommitMessage } = module;
+
+    expect(generateCommitMessage('Custom msg', [], [], 42)).toBe('Custom msg');
+  });
+
+  test('treats empty string as no message (generates default)', async () => {
+    const module = await getModule();
+    const { generateCommitMessage } = module;
+
+    expect(generateCommitMessage('', [{ path: 'a.ts' }], [], 7)).toBe(
+      'Update PR #7: 1 modified/new file(s)'
+    );
+  });
+
+  test('treats undefined as no message (generates default)', async () => {
+    const module = await getModule();
+    const { generateCommitMessage } = module;
+
+    expect(generateCommitMessage(undefined, [{ path: 'a.ts' }], [], 7)).toBe(
+      'Update PR #7: 1 modified/new file(s)'
+    );
+  });
+
+  test('only-changed case: includes only modified/new count', async () => {
+    const module = await getModule();
+    const { generateCommitMessage } = module;
+
+    const out = generateCommitMessage(undefined, [{ path: 'a' }, { path: 'b' }], [], 99);
+    expect(out).toBe('Update PR #99: 2 modified/new file(s)');
+    expect(out).not.toContain('deleted');
+  });
+
+  test('only-deleted case: includes only deleted count', async () => {
+    const module = await getModule();
+    const { generateCommitMessage } = module;
+
+    const out = generateCommitMessage(undefined, [], ['x.ts', 'y.ts'], 99);
+    expect(out).toBe('Update PR #99: 2 deleted file(s)');
+    expect(out).not.toContain('modified/new');
+  });
+
+  test('both-changed-and-deleted case: joins with comma', async () => {
+    const module = await getModule();
+    const { generateCommitMessage } = module;
+
+    expect(
+      generateCommitMessage(undefined, [{ path: 'a' }, { path: 'b' }, { path: 'c' }], ['old'], 5)
+    ).toBe('Update PR #5: 3 modified/new file(s), 1 deleted file(s)');
+  });
+
+  test('both-empty case: produces trailing colon (preserves prior behavior)', async () => {
+    const module = await getModule();
+    const { generateCommitMessage } = module;
+
+    // Caller is expected to only invoke this when at least one list is non-empty,
+    // but we preserve the legacy output shape rather than throwing.
+    expect(generateCommitMessage(undefined, [], [], 1)).toBe('Update PR #1: ');
+  });
+});
+
 describe('buildDryRunReport', () => {
   const baseInput = {
     pullNumber: 42,

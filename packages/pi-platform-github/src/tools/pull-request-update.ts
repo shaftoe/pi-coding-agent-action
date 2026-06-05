@@ -224,6 +224,35 @@ export function buildDryRunReport(input: {
 }
 
 /**
+ * Resolve the commit message to use for a PR update.
+ *
+ * Returns `message` as-is when provided and non-empty; otherwise builds a
+ * descriptive default of the form
+ *   `Update PR #<n>: <a> modified/new file(s), <b> deleted file(s)`
+ * omitting either half when the corresponding list is empty.
+ *
+ * @internal Exported for testing purposes.
+ */
+export function generateCommitMessage(
+  message: string | undefined,
+  changedFiles: readonly { path: string }[],
+  deletedFiles: readonly string[],
+  pullNumber: number
+): string {
+  if (message) {
+    return message;
+  }
+  const changes: string[] = [];
+  if (changedFiles.length > 0) {
+    changes.push(`${changedFiles.length} modified/new file(s)`);
+  }
+  if (deletedFiles.length > 0) {
+    changes.push(`${deletedFiles.length} deleted file(s)`);
+  }
+  return `Update PR #${pullNumber}: ${changes.join(', ')}`;
+}
+
+/**
  * Update a pull request end-to-end.
  *
  * Orchestrates the full flow: fetches the PR and its branch, scans for changed
@@ -301,18 +330,12 @@ export async function updatePullRequest(
     });
 
     // Generate commit message
-    let commitMessage = message;
-    if (!commitMessage) {
-      // Generate a descriptive commit message based on the changes
-      const changes: string[] = [];
-      if (changedFiles.length > 0) {
-        changes.push(`${changedFiles.length} modified/new file(s)`);
-      }
-      if (deletedFiles.length > 0) {
-        changes.push(`${deletedFiles.length} deleted file(s)`);
-      }
-      commitMessage = `Update PR #${resolvedPullNumber}: ${changes.join(', ')}`;
-    }
+    const commitMessage = generateCommitMessage(
+      message,
+      changedFiles,
+      deletedFiles,
+      resolvedPullNumber
+    );
 
     // Create commit and update branch
     commitSha = await createCommitAndUpdateBranch(deps, {
