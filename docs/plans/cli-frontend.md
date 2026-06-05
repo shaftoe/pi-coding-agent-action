@@ -21,32 +21,6 @@ Secondary goals:
 - Give contributors a fast inner-loop for testing prompt, tool, and orchestrator
   changes against real repos without pushing commits that trigger CI.
 
-Non-goals (this RFC):
-
-- Building an interactive REPL or a TUI. The CLI runs one-shot prompts like
-  `pi-cli review 123` and exits. Interactivity can be a follow-up.
-- GitHub-App / webhook frontend (the `pi-app` skeleton from the previous
-  analysis). That is its own RFC.
-- Shipping the CLI in the same bundled `dist/index.js` as the action. The CLI
-  is published as a separate npm package with its own bin entry.
-
----
-
-## 2. Why now
-
-Phases 1–3 of the refactor shipped all the prerequisites:
-
-- `@alexanderfortin/pi-orchestrator` has zero `@actions/*` imports.
-- `@alexanderfortin/pi-platform-github` accepts an explicit
-  `GitHubPlatformDeps { octokit, context, logger, trigger?, branchNameTemplate? }`
-  bag — no singletons.
-- The orchestrator accepts plain `PiConfig`, `Logger`, `OutputSink`,
-  `GitAdapter`, `PiAgentFactory`, `PlatformProvider` interfaces.
-
-A CLI frontend is now a thin layer that wires concrete adapters around the same
-orchestrator. No further refactor is required to ship a useful v0.1.
-
----
 
 ## 3. Package layout
 
@@ -133,7 +107,7 @@ Notes:
 
 Inspired by `gh` and `pi`, but **scoped to what the orchestrator already
 supports**. The two foundational commands are `run` (free-form prompt) and
-`review` (PR review that posts back).
+`review` (PR review that posts back). Build on top of Bun runtime.
 
 ### 4.1 `pi-cli run "<prompt>"`
 
@@ -528,24 +502,9 @@ issue context and an input prompt are present.
 For the first milestone, the package is `private: true` and used only via
 `bun run` / `bunx` from the monorepo. No npm publish.
 
-### 10.2 Public release
-
-Once we're happy with the API:
-
-- Set `private: false`.
-- Add a `scripts/package.ts` similar to `pi-action/scripts/package.ts` that
-  bundles via esbuild into a single `dist/cli.js` with a Node shebang.
-- Publish to npm as `@alexanderfortin/pi-cli`.
-- Users invoke via `bunx @alexanderfortin/pi-cli run "..."` or
-  `npx @alexanderfortin/pi-cli run "..."`.
-- Optionally a Homebrew tap and a `npm install -g` flow.
-
 ### 10.3 Versioning
 
-The CLI ships its own version independently of the action (it has its own
-changelog, its own `package.json`). It depends on `pi-orchestrator` and
-`pi-platform-github` via workspace ranges that get promoted to caret ranges
-on publish.
+Same versioning as the action.
 
 ---
 
@@ -586,15 +545,15 @@ These are decisions for the maintainer / review:
 
 1. **Command framework.** `commander` vs `citty` vs `clipanion` vs hand-rolled.
    Suggested default: `commander` (most familiar, smallest).
+  => choose the most popular
 2. **Stdin prompt input.** Should `pi-cli run -` read the prompt from stdin?
    Useful for piping; trivial to add. Suggest yes.
 3. **`--dry-run` semantics.** Should it disable both `--post-comment` and
    PR creation, or just comment posting? The action already has a per-tool
    `dryRun` flag; we should align with it.
 4. **Multi-issue mode.** Should `pi-cli run "..." --issue 1 --issue 2` fan
-   out to multiple issues? Suggest no for v0.1 — keep one context per run.
-5. **Config file.** `~/.pi/cli.toml` or `./pi-cli.config.json` for
-   provider/model/token defaults? Suggest yes for v0.2, not v0.1.
+   out to multiple issues? => not for now
+5. **Config file.** `~/.pi/cli.toml`
 6. **Streaming output.** Should agent thinking deltas stream to stderr in
    real time (action behavior) or be suppressed unless `--verbose`? Suggest
    stream by default when stderr is a TTY, suppress when piped.
@@ -658,5 +617,5 @@ This RFC is accepted when:
 
 - [ ] Maintainer signs off on the package layout (§3), CLI surface (§4), and
       distribution plan (§10).
-- [ ] Open questions in §12 have a resolution recorded inline.
+- [x] Open questions in §12 have a resolution recorded inline.
 - [ ] A sub-issue is filed for M1 with concrete file list and test plan.
