@@ -9,6 +9,7 @@
  */
 
 import type { GitHubModuleDeps, UpdatePullRequestParams, UpdatePullRequestDetails } from '../types';
+import type { Logger } from '@alexanderfortin/pi-orchestrator';
 import { MAX_TITLE_LENGTH } from '../constants';
 import {
   createLogger,
@@ -17,6 +18,7 @@ import {
   createCommitAndUpdateBranch,
   buildFileMap,
 } from '../git/index';
+import type { CreateBlobsAndTreeParams } from '../git/index';
 
 export interface UpdatePullRequestResult {
   content: { type: 'text'; text: string }[];
@@ -311,6 +313,55 @@ export function buildSuccessReport(input: {
 }
 
 /**
+ * Create blobs/tree/commit and update the PR branch.
+ *
+ * Wrapper around {@link createBlobsAndTree} + {@link generateCommitMessage} +
+ * {@link createCommitAndUpdateBranch}. Returns `undefined` when there are no
+ * file changes to apply.
+ *
+ * @returns The new commit SHA, or `undefined` when no changes were applied.
+ * @internal Exported for testing purposes.
+ */
+export async function applyCommit(
+  deps: GitHubModuleDeps,
+  args: {
+    changedFiles: CreateBlobsAndTreeParams['changedFiles'];
+    deletedFiles: string[];
+    headSha: string;
+    headBranch: string;
+    message: string | undefined;
+    pullNumber: number;
+    log: Logger;
+  }
+): Promise<string | undefined> {
+  const { changedFiles, deletedFiles, headSha, headBranch, message, pullNumber, log } = args;
+
+  if (changedFiles.length === 0 && deletedFiles.length === 0) {
+    log.info(`No code changes detected, only updating PR metadata if provided`);
+    return undefined;
+  }
+
+  const treeSha = await createBlobsAndTree(deps, {
+    changedFiles,
+    deletedFiles,
+    parentSha: headSha,
+    log,
+  });
+
+  const commitMessage = generateCommitMessage(message, changedFiles, deletedFiles, pullNumber);
+
+  const commitSha = await createCommitAndUpdateBranch(deps, {
+    treeSha,
+    parentSha: headSha,
+    branchName: headBranch,
+    message: commitMessage,
+    log,
+  });
+  log.info(`Created new commit ${commitSha} on branch ${headBranch}`);
+  return commitSha;
+}
+
+/**
  * Update a pull request end-to-end.
  *
  * Orchestrates the full flow: fetches the PR and its branch, scans for changed
@@ -377,36 +428,15 @@ export async function updatePullRequest(
     return result;
   }
 
-  let commitSha: string | undefined;
-  if (changedFiles.length > 0 || deletedFiles.length > 0) {
-    // Create blobs and tree
-    const treeSha = await createBlobsAndTree(deps, {
-      changedFiles,
-      deletedFiles,
-      parentSha: headSha,
-      log,
-    });
-
-    // Generate commit message
-    const commitMessage = generateCommitMessage(
-      message,
-      changedFiles,
-      deletedFiles,
-      resolvedPullNumber
-    );
-
-    // Create commit and update branch
-    commitSha = await createCommitAndUpdateBranch(deps, {
-      treeSha,
-      parentSha: headSha,
-      branchName: headBranch,
-      message: commitMessage,
-      log,
-    });
-    log.info(`Created new commit ${commitSha} on branch ${headBranch}`);
-  } else {
-    log.info(`No code changes detected, only updating PR metadata if provided`);
-  }
+  const commitSha = await applyCommit(deps, {
+    changedFiles,
+    deletedFiles,
+    headSha,
+    headBranch,
+    message,
+    pullNumber: resolvedPullNumber,
+    log,
+  });
 
   // Update PR title/body if provided
   let titleUpdated = false;

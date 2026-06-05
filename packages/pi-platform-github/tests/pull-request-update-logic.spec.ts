@@ -46,6 +46,125 @@ interface _UpdatePullRequestParams {
   dryRun?: boolean;
 }
 
+describe('applyCommit', () => {
+  function createGitDeps() {
+    const createBlob = mock(() => Promise.resolve({ data: { sha: 'blob-sha' } }));
+    const createTree = mock(() => Promise.resolve({ data: { sha: 'tree-sha' } }));
+    const createCommit = mock(() => Promise.resolve({ data: { sha: 'commit-sha' } }));
+    const updateRef = mock(() => Promise.resolve({ data: {} }));
+    const getTree = mock(() => Promise.resolve({ data: { tree: [] } }));
+    const info = mock(() => {});
+    const debug = mock(() => {});
+    const logger = {
+      info,
+      debug,
+      warning: mock(() => {}),
+      notice: mock(() => {}),
+      error: mock(() => {}),
+    };
+
+    const deps = {
+      context: mockContext,
+      octokit: {
+        rest: {
+          git: {
+            createBlob,
+            createTree,
+            createCommit,
+            updateRef,
+            getTree,
+            getRef: mock(() => Promise.resolve({ data: { object: { sha: 'abc' } } })),
+            getBlob: mock(() => Promise.resolve({ data: { content: '' } })),
+          },
+        },
+      },
+      logger,
+    } as any;
+    return { deps, createBlob, createTree, createCommit, updateRef, info, debug, logger };
+  }
+
+  test('returns undefined and logs when no changes to apply', async () => {
+    const module = await getModule();
+    const { applyCommit } = module;
+
+    const { deps, createBlob, createTree, createCommit, updateRef, info } = createGitDeps();
+
+    const sha = await applyCommit(deps, {
+      changedFiles: [],
+      deletedFiles: [],
+      headSha: 'abc',
+      headBranch: 'feat',
+      message: 'msg',
+      pullNumber: 42,
+      log: deps.logger,
+    });
+
+    expect(sha).toBeUndefined();
+    expect(info).toHaveBeenCalledWith(
+      'No code changes detected, only updating PR metadata if provided'
+    );
+    expect(createBlob).not.toHaveBeenCalled();
+    expect(createTree).not.toHaveBeenCalled();
+    expect(createCommit).not.toHaveBeenCalled();
+    expect(updateRef).not.toHaveBeenCalled();
+  });
+
+  test('creates blobs/tree, generates message, creates commit, updates branch', async () => {
+    const module = await getModule();
+    const { applyCommit } = module;
+
+    const { deps, createBlob, createTree, createCommit, updateRef, info } = createGitDeps();
+
+    const changedFiles = [
+      { path: 'a.ts', content: 'a', mode: '100644' as const },
+      { path: 'b.ts', content: 'b', mode: '100644' as const },
+    ];
+
+    const sha = await applyCommit(deps, {
+      changedFiles,
+      deletedFiles: ['old.ts'],
+      headSha: 'parent-sha',
+      headBranch: 'feat',
+      message: undefined, // force auto-generated message
+      pullNumber: 7,
+      log: deps.logger,
+    });
+
+    expect(sha).toBe('commit-sha');
+    expect(createBlob).toHaveBeenCalledTimes(2);
+    expect(createTree).toHaveBeenCalledTimes(1);
+    // commit message should be auto-generated
+    expect(createCommit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Update PR #7: 2 modified/new file(s), 1 deleted file(s)',
+      })
+    );
+    expect(updateRef).toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith('Created new commit commit-sha on branch feat');
+  });
+
+  test('uses explicit message when provided', async () => {
+    const module = await getModule();
+    const { applyCommit } = module;
+
+    const { deps, createCommit } = createGitDeps();
+
+    await applyCommit(deps, {
+      changedFiles: [{ path: 'a.ts', content: 'a', mode: '100644' as const }],
+      deletedFiles: [],
+      headSha: 'parent',
+      headBranch: 'feat',
+      message: 'Custom: fix stuff',
+      pullNumber: 1,
+      log: deps.logger,
+    });
+
+    expect(createCommit).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Custom: fix stuff' })
+    );
+  });
+});
+
 describe('buildSuccessReport', () => {
   const baseInput = {
     pullNumber: 42,
