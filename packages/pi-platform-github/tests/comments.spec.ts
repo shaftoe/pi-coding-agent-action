@@ -299,7 +299,7 @@ describe('createFinalComment', () => {
 
   test('includes session stats with token usage', async () => {
     const deps = createTestDeps();
-    const body_ = 'Test result';
+    const body = 'Test result';
     const metadata = {
       sessionStats: {
         inputTokens: 1000,
@@ -310,15 +310,15 @@ describe('createFinalComment', () => {
       },
     };
 
-    const body = await runFinalCommentBody(deps, body_, metadata);
+    const commentBody = await runFinalCommentBody(deps, body, metadata);
 
-    expect(body).toContain('Tokens: 1.5K ');
-    expect(body).toContain('Cost: $0.01 ');
+    expect(commentBody).toContain('Tokens: 1.5K ');
+    expect(commentBody).toContain('Cost: $0.01 ');
   });
 
   test('includes session stats with token usage (rounds up)', async () => {
     const deps = createTestDeps();
-    const body_ = 'Test result';
+    const body = 'Test result';
     const metadata = {
       sessionStats: {
         inputTokens: 2000,
@@ -329,15 +329,15 @@ describe('createFinalComment', () => {
       },
     };
 
-    const body = await runFinalCommentBody(deps, body_, metadata);
+    const commentBody = await runFinalCommentBody(deps, body, metadata);
 
-    expect(body).toContain('Tokens: 2.0K ');
-    expect(body).toContain('Cost: $0.02 ');
+    expect(commentBody).toContain('Tokens: 2.0K ');
+    expect(commentBody).toContain('Cost: $0.02 ');
   });
 
   test('handles zero session stats', async () => {
     const deps = createTestDeps();
-    const body_ = 'Test result';
+    const body = 'Test result';
     const metadata = {
       sessionStats: {
         inputTokens: 0,
@@ -348,10 +348,10 @@ describe('createFinalComment', () => {
       },
     };
 
-    const body = await runFinalCommentBody(deps, body_, metadata);
+    const commentBody = await runFinalCommentBody(deps, body, metadata);
 
-    expect(body).toContain('Tokens: 0');
-    expect(body).not.toContain('Cost: $0');
+    expect(commentBody).toContain('Tokens: 0');
+    expect(commentBody).not.toContain('Cost: $0');
   });
 
   test('includes action version when provided', async () => {

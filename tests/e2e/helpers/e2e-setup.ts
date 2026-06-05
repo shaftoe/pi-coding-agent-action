@@ -138,6 +138,22 @@ export function validateE2EEnvVars(
 }
 
 /**
+ * Non-throwing counterpart to `validateE2EEnvVars`. Returns the env triple
+ * as-is (with empty strings for missing values); `isE2EEnabled()` then
+ * gates the suite based on whether the values are present.
+ *
+ * Use this at describe-time, and reserve `validateE2EEnvVars` for the
+ * actual test body where missing env vars should fail loudly.
+ */
+export function readE2EEnvVars(env: { token: string; provider: string; model: string }): {
+  token: string;
+  provider: string;
+  model: string;
+} {
+  return env;
+}
+
+/**
  * Helper to gate E2E tests on `RUN_E2E_TESTS=1` plus required env vars.
  * Returns `true` if the suite should run, `false` if it should be skipped.
  */

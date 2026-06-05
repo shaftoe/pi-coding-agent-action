@@ -38,7 +38,7 @@ import { resolve } from 'node:path';
 import {
   E2E_TIMEOUT,
   setupE2E,
-  validateE2EEnvVars,
+  readE2EEnvVars,
   isE2EEnabled,
   registerE2ESkip,
 } from './helpers/e2e-setup';
@@ -54,24 +54,11 @@ const {
   token: E2E_TOKEN,
   provider: E2E_PROVIDER,
   model: E2E_MODEL,
-} = (() => {
-  try {
-    return validateE2EEnvVars(
-      {
-        token: Bun.env.E2E_TOKEN_CUSTOM ?? '',
-        provider: Bun.env.E2E_PROVIDER_CUSTOM ?? '',
-        model: Bun.env.E2E_MODEL_CUSTOM ?? '',
-      },
-      {
-        token: 'E2E_TOKEN_CUSTOM',
-        provider: 'E2E_PROVIDER_CUSTOM',
-        model: 'E2E_MODEL_CUSTOM',
-      }
-    );
-  } catch {
-    return { token: '', provider: '', model: '' };
-  }
-})();
+} = readE2EEnvVars({
+  token: Bun.env.E2E_TOKEN_CUSTOM ?? '',
+  provider: Bun.env.E2E_PROVIDER_CUSTOM ?? '',
+  model: Bun.env.E2E_MODEL_CUSTOM ?? '',
+});
 
 const canRun = isE2EEnabled({ token: E2E_TOKEN, provider: E2E_PROVIDER, model: E2E_MODEL });
 

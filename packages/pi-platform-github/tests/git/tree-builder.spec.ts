@@ -1,7 +1,7 @@
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
 
-import { setupGitHubTestEnv } from '../helpers/github-test-env';
-setupGitHubTestEnv({ envPathPrefix: 'gh-event-tree' });
+import { setupGitHubContextMock, defaultMockContext } from '../helpers/github-test-env';
+setupGitHubContextMock(defaultMockContext);
 
 // Mock octokit
 const mockCreateBlob = mock((params: any) =>
@@ -24,22 +24,18 @@ const mockOctokit = {
 };
 // octokit mock no longer needed - deps pattern
 
-import { setupGitHubContextMock, defaultMockContext } from '../helpers/github-test-env';
-const mockContext = defaultMockContext;
-setupGitHubContextMock(mockContext);
-
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 
 function createTestDeps(): GitHubModuleDeps {
   return {
     octokit: mockOctokit as any,
     context: {
-      repo: mockContext.repo,
-      issue: mockContext.issue,
+      repo: defaultMockContext.repo,
+      issue: defaultMockContext.issue,
       eventName: 'push',
       payload: {},
-      serverUrl: mockContext.serverUrl,
-      runId: mockContext.runId,
+      serverUrl: defaultMockContext.serverUrl,
+      runId: defaultMockContext.runId,
       workspace: '/tmp',
     },
     logger: {
@@ -60,7 +56,7 @@ describe('createBlobsAndTree', () => {
     mockCreateBlob.mockClear();
     mockCreateTree.mockClear();
     // Reset to default context
-    mockContext.repo = { owner: 'test-owner', repo: 'test-repo' };
+    defaultMockContext.repo = { owner: 'test-owner', repo: 'test-repo' };
   });
 
   test('creates blobs for changed files', async () => {

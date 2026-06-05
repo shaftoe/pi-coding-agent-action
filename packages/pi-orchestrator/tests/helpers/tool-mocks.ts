@@ -45,8 +45,8 @@ export function createMockProvider(
   overrides?: Partial<PlatformProvider>,
   options?: MockProviderContextOptions
 ): PlatformProvider {
-  const issueNumber = options?.issueNumber ?? 1;
-  const eventName = options?.eventName ?? 'issue_comment';
+  // Destructure with defaults to keep cyclomatic complexity low (one `?.`).
+  const { issueNumber = 1, eventName = 'issue_comment' } = options ?? {};
 
   return {
     type: 'github',

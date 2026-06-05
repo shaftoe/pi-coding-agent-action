@@ -1,7 +1,7 @@
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
 
-import { setupGitHubTestEnv } from '../helpers/github-test-env';
-setupGitHubTestEnv({ envPathPrefix: 'gh-event-commit' });
+import { setupGitHubContextMock, defaultMockContext } from '../helpers/github-test-env';
+setupGitHubContextMock(defaultMockContext);
 
 // Mock octokit
 const mockCreateCommit = mock(() =>
@@ -24,10 +24,6 @@ const mockOctokit = {
 };
 // octokit singleton mock no longer needed - deps pattern
 
-import { setupGitHubContextMock, defaultMockContext } from '../helpers/github-test-env';
-const mockContext = defaultMockContext;
-setupGitHubContextMock(mockContext);
-
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 
 // We need a mutable actor for the appendCoAuthoredBy tests
@@ -37,13 +33,13 @@ function createTestDeps(payloadOverrides?: Record<string, unknown>): GitHubModul
   return {
     octokit: mockOctokit as any,
     context: {
-      repo: mockContext.repo,
-      issue: mockContext.issue,
+      repo: defaultMockContext.repo,
+      issue: defaultMockContext.issue,
       eventName: 'push',
       ...(testActor !== undefined ? { actor: testActor } : {}),
       payload: { ...payloadOverrides },
-      serverUrl: mockContext.serverUrl,
-      runId: mockContext.runId,
+      serverUrl: defaultMockContext.serverUrl,
+      runId: defaultMockContext.runId,
       workspace: '/tmp',
     },
     logger: {
@@ -64,7 +60,7 @@ describe('createCommitAndUpdateBranch', () => {
     mockCreateCommit.mockClear();
     mockUpdateRef.mockClear();
     // Reset to default context
-    mockContext.repo = { owner: 'test-owner', repo: 'test-repo' };
+    defaultMockContext.repo = { owner: 'test-owner', repo: 'test-repo' };
   });
 
   test('creates a commit and updates branch reference', async () => {

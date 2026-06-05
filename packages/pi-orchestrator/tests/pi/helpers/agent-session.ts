@@ -28,15 +28,20 @@ export interface MockSessionOptions {
   messages: MockSession['state']['messages'];
 }
 
-/** Build a mock session with the given stats + messages. */
+/**
+ * Build a mock session with the given stats + messages.
+ *
+ * Destructures `options.stats` once (with defaults) instead of four `?.` /
+ * `??` chains, keeping cyclomatic complexity under Fallow's threshold.
+ */
 export function buildMockSession(options: MockSessionOptions): MockSession {
-  const input = options.stats?.input ?? 100;
-  const output = options.stats?.output ?? 50;
-  const total = options.stats?.total ?? input + output;
-  const cost = options.stats?.cost ?? 0.001;
+  const { input = 100, output = 50, total, cost = 0.001 } = options.stats ?? {};
 
   return {
-    getSessionStats: () => ({ tokens: { input, output, total }, cost }),
+    getSessionStats: () => ({
+      tokens: { input, output, total: total ?? input + output },
+      cost,
+    }),
     prompt: async () => {},
     subscribe: () => {},
     state: { messages: options.messages },

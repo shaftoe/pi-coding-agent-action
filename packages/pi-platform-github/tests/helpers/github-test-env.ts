@@ -27,9 +27,15 @@ import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 export { coreMock };
 
 /**
- * Default mock GitHub context object (no event/payload specifics) — used by
- * `pi-platform-github` git tests that don't care about which event triggered
- * them.
+ * Default mock GitHub context object — no event name / sha / payload.
+ *
+ * Used by git tests (`commit-creator.spec.ts`, `tree-builder.spec.ts`)
+ * that don't care about which event triggered them. They pass this to
+ * `setupGitHubContextMock()` and read `repo` / `issue` / `serverUrl` /
+ * `runId` directly when building `GitHubModuleDeps`.
+ *
+ * If you need a fully-populated context (with `eventName` and `sha`),
+ * use `defaultGitHubContext` below or `createTestDeps()`.
  */
 export const defaultMockContext = {
   repo: {
@@ -67,8 +73,10 @@ export function installStdoutAnnotationFilter(): void {
 }
 
 /**
- * Default fake `@actions/github` context used by `setupGitHubTestEnv()`.
- * Tests can override per-call via `createTestDeps({ context: {...} })`.
+ * Default fake `@actions/github` context used by `setupGitHubTestEnv()` and
+ * `createTestDeps()`. Has `eventName` and `sha` populated — pick this over
+ * `defaultMockContext` when you need a fully-shaped context (most tool
+ * execution tests).
  */
 export const defaultGitHubContext = {
   repo: { owner: 'test-owner', repo: 'test-repo' },
@@ -193,28 +201,5 @@ export function createTestDeps(
       notice: noop,
       error: noop,
     },
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Lazy module loader (replaces the getModule() pattern duplicated in specs)
-// ---------------------------------------------------------------------------
-
-const moduleCache = new Map<string, Promise<unknown>>();
-
-/**
- * Lazily import a module by name, caching the promise. Useful when a spec
- * needs to wait for `mock.module()` registrations to take effect before
- * importing the production module under test.
- */
-export function lazyLoadModule<T = unknown>(specifier: string): () => Promise<T> {
-  let cached: Promise<T> | undefined;
-  return () => {
-    if (!cached) {
-      cached =
-        (moduleCache.get(specifier) as Promise<T> | undefined) ?? (import(specifier) as Promise<T>);
-      moduleCache.set(specifier, cached as Promise<unknown>);
-    }
-    return cached;
   };
 }
