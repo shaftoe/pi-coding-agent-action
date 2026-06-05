@@ -32,6 +32,9 @@ const gitUtilsModule = import('@alexanderfortin/pi-platform-github');
 
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 
+/** Matches the `referenceFiles` param shape of `scanForChanges`/`scanDirectory`. */
+type ReferenceFiles = Map<string, { sha: string; content: string | null }>;
+
 function createTestDeps(): GitHubModuleDeps {
   return {
     octokit: {} as any,
@@ -92,19 +95,32 @@ describe('scanForChanges', () => {
     };
   }
 
-  test('detects new files', async () => {
-    // Create a new file in temp directory
-    const testFile = path.join(tempDir, 'new-file.txt');
-    fs.writeFileSync(testFile, 'new content');
+  /** Run `scanForChanges` against the current `tempDir` with a fresh reference map. */
+  async function scanRef(referenceFiles: ReferenceFiles = new Map()) {
+    return scanForChanges(tempDeps(), referenceFiles, mockLog);
+  }
 
-    const referenceFiles = new Map();
-
-    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
-
+  /** Assert a single changed file at `expectedPath` with optional content. */
+  function expectSingleChanged(
+    result: Awaited<ReturnType<typeof scanRef>>,
+    expectedPath: string,
+    expectedContent?: string
+  ) {
     expect(result.changedFiles).toHaveLength(1);
     expect(result.changedFiles[0]).toBeDefined();
-    expect(result.changedFiles[0]?.path).toBe('new-file.txt');
-    expect(result.changedFiles[0]!.content).toBe('new content');
+    expect(result.changedFiles[0]?.path).toBe(expectedPath);
+    if (expectedContent !== undefined) {
+      expect(result.changedFiles[0]!.content).toBe(expectedContent);
+    }
+  }
+
+  test('detects new files', async () => {
+    // Create a new file in temp directory
+    fs.writeFileSync(path.join(tempDir, 'new-file.txt'), 'new content');
+
+    const result = await scanRef();
+
+    expectSingleChanged(result, 'new-file.txt', 'new content');
     expect(result.deletedFiles).toHaveLength(0);
   });
 
@@ -112,25 +128,20 @@ describe('scanForChanges', () => {
     // Create reference and modify it
     const referenceFiles = new Map([['test.txt', { sha: 'abc123', content: 'old content' }]]);
 
-    const testFile = path.join(tempDir, 'test.txt');
-    fs.writeFileSync(testFile, 'new content');
+    fs.writeFileSync(path.join(tempDir, 'test.txt'), 'new content');
 
-    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
+    const result = await scanRef(referenceFiles);
 
-    expect(result.changedFiles).toHaveLength(1);
-    expect(result.changedFiles[0]).toBeDefined();
-    expect(result.changedFiles[0]?.path).toBe('test.txt');
-    expect(result.changedFiles[0]!.content).toBe('new content');
+    expectSingleChanged(result, 'test.txt', 'new content');
     expect(result.deletedFiles).toHaveLength(0);
   });
 
   test('ignores unchanged files', async () => {
     const referenceFiles = new Map([['unchanged.txt', { sha: 'abc123', content: 'same content' }]]);
 
-    const testFile = path.join(tempDir, 'unchanged.txt');
-    fs.writeFileSync(testFile, 'same content');
+    fs.writeFileSync(path.join(tempDir, 'unchanged.txt'), 'same content');
 
-    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
+    const result = await scanRef(referenceFiles);
 
     expect(result.changedFiles).toHaveLength(0);
     expect(result.deletedFiles).toHaveLength(0);
@@ -143,10 +154,9 @@ describe('scanForChanges', () => {
     ]);
 
     // Only create remaining file
-    const remainingFile = path.join(tempDir, 'remaining.txt');
-    fs.writeFileSync(remainingFile, 'still here');
+    fs.writeFileSync(path.join(tempDir, 'remaining.txt'), 'still here');
 
-    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
+    const result = await scanRef(referenceFiles);
 
     expect(result.changedFiles).toHaveLength(0);
     expect(result.deletedFiles).toHaveLength(1);
@@ -157,21 +167,15 @@ describe('scanForChanges', () => {
     const subdir = path.join(tempDir, 'subdir');
     fs.mkdirSync(subdir, { recursive: true });
 
-    const nestedFile = path.join(subdir, 'nested.txt');
-    fs.writeFileSync(nestedFile, 'nested content');
+    fs.writeFileSync(path.join(subdir, 'nested.txt'), 'nested content');
 
-    const referenceFiles = new Map();
+    const result = await scanRef();
 
-    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
-
-    expect(result.changedFiles).toHaveLength(1);
-    expect(result.changedFiles[0]).toBeDefined();
-    expect(result.changedFiles[0]?.path).toBe(path.join('subdir', 'nested.txt'));
+    expectSingleChanged(result, path.join('subdir', 'nested.txt'));
   });
 
   test('respects .gitignore', async () => {
-    const gitignore = path.join(tempDir, '.gitignore');
-    fs.writeFileSync(gitignore, 'ignored.txt\n*.log');
+    fs.writeFileSync(path.join(tempDir, '.gitignore'), 'ignored.txt\n*.log');
 
     // Create ignored files
     fs.writeFileSync(path.join(tempDir, 'ignored.txt'), 'should be ignored');
@@ -180,9 +184,7 @@ describe('scanForChanges', () => {
     // Create non-ignored file
     fs.writeFileSync(path.join(tempDir, 'included.txt'), 'should be included');
 
-    const referenceFiles = new Map();
-
-    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
+    const result = await scanRef();
 
     // .gitignore and included.txt should be found (ignored files are skipped)
     expect(result.changedFiles).toHaveLength(2);
@@ -191,10 +193,9 @@ describe('scanForChanges', () => {
   });
 
   test('handles missing .gitignore gracefully', async () => {
-    const referenceFiles = new Map();
     fs.writeFileSync(path.join(tempDir, 'test.txt'), 'content');
 
-    const result = await scanForChanges(tempDeps(), referenceFiles, mockLog);
+    const result = await scanRef();
 
     expect(result.changedFiles).toHaveLength(1);
   });
@@ -343,24 +344,36 @@ describe('scanDirectory', () => {
     mockLog = createLogger(createTestDeps(), '🔍');
   });
 
-  test('scans single file', async () => {
-    const testFile = path.join(tempDir, 'test.txt');
-    fs.writeFileSync(testFile, 'content');
-
-    const referenceFiles = new Map();
-    const ig = ignore();
-
-    const result = await scanDirectory({
+  /** Run `scanDirectory` against the current `tempDir`. */
+  async function scanDir(
+    referenceFiles: ReferenceFiles = new Map(),
+    ig: ReturnType<typeof ignore> = ignore()
+  ) {
+    return scanDirectory({
       dir: tempDir,
       relativePath: '',
       referenceFiles,
       ig,
       log: mockLog,
     });
+  }
 
+  /** Asserts a single changed file with the given path. */
+  function expectSingleChangedPath(
+    result: Awaited<ReturnType<typeof scanDir>>,
+    expectedPath: string
+  ) {
     expect(result.changedFiles).toHaveLength(1);
     expect(result.changedFiles[0]).toBeDefined();
-    expect(result.changedFiles[0]?.path).toBe('test.txt');
+    expect(result.changedFiles[0]?.path).toBe(expectedPath);
+  }
+
+  test('scans single file', async () => {
+    fs.writeFileSync(path.join(tempDir, 'test.txt'), 'content');
+
+    const result = await scanDir();
+
+    expectSingleChangedPath(result, 'test.txt');
     expect(result.encounteredFiles.has('test.txt')).toBe(true);
   });
 
@@ -371,16 +384,7 @@ describe('scanDirectory', () => {
     fs.writeFileSync(path.join(tempDir, 'root.txt'), 'root content');
     fs.writeFileSync(path.join(subdir, 'nested.txt'), 'nested content');
 
-    const referenceFiles = new Map();
-    const ig = ignore();
-
-    const result = await scanDirectory({
-      dir: tempDir,
-      relativePath: '',
-      referenceFiles,
-      ig,
-      log: mockLog,
-    });
+    const result = await scanDir();
 
     expect(result.changedFiles).toHaveLength(2);
     expect(result.changedFiles.some(f => f.path === 'root.txt')).toBe(true);
@@ -401,16 +405,7 @@ describe('scanDirectory', () => {
     fs.writeFileSync(path.join(level2, 'file2.txt'), 'level2 content');
     fs.writeFileSync(path.join(level3, 'file3.txt'), 'level3 content');
 
-    const referenceFiles = new Map();
-    const ig = ignore();
-
-    const result = await scanDirectory({
-      dir: tempDir,
-      relativePath: '',
-      referenceFiles,
-      ig,
-      log: mockLog,
-    });
+    const result = await scanDir();
 
     expect(result.changedFiles).toHaveLength(4);
 
@@ -461,19 +456,9 @@ describe('scanDirectory', () => {
       [path.join('nested', 'nested.txt'), { sha: 'def456', content: 'old nested content' }],
     ]);
 
-    const ig = ignore();
+    const result = await scanDir(referenceFiles);
 
-    const result = await scanDirectory({
-      dir: tempDir,
-      relativePath: '',
-      referenceFiles,
-      ig,
-      log: mockLog,
-    });
-
-    expect(result.changedFiles).toHaveLength(1);
-    expect(result.changedFiles[0]).toBeDefined();
-    expect(result.changedFiles[0]?.path).toBe(path.join('nested', 'nested.txt'));
+    expectSingleChangedPath(result, path.join('nested', 'nested.txt'));
     expect(result.changedFiles[0]!.content).toBe('nested modified');
   });
 
@@ -491,15 +476,7 @@ describe('scanDirectory', () => {
       [path.join('nested', 'deep', 'also-deleted.txt'), { sha: 'jkl012', content: 'deep deleted' }],
     ]);
 
-    const ig = ignore();
-
-    const result = await scanDirectory({
-      dir: tempDir,
-      relativePath: '',
-      referenceFiles,
-      ig,
-      log: mockLog,
-    });
+    const result = await scanDir(referenceFiles);
 
     // No changed files
     expect(result.changedFiles).toHaveLength(0);
@@ -517,21 +494,12 @@ describe('scanDirectory', () => {
     fs.writeFileSync(path.join(tempDir, 'included.txt'), 'included');
     fs.writeFileSync(path.join(tempDir, 'excluded.txt'), 'excluded');
 
-    const referenceFiles = new Map();
     const ig = ignore();
     ig.add('excluded.txt');
 
-    const result = await scanDirectory({
-      dir: tempDir,
-      relativePath: '',
-      referenceFiles,
-      ig,
-      log: mockLog,
-    });
+    const result = await scanDir(new Map<string, { sha: string; content: string | null }>(), ig);
 
-    expect(result.changedFiles).toHaveLength(1);
-    expect(result.changedFiles[0]).toBeDefined();
-    expect(result.changedFiles[0]?.path).toBe('included.txt');
+    expectSingleChangedPath(result, 'included.txt');
     expect(result.encounteredFiles.has('included.txt')).toBe(true);
     expect(result.encounteredFiles.has('excluded.txt')).toBe(false);
   });
@@ -547,15 +515,7 @@ describe('scanDirectory', () => {
       ['deleted.txt', { sha: 'ghi789', content: 'deleted' }],
     ]);
 
-    const ig = ignore();
-
-    const result = await scanDirectory({
-      dir: tempDir,
-      relativePath: '',
-      referenceFiles,
-      ig,
-      log: mockLog,
-    });
+    const result = await scanDir(referenceFiles);
 
     // Should find changed.txt and new.txt as changed
     expect(result.changedFiles).toHaveLength(2);
@@ -569,16 +529,7 @@ describe('scanDirectory', () => {
   });
 
   test('handles empty directory', async () => {
-    const referenceFiles = new Map();
-    const ig = ignore();
-
-    const result = await scanDirectory({
-      dir: tempDir,
-      relativePath: '',
-      referenceFiles,
-      ig,
-      log: mockLog,
-    });
+    const result = await scanDir();
 
     expect(result.changedFiles).toHaveLength(0);
     expect(result.encounteredFiles.size).toBe(0);

@@ -6,12 +6,12 @@ Strategy: incremental, one PR-sized step at a time, interleavable with other wor
 ## Current state (as of 2026-06-05)
 
 - ✅ Dead code: clean (no issues)
-- ❌ Duplication: **1,270 LOC / 5.1%** across 27 files (60 clone groups)
-  - Down from 3,333 LOC / 13.3% (110 groups) at baseline — **−62% LOC, −45% groups**
-  - Remaining clones are mostly internal to single spec files (≤19 lines each)
-  - Fallow now flags 2 cross-file extraction quick wins:
-    `get-pr-diff-execution.spec.ts` (5 groups, 53 lines) and
-    `git.spec.ts` (7 groups, 82 lines) — see proposed Step 1.6
+- ❌ Duplication: **1,077 LOC / 4.4%** across 26 files (49 clone groups)
+  - Down from 3,333 LOC / 13.3% (110 groups) at baseline — **−68% LOC, −55% groups**
+  - Down from 1,270 LOC / 5.1% (60 groups) pre-Phase 1.6 — **−193 LOC, −11 groups**
+  - Remaining clones: cross-package spec fixtures (`git.spec.ts` ↔
+    `file-scanner.spec.ts` test bodies; `git.spec.ts` ↔ `tools.spec.ts` env-var
+    setup) plus unrelated internal clones in other spec files
 - ❌ Complexity: **59 functions above threshold** (was 60); MI 92.1 (good);
   1 refactoring target remaining (`get-workflow-run-logs.ts`, pri 15.4)
   - Top CRITICAL functions: `gatherActionsConfig` (600 CRAP),
@@ -73,22 +73,30 @@ Strategy: incremental, one PR-sized step at a time, interleavable with other wor
     `git/commit-creator.spec.ts`, `git/tree-builder.spec.ts`
   - Result: 1,655 LOC / 68 groups → 1,270 LOC / 60 groups (6.8% → 5.3%)
 
-### Phase 1.6 — Spec-internal clones (quick wins, ~135 LOC)
+### Phase 1.6 — Spec-internal clones (quick wins, ~135 LOC) ✅
 
-Fallow now explicitly recommends two cross-file extractions. These should
-land before Phase 2 because they are mechanical and unblock the dupes gate.
+Fallow explicitly recommended two cross-file extractions. These landed
+before Phase 2 (mechanical, no production code touched).
 
-- [ ] **Step 1.6a** — `packages/pi-orchestrator/tests/pi/tools/get-pr-diff-execution.spec.ts`
-  - Extract 5 shared clone groups (53 lines) into a local helper module
-    (e.g. `get-pr-diff-execution.helpers.ts`) — likely fixtures for mock
-    diff payloads and assertion builders
-- [ ] **Step 1.6b** — `packages/pi-platform-github/tests/git.spec.ts`
-  - Extract 7 shared clone groups (82 lines) into `tests/helpers/git-fixtures.ts`
-    (mock tree, blob, commit payloads; repo-state setup)
-  - Side cleanup: also reduces the `pull-request-update-integration.spec.ts`
-    and `tree-builder.spec.ts` clones flagged in `Clone families`
-- [ ] **Step 1.6c** — Re-run `bun run fallow:dupes`;
-  target ≤1,100 LOC / ≤45 groups after this phase
+- [x] **Step 1.6a** — `packages/pi-orchestrator/tests/pi/tools/get-pr-diff-execution.helpers.ts`
+  - Exported: `buildTool`, `runTool`, `expectByteTruncated`,
+    `expectDefaultSuccessDetails`, `SAMPLE_DIFF`, `BIG_DIFF`, `BIG_DIFF_CONFIG`,
+    `mockCtx`, plus `GetPRDiffMock` type
+  - Killed **5 original clone groups (53 lines) + 2 secondary clones**
+    surfaced after the first pass (constants extraction + assertion helper)
+  - `get-pr-diff-execution.spec.ts` is now **0 clones** per fallow
+- [x] **Step 1.6b** — inline helpers in `packages/pi-platform-github/tests/git.spec.ts`
+  - Added `scanRef()`, `expectSingleChanged()` in `scanForChanges` describe;
+    `scanDir()`, `expectSingleChangedPath()` in `scanDirectory` describe
+  - Killed **7 internal clone groups (82 lines)** — the cross-file clones
+    with `file-scanner.spec.ts` and `tools.spec.ts` remain (cross-package,
+    separate scope)
+- [x] **Step 1.6c** — Re-ran `bun run fallow:dupes`
+  - Result: **1,077 LOC / 4.4% / 49 groups** (was 1,270 / 5.1% / 60)
+  - **−193 LOC, −11 groups, −0.7pp**
+  - LOC target met (≤1,100 ✅). Group target missed by 4 (target ≤45, got 49)
+    because the remaining 4 groups are all cross-package clones that need
+    a different approach — see "Risks / open questions" for follow-up
 
 ## Phase 2 — Complexity hotspots (one file per PR)
 
@@ -150,6 +158,7 @@ targeted tests for the new units. Aim: each function ≤15 cyclomatic, ≤30 cog
 | --- | --- |
 | `packages/pi-orchestrator/tests/helpers/core-mock.ts` | `coreMock`, `registerCoreMock()` (pre-existing) |
 | `packages/pi-orchestrator/tests/helpers/tool-mocks.ts` | `mockExtensionContext`, `createMockProvider(overrides?, options?)` |
+| `packages/pi-orchestrator/tests/pi/tools/get-pr-diff-execution.helpers.ts` | `buildTool`, `runTool`, `expectByteTruncated`, `expectDefaultSuccessDetails`, `SAMPLE_DIFF`, `BIG_DIFF`, `BIG_DIFF_CONFIG`, `mockCtx`, `GetPRDiffMock` |
 | `packages/pi-orchestrator/tests/orchestrator/helpers.ts` | `setAgentRunResult`, `setAgentRunError`, `setAddReactionReturn`, `getFinalCommentCall`, `expectFactoryCalledWith` |
 | `packages/pi-orchestrator/tests/pi/helpers/agent-session.ts` | `buildMockSession`, `injectMockSession`, `userHelloMessage` |
 | `packages/pi-platform-github/tests/helpers/github-test-env.ts` | `setupGitHubTestEnv`, `setupGitHubContextMock`, `createTestDeps`, `coreMock`, `defaultMockContext`, `defaultGitHubContext`, `lazyLoadModule`, `installStdoutAnnotationFilter`, `registerGitHubContextMock`, `installGitHubEnv` |
@@ -166,25 +175,32 @@ targeted tests for the new units. Aim: each function ≤15 cyclomatic, ≤30 cog
 
 Concrete pick-up order, smallest-to-largest blast radius. Each item is one PR.
 
-1. **Squash & open PR for Step 2.1 (already done locally).** 6 wip commits on
-   `fallow-cleanup`; collapse into `refactor(pull-request-update): decompose
-   updatePullRequest` and ship it. Gets the +34 tests reviewed and merged.
-2. **Step 1.6a + 1.6b** (one PR, ~1 hour). Mechanical extraction of
-   `get-pr-diff-execution` and `git.spec` fixtures. Expected dupes drop:
-   ~135 LOC, ~12 groups → ~1,135 LOC / ~48 groups. Gets dupes gate close to
-   green without touching production code.
-3. **Step 2.2 — `gatherActionsConfig`** (CRAP 600, single file). Highest
+1. **Squash & open PR for Step 2.1** (you're handling this).
+2. **Open PR for Step 1.6 (this work)** — 4 changed files, 1 new helper, all
+   tests pass, `bun run validate` green. Suggested commit:
+   `refactor(tests): extract helpers from get-pr-diff and git specs`.
+3. **Step 1.7 (NEW, optional)** — Kill the remaining cross-package clones
+   flagged by fallow:
+   - `git.spec.ts:124/489/504/518` ↔ `pi-orchestrator/tests/git/file-scanner.spec.ts`
+     (4 groups, ~47 lines) — would require a shared fixture module under
+     `tests/fixtures/` (already exists as a dir) exporting `scanFixtureSetup()`
+     and similar. Could land alongside Step 2.5 since it's also `scanDirectory`-adjacent.
+   - `git.spec.ts:19` ↔ `tools.spec.ts:19` (1 group, 10 lines) — duplicate
+     env-var setup; could be folded into `github-test-env.ts`'s `installGitHubEnv`.
+   - **Estimated gain**: ~−60 LOC, ~−5 groups → ~1,020 LOC / ~44 groups.
+     Crosses the ≤45-group target.
+4. **Step 2.2 — `gatherActionsConfig`** (CRAP 600, single file). Highest
    remaining risk; clean separation between parsing/defaulting/validation.
-4. **Step 2.5 — `getWorkflowRunLogs`** (CRAP 420). Only file still in
+5. **Step 2.5 — `getWorkflowRunLogs`** (CRAP 420). Only file still in
    refactoring-targets list; fallow explicitly calls it out.
-5. **Step 2.3 + 2.4** (bundle, both CRAP 462). Similar shape
+6. **Step 2.3 + 2.4** (bundle, both CRAP 462). Similar shape
    (orchestrator-side execute + comment rendering).
-6. **Step 2.6 + 2.7** (bundle, CRAP 306 + 272). Small, contained validators.
-7. **Step 2.8** — orchestrator `execute` (CRAP 240). Land last because it
+7. **Step 2.6 + 2.7** (bundle, CRAP 306 + 272). Small, contained validators.
+8. **Step 2.8** — orchestrator `execute` (CRAP 240). Land last because it
    touches the central flow and benefits from the prior extractions.
-8. **Step 2.9** — pull-request/thread/get-ci-status bundle (CRAP 240/240/210).
-9. **Step 2.10a + 2.10b** — clean-up bundles.
-10. **Phase 3** — suppressions + final `bun run fallow` → 0.
+9. **Step 2.9** — pull-request/thread/get-ci-status bundle (CRAP 240/240/210).
+10. **Step 2.10a + 2.10b** — clean-up bundles.
+11. **Phase 3** — suppressions + final `bun run fallow` → 0.
 
 ### Stop conditions
 
