@@ -46,6 +46,111 @@ interface _UpdatePullRequestParams {
   dryRun?: boolean;
 }
 
+describe('buildDryRunReport', () => {
+  const baseInput = {
+    pullNumber: 42,
+    headBranch: 'feat',
+    baseBranch: 'main',
+    prUrl: 'https://github.com/test-owner/test-repo/pull/42',
+    changedFiles: [] as { path: string }[],
+    deletedFiles: [] as string[],
+  };
+
+  function textOf(result: { content: { type: string; text: string }[] }) {
+    return result.content[0]!.text;
+  }
+
+  test('always includes header and branch info', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport(baseInput);
+    expect(textOf(out)).toContain('[DRY RUN] Would update pull request #42:');
+    expect(textOf(out)).toContain('- Head branch: feat');
+    expect(textOf(out)).toContain('- Base branch: main');
+    expect(out.details.dryRun).toBe(true);
+    expect(out.details.pullRequestNumber).toBe(42);
+    expect(out.details.pullRequestUrl).toBe(baseInput.prUrl);
+    expect(out.details.headBranch).toBe('feat');
+    expect(out.details.baseBranch).toBe('main');
+  });
+
+  test('reports no code changes when both lists are empty', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport(baseInput);
+    expect(textOf(out)).toContain('- No code changes detected');
+    expect(textOf(out)).not.toContain('- Code changes:');
+  });
+
+  test('includes only modified count when changedFiles > 0', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport({
+      ...baseInput,
+      changedFiles: [{ path: 'a.ts' }, { path: 'b.ts' }],
+    });
+    expect(textOf(out)).toContain('- Code changes:');
+    expect(textOf(out)).toContain('  - 2 modified/new file(s)');
+    expect(textOf(out)).not.toContain('deleted file(s)');
+  });
+
+  test('includes only deleted count when deletedFiles > 0', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport({
+      ...baseInput,
+      deletedFiles: ['old.ts'],
+    });
+    expect(textOf(out)).toContain('- Code changes:');
+    expect(textOf(out)).toContain('  - 1 deleted file(s)');
+    expect(textOf(out)).not.toContain('modified/new file(s)');
+  });
+
+  test('includes both counts when both lists non-empty', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport({
+      ...baseInput,
+      changedFiles: [{ path: 'a.ts' }, { path: 'b.ts' }, { path: 'c.ts' }],
+      deletedFiles: ['old.ts', 'older.ts'],
+    });
+    expect(textOf(out)).toContain('  - 3 modified/new file(s)');
+    expect(textOf(out)).toContain('  - 2 deleted file(s)');
+  });
+
+  test('omits title line when title is undefined', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport({ ...baseInput, body: 'B' });
+    expect(textOf(out)).not.toContain('- Title:');
+    expect(textOf(out)).toContain('- Body: B');
+  });
+
+  test('omits body line when body is undefined', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport({ ...baseInput, title: 'T' });
+    expect(textOf(out)).toContain('- Title: T');
+    expect(textOf(out)).not.toContain('- Body:');
+  });
+
+  test('includes both title and body when both provided', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport({ ...baseInput, title: 'T', body: 'B' });
+    expect(textOf(out)).toContain('- Title: T');
+    expect(textOf(out)).toContain('- Body: B');
+  });
+});
+
 describe('fetchPullRequestData', () => {
   function createDeps(octokitGet: ReturnType<typeof mock>) {
     return {

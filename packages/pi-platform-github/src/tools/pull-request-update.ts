@@ -168,6 +168,62 @@ export async function fetchPullRequestData(
 }
 
 /**
+ * Build the dry-run report (no side effects).
+ *
+ * Produces both the human-readable text content and the structured
+ * `details` payload describing what would happen if the PR update ran for
+ * real. The caller is responsible for any logging.
+ *
+ * @param input - Resolved PR number, branch info, and the change scan results.
+ * @returns The tool result to return to the caller.
+ * @internal Exported for testing purposes.
+ */
+export function buildDryRunReport(input: {
+  pullNumber: number;
+  title: string | undefined;
+  body: string | undefined;
+  headBranch: string;
+  baseBranch: string;
+  prUrl: string;
+  changedFiles: readonly { path: string }[];
+  deletedFiles: readonly string[];
+}): UpdatePullRequestResult {
+  const { pullNumber, title, body, headBranch, baseBranch, prUrl, changedFiles, deletedFiles } =
+    input;
+  const parts: string[] = [`[DRY RUN] Would update pull request #${pullNumber}:`];
+  if (title !== undefined) {
+    parts.push(`- Title: ${title}`);
+  }
+  if (body !== undefined) {
+    parts.push(`- Body: ${body}`);
+  }
+  parts.push(`- Head branch: ${headBranch}`);
+  parts.push(`- Base branch: ${baseBranch}`);
+  if (changedFiles.length > 0 || deletedFiles.length > 0) {
+    parts.push(`- Code changes:`);
+    if (changedFiles.length > 0) {
+      parts.push(`  - ${changedFiles.length} modified/new file(s)`);
+    }
+    if (deletedFiles.length > 0) {
+      parts.push(`  - ${deletedFiles.length} deleted file(s)`);
+    }
+  } else {
+    parts.push(`- No code changes detected`);
+  }
+
+  return {
+    content: [{ type: 'text' as const, text: parts.join('\n') }],
+    details: {
+      pullRequestNumber: pullNumber,
+      pullRequestUrl: prUrl,
+      headBranch,
+      baseBranch,
+      dryRun: true,
+    },
+  };
+}
+
+/**
  * Update a pull request end-to-end.
  *
  * Orchestrates the full flow: fetches the PR and its branch, scans for changed
@@ -220,40 +276,18 @@ export async function updatePullRequest(
 
   // Dry run mode - report what would happen without making changes
   if (dryRun) {
-    const parts: string[] = [`[DRY RUN] Would update pull request #${resolvedPullNumber}:`];
-    if (title !== undefined) {
-      parts.push(`- Title: ${title}`);
-    }
-    if (body !== undefined) {
-      parts.push(`- Body: ${body}`);
-    }
-    parts.push(`- Head branch: ${headBranch}`);
-    parts.push(`- Base branch: ${baseBranch}`);
-    if (changedFiles.length > 0 || deletedFiles.length > 0) {
-      parts.push(`- Code changes:`);
-      if (changedFiles.length > 0) {
-        parts.push(`  - ${changedFiles.length} modified/new file(s)`);
-      }
-      if (deletedFiles.length > 0) {
-        parts.push(`  - ${deletedFiles.length} deleted file(s)`);
-      }
-    } else {
-      parts.push(`- No code changes detected`);
-    }
-
-    const dryRunMessage = parts.join('\n');
-    log.debug(dryRunMessage);
-
-    return {
-      content: [{ type: 'text' as const, text: dryRunMessage }],
-      details: {
-        pullRequestNumber: resolvedPullNumber,
-        pullRequestUrl: prUrl,
-        headBranch,
-        baseBranch,
-        dryRun: true,
-      },
-    };
+    const result = buildDryRunReport({
+      pullNumber: resolvedPullNumber,
+      title,
+      body,
+      headBranch,
+      baseBranch,
+      prUrl,
+      changedFiles,
+      deletedFiles,
+    });
+    log.debug(result.content[0]!.text);
+    return result;
   }
 
   let commitSha: string | undefined;

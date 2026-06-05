@@ -67,6 +67,7 @@ export {
   validateUpdatePullRequestParams,
   resolvePullRequestNumber,
   fetchPullRequestData,
+  buildDryRunReport,
 } from './tools/pull-request-update';
 
 export { createReview, validateCreateReviewParams, toGitHubComment } from './tools/review';
