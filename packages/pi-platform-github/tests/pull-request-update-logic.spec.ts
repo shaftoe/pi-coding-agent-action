@@ -46,6 +46,50 @@ interface _UpdatePullRequestParams {
   dryRun?: boolean;
 }
 
+describe('resolvePullRequestNumber', () => {
+  beforeEach(() => {
+    mockContext.issue = { number: 123 };
+  });
+
+  test('returns explicit pull_number when provided', async () => {
+    const module = await getModule();
+    const { resolvePullRequestNumber } = module;
+
+    const deps = { context: mockContext } as any;
+    expect(resolvePullRequestNumber(deps, 789)).toBe(789);
+  });
+
+  test('falls back to context.issue.number when pull_number is undefined', async () => {
+    const module = await getModule();
+    const { resolvePullRequestNumber } = module;
+
+    const deps = { context: mockContext } as any;
+    expect(resolvePullRequestNumber(deps, undefined)).toBe(123);
+  });
+
+  test('throws when neither pull_number nor context.issue.number is available', async () => {
+    const module = await getModule();
+    const { resolvePullRequestNumber } = module;
+
+    // @ts-expect-error -- Testing error handling when issue is undefined
+    mockContext.issue = undefined;
+    const deps = { context: mockContext } as any;
+
+    expect(() => resolvePullRequestNumber(deps, undefined)).toThrow(
+      'Pull request number not provided and not available in context'
+    );
+  });
+
+  test('explicit pull_number wins over context.issue.number', async () => {
+    const module = await getModule();
+    const { resolvePullRequestNumber } = module;
+
+    const deps = { context: mockContext } as any;
+    mockContext.issue = { number: 999 };
+    expect(resolvePullRequestNumber(deps, 1)).toBe(1);
+  });
+});
+
 describe('validateUpdatePullRequestParams', () => {
   beforeEach(() => {
     // Reset to default context

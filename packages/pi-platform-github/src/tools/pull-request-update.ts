@@ -98,6 +98,29 @@ export function validateUpdatePullRequestParams(params: UpdatePullRequestParams)
 }
 
 /**
+ * Resolve the pull request number from explicit param or action context.
+ *
+ * @param deps - Module dependencies (provides `context.issue.number`).
+ * @param pullNumber - Explicit `pull_number` parameter, if provided.
+ * @returns The resolved PR number.
+ * @throws {Error} If no PR number can be resolved.
+ * @internal Exported for testing purposes.
+ */
+export function resolvePullRequestNumber(
+  deps: GitHubModuleDeps,
+  pullNumber: number | undefined
+): number {
+  const resolved = pullNumber ?? deps.context.issue?.number;
+  if (!resolved) {
+    throw new Error(
+      'Pull request number not provided and not available in context. ' +
+        'Please provide pull_number parameter or run this action in the context of a pull request.'
+    );
+  }
+  return resolved;
+}
+
+/**
  * Update a pull request end-to-end.
  *
  * Orchestrates the full flow: fetches the PR and its branch, scans for changed
@@ -116,20 +139,14 @@ export async function updatePullRequest(
   deps: GitHubModuleDeps,
   params: UpdatePullRequestParams
 ): Promise<UpdatePullRequestResult> {
-  const { pull_number, title, body, message, dryRun } = params;
+  const { title, body, message, dryRun } = params;
   const log = createLogger(deps);
 
   // Validate input parameters early
   validateUpdatePullRequestParams(params);
 
   // Resolve PR number from context if not provided
-  const resolvedPullNumber = pull_number ?? deps.context.issue?.number;
-  if (!resolvedPullNumber) {
-    throw new Error(
-      'Pull request number not provided and not available in context. ' +
-        'Please provide pull_number parameter or run this action in the context of a pull request.'
-    );
-  }
+  const resolvedPullNumber = resolvePullRequestNumber(deps, params.pull_number);
 
   log.debug(`PR Number: ${resolvedPullNumber}`);
   log.debug(`Title: ${title ?? '(no change)'}`);

@@ -62,7 +62,11 @@ export {
   validateBranchName,
 } from './tools/pull-request';
 
-export { updatePullRequest, validateUpdatePullRequestParams } from './tools/pull-request-update';
+export {
+  updatePullRequest,
+  validateUpdatePullRequestParams,
+  resolvePullRequestNumber,
+} from './tools/pull-request-update';
 
 export { createReview, validateCreateReviewParams, toGitHubComment } from './tools/review';
 
