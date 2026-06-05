@@ -253,6 +253,64 @@ export function generateCommitMessage(
 }
 
 /**
+ * Build the success report (no side effects).
+ *
+ * Composes both the human-readable summary and the structured `details`
+ * payload describing a successful (non-dry-run) PR update. The caller is
+ * responsible for any logging.
+ *
+ * @param input - Resolved PR number, branch info, and the outcomes of the
+ *                 commit / metadata-update steps.
+ * @returns The tool result to return to the caller.
+ * @internal Exported for testing purposes.
+ */
+export function buildSuccessReport(input: {
+  pullNumber: number;
+  prUrl: string;
+  headBranch: string;
+  baseBranch: string;
+  commitSha: string | undefined;
+  titleUpdated: boolean | undefined;
+  bodyUpdated: boolean | undefined;
+}): UpdatePullRequestResult {
+  const { pullNumber, prUrl, headBranch, baseBranch, commitSha, titleUpdated, bodyUpdated } = input;
+
+  const parts: string[] = [`Pull request #${pullNumber} updated: ${prUrl}`];
+  if (commitSha) {
+    parts.push(`- New commit: ${commitSha}`);
+  }
+  if (titleUpdated) {
+    parts.push(`- Title updated`);
+  }
+  if (bodyUpdated) {
+    parts.push(`- Description updated`);
+  }
+  const successMessage = parts.join('\n');
+
+  const details: UpdatePullRequestDetails = {
+    pullRequestNumber: pullNumber,
+    pullRequestUrl: prUrl,
+    headBranch,
+    baseBranch,
+    dryRun: false,
+  };
+  if (commitSha !== undefined) {
+    details.commitSha = commitSha;
+  }
+  if (titleUpdated) {
+    details.titleUpdated = titleUpdated;
+  }
+  if (bodyUpdated) {
+    details.bodyUpdated = bodyUpdated;
+  }
+
+  return {
+    content: [{ type: 'text' as const, text: successMessage }],
+    details,
+  };
+}
+
+/**
  * Update a pull request end-to-end.
  *
  * Orchestrates the full flow: fetches the PR and its branch, scans for changed
@@ -373,40 +431,15 @@ export async function updatePullRequest(
     }
   }
 
-  const successParts: string[] = [`Pull request #${resolvedPullNumber} updated: ${prUrl}`];
-  if (commitSha) {
-    successParts.push(`- New commit: ${commitSha}`);
-  }
-  if (titleUpdated) {
-    successParts.push(`- Title updated`);
-  }
-  if (bodyUpdated) {
-    successParts.push(`- Description updated`);
-  }
-
-  const successMessage = successParts.join('\n');
-  log.info(`SUCCESS: ${successMessage}`);
-
-  const details: UpdatePullRequestDetails = {
-    pullRequestNumber: resolvedPullNumber,
-    pullRequestUrl: prUrl,
+  const result = buildSuccessReport({
+    pullNumber: resolvedPullNumber,
+    prUrl,
     headBranch,
     baseBranch,
-    dryRun: false,
-  };
-
-  if (commitSha !== undefined) {
-    details.commitSha = commitSha;
-  }
-  if (titleUpdated) {
-    details.titleUpdated = titleUpdated;
-  }
-  if (bodyUpdated) {
-    details.bodyUpdated = bodyUpdated;
-  }
-
-  return {
-    content: [{ type: 'text' as const, text: successMessage }],
-    details,
-  };
+    commitSha,
+    titleUpdated,
+    bodyUpdated,
+  });
+  log.info(`SUCCESS: ${result.content[0]!.text}`);
+  return result;
 }

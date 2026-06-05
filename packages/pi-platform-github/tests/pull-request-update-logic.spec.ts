@@ -46,6 +46,122 @@ interface _UpdatePullRequestParams {
   dryRun?: boolean;
 }
 
+describe('buildSuccessReport', () => {
+  const baseInput = {
+    pullNumber: 42,
+    prUrl: 'https://github.com/test-owner/test-repo/pull/42',
+    headBranch: 'feat',
+    baseBranch: 'main',
+    commitSha: undefined as string | undefined,
+    titleUpdated: undefined as boolean | undefined,
+    bodyUpdated: undefined as boolean | undefined,
+  };
+
+  function textOf(result: { content: { type: string; text: string }[] }) {
+    return result.content[0]!.text;
+  }
+
+  test('always includes header with PR number and URL; dryRun=false', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport(baseInput);
+    expect(textOf(out)).toBe(
+      'Pull request #42 updated: https://github.com/test-owner/test-repo/pull/42'
+    );
+    expect(out.details).toEqual({
+      pullRequestNumber: 42,
+      pullRequestUrl: baseInput.prUrl,
+      headBranch: 'feat',
+      baseBranch: 'main',
+      dryRun: false,
+    });
+  });
+
+  test('includes New commit line + details.commitSha when commitSha is set', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport({ ...baseInput, commitSha: 'abc123' });
+    expect(textOf(out)).toContain('- New commit: abc123');
+    expect(out.details.commitSha).toBe('abc123');
+  });
+
+  test('omits commit line when commitSha is undefined', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport(baseInput);
+    expect(textOf(out)).not.toContain('New commit');
+    expect(out.details.commitSha).toBeUndefined();
+  });
+
+  test('includes Title updated line + details.titleUpdated when true', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport({ ...baseInput, titleUpdated: true });
+    expect(textOf(out)).toContain('- Title updated');
+    expect(out.details.titleUpdated).toBe(true);
+  });
+
+  test('omits Title line when titleUpdated is undefined', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport(baseInput);
+    expect(textOf(out)).not.toContain('Title');
+    expect(out.details.titleUpdated).toBeUndefined();
+  });
+
+  test('includes Description updated line + details.bodyUpdated when true', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport({ ...baseInput, bodyUpdated: true });
+    expect(textOf(out)).toContain('- Description updated');
+    expect(out.details.bodyUpdated).toBe(true);
+  });
+
+  test('omits Description line when bodyUpdated is undefined', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport(baseInput);
+    expect(textOf(out)).not.toContain('Description');
+    expect(out.details.bodyUpdated).toBeUndefined();
+  });
+
+  test('all-three-set produces ordered lines and full details payload', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport({
+      ...baseInput,
+      commitSha: 'deadbeef',
+      titleUpdated: true,
+      bodyUpdated: true,
+    });
+    const lines = textOf(out).split('\n');
+    expect(lines).toEqual([
+      'Pull request #42 updated: https://github.com/test-owner/test-repo/pull/42',
+      '- New commit: deadbeef',
+      '- Title updated',
+      '- Description updated',
+    ]);
+    expect(out.details).toEqual({
+      pullRequestNumber: 42,
+      pullRequestUrl: baseInput.prUrl,
+      headBranch: 'feat',
+      baseBranch: 'main',
+      dryRun: false,
+      commitSha: 'deadbeef',
+      titleUpdated: true,
+      bodyUpdated: true,
+    });
+  });
+});
+
 describe('generateCommitMessage', () => {
   test('returns explicit message as-is when truthy', async () => {
     const module = await getModule();
