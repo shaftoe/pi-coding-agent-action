@@ -120,6 +120,53 @@ export function resolvePullRequestNumber(
   return resolved;
 }
 
+interface PullRequestBranchInfo {
+  headBranch: string;
+  baseBranch: string;
+  headSha: string;
+  prUrl: string;
+}
+
+/**
+ * Fetch a pull request via the GitHub REST API and extract the fields needed
+ * to update its branch (head/base ref, head SHA, HTML URL).
+ *
+ * @param deps - Module dependencies.
+ * @param pullNumber - PR number to fetch.
+ * @returns The PR's branch info and URL.
+ * @throws {Error} If the API call returns a non-200 status or no data.
+ * @internal Exported for testing purposes.
+ */
+export async function fetchPullRequestData(
+  deps: GitHubModuleDeps,
+  pullNumber: number
+): Promise<PullRequestBranchInfo> {
+  const owner = deps.context.repo.owner;
+  const repo = deps.context.repo.repo;
+  const log = createLogger(deps);
+
+  log.debug(`Fetching PR #${pullNumber}...`);
+  const prData = await deps.octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: pullNumber,
+  });
+
+  if (prData.status !== 200 || !prData.data) {
+    throw new Error(
+      `Could not fetch pull request #${pullNumber}. ` +
+        `Please verify the pull request number is correct and that you have access to this repository.`
+    );
+  }
+
+  return {
+    headBranch: prData.data.head.ref,
+    baseBranch: prData.data.base.ref,
+    headSha: prData.data.head.sha,
+    prUrl: prData.data.html_url,
+  };
+}
+
 /**
  * Update a pull request end-to-end.
  *
@@ -153,29 +200,10 @@ export async function updatePullRequest(
   log.debug(`Body: ${body ? '(provided)' : '(no change)'}`);
   log.debug(`DryRun: ${dryRun ?? false}`);
 
-  // Fetch PR details
-  const owner = deps.context.repo.owner;
-  const repo = deps.context.repo.repo;
-
-  log.debug(`Fetching PR #${resolvedPullNumber}...`);
-  const prData = await deps.octokit.rest.pulls.get({
-    owner,
-    repo,
-    pull_number: resolvedPullNumber,
-  });
-
-  // Verify we got a valid pull request (not an issue)
-  if (prData.status !== 200 || !prData.data) {
-    throw new Error(
-      `Could not fetch pull request #${resolvedPullNumber}. ` +
-        `Please verify the pull request number is correct and that you have access to this repository.`
-    );
-  }
-
-  const headBranch = prData.data.head.ref;
-  const baseBranch = prData.data.base.ref;
-  const headSha = prData.data.head.sha;
-  const prUrl = prData.data.html_url;
+  const { headBranch, baseBranch, headSha, prUrl } = await fetchPullRequestData(
+    deps,
+    resolvedPullNumber
+  );
 
   log.debug(`PR found: ${prUrl}`);
   log.debug(`Head branch: ${headBranch}`);

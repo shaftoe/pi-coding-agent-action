@@ -46,6 +46,80 @@ interface _UpdatePullRequestParams {
   dryRun?: boolean;
 }
 
+describe('fetchPullRequestData', () => {
+  function createDeps(octokitGet: ReturnType<typeof mock>) {
+    return {
+      context: mockContext,
+      octokit: { rest: { pulls: { get: octokitGet } } },
+      logger: {
+        debug: mock(() => {}),
+        info: mock(() => {}),
+        warning: mock(() => {}),
+        notice: mock(() => {}),
+        error: mock(() => {}),
+      },
+    } as any;
+  }
+
+  test('returns branch info and URL on a 200 response', async () => {
+    const module = await getModule();
+    const { fetchPullRequestData } = module;
+
+    const get = mock(() =>
+      Promise.resolve({
+        status: 200,
+        data: {
+          number: 42,
+          head: { ref: 'feat', sha: 'abc' },
+          base: { ref: 'main' },
+          html_url: 'https://github.com/test-owner/test-repo/pull/42',
+        },
+      })
+    );
+
+    const info = await fetchPullRequestData(createDeps(get), 42);
+    expect(info).toEqual({
+      headBranch: 'feat',
+      baseBranch: 'main',
+      headSha: 'abc',
+      prUrl: 'https://github.com/test-owner/test-repo/pull/42',
+    });
+    expect(get).toHaveBeenCalledWith({
+      owner: 'test-owner',
+      repo: 'test-repo',
+      pull_number: 42,
+    });
+  });
+
+  test('throws when status is not 200', async () => {
+    const module = await getModule();
+    const { fetchPullRequestData } = module;
+
+    const get = mock(() => Promise.resolve({ status: 404, data: null }));
+    await expect(fetchPullRequestData(createDeps(get), 99)).rejects.toThrow(
+      /Could not fetch pull request #99/
+    );
+  });
+
+  test('throws when data is null despite 200', async () => {
+    const module = await getModule();
+    const { fetchPullRequestData } = module;
+
+    const get = mock(() => Promise.resolve({ status: 200, data: null }));
+    await expect(fetchPullRequestData(createDeps(get), 7)).rejects.toThrow(
+      /Could not fetch pull request #7/
+    );
+  });
+
+  test('propagates underlying octokit errors', async () => {
+    const module = await getModule();
+    const { fetchPullRequestData } = module;
+
+    const get = mock(() => Promise.reject(new Error('network down')));
+    await expect(fetchPullRequestData(createDeps(get), 1)).rejects.toThrow('network down');
+  });
+});
+
 describe('resolvePullRequestNumber', () => {
   beforeEach(() => {
     mockContext.issue = { number: 123 };
