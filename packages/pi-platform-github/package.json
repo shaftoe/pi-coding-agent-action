@@ -15,7 +15,7 @@
     "./context-utils": "./src/context-utils.ts"
   },
   "peerDependencies": {
-    "@actions/github": ">=9.0.0"
+    "@actions/github": "^9.1.1"
   },
   "dependencies": {
     "@alexanderfortin/pi-orchestrator": "workspace:*",
