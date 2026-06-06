@@ -190,6 +190,76 @@ jobs:
 > [!TIP]
 > The `get_issue_or_pr_thread` tool returns both regular comments and inline review comments (with file path and line information). Telling the agent to call it first is all you need to provide full review context — no special configuration required.
 
+### Selecting a Model per Trigger
+
+A common need is to keep a **fallback model** handy — e.g. to re-trigger a job when the default model's quota is exhausted, or to reach for a stronger/cheaper model on demand. This can be achieved purely at the **workflow level**, with **no change to the action**, by exploiting two facts:
+
+1. The action exposes a `trigger` input (default `/pi `) that defines the prefix stripped from the comment to obtain the prompt.
+2. A workflow can run multiple jobs, each gated on a different comment prefix and each wiring a different provider/model/token.
+
+The trick is to pair each trigger with a dedicated set of GitHub **Variables** (`PROVIDER`/`MODEL`) and **Secrets** (API key). The suffix mirrors the trigger so everything maps 1:1:
+
+| Trigger  | Variables              | Secret        |
+|----------|------------------------|---------------|
+| `/pi `   | `PROVIDER`, `MODEL`    | `API_KEY`     |
+| `/pi2 `  | `PROVIDER2`, `MODEL2`  | `API_KEY2`    |
+
+Note that `/pi2 ` does **not** match `startsWith('/pi ')` (the 4th character is `2`, not a space), so the two triggers are mutually exclusive — exactly one job runs per comment.
+
+```yaml
+name: Pi Agent (multi-model)
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  # Default model — invoked with `/pi `
+  pi-default:
+    if: startsWith(github.event.comment.body, '/pi ')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: shaftoe/pi-coding-agent-action@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          provider: ${{ vars.PROVIDER }}
+          model: ${{ vars.MODEL }}
+          token: ${{ secrets.API_KEY }}
+          trigger: '/pi '   # strips `/pi ` from the comment to get the prompt
+
+  # Alternative model — invoked with `/pi2 `
+  pi-alternative:
+    # Skipped automatically when the alternative isn't configured
+    if: startsWith(github.event.comment.body, '/pi2 ') && vars.PROVIDER2 != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: shaftoe/pi-coding-agent-action@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          provider: ${{ vars.PROVIDER2 }}
+          model: ${{ vars.MODEL2 }}
+          token: ${{ secrets.API_KEY2 }}
+          trigger: '/pi2 '   # strips `/pi2 ` from the comment instead
+```
+
+Now a comment like `/pi2 retry with the fallback model` runs against the alternative provider, while `/pi ...` keeps using the default — no workflow edits required to switch.
+
+> [!TIP]
+> The same pattern scales to more variants (`/pi3 ` → `PROVIDER3`/`MODEL3`/`API_KEY3`, etc.). The examples in this repository's own [`pi.yml`](./.github/workflows/pi.yml) workflow use exactly this technique with a reusable workflow.
+
 ### Custom Extensions
 
 You can load custom Pi extensions to add additional custom tools or modify agent behavior:
