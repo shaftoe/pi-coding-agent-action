@@ -29,6 +29,10 @@ jobs:
     name: semantic-release
     runs-on: ubuntu-latest
     needs: test-and-coverage
+    env:
+      # All builds in this job are release builds — the dist must contain a
+      # bare semver, never a `-dev+branch.sha` suffix.
+      RELEASE_BUILD: 'true'
 
     steps:
       - name: Checkout
