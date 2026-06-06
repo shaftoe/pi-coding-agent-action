@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import {
   copyAllSdkAssets,
   copySdkAssetDir,
+  composeActionVersion,
   formatGitMetadata,
   readJsonVersion,
 } from '../../scripts/package';
@@ -67,6 +68,50 @@ describe('formatGitMetadata', () => {
       branch: 'unknown',
       sha: 'unknown',
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// composeActionVersion
+// ---------------------------------------------------------------------------
+
+describe('composeActionVersion', () => {
+  const meta = { branch: 'develop', sha: 'a1b2c3d' };
+
+  test('returns bare semver for release builds regardless of branch', () => {
+    expect(composeActionVersion('2.19.3', meta, true)).toBe('2.19.3');
+  });
+
+  test('returns bare semver for release builds even on non-v2 branch', () => {
+    // This is the key fix: release is explicit, not branch-based.
+    // A release build on 'develop' (or any branch) still gets bare semver.
+    expect(composeActionVersion('2.19.3', { branch: 'develop', sha: 'deadbeef' }, true)).toBe(
+      '2.19.3'
+    );
+  });
+
+  test('composes dev version with branch and sha for dev builds', () => {
+    expect(composeActionVersion('2.19.3', meta, false)).toBe('2.19.3-dev+develop.a1b2c3d');
+  });
+
+  test('sanitizes branch names with slashes for dev builds', () => {
+    expect(composeActionVersion('2.19.3', { branch: 'feature/foo', sha: 'a1b2c3d' }, false)).toBe(
+      '2.19.3-dev+feature-foo.a1b2c3d'
+    );
+  });
+
+  test('handles unknown git metadata for dev builds', () => {
+    expect(composeActionVersion('2.19.3', { branch: 'unknown', sha: 'unknown' }, false)).toBe(
+      '2.19.3-dev+unknown.unknown'
+    );
+  });
+
+  test('dev build on v2 branch still gets dev suffix (release is explicit)', () => {
+    // Without RELEASE_BUILD=true, even a build on v2 is treated as dev.
+    // This prevents stale dev builds masquerading as releases.
+    expect(composeActionVersion('2.19.3', { branch: 'v2', sha: 'a1b2c3d' }, false)).toBe(
+      '2.19.3-dev+v2.a1b2c3d'
+    );
   });
 });
 

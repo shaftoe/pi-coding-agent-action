@@ -18,9 +18,15 @@
  *
  * ## Version scheme
  *
- * - **Release builds** (built from `v2` branch): bare semver, e.g. `2.19.2`
- * - **Development builds** (built from any other branch):
- *   `2.19.2-dev+<branch>.<sha>`, e.g. `2.19.2-dev+develop.a1b2c3d`
+ * - **Release builds** (`RELEASE_BUILD=true`): bare semver, e.g. `2.19.2`
+ * - **Development builds** (default): `2.19.2-dev+<branch>.<sha>`,
+ *   e.g. `2.19.2-dev+develop.a1b2c3d`
+ *
+ * Whether a build is a release is determined **explicitly** by the
+ * `RELEASE_BUILD` env var at build time (see `scripts/package.ts`), never by
+ * sniffing the git branch. This avoids cross-branch dist contamination where
+ * a dev-built `dist/index.js` committed on `develop` is carried to `v2`
+ * via fast-forward.
  *
  * See {@link formatActionVersion} for the human-readable display format.
  */

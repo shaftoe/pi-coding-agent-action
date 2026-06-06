@@ -74,13 +74,26 @@ function sanitizeSemverIdent(ident: string): string {
 }
 
 /**
- * Compose the action version string based on the current git context.
+ * Compose the action version string.
  *
- * - On the release branch (`v2`): uses the bare semver from `package.json`.
- * - On any other branch: appends `-dev+<branch>.<sha>` using semver build metadata syntax.
+ * - **Release builds** (`isRelease === true`): bare semver, e.g. `2.19.3`.
+ * - **Dev builds**: `<baseVersion>-dev+<branch>.<sha>` using semver build metadata
+ *   syntax, e.g. `2.19.3-dev+develop.a1b2c3d`.
+ *
+ * Whether a build is a release is determined **explicitly** by the caller (via
+ * the `RELEASE_BUILD` env var, see {@link buildDist}) — never by sniffing the
+ * git branch. This avoids the cross-branch dist-contamination problem where
+ * a dev-built `dist/index.js` committed on `develop` gets carried to `v2`
+ * via fast-forward and persists when semantic-release finds no new release.
+ *
+ * Exported for unit testing.
  */
-function composeActionVersion(baseVersion: string, meta: GitBuildMetadata): string {
-  if (meta.branch === 'v2') {
+export function composeActionVersion(
+  baseVersion: string,
+  meta: GitBuildMetadata,
+  isRelease: boolean
+): string {
+  if (isRelease) {
     return baseVersion;
   }
   const branch = sanitizeSemverIdent(meta.branch);
@@ -194,8 +207,15 @@ export function copyAllSdkAssets(sdkDistDir: string, piSdkDest: string): void {
 
 export async function buildDist(cwd: string = process.cwd()): Promise<void> {
   const baseVersion = readJsonVersion(join(cwd, 'package.json'));
+
+  // Release vs dev is determined explicitly via the RELEASE_BUILD env var —
+  // never by sniffing the git branch. This is set by the release/promote
+  // workflows and by the semantic-release prepareCmd. When unset (default,
+  // e.g. the develop package.yml workflow or local builds), a dev version is
+  // produced with git build metadata.
+  const isRelease = process.env.RELEASE_BUILD === 'true';
   const gitMeta = await resolveGitMeta(cwd);
-  const version = composeActionVersion(baseVersion, gitMeta);
+  const version = composeActionVersion(baseVersion, gitMeta, isRelease);
 
   // Resolve Pi SDK path dynamically — in Bun workspaces, deps are hoisted to root node_modules,
   // but the prepare lifecycle may run before the full tree is materialized.
@@ -203,8 +223,9 @@ export async function buildDist(cwd: string = process.cwd()): Promise<void> {
   const piPkgPath = require.resolve('@earendil-works/pi-coding-agent/package.json');
   const piVersion = readJsonVersion(piPkgPath);
 
+  const buildType = isRelease ? 'release' : 'dev';
   console.log(
-    `[package] Building action v${version} (base: ${baseVersion}, branch: ${gitMeta.branch}, sha: ${gitMeta.sha})`
+    `[package] Building action v${version} (${buildType}, base: ${baseVersion}, branch: ${gitMeta.branch}, sha: ${gitMeta.sha})`
   );
 
   await build({

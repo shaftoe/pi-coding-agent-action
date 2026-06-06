@@ -21,7 +21,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "bun run scripts/bump-readme-version.ts ${nextRelease.version} && bun run sync-versions && bun run package"
+        "prepareCmd": "bun run scripts/bump-readme-version.ts ${nextRelease.version} && bun run sync-versions && RELEASE_BUILD=true bun run package"
       }
     ],
     [
