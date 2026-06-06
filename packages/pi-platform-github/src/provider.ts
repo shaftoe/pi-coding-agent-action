@@ -42,6 +42,28 @@ import type {
 } from './tools/get-workflow-run-logs';
 
 /**
+ * Substring patterns that identify a recognized git host. Matches the
+ * branches of {@link detectPlatform}.
+ *
+ * Exported so frontends (e.g. `pi-cli`) can warn when a user points at a
+ * host that doesn't match any known pattern — `detectPlatform` silently
+ * falls back to `'github'` for unrecognized hosts, so callers that want
+ * to surface the fallback must check this predicate themselves.
+ */
+const KNOWN_HOST_PATTERNS = ['codeberg', 'forgejo', 'gitea', 'github.com', '.github.'] as const;
+
+/**
+ * Return `true` iff `serverUrl` matches a host pattern recognized by
+ * {@link detectPlatform}. Pure — no environment access.
+ */
+export function isKnownServerUrl(serverUrl: string): boolean {
+  if (!serverUrl) {
+    return false;
+  }
+  return KNOWN_HOST_PATTERNS.some(pattern => serverUrl.includes(pattern));
+}
+
+/**
  * Detect the current platform based on a server URL.
  *
  * Pure function — no environment access. Callers (typically the action/
@@ -85,6 +107,10 @@ export function detectPlatform(serverUrl: string): PlatformType {
   // or GHE-like proxies. Falling back to 'github' gives them correct
   // platform semantics (GitHub-compatible REST API). Codeberg and Forgejo
   // are already caught by the explicit checks above.
+  //
+  // Frontends that want to surface the silent fallback (e.g. `pi-cli`
+  // warning on GitLab/Bitbucket misconfiguration) can call
+  // {@link isKnownServerUrl} to detect this branch.
   //
   // Users who need a non-default API base URL (e.g. GHES) should use the
   // --server-url flag; Octokit base URL is derived from it in the CLI's

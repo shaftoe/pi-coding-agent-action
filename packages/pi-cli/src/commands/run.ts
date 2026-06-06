@@ -10,7 +10,11 @@
  */
 
 import { ActionOrchestrator } from '@alexanderfortin/pi-orchestrator';
-import { createGitHubPlatformProvider, detectPlatform } from '@alexanderfortin/pi-platform-github';
+import {
+  createGitHubPlatformProvider,
+  detectPlatform,
+  isKnownServerUrl,
+} from '@alexanderfortin/pi-platform-github';
 import { CliGitAdapter } from '../adapters/git-adapter.js';
 import { CliLogger, type LogLevel } from '../adapters/logger.js';
 import { CliOutputSink } from '../adapters/output-sink.js';
@@ -101,6 +105,17 @@ export async function runCommand(args: RunCommandArgs): Promise<void> {
     serverUrl: args.serverUrl,
   });
   const platformType = detectPlatform(args.serverUrl);
+  // detectPlatform silently falls back to 'github' for unrecognized hosts
+  // (correct behavior for self-hosted GHE) but a user who mistypes a
+  // GitLab/Bitbucket URL would otherwise hit confusing GitHub-API 404s.
+  // Surface a warning so they can correct --server-url before the run.
+  if (!isKnownServerUrl(args.serverUrl)) {
+    logger.warning(
+      `Unrecognized git host '${args.serverUrl}'; assuming GitHub-compatible API. ` +
+        `If targeting GitLab/Bitbucket, set --server-url to a GitHub/Codeberg/Forgejo host ` +
+        `or expect API errors.`
+    );
+  }
   const provider = createGitHubPlatformProvider({
     octokit,
     context: platformContext,

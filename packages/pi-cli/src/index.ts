@@ -85,9 +85,12 @@ async function main(): Promise<void> {
   await program.parseAsync(process.argv);
 }
 
-// Skip automatic execution when imported (e.g. in tests).
-const invokedDirectly = import.meta.main === true || process.argv[1]?.endsWith('index.ts');
-if (invokedDirectly) {
+// Skip automatic execution when imported (e.g. in tests). `import.meta.main`
+// is a Bun-specific boolean that is `true` only when the current module is
+// the entry point of the process. It's sufficient on its own — there's no
+// need for an `process.argv[1]` fallback (which would falsely match any
+// file named `index.ts`).
+if (import.meta.main === true) {
   main().catch(err => {
     // runCommand handles orchestrator errors via the OutputSink (prints
     // its own ✖ line and sets process.exitCode). This outer catch is for

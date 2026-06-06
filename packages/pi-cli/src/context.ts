@@ -8,13 +8,17 @@
  *
  * - `addReaction()` no-ops when `payload.comment?.id` is missing.
  * - `createComment()` no-ops when `issue.number` is falsy.
+ * - `buildActionRunUrl()` returns `undefined` when `runId` is missing, so
+ *   M2's `--post-comment` won't append a footer URL pointing at a
+ *   nonexistent Actions run.
  * - `getStartTimeFromContext()` returns `undefined` for unknown event names.
  * - `getContextType()` returns `undefined` for unknown event names, which
  *   also disables prompt enrichment.
  *
- * This lets M1 ship with no library change. A future milestone may promote
- * `'cli'` to a first-class event name in `pi-platform-github/src/context-utils.ts`
- * if explicit handling is needed.
+ * This lets M1 ship with no library change beyond widening
+ * `PlatformContext.runId` to optional. A future milestone may promote
+ * `'cli'` to a first-class event name in
+ * `pi-platform-github/src/context-utils.ts` if explicit handling is needed.
  */
 
 import type { PlatformContext } from '@alexanderfortin/pi-orchestrator';
@@ -98,7 +102,9 @@ export function buildPlatformContext(args: CliContextArgs): PlatformContext {
     eventName: CLI_EVENT_NAME,
     payload: {},
     serverUrl: args.serverUrl,
-    runId: process.pid,
+    // runId omitted: CLI has no Actions runId. Leaving it undefined makes
+    // buildActionRunUrl() return undefined, suppressing the "View action
+    // run" footer so M2's --post-comment won't link to nonexistent runs.
     workspace: args.workspace,
     ...(args.actor !== undefined ? { actor: args.actor } : {}),
     ...(args.sha !== undefined ? { sha: args.sha } : {}),

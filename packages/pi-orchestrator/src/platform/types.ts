@@ -36,8 +36,14 @@ export interface PlatformContext {
   payload: Record<string, unknown>;
   /** The server URL (e.g. https://github.com, https://codeberg.org) */
   serverUrl: string;
-  /** The current workflow run ID */
-  runId: number;
+  /**
+   * The current workflow run ID.
+   *
+   * Optional so non-CI frontends (e.g. `pi-cli`) can omit it.
+   * `buildActionRunUrl()` returns `undefined` when `runId` is missing,
+   * which suppresses the "View action run" footer on posted comments.
+   */
+  runId?: number;
   /** The workspace directory path */
   workspace: string;
   /** The user/actor who triggered the workflow (e.g. for Co-authored-by trailers). */

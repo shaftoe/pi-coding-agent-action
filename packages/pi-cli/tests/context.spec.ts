@@ -117,9 +117,11 @@ describe('buildPlatformContext', () => {
     expect(ctx.workspace).toBe('/some/path');
   });
 
-  it('uses process.pid as runId (opaque token for CLI)', () => {
+  it('omits runId so comment footers do not link to nonexistent Actions runs', () => {
+    // buildActionRunUrl() returns undefined when runId is falsy/missing,
+    // suppressing the "View action run" footer. See context.ts docstring.
     const ctx = buildPlatformContext(baseArgs);
-    expect(ctx.runId).toBe(process.pid);
+    expect(ctx.runId).toBeUndefined();
   });
 
   it('omits optional actor when not provided', () => {

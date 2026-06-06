@@ -53,9 +53,14 @@ packages/
     │       └── git-adapter.ts      ← thin proxy over PlatformProvider (cleaner pattern than the action's RealGitAdapter; see §11.1)
     └── tests/
         ├── auth.spec.ts            ← 16 tests: token resolution + provider→env table
-        ├── context.spec.ts         ← 16 tests: parseRepoFlag + buildPlatformContext
+        ├── context.spec.ts         ← 17 tests: parseRepoFlag + buildPlatformContext (runId-omitted)
+        ├── config.spec.ts          ← 9 tests: gatherCliConfig → PiConfig shape
+        ├── octokit.spec.ts         ← 9 tests: apiBaseUrlFromServerUrl across hosts/slashes
+        ├── commands/
+        │   └── run.spec.ts         ← 5 tests: resolveLogLevel + verbose/quiet mutex
         └── adapters/
-            └── logger.spec.ts      ← 7 tests: level filtering + stderr routing
+            ├── logger.spec.ts      ← 7 tests: level filtering + stderr routing
+            └── output-sink.spec.ts ← 11 tests: flush modes, setFailed, getExportDirectory
 ```
 
 ### 3.1 `package.json` sketch
@@ -225,7 +230,10 @@ export function buildPlatformContext(args: CliContextArgs): PlatformContext {
     eventName: CLI_EVENT_NAME,     // sentinel: see §14.1
     payload: {},                   // empty: addReaction() no-ops
     serverUrl: args.serverUrl,
-    runId: process.pid,            // CLI has no runId; use pid as opaque token
+    // runId omitted: CLI has no Actions runId. buildActionRunUrl() returns
+    // undefined when runId is missing, so M2's --post-comment won't link
+    // to a nonexistent Actions run. Requires PlatformContext.runId to be
+    // optional (widened as part of M1).
     workspace: args.workspace,
     ...(args.actor !== undefined ? { actor: args.actor } : {}),
     ...(args.sha !== undefined ? { sha: args.sha } : {}),
@@ -243,6 +251,8 @@ unknown event names:
 
 - `addReaction()` no-ops when `payload.comment?.id` is missing.
 - `createComment()` no-ops when `issue.number` is falsy (M1 uses `0`).
+- `buildActionRunUrl()` returns `undefined` when `runId` is missing (M1
+  omits it), so no "View action run" footer is appended.
 - `getStartTimeFromContext()` returns `undefined` for unknown event names.
 - `getContextType()` returns `undefined` for unknown event names, which also
   disables prompt enrichment.
@@ -583,6 +593,11 @@ This removes the last `@actions/github` import — even type-only — from
 a cast. Originally scoped for M3; folded into M1 because the cast alternative
 was uglier than the 5-line prerequisite change.
 
+M1 also widened `PlatformContext.runId: number` → `runId?: number` so the
+CLI can omit it (suppressing the "View action run" footer on posted
+comments — see §5) and added `isKnownServerUrl()` so frontends can surface
+a warning when `detectPlatform` falls back to its silent `'github'` default.
+
 ### 11.3 Promote `CliOutputSink`/`CliLogger` to a shared `frontends/` helper module?
 
 Probably not worth it yet. The two frontends (`pi-action`, `pi-cli`) differ
@@ -637,7 +652,7 @@ Each milestone is independently mergeable and leaves the repo green.
 
 | #      | Milestone                                                                                                                                                                                                                                                                                                       | Deliverable                                  |
 | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| **M1** ✅ | Package skeleton + `pi-cli run` end-to-end with env-var-only auth. Flags shipped: `<prompt>`, `--repo`, `--provider`, `--model`, `--cwd`, `--server-url`, `--verbose`, `--quiet`. §11.2 Octokit type widening folded in. Output to stdout (final response), thinking deltas to stderr. 38 new tests.            | `bun pi-cli run "hello" ...` works.          |
+| **M1** ✅ | Package skeleton + `pi-cli run` end-to-end with env-var-only auth. Flags shipped: `<prompt>`, `--repo`, `--provider`, `--model`, `--cwd`, `--server-url`, `--verbose`, `--quiet`. §11.2 Octokit type widening folded in. Output to stdout (final response), thinking deltas to stderr. 75 new tests across 7 spec files.            | `bun pi-cli run "hello" ...` works.          |
 | **M2** | Full flag matrix: `--pr`, `--issue`, `--post-comment`, `--add-reaction`, `--system-prompt`, `--thinking`, `--extensions`, `--load-builtin-extensions`, `--loaded-tools`, `--base-url`, `--export-session-*`, `--auto-compaction`, all diff flags, `--out <stdout\|json\|none>`. First-class `'cli'` event name. | All action inputs reachable from the CLI.    |
 | **M3** | `review` and `thread` subcommands; `git remote get-url origin` auto-detection for `--repo` and `--server-url`; `pi-cli run -` stdin input; promote shared `GitAdapterFromProvider` into `pi-orchestrator` (§11.1); possibly `~/.pi/cli.toml` config file.                                                          | Local dev UX parity with the action.         |
 | **M4** | Bundling via esbuild; `private: false`; npm publish as `@alexanderfortin/pi-cli`; Homebrew tap optional.                                                                                                                                                                                                        | First public release.                        |
@@ -697,7 +712,7 @@ This RFC is accepted when:
 
 **Shipped:**
 
-- `packages/pi-cli/` (16 files, ~1.2k LOC, 38 new tests, all green).
+- `packages/pi-cli/` (16 files, ~1.2k LOC, 75 new tests across 7 spec files, all green).
 - Root `package.json` script `"pi-cli": "bun packages/pi-cli/src/index.ts"`.
 - §11.2 prerequisite: `@octokit/core` type widening in `pi-platform-github`,
   `@actions/github` moved from `peerDependencies` to `devDependencies`.
@@ -716,7 +731,7 @@ This RFC is accepted when:
 **Verified:**
 
 - `bun run validate` clean (lint + type-check + format).
-- `bun test`: 1302 pass / 0 fail (was 1264 pre-M1; +38 new).
+- `bun test`: 1349 run / 1347 pass / 2 skip / 0 fail (was 1264 pre-M1; +85 across the repo, 75 of which are the 7 new spec files under `packages/pi-cli/tests/`, plus 8 new tests for the §11.2 `isKnownServerUrl` helper).
 - All 7 error paths smoke-tested: missing required flag, mutex violation,
   missing GitHub token, missing provider token, unknown provider, bad
   `--repo`, malformed repo format. Each produces a clear `✖` message and

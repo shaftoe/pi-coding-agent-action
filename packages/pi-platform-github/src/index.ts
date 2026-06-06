@@ -126,4 +126,9 @@ export type {
 } from './git';
 
 // Platform provider (used by platform/index.ts)
-export { detectPlatform, createGitHubPlatformProvider, type GitHubPlatformDeps } from './provider';
+export {
+  detectPlatform,
+  isKnownServerUrl,
+  createGitHubPlatformProvider,
+  type GitHubPlatformDeps,
+} from './provider';
