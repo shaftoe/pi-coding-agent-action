@@ -37,7 +37,7 @@ packages/
     ├── src/
     │   ├── index.ts                ← bin entry: parses argv with `commander`, dispatches commands
     │   ├── commands/
-    │   │   └── run.ts              ← `pi-cli run "<prompt>"` (M1)
+    │   │   ├── run.ts              ← `pi-cli run "<prompt>"` (M1)
     │   │   ├── review.ts           ← M3
     │   │   └── thread.ts           ← M3
     │   ├── auth.ts                 ← env-var-only token resolution (GitHub + provider)
@@ -50,15 +50,12 @@ packages/
     │       ├── logger.ts           ← CliLogger: level-filtered, all → stderr
     │       ├── output-sink.ts      ← CliOutputSink: stdout/json/none modes
     │       ├── pi-agent.ts         ← PiAgentFactory: AgentEvents → stderr
-    │       └── git-adapter.ts      ← thin proxy over PlatformProvider (duplicated from action)
+    │       └── git-adapter.ts      ← thin proxy over PlatformProvider (cleaner pattern than the action's RealGitAdapter; see §11.1)
     └── tests/
         ├── auth.spec.ts            ← 16 tests: token resolution + provider→env table
         ├── context.spec.ts         ← 16 tests: parseRepoFlag + buildPlatformContext
         └── adapters/
             └── logger.spec.ts      ← 7 tests: level filtering + stderr routing
-        ├── context.spec.ts
-        ├── commands/
-        └── adapters/
 ```
 
 ### 3.1 `package.json` sketch
@@ -438,13 +435,15 @@ with two differences:
 
 ### 7.4 `GitAdapter`
 
-We reuse the same approach as `pi-action/adapters/git-adapter.ts` — a thin
-adapter that delegates the four `GitAdapter` methods
+The CLI's `CliGitAdapter` delegates each of the five `GitAdapter` methods
 (`addReaction`, `deleteReaction`, `createFinalComment`, `getPrompt`,
 `getStartTime`) to the injected `PlatformProvider`. Since `PlatformProvider`
-already implements all of those, the CLI's `GitAdapter` is a one-liner proxy
-identical to the action's. Worth factoring out into a shared helper in
-`pi-orchestrator` (see §11.1).
+already implements all of them, the adapter is a thin proxy.
+
+**The action's `RealGitAdapter` uses a different pattern** — it imports
+standalone functions from `pi-platform-github` directly. The CliGitAdapter
+(built on the provider abstraction) is the cleaner approach; see §11.1 for
+the M3 plan to refactor the action's adapter to match.
 
 ---
 
@@ -555,12 +554,17 @@ Same versioning as the action.
 
 ## 11. Prerequisite and opportunistic library changes
 
-### 11.1 Promote `GitAdapterFromProvider` into `pi-orchestrator`
+### 11.1 Refactor `RealGitAdapter` to adopt the `PlatformProvider` pattern
 
-Both `pi-action/adapters/git-adapter.ts` and the new `pi-cli` adapter are
-identical thin proxies from `PlatformProvider` to `GitAdapter`. This is dead
-code duplication. Move a single `createGitAdapterFromProvider(provider):
-GitAdapter` helper into `pi-orchestrator` and have both frontends use it.
+**Current state (pi-action):** `RealGitAdapter` imports standalone functions
+(`addReaction`, `createFinalComment`, `getPrompt`, etc.) directly from
+`pi-platform-github` and constructs its own `GitHubModuleDeps` bag. It does
+**not** use `PlatformProvider` — it was written before the provider abstraction
+existed.
+
+**Current state (pi-cli, M1):** `CliGitAdapter` delegates through
+`PlatformProvider` — the cleaner pattern made possible by the Phase 1–3
+refactor. It's a thin proxy with no direct dependency on `pi-platform-github`.
 
 **Status:** deferred to M3. M1 ships with a duplicated adapter (~30 lines);
 promoting a shared helper before having two concrete instances to design the

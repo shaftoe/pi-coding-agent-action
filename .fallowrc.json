@@ -2,7 +2,8 @@
   "entry": [
     "packages/pi-action/src/run.ts",
     "packages/pi-orchestrator/src/index.ts",
-    "packages/pi-platform-github/src/index.ts"
+    "packages/pi-platform-github/src/index.ts",
+    "packages/pi-cli/src/index.ts"
   ],
   "ignorePatterns": [
     "dist/**",

@@ -67,6 +67,36 @@ describe('parseRepoFlag', () => {
   it('includes the offending value in the error message', () => {
     expect(() => parseRepoFlag('garbage')).toThrow(/'garbage'/);
   });
+
+  describe('.git stripping', () => {
+    it('strips trailing .git from owner/repo.git', () => {
+      expect(parseRepoFlag('org/repo.git')).toEqual({
+        owner: 'org',
+        repo: 'repo',
+      });
+    });
+
+    it('strips trailing .git from owner/repo with dashes', () => {
+      expect(parseRepoFlag('my-org/my-repo.git')).toEqual({
+        owner: 'my-org',
+        repo: 'my-repo',
+      });
+    });
+
+    it('strips .git even with dots in repo name', () => {
+      expect(parseRepoFlag('org/collection.config.git')).toEqual({
+        owner: 'org',
+        repo: 'collection.config',
+      });
+    });
+
+    it('does not strip .notgit', () => {
+      expect(parseRepoFlag('org/repo.notgit')).toEqual({
+        owner: 'org',
+        repo: 'repo.notgit',
+      });
+    });
+  });
 });
 
 describe('buildPlatformContext', () => {

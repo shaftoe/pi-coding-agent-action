@@ -8,37 +8,66 @@
  * This bypasses `@actions/github.getOctokit()` so the CLI doesn't pull in
  * the GitHub-Actions-only package and its runner-side defaults (proxy
  * agent, etc.).
+ *
+ * The OctokitInstance type is imported from `@alexanderfortin/pi-platform-github`
+ * (the canonical source — see §5 of the issue review) to prevent the two
+ * packages' type definitions from silently drifting.
  */
 
 import { Octokit } from '@octokit/core';
 import { restEndpointMethods } from '@octokit/plugin-rest-endpoint-methods';
+import type { OctokitInstance } from '@alexanderfortin/pi-platform-github/types';
 
 /**
  * Build the Octokit class with the REST endpoint methods plugin applied.
  *
- * Exported as a constant so the type can be derived via `InstanceType<>`
- * in `pi-platform-github` (see `packages/pi-platform-github/src/types.ts`).
+ * Exported as a constant so `pi-platform-github`'s `OctokitInstance` type
+ * (which is derived from the same plugin call) is structurally aligned.
  */
-const OctokitWithRest = Octokit.plugin(restEndpointMethods);
+export const OctokitWithRest = Octokit.plugin(restEndpointMethods);
 
 /**
  * Resolve a REST API base URL from a server URL.
  *
- * - `github.com` (and any `*.github.com` enterprise host) → Octokit's
- *   default `https://api.github.com`, so we return `undefined` and let
- *   Octokit resolve it.
- * - Codeberg, Forgejo, Gitea → `{serverUrl}/api/v1` (the standard
- *   endpoint path for these GitHub-compatible platforms).
+ * - `https://github.com` (exact): Octokit's default `https://api.github.com`
+ * - `*.github.com` (subdomain, e.g. `github.example.com`): also default
+ * - Self-hosted GHE with custom hostname (e.g. `github.company.internal`):
+ *   the `detectPlatform()` function in pi-platform-github now defaults to
+ *   `'github'` for unrecognized hosts, so we treat these as GHES-specific:
+ *   the REST API is at `{serverUrl}/api/v3`.
+ * - Codeberg, Forgejo, Gitea: `{serverUrl}/api/v1`
  *
- * Returning `undefined` for the default case lets the SDK use its built-in
- * default, which is important for GitHub Enterprise users who configure
- * Octokit's `baseUrl` via other means.
+ * Returning `undefined` lets the SDK use its built-in `api.github.com`.
  */
 export function apiBaseUrlFromServerUrl(serverUrl: string): string | undefined {
-  if (serverUrl.includes('github.com')) {
+  const url = serverUrl.replace(/\/$/, '');
+
+  // Exact github.com → Octokit's default.
+  if (url === 'https://github.com') {
     return undefined;
   }
-  return `${serverUrl.replace(/\/$/, '')}/api/v1`;
+
+  // Standard github.com subdomains (api.github.com, *.github.com).
+  if (url.includes('.github.')) {
+    return undefined;
+  }
+
+  // GitHub.com (fallback for bare 'github.com' without protocol and
+  // edge cases like GitHub AE which uses github.com).
+  if (url.includes('github.com')) {
+    return undefined;
+  }
+
+  // Codeberg, Forgejo, Gitea → /api/v1
+  if (url.includes('codeberg') || url.includes('forgejo') || url.includes('gitea')) {
+    return `${url}/api/v1`;
+  }
+
+  // Self-hosted GitHub Enterprise → /api/v3
+  // This is the standard path for GHES REST API.
+  // Users of other platforms should pass --server-url to get correct
+  // API base URL derivation.
+  return `${url}/api/v3`;
 }
 
 /**
@@ -55,6 +84,3 @@ export function createCliOctokit(token: string, serverUrl: string): OctokitInsta
     ...(baseUrl !== undefined ? { baseUrl } : {}),
   });
 }
-
-/** Re-export of the Octokit instance type for callers that need it. */
-export type OctokitInstance = InstanceType<typeof OctokitWithRest>;

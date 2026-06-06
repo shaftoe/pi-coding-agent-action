@@ -15,7 +15,7 @@ import { CliGitAdapter } from '../adapters/git-adapter.js';
 import { CliLogger, type LogLevel } from '../adapters/logger.js';
 import { CliOutputSink } from '../adapters/output-sink.js';
 import { createCliPiAgent } from '../adapters/pi-agent.js';
-import { resolveGitHubToken, resolveProviderToken } from '../auth.js';
+import { resolveGitHubToken, resolveProviderToken, PROVIDER_ENV_VARS } from '../auth.js';
 import { buildPlatformContext, parseRepoFlag } from '../context.js';
 import { gatherCliConfig } from '../config.js';
 import { createCliOctokit } from '../octokit.js';
@@ -65,10 +65,10 @@ export function resolveLogLevel(args: Pick<RunCommandArgs, 'verbose' | 'quiet'>)
  *
  * 2. **Orchestrator errors** (LLM failure, network): the orchestrator
  *    catches them internally, calls `outputSink.setFailed()`, then
- *    re-throws. We use try/finally (NOT try/catch+rethrow) so the
- *    re-throw is absorbed and the failure signal is the non-zero
- *    `process.exitCode` set by `outputSink.flush()` — avoiding
- *    double-printed ✖ lines.
+ *    re-throws. We catch and swallow the re-throw (the orchestrator
+ *    already reported via the output sink), then flush in `finally`
+ *    which renders the error and sets `process.exitCode = 1`. This
+ *    avoids the double-printed ✖ line reported in review item #1.
  */
 // fallow-ignore-next-line complexity
 export async function runCommand(args: RunCommandArgs): Promise<void> {
@@ -77,6 +77,18 @@ export async function runCommand(args: RunCommandArgs): Promise<void> {
   const outputSink = new CliOutputSink();
 
   // --- Auth (setup error if missing) ----------------------------------
+  // Validate --provider against the known env-var table BEFORE hitting
+  // resolveGitHubToken/resolveProviderToken. This way a typo in
+  // --provider (e.g. 'anthrpic') fails fast with a clear message
+  // instead of first asking for both tokens. (Review item #11.)
+  const providerEnvVar = PROVIDER_ENV_VARS[args.provider];
+  if (!providerEnvVar) {
+    throw new Error(
+      `Unknown provider '${args.provider}'. ` +
+        `Check the supported list at https://docs.pi.dev/providers.`
+    );
+  }
+
   const githubToken = resolveGitHubToken();
   const providerToken = resolveProviderToken(args.provider);
 
@@ -117,9 +129,12 @@ export async function runCommand(args: RunCommandArgs): Promise<void> {
     provider
   );
 
-  // finally (not catch+rethrow): see method header.
+  // catch+swallow + finally: see method header — orchestrator re-throws
+  // after calling setFailed; we absorb the throw and let flush() render.
   try {
     await orchestrator.execute();
+  } catch {
+    // Swallow — orchestrator already reported via outputSink.setFailed().
   } finally {
     outputSink.flush('stdout');
   }

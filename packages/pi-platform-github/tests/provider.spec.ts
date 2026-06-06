@@ -60,16 +60,14 @@ describe('detectPlatform', () => {
     expect(detectPlatform('https://gitea.example.com')).toBe('forgejo');
   });
 
-  test('throws for unknown non-github.com server URL', () => {
-    expect(() => detectPlatform('https://git.mycompany.com')).toThrow(
-      /Unsupported platform server URL/
-    );
+  test('returns github for unknown non-github.com server URL (default fallback)', () => {
+    // Self-hosted GHE and other GitHub-compatible hosts default to 'github'
+    // instead of throwing. See detectPlatform docstring for rationale.
+    expect(detectPlatform('https://git.mycompany.com')).toBe('github');
   });
 
-  test('throws for GitHub Enterprise-like URL (custom domain)', () => {
-    expect(() => detectPlatform('https://github.mycompany.com')).toThrow(
-      /Unsupported platform server URL/
-    );
+  test('returns github for GitHub Enterprise-like URL with custom domain', () => {
+    expect(detectPlatform('https://github.mycompany.com')).toBe('github');
   });
 
   test('detects codeberg with subpath URL', () => {
@@ -84,12 +82,9 @@ describe('detectPlatform', () => {
     expect(detectPlatform('https://gitea.example.com/')).toBe('forgejo');
   });
 
-  test('error message includes the problematic URL', () => {
-    expect(() => detectPlatform('https://unknown.host')).toThrow('https://unknown.host');
-  });
-
-  test('error message mentions supported platforms', () => {
-    expect(() => detectPlatform('https://unknown.host')).toThrow(/github\.com.*codeberg.*forgejo/i);
+  test('returns github for unknown host (default fallback)', () => {
+    expect(detectPlatform('https://unknown.host')).toBe('github');
+    expect(detectPlatform('https://another-unknown.host')).toBe('github');
   });
 });
 

@@ -12,7 +12,8 @@
     "./reactions": "./src/reactions.ts",
     "./comments": "./src/comments.ts",
     "./constants": "./src/constants.ts",
-    "./context-utils": "./src/context-utils.ts"
+    "./context-utils": "./src/context-utils.ts",
+    "./types": "./src/types.ts"
   },
   "dependencies": {
     "@alexanderfortin/pi-orchestrator": "workspace:*",

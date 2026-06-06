@@ -16,6 +16,7 @@
  * hard `process.exit()` that could truncate pending I/O.
  */
 
+import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { OutputSink } from '@alexanderfortin/pi-orchestrator';
@@ -42,7 +43,9 @@ export class CliOutputSink implements OutputSink {
   }
 
   getExportDirectory(format: 'html' | 'jsonl'): string {
-    return path.join(os.tmpdir(), `pi-cli-${format}-${process.pid}`);
+    const dir = path.join(os.tmpdir(), `pi-cli-${format}-${process.pid}`);
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
   }
 
   /**

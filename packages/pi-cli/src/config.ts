@@ -10,7 +10,6 @@
  * thinking level, diff limits, exports, etc.).
  */
 
-import * as path from 'node:path';
 import type { PiConfig } from '@alexanderfortin/pi-orchestrator';
 import { CLI_DEFAULT_SYSTEM_PROMPT } from './pi/default-system-prompt.js';
 
@@ -56,6 +55,6 @@ export function gatherCliConfig(args: CliRunArgs, providerToken: string): PiConf
     exportSessionJsonl: false,
     autoCompaction: false,
     systemPrompt: CLI_DEFAULT_SYSTEM_PROMPT,
-    cwd: path.resolve(args.cwd),
+    cwd: args.cwd,
   };
 }

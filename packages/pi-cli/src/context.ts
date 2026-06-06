@@ -43,11 +43,19 @@ const REPO_PATTERN = /^([\w.-]+)\/([\w.-]+)$/;
 /**
  * Parse a `owner/repo` string into a {@link RepoRef}.
  *
+ * Silently strips a trailing `.git` suffix (common when pasting git clone
+ * URLs). Note: a legitimate repo whose name ends in `.git` (e.g.
+ * `alice/scripts.git`) will have the suffix stripped. This is a deliberate
+ * trade-off: the `.git` suffix is never part of the API resource name, and
+ * false positives are negligibly rare.
+ *
  * @throws Error on malformed input with a message that names the offending
  *         value and shows the expected format.
  */
 export function parseRepoFlag(raw: string): RepoRef {
-  const match = REPO_PATTERN.exec(raw);
+  // Strip trailing .git before validation for user-friendliness.
+  const cleaned = raw.replace(/\.git$/, '');
+  const match = REPO_PATTERN.exec(cleaned);
   if (!match) {
     throw new Error(
       `Invalid --repo value '${raw}'. Expected format: 'owner/repo' (e.g. 'shaftoe/pi-coding-agent-action').`
