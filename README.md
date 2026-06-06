@@ -219,10 +219,26 @@ permissions:
   issues: write
 
 jobs:
-  # Default model — invoked with `/pi `
-  pi-default:
-    if: startsWith(github.event.comment.body, '/pi ')
+  pi:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Default model — `/pi ` → PROVIDER / MODEL / API_KEY
+          - trigger: '/pi '
+            suffix: '' # '' → PROVIDER / MODEL / API_KEY
+            token: ${{ secrets.API_KEY }} # literal reference (see note below)
+          # Alternative model — `/pi2 ` → PROVIDER2 / MODEL2 / API_KEY2.
+          # Leave PROVIDER2 unset (or delete this entry) to disable it.
+          - trigger: '/pi2 '
+            suffix: '2'
+            token: ${{ secrets.API_KEY2 }}
+    # Exactly one entry runs: the one whose trigger prefix matches the comment,
+    # and only if its provider variable is configured.
+    if: |
+      startsWith(github.event.comment.body, matrix.trigger) &&
+      vars[format('PROVIDER{0}', matrix.suffix)] != ''
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -231,34 +247,23 @@ jobs:
       - uses: shaftoe/pi-coding-agent-action@v2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          provider: ${{ vars.PROVIDER }}
-          model: ${{ vars.MODEL }}
-          token: ${{ secrets.API_KEY }}
-          trigger: '/pi '   # strips `/pi ` from the comment to get the prompt
-
-  # Alternative model — invoked with `/pi2 `
-  pi-alternative:
-    # Skipped automatically when the alternative isn't configured
-    if: startsWith(github.event.comment.body, '/pi2 ') && vars.PROVIDER2 != ''
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-      - uses: shaftoe/pi-coding-agent-action@v2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          provider: ${{ vars.PROVIDER2 }}
-          model: ${{ vars.MODEL2 }}
-          token: ${{ secrets.API_KEY2 }}
-          trigger: '/pi2 '   # strips `/pi2 ` from the comment instead
+          # provider/model are resolved dynamically by suffix (Variables allow this)
+          provider: ${{ vars[format('PROVIDER{0}', matrix.suffix)] }}
+          model: ${{ vars[format('MODEL{0}', matrix.suffix)] }}
+          # the API key is the literal secret carried through the matrix (see include)
+          token: ${{ matrix.token }}
+          trigger: ${{ matrix.trigger }} # strips this prefix from the comment
 ```
+
+A single job template now serves any number of models — each variant is just one entry in `matrix.include`, so adding models never duplicates steps.
+
+> [!NOTE]
+> Why is the API key a literal `${{ secrets.API_KEY2 }}` inside `matrix.include` rather than `${{ secrets[format('API_KEY{0}', matrix.suffix)] }}`? GitHub Actions **does not support computed/dynamic keys for the `secrets` context** — such expressions resolve to empty — whereas it *does* for the `vars` context. Embedding the literal secret reference in the matrix entry keeps it discoverable, then reads it back through `${{ matrix.token }}`. The non-secret `provider`/`model` values can be looked up dynamically from Variables.
 
 Now a comment like `/pi2 retry with the fallback model` runs against the alternative provider, while `/pi ...` keeps using the default — no workflow edits required to switch.
 
 > [!TIP]
-> The same pattern scales to more variants (`/pi3 ` → `PROVIDER3`/`MODEL3`/`API_KEY3`, etc.). The examples in this repository's own [`pi.yml`](./.github/workflows/pi.yml) workflow use exactly this technique with a reusable workflow.
+> Adding a third model is a one-line change: append `- trigger: '/pi3 '`, `suffix: '3'`, `token: ${{ secrets.API_KEY3 }}` and set the matching `PROVIDER3`/`MODEL3` Variables. (This repository's own [`pi.yml`](./.github/workflows/pi.yml) expresses the same idea with a reusable workflow.)
 
 ### Custom Extensions
 
