@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "package": "bun packages/pi-action/scripts/package.ts",
+    "pi-cli": "bun packages/pi-cli/src/index.ts",
     "prepare": "bun run package",
     "test": "bun test",
     "test:e2e": "RUN_E2E_TESTS=1 bun test tests/e2e",

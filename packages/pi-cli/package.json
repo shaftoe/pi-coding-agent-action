@@ -1,0 +1,28 @@
+{
+  "name": "@alexanderfortin/pi-cli",
+  "version": "2.19.3",
+  "private": true,
+  "description": "Terminal frontend for the Pi orchestrator — runs the same agent + tools as the GitHub Action, from a local shell.",
+  "type": "module",
+  "bin": {
+    "pi-cli": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@alexanderfortin/pi-orchestrator": "workspace:*",
+    "@alexanderfortin/pi-platform-github": "workspace:*",
+    "@earendil-works/pi-coding-agent": "^0.78.1",
+    "@earendil-works/pi-ai": "^0.78.1",
+    "@earendil-works/pi-agent-core": "^0.78.1",
+    "@js-temporal/polyfill": "^0.5.1",
+    "@octokit/core": "^7.0.3",
+    "@octokit/plugin-rest-endpoint-methods": "^17.0.0",
+    "commander": "^14.0.0"
+  }
+}

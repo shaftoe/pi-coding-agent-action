@@ -14,15 +14,14 @@
     "./constants": "./src/constants.ts",
     "./context-utils": "./src/context-utils.ts"
   },
-  "peerDependencies": {
-    "@actions/github": "^9.1.1"
-  },
   "dependencies": {
     "@alexanderfortin/pi-orchestrator": "workspace:*",
     "@js-temporal/polyfill": "^0.5.1",
+    "@octokit/core": "^7.0.3",
     "@octokit/plugin-rest-endpoint-methods": "^17.0.0"
   },
   "devDependencies": {
+    "@actions/github": "^9.1.1",
     "ignore": "^7.0.5"
   }
 }

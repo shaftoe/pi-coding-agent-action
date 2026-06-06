@@ -85,8 +85,8 @@ export function detectPlatform(serverUrl: string): PlatformType {
  * (GitHub App, CLI, web UI).
  */
 export interface GitHubPlatformDeps {
-  /** Pre-authenticated Octokit instance. */
-  octokit: ReturnType<typeof import('@actions/github').getOctokit>;
+  /** Pre-authenticated Octokit instance (core + rest endpoint methods). */
+  octokit: import('./types').OctokitInstance;
   /** Platform context extracted from the CI/CD environment or webhook. */
   context: PlatformContext;
   /** Logger for debug/info/warning output. */
