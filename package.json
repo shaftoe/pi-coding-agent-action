@@ -42,7 +42,7 @@
     "@alexanderfortin/pi-platform-github": "workspace:*"
   },
   "devDependencies": {
-    "@alexanderfortin/semantic-release-keep-a-changelog": "^0.3.0",
+    "@alexanderfortin/semantic-release-keep-a-changelog": "^0.4.0",
     "@earendil-works/pi-coding-agent": "^0.78.1",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/exec": "^7.1.0",
