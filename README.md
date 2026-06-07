@@ -82,7 +82,7 @@ Dependencies (including Pi itself) are [updated regularly](./.github/workflows/d
 | `@js-temporal/polyfill` | `0.5.1` | Temporal API polyfill |
 | `@octokit/plugin-rest-endpoint-methods` | `17.0.0` | Octokit REST API endpoint methods |
 | `ignore` | `7.0.5` | `.gitignore`-style pattern matching |
-| `typebox` | `1.2.1` | JSON Schema Type Builder |
+| `typebox` | `1.2.2` | JSON Schema Type Builder |
 
 <!-- DEPS_TABLE_END -->
 
