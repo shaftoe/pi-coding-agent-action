@@ -1018,6 +1018,32 @@ describe('getPrompt with workflow_dispatch + pr_number', () => {
     expect(result).toBeUndefined();
   });
 
+  test('returns instruction without enrichment when API fetch fails', async () => {
+    const { getPrompt } = await contextModule;
+    const deps = {
+      ...createTestDeps({
+        eventName: 'workflow_dispatch',
+        issue: { number: 99 },
+        payload: { pull_request: { number: 99 } },
+      }),
+      octokit: {
+        rest: {
+          issues: {
+            get: async () => {
+              throw new Error('API failure');
+            },
+          },
+        },
+      } as any,
+    };
+
+    const result = await getPrompt(deps);
+    expect(result).toBeDefined();
+    // Falls back to raw default instruction without enrichment
+    expect(result).toContain('Review this pull request and provide feedback');
+    expect(result).not.toContain('Issue/PR');
+  });
+
   test('falls back to default instruction when no comment and no prompt input', async () => {
     const { getPrompt } = await contextModule;
     const deps = createTestDepsWithOctokit(

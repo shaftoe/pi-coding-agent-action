@@ -240,30 +240,30 @@ export async function getPrompt(
 
   // Fall back to comment-based prompt
   const comment = await getComment(deps);
-  if (comment) {
-    const prompt = comment.body;
-    if (!prompt) {
-      deps.logger.notice('no prompt found in comment, skipping');
-      return undefined;
+  if (!comment) {
+    // When no comment is found (e.g. workflow_dispatch), check if we have an
+    // issue/PR number in context. Only generate a default instruction for
+    // workflow_dispatch events where a pr_number was explicitly provided.
+    const isWorkflowDispatch = deps.context.eventName === 'workflow_dispatch';
+    if (isWorkflowDispatch && deps.context.issue?.number) {
+      const defaultInstruction = 'Review this pull request and provide feedback';
+      deps.logger.info(
+        `[getPrompt] No comment found; using default instruction for PR #${deps.context.issue.number}`
+      );
+      return enrichWithContext(deps, defaultInstruction, 'Instruction');
     }
 
-    return enrichWithContext(deps, prompt, 'Comment/Instruction');
+    deps.logger.notice('no comment found in context, skipping');
+    return undefined;
   }
 
-  // When no comment is found (e.g. workflow_dispatch), check if we have an
-  // issue/PR number in context. Only generate a default instruction for
-  // workflow_dispatch events where a pr_number was explicitly provided.
-  const isWorkflowDispatch = deps.context.eventName === 'workflow_dispatch';
-  if (isWorkflowDispatch && deps.context.issue?.number) {
-    const defaultInstruction = 'Review this pull request and provide feedback';
-    deps.logger.info(
-      `[getPrompt] No comment found; using default instruction for PR #${deps.context.issue.number}`
-    );
-    return enrichWithContext(deps, defaultInstruction, 'Instruction');
+  const prompt = comment.body;
+  if (!prompt) {
+    deps.logger.notice('no prompt found in comment, skipping');
+    return undefined;
   }
 
-  deps.logger.notice('no comment found in context, skipping');
-  return undefined;
+  return enrichWithContext(deps, prompt, 'Comment/Instruction');
 }
 
 /**
