@@ -238,8 +238,8 @@ jobs:
           provider: ${{ vars.PROVIDER }}
           model: ${{ vars.MODEL }}
           token: ${{ secrets.API_KEY }}
-          pr_number: ${{ github.event.inputs.pr_number }}
-          prompt: ${{ github.event.inputs.instruction }}
+          pr_number: ${{ inputs.pr_number }}
+          prompt: ${{ inputs.instruction }}
 ```
 
 #### Example: triggered by another workflow
