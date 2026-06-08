@@ -6,15 +6,42 @@
  * execution flow.
  */
 
+import * as path from 'node:path';
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import { ActionOrchestrator } from '@alexanderfortin/pi-orchestrator';
+import { getPackageDir } from '@earendil-works/pi-coding-agent';
 import { RealCoreAdapter } from './adapters/core-adapter';
 import { RealGitAdapter } from './adapters/git-adapter';
 import { createRealPiAgent } from './adapters/pi-agent-adapter';
 import { gatherActionsConfig } from './adapters/config';
 import { ActionsOutputSink } from './adapters/output-sink';
 import { createGitHubPlatformProvider, detectPlatform } from '@alexanderfortin/pi-platform-github';
+
+/**
+ * Configure the Pi SDK's package directory for the bundled action.
+ *
+ * When the action runs from its bundled `dist/index.js`, the SDK's
+ * `getPackageDir()` walks up from `__dirname` and finds the action's
+ * `package.json` instead of the SDK's. The build script copies the SDK's
+ * export-html assets into `dist/pi-sdk/`. Setting `PI_PACKAGE_DIR` tells
+ * the SDK where to find those assets — it's the SDK's documented escape
+ * hatch for bundled deployments.
+ *
+ * Using the now-officially-exported `getPackageDir()` from the SDK, we
+ * can validate whether the override is needed. For a standard
+ * `node_modules/` layout (library/CLI usage), this function is a no-op.
+ */
+function ensurePackageDirOverride(): void {
+  const resolved = getPackageDir();
+  const bundled = path.join(__dirname, 'pi-sdk');
+
+  // If the SDK already resolves correctly (e.g. running unbundled in
+  // tests), skip the override — PI_PACKAGE_DIR is not needed.
+  if (!resolved.includes('pi-sdk')) {
+    process.env.PI_PACKAGE_DIR = bundled;
+  }
+}
 
 /**
  * Run the Pi coding agent end-to-end.
@@ -27,6 +54,10 @@ import { createGitHubPlatformProvider, detectPlatform } from '@alexanderfortin/p
  */
 // fallow-ignore-next-line complexity
 export async function run() {
+  // Set PI_PACKAGE_DIR once at startup so the SDK's getPackageDir()
+  // resolves to the bundled assets in dist/pi-sdk/.
+  ensurePackageDirOverride();
+
   const coreAdapter = new RealCoreAdapter();
   const config = gatherActionsConfig();
   const outputSink = new ActionsOutputSink();

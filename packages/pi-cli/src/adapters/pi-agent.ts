@@ -5,9 +5,9 @@
  * CLI-specific differences:
  *
  * 1. **No `PI_PACKAGE_DIR` manipulation** — the CLI runs from a standard
- *    `node_modules/` layout, so the Pi SDK resolves its own package
- *    directory. The bundled-deployment escape hatch is only relevant to
- *    the GitHub Action's esbuild output.
+ *    `node_modules/` layout, so the Pi SDK's exported `getPackageDir()`
+ *    resolves its own package directory. The bundled-deployment escape
+ *    hatch is only relevant to the GitHub Action's esbuild output.
  * 2. **Streaming events routed to stderr** — so the agent's final
  *    response on stdout is never interleaved with thinking deltas. The
  *    action frontend writes deltas to stdout because GitHub Actions

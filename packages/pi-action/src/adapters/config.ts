@@ -17,7 +17,6 @@
  *     assembles the final `PiConfig`.
  */
 
-import * as path from 'node:path';
 import * as core from '@actions/core';
 import type { PiConfig } from '@alexanderfortin/pi-orchestrator';
 
@@ -192,10 +191,5 @@ export function gatherActionsConfig(): PiConfig {
     ...(diffMaxBytes ? { diffMaxBytes } : {}),
     ...(diffIgnorePatterns?.length ? { diffIgnorePatterns } : {}),
     ...(prNumber ? { prNumber } : {}),
-    /**
-     * Set packageDir so the Agent can point PI_PACKAGE_DIR at the bundled
-     * SDK assets when running from the GitHub Action's dist/index.js.
-     */
-    packageDir: path.join(__dirname, 'pi-sdk'),
   };
 }

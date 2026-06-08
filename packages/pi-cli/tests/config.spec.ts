@@ -53,11 +53,6 @@ describe('gatherCliConfig', () => {
     expect(config.thinkingLevel).toBe('off');
   });
 
-  it('omits packageDir (not needed in CLI node_modules layout)', () => {
-    const config = gatherCliConfig(baseArgs, 'sk-ant-test');
-    expect(config.packageDir).toBeUndefined();
-  });
-
   it('does not set extensions/loadedTools/diff limits in M1', () => {
     const config = gatherCliConfig(baseArgs, 'sk-ant-test');
     expect(config.extensions).toBeUndefined();

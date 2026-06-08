@@ -41,7 +41,8 @@ export interface CliRunArgs {
  * - `thinkingLevel` is `'off'` (M2 will add `--thinking`).
  * - `exportSessionHtml`/`exportSessionJsonl` are both `false` (M2 will add flags).
  * - `packageDir` is intentionally omitted — the CLI runs from a normal
- *   node_modules layout, so the SDK resolves its own package directory.
+ *   node_modules layout, so the SDK resolves its own package directory
+ *   via the now-exported `getPackageDir()`.
  */
 export function gatherCliConfig(args: CliRunArgs, providerToken: string): PiConfig {
   return {

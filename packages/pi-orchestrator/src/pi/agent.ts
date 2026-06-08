@@ -300,10 +300,9 @@ export class Agent {
    * Uses the Pi SDK's built-in HTML export (same renderer as `/share`).
    * Must be called after {@link run} so the session has content.
    *
-   * NOTE: When running from a bundled deployment (e.g. GitHub Action's
-   * `dist/index.js`), the SDK's `getPackageDir()` may not find its own
-   * `package.json`. The caller (adapter) is responsible for setting
-   * `PI_PACKAGE_DIR` before calling this method if needed.
+   * When running from a bundled deployment (e.g. GitHub Action's
+   * `dist/index.js`), the action entry point sets `PI_PACKAGE_DIR` once
+   * at startup so the SDK's `getPackageDir()` resolves correctly.
    *
    * @param outputPath - Path to write the HTML file to.
    * @returns The path to the written file.
