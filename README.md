@@ -192,6 +192,73 @@ jobs:
 > [!TIP]
 > The `get_issue_or_pr_thread` tool returns both regular comments and inline review comments (with file path and line information). Telling the agent to call it first is all you need to provide full review context — no special configuration required.
 
+### On-Demand PR Reviews (`workflow_dispatch`)
+
+Use the `pr_number` input to run the agent against any pull request on demand, without requiring a triggering comment or event. This is ideal for manual reviews triggered via the GitHub Actions "Run workflow" button or from other automation pipelines.
+
+When `pr_number` is provided:
+
+- The action targets the specified PR for all operations (diff, thread, review, etc.).
+- PR context (title, description) is fetched from the GitHub API and included in the prompt.
+- If no `prompt` input is provided, a default instruction ("Review this pull request and provide feedback") is used.
+- Reactions are automatically skipped since there is no triggering comment.
+
+#### Example: manual trigger from the GitHub UI
+
+```yaml
+name: On-demand PR Review
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: number
+      instruction:
+        description: 'Custom instruction (optional)'
+        required: false
+        default: 'Review this PR for bugs, security issues, and improvements'
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - uses: shaftoe/pi-coding-agent-action@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          provider: ${{ vars.PROVIDER }}
+          model: ${{ vars.MODEL }}
+          token: ${{ secrets.API_KEY }}
+          pr_number: ${{ github.event.inputs.pr_number }}
+          prompt: ${{ github.event.inputs.instruction }}
+```
+
+#### Example: triggered by another workflow
+
+You can also call a `workflow_dispatch` from another workflow step, e.g. to automatically request a review after a specific event:
+
+```yaml
+- name: Trigger PR review
+  env:
+    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  run: |
+    gh workflow run on-demand-review.yml \
+      --field pr_number=${{ github.event.pull_request.number }} \
+      --field instruction="Review the latest changes for regressions"
+```
+
+> [!TIP]
+> Combine `pr_number` with other inputs like `thinking_level`, `loaded_tools`, or `extensions` to customize the review behavior. For example, use `loaded_tools` to restrict the agent to read-only tools when you only want feedback without automatic fixes.
+
 ### Custom Extensions
 
 You can load custom Pi extensions to add additional custom tools or modify agent behavior:
@@ -477,6 +544,7 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | `load_builtin_extensions` | Whether to load built-in GitHub tools (see [Custom Tools](#custom-tools) for the full list) | No | `true` |
 | `loaded_tools` | Controls which tools are available in the session. Defaults to `all`. Accepts a list of tool names (one per line) to load — unknown names cause the run to fail early | No | `all` |
 | `model` | Model to use (e.g., gpt-5.4, gpt-4o, gemini-2.5-pro) | Yes | - |
+| `pr_number` | Pull request number to target. Use with `workflow_dispatch` to run the agent on a specific PR without a triggering event. When set, the action fetches PR context from the API and targets all operations at the specified PR | No | - |
 | `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
 | `provider` | LLM provider (openai, google, anthropic, etc.) | Yes | - |
 | `thinking_level` | Model thinking level (off\|low\|medium\|high) | No | off |
