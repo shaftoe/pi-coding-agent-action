@@ -46,12 +46,12 @@ describe('getPiVersion', () => {
 
 describe('formatActionVersion', () => {
   test('formats a clean release version as-is', () => {
-    expect(formatActionVersion('2.19.2')).toBe('2.19.2');
+    expect(formatActionVersion('2.19.3')).toBe('2.19.3');
   });
 
   test('formats a dev version with branch and sha', () => {
-    expect(formatActionVersion('2.19.2-dev+develop.a1b2c3d')).toBe(
-      '2.19.2-dev (develop @ a1b2c3d)'
+    expect(formatActionVersion('2.19.3-develop.9272858')).toBe(
+      '2.19.3-develop (develop @ 9272858)'
     );
   });
 
@@ -59,9 +59,15 @@ describe('formatActionVersion', () => {
     expect(formatActionVersion('unknown')).toBe('unknown');
   });
 
-  test('handles branch name with forward slashes (sanitized to dashes)', () => {
-    expect(formatActionVersion('2.19.2-dev+feature-my-feature.abc1234')).toBe(
-      '2.19.2-dev (feature-my-feature @ abc1234)'
+  test('handles branch name with dashes (sanitized)', () => {
+    expect(formatActionVersion('2.19.3-feature-my-feature.abc1234')).toBe(
+      '2.19.3-feature-my-feature (feature-my-feature @ abc1234)'
+    );
+  });
+
+  test('handles unknown fallback version', () => {
+    expect(formatActionVersion('2.19.3-unknown.unknown')).toBe(
+      '2.19.3-unknown (unknown @ unknown)'
     );
   });
 

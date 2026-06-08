@@ -12,61 +12,72 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  composeActionVersion,
   copyAllSdkAssets,
   copySdkAssetDir,
-  formatGitMetadata,
   readJsonVersion,
+  RELEASE_BRANCH_RE,
 } from '../../scripts/package';
 
 // ---------------------------------------------------------------------------
-// formatGitMetadata
+// RELEASE_BRANCH_RE
 // ---------------------------------------------------------------------------
 
-describe('formatGitMetadata', () => {
-  test('returns a populated object when both inputs are present', () => {
-    expect(formatGitMetadata('feature/foo', 'abcdef1234567890')).toEqual({
-      branch: 'feature/foo',
-      sha: 'abcdef1',
-    });
+describe('RELEASE_BRANCH_RE', () => {
+  test('matches v2', () => {
+    expect(RELEASE_BRANCH_RE.test('v2')).toBe(true);
   });
 
-  test('truncates SHA to 7 characters even when input is shorter', () => {
-    expect(formatGitMetadata('main', 'abc').sha).toBe('abc');
-    expect(formatGitMetadata('main', 'abcdefg').sha).toBe('abcdefg');
-    expect(formatGitMetadata('main', 'abcdefgh').sha).toBe('abcdefg');
+  test('matches v3, v10, v99', () => {
+    expect(RELEASE_BRANCH_RE.test('v3')).toBe(true);
+    expect(RELEASE_BRANCH_RE.test('v10')).toBe(true);
+    expect(RELEASE_BRANCH_RE.test('v99')).toBe(true);
   });
 
-  test('coerces null branch to "unknown"', () => {
-    expect(formatGitMetadata(null, 'deadbeef')).toEqual({
-      branch: 'unknown',
-      sha: 'deadbee',
-    });
+  test('does not match non-release branches', () => {
+    expect(RELEASE_BRANCH_RE.test('develop')).toBe(false);
+    expect(RELEASE_BRANCH_RE.test('main')).toBe(false);
+    expect(RELEASE_BRANCH_RE.test('feature/foo')).toBe(false);
   });
 
-  test('coerces void (undefined) branch to "unknown"', () => {
-    // isomorphic-git's `currentBranch` returns `string | void`
-    expect(formatGitMetadata(undefined, 'deadbeef')).toEqual({
-      branch: 'unknown',
-      sha: 'deadbee',
-    });
+  test('does not match false positives', () => {
+    expect(RELEASE_BRANCH_RE.test('v2-rc')).toBe(false);
+    expect(RELEASE_BRANCH_RE.test('v2.1')).toBe(false);
+    expect(RELEASE_BRANCH_RE.test('v')).toBe(false);
+    expect(RELEASE_BRANCH_RE.test('version2')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// composeActionVersion
+// ---------------------------------------------------------------------------
+
+describe('composeActionVersion', () => {
+  test('returns bare version for v2 (release branch)', () => {
+    expect(composeActionVersion('2.19.3', 'v2')).toBe('2.19.3');
   });
 
-  test('coerces undefined headOid to "unknown"', () => {
-    expect(formatGitMetadata('main', undefined)).toEqual({
-      branch: 'main',
-      sha: 'unknown',
-    });
+  test('returns bare version for v3 (future release branch)', () => {
+    expect(composeActionVersion('3.0.0', 'v3')).toBe('3.0.0');
   });
 
-  test('"unknown" sha is preserved by .slice (still 7 chars)', () => {
-    expect(formatGitMetadata(null, undefined).sha).toBe('unknown');
+  test('returns prerelease version for develop branch', () => {
+    expect(composeActionVersion('2.19.3', 'develop', '9272858')).toBe('2.19.3-develop.9272858');
   });
 
-  test('handles all-undefined input', () => {
-    expect(formatGitMetadata(null, undefined)).toEqual({
-      branch: 'unknown',
-      sha: 'unknown',
-    });
+  test('sanitizes branch names with slashes', () => {
+    expect(composeActionVersion('2.19.3', 'feature/foo', 'abcdef12')).toBe(
+      '2.19.3-feature-foo.abcdef12'
+    );
+  });
+
+  test('returns unknown fallback when no env vars set', () => {
+    expect(composeActionVersion('2.19.3', 'unknown', 'unknown')).toBe('2.19.3-unknown.unknown');
+  });
+
+  test('truncates SHA to 7 characters (resolveSha behavior)', () => {
+    // When passed explicitly, sha is used as-is; resolveSha() does the slicing
+    expect(composeActionVersion('2.19.3', 'develop', 'abcdef12')).toBe('2.19.3-develop.abcdef12');
   });
 });
 

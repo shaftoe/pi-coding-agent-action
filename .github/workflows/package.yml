@@ -9,6 +9,7 @@ on:
       - 'package.json'
       - 'bun.lock'
       - 'tsconfig.json'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -18,22 +19,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  package:
+  rebuild-dist:
+    uses: ./.github/workflows/rebuild-dist.yml
+    with:
+      commit-message: 'chore: update dist and README deps [skip ci]'
+    secrets: inherit
+
+  update-readme:
+    needs: rebuild-dist
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build dist
-        run: bun run package
+      - run: bun install --frozen-lockfile
 
       - name: Update dependency versions in README
         run: bun run update-readme
@@ -41,13 +43,10 @@ jobs:
       - name: Check for changes
         id: check_changes
         run: |
-          # Force-add dist/ (which is gitignored) along with README.md (which the
-          # update-readme step may have rewritten) and compare against HEAD.
-          # This correctly detects changes even when dist/ is not tracked in git.
-          git add -f dist/ README.md
-          if git diff --cached --exit-code -- dist/ README.md; then
+          git add -f README.md
+          if git diff --cached --exit-code -- README.md; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            git reset -- dist/ README.md > /dev/null 2>&1 || true
+            git reset -- README.md > /dev/null 2>&1 || true
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
@@ -57,6 +56,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit --no-verify -m "chore: update dist and README deps [skip ci]"
+          git commit --no-verify -m "chore: update README deps [skip ci]"
           git pull --rebase origin develop --autostash
           git push origin develop

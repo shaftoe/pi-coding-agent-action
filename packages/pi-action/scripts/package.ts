@@ -1,91 +1,62 @@
-import fs, { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { build, type Plugin } from 'esbuild';
 import { join, dirname } from 'node:path';
-import git from 'isomorphic-git';
 
 /**
- * Result of reading git metadata at build time.
- */
-interface GitBuildMetadata {
-  /** Git branch name, or `'unknown'` if unavailable. */
-  branch: string;
-  /** Short (7-char) commit SHA, or `'unknown'` if unavailable. */
-  sha: string;
-}
-
-/**
- * Pure formatter for git-build metadata. Coerces nullable inputs to
- * `'unknown'` and truncates the head commit SHA to 7 characters.
+ * Regex matching release branches: v2, v3, v10, …
  *
  * Exported for unit testing.
  */
-export function formatGitMetadata(
-  branch: string | null | void,
-  headOid: string | undefined
-): GitBuildMetadata {
-  return {
-    branch: branch ?? 'unknown',
-    sha: (headOid ?? 'unknown').slice(0, 7),
-  };
-}
+export const RELEASE_BRANCH_RE = /^v\d+$/;
 
 /**
- * Resolve the git branch and short commit SHA using `isomorphic-git`.
- *
- * Uses the pure-JS git implementation instead of shelling out to the `git`
- * CLI, so it works reliably even in environments where the git binary has
- * restricted permissions (e.g. some CI runner setups).
- *
- * Falls back to `{ branch: 'unknown', sha: 'unknown' }` when the current
- * directory is not a git repository or any other error occurs.
+ * Resolve branch name from the GitHub-native `GITHUB_REF_NAME` env var,
+ * falling back to `'unknown'` when not running in CI.
  */
-async function getGitBuildMetadata(dir: string): Promise<GitBuildMetadata> {
-  try {
-    const [branch, log] = await Promise.all([
-      git.currentBranch({ fs, dir }),
-      git.log({ fs, dir, depth: 1 }),
-    ]);
-    return formatGitMetadata(branch, log[0]?.oid);
-  } catch {
-    return { branch: 'unknown', sha: 'unknown' };
-  }
+function resolveBranch(): string {
+  return process.env.GITHUB_REF_NAME ?? 'unknown';
 }
 
 /**
- * Resolve git metadata for the build, returning `'unknown'` placeholders when
- * `cwd` is not a git checkout (no `.git` directory). Exported for unit testing.
+ * Resolve short (7-char) commit SHA from the GitHub-native `GITHUB_SHA` env
+ * var, falling back to `'unknown'` when not running in CI.
  */
-export async function resolveGitMeta(cwd: string): Promise<GitBuildMetadata> {
-  if (!existsSync(join(cwd, '.git'))) {
-    return { branch: 'unknown', sha: 'unknown' };
-  }
-  return getGitBuildMetadata(cwd);
+function resolveSha(): string {
+  return (process.env.GITHUB_SHA ?? 'unknown').slice(0, 7);
 }
 
 /**
- * Sanitize a string for use in semver build metadata.
+ * Sanitize a string for use in semver prerelease identifiers.
  *
- * Semver build metadata allows only `[0-9a-zA-Z-]` plus `.` separators.
+ * Semver prerelease identifiers allow only `[0-9A-Za-z-]` plus `.` separators.
  * Characters like `/` in branch names (e.g. `feature/foo`) are replaced with `-`.
  */
 function sanitizeSemverIdent(ident: string): string {
-  return ident.replace(/[^0-9a-zA-Z-]/g, '-');
+  return ident.replace(/[^0-9A-Za-z-]/g, '-');
 }
 
 /**
- * Compose the action version string based on the current git context.
+ * Compose the action version string from the base version and ambient
+ * GitHub-native env vars.
  *
- * - On the release branch (`v2`): uses the bare semver from `package.json`.
- * - On any other branch: appends `-dev+<branch>.<sha>` using semver build metadata syntax.
+ * - **Release branch** (`GITHUB_REF_NAME` matches `/^v\d+$/`): bare semver,
+ *   e.g. `2.19.3`.
+ * - **Any other branch**: `<base>-<branch>.<sha>` (semver prerelease),
+ *   e.g. `2.19.3-develop.9272858`.
+ * - **No env vars** (local build): `<base>-unknown.unknown`.
+ *
+ * Exported for unit testing.
  */
-function composeActionVersion(baseVersion: string, meta: GitBuildMetadata): string {
-  if (meta.branch === 'v2') {
+export function composeActionVersion(
+  baseVersion: string,
+  branch: string = resolveBranch(),
+  sha: string = resolveSha()
+): string {
+  if (RELEASE_BRANCH_RE.test(branch)) {
     return baseVersion;
   }
-  const branch = sanitizeSemverIdent(meta.branch);
-  const sha = sanitizeSemverIdent(meta.sha);
-  return `${baseVersion}-dev+${branch}.${sha}`;
+  return `${baseVersion}-${sanitizeSemverIdent(branch)}.${sanitizeSemverIdent(sha)}`;
 }
 
 /**
@@ -194,8 +165,7 @@ export function copyAllSdkAssets(sdkDistDir: string, piSdkDest: string): void {
 
 export async function buildDist(cwd: string = process.cwd()): Promise<void> {
   const baseVersion = readJsonVersion(join(cwd, 'package.json'));
-  const gitMeta = await resolveGitMeta(cwd);
-  const version = composeActionVersion(baseVersion, gitMeta);
+  const version = composeActionVersion(baseVersion);
 
   // Resolve Pi SDK path dynamically — in Bun workspaces, deps are hoisted to root node_modules,
   // but the prepare lifecycle may run before the full tree is materialized.
@@ -203,8 +173,10 @@ export async function buildDist(cwd: string = process.cwd()): Promise<void> {
   const piPkgPath = require.resolve('@earendil-works/pi-coding-agent/package.json');
   const piVersion = readJsonVersion(piPkgPath);
 
+  const branch = process.env.GITHUB_REF_NAME ?? 'unknown';
+  const sha = (process.env.GITHUB_SHA ?? 'unknown').slice(0, 7);
   console.log(
-    `[package] Building action v${version} (base: ${baseVersion}, branch: ${gitMeta.branch}, sha: ${gitMeta.sha})`
+    `[package] Building action v${version} (base: ${baseVersion}, branch: ${branch}, sha: ${sha})`
   );
 
   await build({

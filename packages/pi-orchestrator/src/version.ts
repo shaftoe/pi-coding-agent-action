@@ -18,9 +18,15 @@
  *
  * ## Version scheme
  *
- * - **Release builds** (built from `v2` branch): bare semver, e.g. `2.19.2`
+ * - **Release builds** (built from a release branch like `v2`): bare semver,
+ *   e.g. `2.19.3`
  * - **Development builds** (built from any other branch):
- *   `2.19.2-dev+<branch>.<sha>`, e.g. `2.19.2-dev+develop.a1b2c3d`
+ *   `<base>-<branch>.<sha>`, e.g. `2.19.3-develop.9272858`
+ * - **Local builds** (no CI env vars):
+ *   `<base>-unknown.unknown`, e.g. `2.19.3-unknown.unknown`
+ *
+ * The suffix lives in the semver **prerelease** slot (`-`) so that
+ * `2.19.3-develop.abc < 2.19.3` (correct precedence).
  *
  * See {@link formatActionVersion} for the human-readable display format.
  */
@@ -95,8 +101,8 @@ function readPackageVersion(pkgPath: string): string | undefined {
 /**
  * Read the action's own package version at runtime.
  *
- * Returns the full composed version string, which may include build metadata
- * for development builds (e.g. `2.19.2-dev+develop.a1b2c3d`).
+ * Returns the full composed version string, which may include a prerelease
+ * segment for development builds (e.g. `2.19.3-develop.9272858`).
  *
  * For a human-readable display format, use {@link formatActionVersion}.
  * For structured build provenance data, see the {@link ActionBuildInfo} type.
@@ -133,9 +139,10 @@ export function getActionVersion(): string {
  * Parse a (possibly composed) action version string into structured build info.
  *
  * Handles these formats:
- * - `2.19.2`                    → `{ version: '2.19.2', isDev: false, ... }`
- * - `2.19.2-dev+develop.a1b2c3d` → `{ version: '2.19.2', isDev: true, branch: 'develop', sha: 'a1b2c3d', ... }`
- * - `unknown`                   → `{ version: 'unknown', isDev: false, ... }`
+ * - `2.19.3`                      → `{ version: '2.19.3', isDev: false, ... }`
+ * - `2.19.3-develop.9272858`      → `{ version: '2.19.3', isDev: true, branch: 'develop', sha: '9272858', ... }`
+ * - `2.19.3-unknown.unknown`      → `{ version: '2.19.3', isDev: true, branch: 'unknown', sha: 'unknown', ... }`
+ * - `unknown`                     → `{ version: 'unknown', isDev: false, ... }`
  */
 // fallow-ignore-next-line complexity
 function parseActionBuildInfo(fullVersion: string): ActionBuildInfo {
@@ -149,29 +156,23 @@ function parseActionBuildInfo(fullVersion: string): ActionBuildInfo {
     };
   }
 
-  // Parse semver with optional pre-release and build metadata:
-  //   <semver>[-<pre>][+<build>]
-  // The build metadata portion uses dot-separated identifiers.
-  // We expect: <baseVersion>-dev+<branch>.<sha>
-  const plusIndex = fullVersion.indexOf('+');
+  // Parse semver with optional prerelease:
+  //   <semver>[-<branch>.<sha>]
+  // We expect: <baseVersion>-<branch>.<sha> (prerelease format)
+  const dashIndex = fullVersion.indexOf('-');
 
-  if (plusIndex === -1) {
-    // No build metadata → release build
+  if (dashIndex === -1) {
+    // No prerelease → release build
     return { version: fullVersion, isDev: false, branch: undefined, sha: undefined, fullVersion };
   }
 
-  // Extract the base version (before the pre-release tag like `-dev`)
-  const dashIndex = fullVersion.indexOf('-');
-  const version = dashIndex > 0 ? fullVersion.slice(0, dashIndex) : fullVersion.slice(0, plusIndex);
+  const version = fullVersion.slice(0, dashIndex);
+  const prerelease = fullVersion.slice(dashIndex + 1); // e.g. "develop.9272858"
 
-  // Parse build metadata: <branch>.<sha>
-  const buildMeta = fullVersion.slice(plusIndex + 1); // e.g. "develop.a1b2c3d"
-  const parts = buildMeta.split('.');
-
-  // Take the last part as SHA, everything before as branch
-  const sha: string | undefined = parts.length > 0 ? parts[parts.length - 1] : undefined;
-  const branch: string | undefined =
-    parts.length > 1 ? parts.slice(0, parts.length - 1).join('.') : undefined;
+  // Split on last dot: everything before is branch, last segment is sha
+  const dot = prerelease.lastIndexOf('.');
+  const branch = dot === -1 ? prerelease : prerelease.slice(0, dot);
+  const sha = dot === -1 ? undefined : prerelease.slice(dot + 1);
 
   return {
     version,
@@ -186,8 +187,8 @@ function parseActionBuildInfo(fullVersion: string): ActionBuildInfo {
  * Format an action version string for human-readable display (no `v` prefix —
  * callers add their own prefix when needed).
  *
- * - Release builds: `2.19.2`
- * - Development builds: `2.19.2-dev (develop @ a1b2c3d)`
+ * - Release builds: `2.19.3`
+ * - Development builds: `2.19.3-develop (develop @ 9272858)`
  * - Unknown: `unknown`
  *
  * When called without an argument, reads the running action's version.
@@ -203,7 +204,7 @@ export function formatActionVersion(version?: string): string {
     return info.version;
   }
 
-  return `${info.version}-dev (${info.branch} @ ${info.sha})`;
+  return `${info.version}-${info.branch} (${info.branch} @ ${info.sha})`;
 }
 
 /**
