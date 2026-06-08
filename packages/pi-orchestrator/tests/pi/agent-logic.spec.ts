@@ -560,6 +560,89 @@ describe('Agent', () => {
     });
   });
 
+  describe('session manager selection', () => {
+    /**
+     * Access the session manager's file path from a ready agent.
+     * File-backed sessions (SessionManager.create) return a string path;
+     * in-memory sessions (SessionManager.inMemory) return undefined.
+     */
+    function getSessionFilePath(agent: InstanceType<typeof Agent>): string | undefined {
+      const session = (
+        agent as unknown as {
+          session: { sessionManager: { getSessionFile: () => string | undefined } };
+        }
+      ).session;
+      return session.sessionManager.getSessionFile();
+    }
+
+    test('uses file-backed session when exportSessionHtml is true', async () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        exportSessionHtml: true,
+      });
+
+      await agent.ready();
+
+      const sessionFile = getSessionFilePath(agent);
+      expect(sessionFile).toBeDefined();
+      expect(typeof sessionFile).toBe('string');
+      expect(sessionFile).toMatch(/\.jsonl$/);
+    });
+
+    test('uses file-backed session when exportSessionJsonl is true', async () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        exportSessionJsonl: true,
+      });
+
+      await agent.ready();
+
+      const sessionFile = getSessionFilePath(agent);
+      expect(sessionFile).toBeDefined();
+      expect(typeof sessionFile).toBe('string');
+      expect(sessionFile).toMatch(/\.jsonl$/);
+    });
+
+    test('uses file-backed session when both exportSessionHtml and exportSessionJsonl are true', async () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        exportSessionHtml: true,
+        exportSessionJsonl: true,
+      });
+
+      await agent.ready();
+
+      const sessionFile = getSessionFilePath(agent);
+      expect(sessionFile).toBeDefined();
+      expect(typeof sessionFile).toBe('string');
+    });
+
+    test('uses in-memory session when exportSessionHtml and exportSessionJsonl are false', async () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        exportSessionHtml: false,
+        exportSessionJsonl: false,
+      });
+
+      await agent.ready();
+
+      const sessionFile = getSessionFilePath(agent);
+      expect(sessionFile).toBeUndefined();
+    });
+
+    test('uses in-memory session by default when no export flags are set', async () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        // Neither exportSessionHtml nor exportSessionJsonl is set
+      });
+
+      await agent.ready();
+
+      const sessionFile = getSessionFilePath(agent);
+      expect(sessionFile).toBeUndefined();
+    });
+  });
+
   describe('extension error logging', () => {
     test('logs extension loading errors from getExtensions().errors', async () => {
       const { core: testCore, messages: errorMessages } = createCoreWithErrorCapture();
