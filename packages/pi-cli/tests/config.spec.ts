@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { gatherCliConfig } from '../src/config.js';
+import { gatherCliConfig, gatherInteractiveConfig } from '../src/config.js';
 
 describe('gatherCliConfig', () => {
   const baseArgs = {
@@ -71,5 +71,48 @@ describe('gatherCliConfig', () => {
   it('accepts different cwd values', () => {
     const config = gatherCliConfig({ ...baseArgs, cwd: '/other/dir' }, 'tok');
     expect(config.cwd).toBe('/other/dir');
+  });
+});
+
+describe('gatherInteractiveConfig', () => {
+  const interactiveArgs = {
+    prompt: 'Issue #277: Develop CLI features\n\nInstruction: implement the CLI',
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-5',
+    cwd: '/some/workspace',
+    postComment: true,
+  };
+
+  it('produces a PiConfig with the expected fields', () => {
+    const config = gatherInteractiveConfig(interactiveArgs, 'sk-ant-test');
+
+    expect(config.provider).toBe('anthropic');
+    expect(config.model).toBe('claude-sonnet-4-5');
+    expect(config.token).toBe('sk-ant-test');
+    expect(config.promptInput).toContain('Issue #277');
+    expect(config.cwd).toBe('/some/workspace');
+  });
+
+  it('uses the interactive system prompt (mixed CLI/GitHub mode)', () => {
+    const config = gatherInteractiveConfig(interactiveArgs, 'sk-ant-test');
+    expect(config.systemPrompt).toContain('mixed CLI/GitHub mode');
+    expect(config.systemPrompt).toContain('thread history');
+    expect(config.systemPrompt).toContain('Do NOT add any footer');
+  });
+
+  it('disables HTML/JSONL exports by default', () => {
+    const config = gatherInteractiveConfig(interactiveArgs, 'sk-ant-test');
+    expect(config.exportSessionHtml).toBe(false);
+    expect(config.exportSessionJsonl).toBe(false);
+  });
+
+  it('enables builtin extensions by default', () => {
+    const config = gatherInteractiveConfig(interactiveArgs, 'sk-ant-test');
+    expect(config.loadBuiltinExtensions).toBe(true);
+  });
+
+  it('sets thinking level to off', () => {
+    const config = gatherInteractiveConfig(interactiveArgs, 'sk-ant-test');
+    expect(config.thinkingLevel).toBe('off');
   });
 });

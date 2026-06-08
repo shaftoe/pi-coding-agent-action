@@ -7,7 +7,6 @@
  */
 
 import { MAX_COMMENTS, MAX_REVIEW_COMMENTS } from '../constants';
-import { sanitizeContent } from '../sanitize';
 import type {
   GitHubModuleDeps,
   ThreadComment,
@@ -101,7 +100,7 @@ function transformComment(
     author: comment.user?.login ?? 'unknown',
     author_type: comment.user?.type === 'Bot' ? 'bot' : 'user',
     created_at: comment.created_at,
-    body: sanitizeContent(comment.body ?? ''),
+    body: comment.body ?? '',
     is_triggering_comment: comment.id === triggeringCommentId,
   };
 
@@ -186,7 +185,7 @@ export function mapReviewComment(
     author: comment.user?.login ?? 'unknown',
     author_type: comment.user?.type === 'Bot' ? 'bot' : 'user',
     created_at: comment.created_at,
-    body: sanitizeContent(comment.body),
+    body: comment.body,
     ...(comment.in_reply_to_id ? { in_reply_to_id: comment.in_reply_to_id } : {}),
   };
 }
@@ -268,7 +267,7 @@ function buildThreadResult(
   return {
     number: issue.number,
     title: issue.title,
-    body: issue.body ? sanitizeContent(issue.body) : issue.body,
+    body: issue.body,
     state: determineThreadState(issue.state, prData),
     author: issue.user?.login ?? 'unknown',
     author_type: issue.user?.type === 'Bot' ? 'bot' : 'user',

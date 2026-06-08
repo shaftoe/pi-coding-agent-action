@@ -14,6 +14,8 @@
 import { Command, CommanderError } from 'commander';
 import * as path from 'node:path';
 import { runCommand, type RunCommandArgs } from './commands/run.js';
+import { issueCommand } from './commands/issue.js';
+import { prCommand } from './commands/pr.js';
 
 /**
  * Build the commander program. Exported so tests can introspect the CLI
@@ -74,6 +76,99 @@ export function buildProgram(): Command {
         prompt,
         // Resolve cwd relative to current cwd so `--cwd ./foo` works.
         cwd: path.resolve(opts.cwd),
+      });
+    });
+
+  // --- M2: Issue command -------------------------------------------------
+  program
+    .command('issue <number>')
+    .description(
+      'Run the Pi agent against a GitHub issue with full thread context. ' +
+        'The agent reads all prior comments (its memory) and can post its response ' +
+        'as a comment on the issue.'
+    )
+    .option('--repo <owner/repo>', 'Target repository (auto-detected from git remote if omitted).')
+    .requiredOption('--provider <id>', 'LLM provider id (e.g. anthropic, openai, google).')
+    .requiredOption('--model <id>', 'LLM model id (e.g. claude-sonnet-4-5).')
+    .option('[instruction]', 'Optional instruction override (uses issue body if omitted).')
+    .option('--cwd <path>', 'Working directory for the agent.', process.cwd())
+    .option('--server-url <url>', 'Git host server URL.', 'https://github.com')
+    .option('--post-comment', 'Post response as comment on the issue (default).', true)
+    .option('--no-post-comment', 'Do not post comment, only output to stdout.')
+    .option('--max-comments <n>', 'Maximum thread comments to fetch.', '100')
+    .option('--verbose', 'Show debug-level logs (mutually exclusive with --quiet).')
+    .option('--quiet', 'Suppress all logs except errors (mutually exclusive with --verbose).')
+    .action(async (number: string, opts: Record<string, unknown>) => {
+      // commander passes the positional as first arg before the options object
+      // but in action handlers with a positional, it merges into the opts
+      const issueNum = parseInt(number, 10);
+      if (isNaN(issueNum) || issueNum <= 0) {
+        throw new Error(`Invalid issue number: ${number}`);
+      }
+
+      // Extract the positional instruction (if any)
+      // Commander stores extra args in the opts object
+      const instruction = typeof opts.instruction === 'string' ? opts.instruction : undefined;
+
+      await issueCommand({
+        number: issueNum,
+        repo: opts.repo as string | undefined,
+        provider: opts.provider as string,
+        model: opts.model as string,
+        instruction,
+        cwd: path.resolve(opts.cwd as string),
+        serverUrl: (opts.serverUrl as string) ?? 'https://github.com',
+        postComment: opts.postComment !== false,
+        maxComments: parseInt(opts.maxComments as string, 10) || 100,
+        verbose: opts.verbose as boolean,
+        quiet: opts.quiet as boolean,
+      });
+    });
+
+  // --- M2: PR command -----------------------------------------------------
+  program
+    .command('pr <number>')
+    .description(
+      'Run the Pi agent against a GitHub pull request with full thread context, ' +
+        'diff, and CI status. The agent can push commits, post reviews, and fix CI failures.'
+    )
+    .option('--repo <owner/repo>', 'Target repository (auto-detected from git remote if omitted).')
+    .requiredOption('--provider <id>', 'LLM provider id (e.g. anthropic, openai, google).')
+    .requiredOption('--model <id>', 'LLM model id (e.g. claude-sonnet-4-5).')
+    .option('[instruction]', 'Optional instruction override.')
+    .option('--cwd <path>', 'Working directory for the agent.', process.cwd())
+    .option('--server-url <url>', 'Git host server URL.', 'https://github.com')
+    .option('--post-comment', 'Post response as comment on the PR (default).', true)
+    .option('--no-post-comment', 'Do not post comment, only output to stdout.')
+    .option('--include-diff', 'Include PR diff in context (default).', true)
+    .option('--no-include-diff', 'Do not include PR diff.')
+    .option('--ci-aware', 'Include CI status in context (default).', true)
+    .option('--no-ci-aware', 'Do not include CI status.')
+    .option('--max-comments <n>', 'Maximum thread comments to fetch.', '100')
+    .option('--verbose', 'Show debug-level logs (mutually exclusive with --quiet).')
+    .option('--quiet', 'Suppress all logs except errors (mutually exclusive with --verbose).')
+    .action(async (number: string, opts: Record<string, unknown>) => {
+      const prNum = parseInt(number, 10);
+      if (isNaN(prNum) || prNum <= 0) {
+        throw new Error(`Invalid PR number: ${number}`);
+      }
+
+      const instruction = typeof opts.instruction === 'string' ? opts.instruction : undefined;
+
+      await prCommand({
+        number: prNum,
+        repo: opts.repo as string | undefined,
+        provider: opts.provider as string,
+        model: opts.model as string,
+        instruction,
+        cwd: path.resolve(opts.cwd as string),
+        serverUrl: (opts.serverUrl as string) ?? 'https://github.com',
+        postComment: opts.postComment !== false,
+        includeDiff: opts.includeDiff !== false,
+        ciAware: opts.ciAware !== false,
+        maxComments: parseInt(opts.maxComments as string, 10) || 100,
+        verbose: opts.verbose as boolean,
+        quiet: opts.quiet as boolean,
       });
     });
 
