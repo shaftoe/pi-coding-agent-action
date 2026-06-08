@@ -90,6 +90,11 @@ inputs:
     required: false
     default: 'false'
 
+  pr_number:
+    description: 'Pull request number to target. Use this with workflow_dispatch to run the agent on a specific PR without a triggering event. When set, the action fetches PR context and posts the result as a comment on the specified PR.'
+    required: false
+    default: ''
+
 runs:
   using: 'node24'
   main: 'dist/index.js'

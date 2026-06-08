@@ -132,13 +132,29 @@ export function getIssueOrPullRequestContext(
 /**
  * Enrich a prompt string with issue/PR context when available.
  *
+ * Tries to extract context from the event payload first, then falls back to
+ * fetching from the GitHub API when an issue/PR number is set in context but
+ * no payload data is available (e.g. workflow_dispatch with pr_number).
+ *
  * @param deps - Module dependencies.
  * @param instruction - The raw instruction text.
  * @param label - Label for the instruction section (e.g. "Comment/Instruction" or "Instruction").
  * @returns The enriched prompt, or the original instruction if no context is available.
  */
-function enrichWithContext(deps: GitHubModuleDeps, instruction: string, label: string): string {
-  const issueOrPrContext = getIssueOrPullRequestContext(deps);
+// fallow-ignore-next-line complexity
+async function enrichWithContext(
+  deps: GitHubModuleDeps,
+  instruction: string,
+  label: string
+): Promise<string> {
+  // First try to extract from event payload
+  let issueOrPrContext = getIssueOrPullRequestContext(deps);
+
+  // When no context in payload (e.g. workflow_dispatch), try fetching from API
+  if (!issueOrPrContext && deps.context.issue?.number) {
+    issueOrPrContext = await fetchIssueContextFromAPI(deps, deps.context.issue.number);
+  }
+
   if (issueOrPrContext) {
     const { title, body, number } = issueOrPrContext;
     const contextParts: string[] = [`Issue/PR #${number}: ${title}`];
@@ -155,13 +171,51 @@ function enrichWithContext(deps: GitHubModuleDeps, instruction: string, label: s
 }
 
 /**
+ * Fetch issue/PR context from the GitHub API when not available in the event
+ * payload (e.g. workflow_dispatch with an explicit pr_number).
+ *
+ * @param deps - Module dependencies.
+ * @param issueNumber - The issue or PR number to fetch.
+ * @returns The context, or undefined if the API call fails.
+ */
+async function fetchIssueContextFromAPI(
+  deps: GitHubModuleDeps,
+  issueNumber: number
+): Promise<IssueOrPullRequestContext | undefined> {
+  try {
+    const { owner, repo } = deps.context.repo;
+    const issueData = await deps.octokit.rest.issues.get({
+      owner,
+      repo,
+      issue_number: issueNumber,
+    });
+    const issue = issueData.data;
+    return {
+      title: issue.title,
+      number: issue.number,
+      ...(issue.body !== undefined && issue.body !== null ? { body: issue.body } : {}),
+    };
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    deps.logger.debug(
+      `[fetchIssueContextFromAPI] Failed to fetch issue/PR #${issueNumber}: ${errorMessage}`
+    );
+    return undefined;
+  }
+}
+
+/**
  * Build the full prompt that will be sent to the Pi agent.
  *
  * First checks for a `prompt` action input. If provided, it is used as-is
  * (no trigger stripping). If not provided, falls back to extracting the prompt
  * from the triggering comment.
  *
- * In both cases, if an issue/PR is available in the current context, its title
+ * When triggered via workflow_dispatch with a pr_number, and no comment is
+ * available, a default instruction is generated if a prompt input is not
+ * provided.
+ *
+ * In all cases, if an issue/PR is available in the current context, its title
  * and description are prepended for additional context.
  *
  * @param deps - Module dependencies.
@@ -186,18 +240,30 @@ export async function getPrompt(
 
   // Fall back to comment-based prompt
   const comment = await getComment(deps);
-  if (!comment) {
-    deps.logger.notice('no comment found in context, skipping');
-    return undefined;
+  if (comment) {
+    const prompt = comment.body;
+    if (!prompt) {
+      deps.logger.notice('no prompt found in comment, skipping');
+      return undefined;
+    }
+
+    return enrichWithContext(deps, prompt, 'Comment/Instruction');
   }
 
-  const prompt = comment.body;
-  if (!prompt) {
-    deps.logger.notice('no prompt found in comment, skipping');
-    return undefined;
+  // When no comment is found (e.g. workflow_dispatch), check if we have an
+  // issue/PR number in context. Only generate a default instruction for
+  // workflow_dispatch events where a pr_number was explicitly provided.
+  const isWorkflowDispatch = deps.context.eventName === 'workflow_dispatch';
+  if (isWorkflowDispatch && deps.context.issue?.number) {
+    const defaultInstruction = 'Review this pull request and provide feedback';
+    deps.logger.info(
+      `[getPrompt] No comment found; using default instruction for PR #${deps.context.issue.number}`
+    );
+    return enrichWithContext(deps, defaultInstruction, 'Instruction');
   }
 
-  return enrichWithContext(deps, prompt, 'Comment/Instruction');
+  deps.logger.notice('no comment found in context, skipping');
+  return undefined;
 }
 
 /**

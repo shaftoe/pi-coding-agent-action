@@ -396,6 +396,16 @@ describe('isPR', () => {
     });
     expect(isPR(deps)).toBe(true);
   });
+
+  test('returns true for workflow_dispatch with pr_number (pull_request stub in payload)', async () => {
+    const { isPR } = await contextModule;
+    const deps = createTestDeps({
+      eventName: 'workflow_dispatch',
+      issue: { number: 99 },
+      payload: { pull_request: { number: 99 } },
+    });
+    expect(isPR(deps)).toBe(true);
+  });
 });
 
 describe('getContextType', () => {
@@ -906,5 +916,121 @@ describe('getStartTimeFromContext', () => {
       const result = getStartTimeFromContext(deps);
       expect(result).toBeUndefined();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helper for tests that need a mock Octokit (API calls)
+// ---------------------------------------------------------------------------
+
+function createMockOctokit(prData: { title: string; number: number; body?: string | null }) {
+  return {
+    rest: {
+      issues: {
+        get: async () => ({
+          data: {
+            title: prData.title,
+            number: prData.number,
+            body: prData.body ?? null,
+          },
+        }),
+      },
+    },
+  } as any;
+}
+
+function createTestDepsWithOctokit(
+  contextOverrides: Partial<PlatformContext> = {},
+  prData?: { title: string; number: number; body?: string | null }
+): GitHubModuleDeps {
+  return {
+    ...createTestDeps(contextOverrides),
+    octokit: createMockOctokit(
+      prData ?? { title: 'Test PR', number: contextOverrides.issue?.number ?? 42 }
+    ),
+  };
+}
+
+describe('getPrompt with workflow_dispatch + pr_number', () => {
+  test('returns default instruction for workflow_dispatch with pr_number and no prompt input', async () => {
+    const { getPrompt } = await contextModule;
+    const deps = createTestDepsWithOctokit(
+      {
+        eventName: 'workflow_dispatch',
+        issue: { number: 99 },
+        payload: { pull_request: { number: 99 } },
+      },
+      { title: 'Fix auth bug', number: 99, body: 'This PR fixes the auth issue' }
+    );
+
+    const result = await getPrompt(deps);
+    expect(result).toBeDefined();
+    expect(result).toContain('Issue/PR #99: Fix auth bug');
+    expect(result).toContain('This PR fixes the auth issue');
+    expect(result).toContain('Instruction:');
+    expect(result).toContain('Review this pull request and provide feedback');
+  });
+
+  test('uses explicit prompt input for workflow_dispatch with pr_number', async () => {
+    const { getPrompt } = await contextModule;
+    const deps = createTestDepsWithOctokit(
+      {
+        eventName: 'workflow_dispatch',
+        issue: { number: 88 },
+        payload: { pull_request: { number: 88 } },
+      },
+      { title: 'Add feature X', number: 88, body: 'Implements feature X' }
+    );
+
+    const result = await getPrompt(deps, 'Check for security issues');
+    expect(result).toBeDefined();
+    expect(result).toContain('Issue/PR #88: Add feature X');
+    expect(result).toContain('Instruction:');
+    expect(result).toContain('Check for security issues');
+  });
+
+  test('enriches prompt with API-fetched context for workflow_dispatch', async () => {
+    const { getPrompt } = await contextModule;
+    const deps = createTestDepsWithOctokit(
+      {
+        eventName: 'workflow_dispatch',
+        issue: { number: 55 },
+        payload: { pull_request: { number: 55 } },
+      },
+      { title: 'Refactor database layer', number: 55, body: 'Major refactoring of the DB layer' }
+    );
+
+    const result = await getPrompt(deps, 'Review the changes');
+    expect(result).toContain('Issue/PR #55: Refactor database layer');
+    expect(result).toContain('Major refactoring of the DB layer');
+    expect(result).toContain('Review the changes');
+  });
+
+  test('returns undefined for workflow_dispatch without issue number', async () => {
+    const { getPrompt } = await contextModule;
+    const deps = createTestDepsWithOctokit({
+      eventName: 'workflow_dispatch',
+      issue: { number: undefined as any },
+      payload: {},
+    });
+
+    const result = await getPrompt(deps);
+    expect(result).toBeUndefined();
+  });
+
+  test('falls back to default instruction when no comment and no prompt input', async () => {
+    const { getPrompt } = await contextModule;
+    const deps = createTestDepsWithOctokit(
+      {
+        eventName: 'workflow_dispatch',
+        issue: { number: 42 },
+        payload: { pull_request: { number: 42 } },
+      },
+      { title: 'Test PR', number: 42 }
+    );
+
+    const result = await getPrompt(deps);
+    expect(result).toBeDefined();
+    expect(result).toContain('Review this pull request and provide feedback');
   });
 });

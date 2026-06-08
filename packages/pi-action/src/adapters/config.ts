@@ -172,6 +172,7 @@ export function gatherActionsConfig(): PiConfig {
   // --- Optional positive-integer inputs ----------------------------------
   const diffMaxLines = parsePositiveIntInput(core.getInput('diff_max_lines'));
   const diffMaxBytes = parsePositiveIntInput(core.getInput('diff_max_bytes'));
+  const prNumber = parsePositiveIntInput(core.getInput('pr_number'));
 
   // --- Assemble PiConfig (only include optional keys when set) -----------
   return {
@@ -190,6 +191,7 @@ export function gatherActionsConfig(): PiConfig {
     ...(diffMaxLines ? { diffMaxLines } : {}),
     ...(diffMaxBytes ? { diffMaxBytes } : {}),
     ...(diffIgnorePatterns?.length ? { diffIgnorePatterns } : {}),
+    ...(prNumber ? { prNumber } : {}),
     /**
      * Set packageDir so the Agent can point PI_PACKAGE_DIR at the bundled
      * SDK assets when running from the GitHub Action's dist/index.js.

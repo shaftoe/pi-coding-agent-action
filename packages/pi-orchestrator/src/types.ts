@@ -226,6 +226,14 @@ export interface PiConfig extends DiffConfig {
   packageDir?: string;
   /** Working directory. Defaults to `process.cwd()`. */
   cwd?: string;
+  /**
+   * Explicit pull request number for workflow_dispatch support.
+   *
+   * When provided, the action targets the specified PR instead of deriving
+   * the issue/PR number from the triggering event. All context-dependent
+   * tools (diff, thread, review, etc.) use this number.
+   */
+  prNumber?: number;
 }
 
 /**

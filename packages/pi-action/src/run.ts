@@ -36,11 +36,24 @@ export async function run() {
 
   // Build PlatformContext from the @actions/github singleton
   const githubCtx = github.context as { actor?: string; sha?: string };
+
+  // When pr_number is provided (e.g. workflow_dispatch), override the
+  // issue number so all downstream tools target the specified PR.
+  const prNumber = config.prNumber;
+  const issueNumber = prNumber ?? github.context.issue.number;
+
+  // Build the payload, injecting a pull_request stub when pr_number is set
+  // so that isPR() and getContextType() work without event-specific context.
+  const payload = { ...(github.context.payload as Record<string, unknown>) };
+  if (prNumber) {
+    payload.pull_request = payload.pull_request ?? { number: prNumber };
+  }
+
   const platformContext = {
     repo: github.context.repo,
-    issue: github.context.issue,
+    issue: { number: issueNumber },
     eventName: github.context.eventName,
-    payload: github.context.payload as Record<string, unknown>,
+    payload,
     serverUrl: github.context.serverUrl || 'https://github.com',
     runId: github.context.runId,
     workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),

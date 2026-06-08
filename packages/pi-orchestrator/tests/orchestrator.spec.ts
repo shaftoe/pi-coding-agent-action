@@ -1269,4 +1269,21 @@ describe('ActionOrchestrator', () => {
       expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { autoCompaction: false });
     });
   });
+
+  describe('prNumber configuration', () => {
+    test('defaults to undefined when not provided', async () => {
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const callArgs = (mockPiFactory as any).mock.calls[0][0];
+      expect(callArgs.prNumber).toBeUndefined();
+    });
+
+    test('passes prNumber when provided', async () => {
+      const orchestrator = createOrchestrator({ prNumber: 42 });
+      await orchestrator.execute();
+
+      expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { prNumber: 42 });
+    });
+  });
 });
