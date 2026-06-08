@@ -18,7 +18,7 @@
   "dependencies": {
     "@alexanderfortin/pi-orchestrator": "workspace:*",
     "@js-temporal/polyfill": "^0.5.1",
-    "@octokit/core": "^7.0.3",
+    "@octokit/core": "^7.0.6",
     "@octokit/plugin-rest-endpoint-methods": "^17.0.0"
   },
   "devDependencies": {
