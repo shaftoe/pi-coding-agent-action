@@ -156,9 +156,16 @@ export class Agent {
 
     // Phase 2: Create the session with the resolved model.
     const loadedTools = this.config.loadedTools;
+    // Use a file-backed session when HTML/JSONL export is needed — the SDK's
+    // exportToHtml() requires a session file and throws "Cannot export
+    // in-memory session to HTML" for in-memory sessions.
+    const needsPersistence = this.config.exportSessionHtml ?? this.config.exportSessionJsonl;
+    const sessionManager = needsPersistence
+      ? SessionManager.create(services.cwd)
+      : SessionManager.inMemory(services.cwd);
     const { session } = await createAgentSessionFromServices({
       services,
-      sessionManager: SessionManager.inMemory(services.cwd),
+      sessionManager,
       model: this.model,
       thinkingLevel: this.thinkingLevel,
       // Pass loadedTools as the SDK's native allowlist (tools option).
