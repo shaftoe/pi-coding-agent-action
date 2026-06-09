@@ -11,6 +11,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "test": "bun test"
   },
