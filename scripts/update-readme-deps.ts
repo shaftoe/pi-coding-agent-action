@@ -2,16 +2,16 @@
  * Updates the dependency versions table in README.md between
  * <!-- DEPS_TABLE_START --> and <!-- DEPS_TABLE_END --> markers.
  *
- * Designed for the Bun-workspace monorepo: scans every package under packages/,
- * merges their `dependencies` + `peerDependencies`, skips `workspace:*` links,
- * and reads versions straight from each package.json (assumed to be kept in
- * sync with what's actually installed).
+ * Collects only the dependencies that end up in dist/ by starting from the
+ * pi-action package (the esbuild entry point) and recursively resolving
+ * workspace: dependencies. Non-workspace deps from the resolved tree are
+ * exactly what esbuild bundles into dist/index.js.
  *
  * Wired into .github/workflows/package.yml so the table is refreshed whenever
  * dist/ is rebuilt on develop.
  */
 
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const scriptDir = __dirname;
@@ -36,6 +36,7 @@ const DEP_DESCRIPTIONS: Record<string, string> = {
   '@earendil-works/pi-ai': 'Pi AI — AI model abstractions and providers',
   '@earendil-works/pi-coding-agent': 'Pi SDK — AI coding agent runtime',
   '@js-temporal/polyfill': 'Temporal API polyfill',
+  '@octokit/core': 'Octokit REST API client core',
   '@octokit/plugin-rest-endpoint-methods': 'Octokit REST API endpoint methods',
   ignore: '`.gitignore`-style pattern matching',
   typebox: 'JSON Schema Type Builder',
@@ -57,45 +58,53 @@ function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf-8'));
 }
 
-function collectWorkspaceDeps(): Map<string, string> {
-  if (!existsSync(PACKAGES_DIR)) {
-    console.error(`packages directory not found at ${PACKAGES_DIR}`);
+interface PkgJson {
+  name: string;
+  dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+}
+
+const ENTRY_POINT_PKG = 'pi-action';
+
+/**
+ * Starting from the entry-point package (pi-action), recursively resolve
+ * `workspace:` dependencies and collect all non-workspace deps that end up
+ * in the esbuild bundle.
+ */
+function collectBundledDeps(): Map<string, string> {
+  const entryPkgPath = join(PACKAGES_DIR, ENTRY_POINT_PKG, 'package.json');
+  if (!existsSync(entryPkgPath)) {
+    console.error(`Entry-point package not found at ${entryPkgPath}`);
     process.exit(1);
   }
 
   const merged = new Map<string, string>();
-  for (const entry of readdirSync(PACKAGES_DIR)) {
-    const entryPath = join(PACKAGES_DIR, entry);
-    let isDir = false;
-    try {
-      isDir = statSync(entryPath).isDirectory();
-    } catch {
-      /* skip */
-    }
-    if (!isDir) {
-      continue;
-    }
+  const visited = new Set<string>();
 
-    const pkgJsonPath = join(entryPath, 'package.json');
-    if (!existsSync(pkgJsonPath)) {
-      continue;
-    }
+  function resolvePackage(pkgDirName: string): void {
+    const pkgJsonPath = join(PACKAGES_DIR, pkgDirName, 'package.json');
+    if (!existsSync(pkgJsonPath) || visited.has(pkgDirName)) return;
+    visited.add(pkgDirName);
 
-    const pkg = readJson(pkgJsonPath) as {
-      dependencies?: Record<string, string>;
-      peerDependencies?: Record<string, string>;
+    const pkg = readJson(pkgJsonPath) as PkgJson;
+
+    const allDeps: Record<string, string> = {
+      ...(pkg.peerDependencies ?? {}),
+      ...(pkg.dependencies ?? {}),
     };
 
-    for (const [name, spec] of Object.entries(pkg.dependencies ?? {})) {
-      merged.set(name, spec);
-    }
-    // peerDependencies are also "shipped" deps from the consumer's POV
-    for (const [name, spec] of Object.entries(pkg.peerDependencies ?? {})) {
-      if (!merged.has(name)) {
+    for (const [name, spec] of Object.entries(allDeps)) {
+      if (isWorkspaceSpec(spec)) {
+        // Resolve workspace link → recurse into the target package
+        const targetDir = name.startsWith('@') ? name.split('/').pop()! : name;
+        resolvePackage(targetDir);
+      } else if (!merged.has(name)) {
         merged.set(name, spec);
       }
     }
   }
+
+  resolvePackage(ENTRY_POINT_PKG);
   return merged;
 }
 
@@ -112,7 +121,7 @@ function main(): void {
     process.exit(1);
   }
 
-  const allDeps = collectWorkspaceDeps();
+  const allDeps = collectBundledDeps();
 
   const deps: DepInfo[] = Array.from(allDeps.entries())
     .filter(([, spec]) => !isWorkspaceSpec(spec))
