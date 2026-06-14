@@ -47,7 +47,7 @@ These decisions were reached through a structured grilling session and are consi
 
 ### 2.5 Handoff Format
 
-- **Structured prose — no hidden payload.** The handoff is a normal `/pi` comment whose body uses Markdown headings (`## Done`, `## Next`, `## Steering`) to convey the same fields the earlier JSON payload carried (`done` / `next` / `steer`):
+- **Structured prose — no hidden payload.** The handoff is a normal `/pi` comment whose body uses two Markdown headings (`## Done`, `## Next`) to convey what's been completed and what remains:
 
 ```markdown
 /pi 🤖 Handoff from local session
@@ -57,12 +57,10 @@ These decisions were reached through a structured grilling session and are consi
 - wired up middleware
 
 ## Next
-add tests
-
-## Steering
-focus on error handling
+add tests — focus on error handling coverage
 ```
 
+- **Why two headings, not three.** An earlier draft used `## Done` / `## Next` / `## Steering` (mirroring the original JSON payload's `done` / `next` / `steer` fields). The distinction between "Next" (what to do) and "Steering" (how to do it) is artificial for an LLM consumer: the CI agent reads "add tests, focus on error handling" equally well whether it's under one heading or two. The real difference was *provenance* (tasks inferred by the local agent vs. guidance supplied by the user via `--steer`), not content type — and the CI agent doesn't care who said what. Collapsing them into a single `## Next` section also removes a decision point for the composing agent ("which heading does this go in?") and follows the agent-native principle already established in this section: if a structured JSON blob gave an LLM nothing prose doesn't, then splitting task-list from approach-guidance gives an LLM nothing a single heading doesn't. The `--steer` argument remains valuable as an *input* to the local agent — it just gets woven into the Next section naturally.
 - **Why prose, not a hidden JSON payload.** The earlier design embedded a JSON blob in an HTML comment (`<!-- pi-handoff-payload ... -->`). That does not work: `pi-platform-github`'s `sanitizeContent()` strips HTML comments (defense-in-depth against prompt injection) before the body reaches the CI agent — via `getPrompt()` and via `get_thread`/`transformComment()` alike. Markdown headings, lists, bold, and emoji survive sanitization; HTML comments do not.
 - **Agent-native.** §2.1 makes `/skill:handoff` agent-driven. The local agent fills the prose headings; the CI agent (an LLM) reads them natively. A structured JSON blob gave an LLM nothing prose doesn't.
 - **No version field.** The `"v": 1` forward-compat field is dropped. The format is natural language; the CI agent adapts to whatever structure it reads. Revisit only if a non-LLM consumer ever needs a schema (YAGNI today).
@@ -237,6 +235,8 @@ A workspace package is **not** auto-discovered by Pi. To load the bridge:
 | `create_comment` | Post a top-level comment to an issue/PR via `octokit.rest.issues.createComment`. Three modes: **plain** (free-form Markdown), **steering** (`/pi <instruction>` — picked up by the CI action as a normal invocation), **handoff** (`/pi 🤖 Handoff…` + structured-prose headings, §2.5). Bridge-owned; no CI action-run footer locally. | Direct Octokit call |
 | `create_pull_request` | Push branch via `simple-git` + create PR via Octokit. Agent composes title/body. | `simple-git` + Octokit |
 
+> **Steering vs. handoff — both reach CI, different intent.** Steering is an ad-hoc mid-session directive ("focus on error handling") with no context payload — just `/pi <instruction>`. Handoff is the full state transfer: `## Done` / `## Next` headings summarizing completed and remaining work. The `--steer` argument to `/skill:handoff` is steering *input* that the local agent weaves into the `## Next` section of the handoff comment — it does not get a separate heading (see §2.5).
+
 ---
 
 ## 5. Skill Surface (MVP)
@@ -244,7 +244,7 @@ A workspace package is **not** auto-discovered by Pi. To load the bridge:
 | Skill | Trigger | What the Agent Does |
 |-------|---------|-------------------|
 | `/skill:sync` | User types `/skill:sync [number]` | Fetches the linked thread (or specified #) and presents the current state. The agent infers what's new from its own conversational context — no persisted "last seen" marker is needed. |
-| `/skill:handoff` | User types `/skill:handoff [--steer "..."]` | Checks for uncommitted changes (asks the user how to proceed if working tree is dirty), pushes branch via `simple-git`, creates/updates PR, reads diff to summarize what's done and what's next, posts `/pi` comment with structured-prose handoff (`## Done` / `## Next` / `## Steering` headings; see §2.5). Idempotent on retry: if the remote branch already exists (e.g. a prior run pushed but PR creation failed), skips push and retries PR create; `gh pr create` is the manual fallback. |
+| `/skill:handoff` | User types `/skill:handoff [--steer "..."]` | Checks for uncommitted changes (asks the user how to proceed if working tree is dirty), pushes branch via `simple-git`, creates/updates PR, reads diff to summarize what's done and what's next, posts `/pi` comment with structured-prose handoff (`## Done` / `## Next` headings; see §2.5). The `--steer` argument, if provided, is woven into the `## Next` section — it does not get a separate heading. Idempotent on retry: if the remote branch already exists (e.g. a prior run pushed but PR creation failed), skips push and retries PR create; `gh pr create` is the manual fallback. |
 | `/skill:review` | User types `/skill:review` | Fetches PR review comments via `get_thread`, presents them for the user to address locally |
 
 ---
