@@ -9,6 +9,8 @@
         "@alexanderfortin/pi-cli": "workspace:*",
         "@alexanderfortin/pi-orchestrator": "workspace:*",
         "@alexanderfortin/pi-platform-github": "workspace:*",
+        "@earendil-works/pi-agent-core": "^0.79.4",
+        "@earendil-works/pi-ai": "^0.79.4",
         "@earendil-works/pi-coding-agent": "^0.79.4",
       },
       "devDependencies": {
