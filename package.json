@@ -41,8 +41,6 @@
   "author": "Alexander Fortin",
   "license": "MIT",
   "dependencies": {
-    "@alexanderfortin/pi-action": "workspace:*",
-    "@alexanderfortin/pi-cli": "workspace:*",
     "@alexanderfortin/pi-orchestrator": "workspace:*",
     "@alexanderfortin/pi-platform-github": "workspace:*",
     "@earendil-works/pi-agent-core": "^0.79.4",
