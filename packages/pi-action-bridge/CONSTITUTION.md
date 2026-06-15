@@ -3,7 +3,7 @@
 > **Codename:** `pi-action-bridge` — bridging local CLI and CI/CD agent workflows
 > **Repository:** `pi-coding-agent-action` (monorepo)
 > **Date:** 2026-06-09
-> **Status:** Design v0.2 — Grilled & Resolved
+> **Status:** Design v0.3 — Reviewed (incorporates PR #295 review pass 6)
 
 ---
 
@@ -25,7 +25,7 @@ These decisions were reached through a structured grilling session and are consi
 
 - **Skills are the steering wheel, tools are the engine.** The human drives via slash-skills (`/skill:handoff`, `/skill:sync`, `/skill:review`). The agent acts autonomously for context injection and when using tools during a session.
 - `/skill:handoff` is **agent-driven** — the agent reads the diff, summarizes what's done, proposes next steps. Not a dumb script.
-- There is **no imperative `commands/` directory**. Each skill is a SKILL.md document (Markdown) that instructs the agent; the tools are the actual implementation. Skills are invoked per the [Agent Skills standard](https://agentskills.io/specification) as `/skill:<name>` (see `docs/skills.md`). Arguments after the command are appended as free `User: <args>` text — the agent interprets them natively (e.g. `/skill:handoff --steer "focus on error handling"`). `enableSkillCommands` must be on (toggle via `/settings` or `settings.json`).
+- There is **no imperative `commands/` directory**. Each skill is a SKILL.md document (Markdown) that instructs the agent; the tools are the actual implementation. Skills are invoked per the [Agent Skills standard](https://agentskills.io/specification) as `/skill:<name>` (see `docs/skills.md`). Arguments after the command are appended as free `User: <args>` text — the agent interprets them natively (e.g. `/skill:handoff --steer "focus on error handling"`). `enableSkillCommands` must be on (`"enableSkillCommands": true` in `settings.json` — per the Pi SDK `docs/skills.md`; toggle via `/settings`). `pi.registerCommand()` and `ctx.sendUserMessage()`, referenced in the alternative-considered note below, are likewise SDK `ExtensionAPI` methods (`docs/extensions.md`) — not repo-local constructs.
 - **Alternative considered (not adopted for MVP):** register bare `/handoff` via `pi.registerCommand()`, parse `--steer` in the handler, then `ctx.sendUserMessage()` to inject the skill content and hand off to the agent. Gives a cleaner `/handoff` UX with real arg parsing, but adds a command layer that partly reinvents skill loading. **Escalation trigger:** revisit if `/skill:handoff` feels too verbose in practice.
 
 ### 2.2 Statelessness
@@ -37,7 +37,7 @@ These decisions were reached through a structured grilling session and are consi
 
 - **Git operations** (push, branch detection, remote queries via `simple-git`): Uses the developer's existing git credentials — SSH keys, macOS Keychain, credential helpers, etc. No env var needed.
 - **Forge API operations** (threads, diffs, comments, PR creation via Octokit): Requires `GITHUB_TOKEN` or `GH_TOKEN` env var. Fail fast if missing. No fallbacks, no `gh` auth piggybacking, no first-run flows.
-- The extension checks for the token **eagerly, at extension load** (the async factory), and throws a clear error if absent — before any skill can execute. This makes the token check **authoritative**: the push-succeeds-but-token-missing race (§2.3 split auth) cannot reach `/skill:handoff`. If push later succeeds but PR creation fails for a *non-token* reason (network, permissions, branch protection), the pushed branch is a harmless feature branch — re-run `/skill:handoff` (idempotent: detects the existing remote branch, skips push, retries PR create) or fall back to `gh pr create`.
+- The extension checks for the token **eagerly, at extension load** (the async factory), and throws a clear error if absent — before any skill can execute. This makes the token check **best-effort at load time**: at the instant of load, the push-succeeds-but-token-missing race (§2.3 split auth) cannot reach `/skill:handoff`. In a long-lived TUI session the token can later become invalid (a short-lived `GITHUB_TOKEN` expires, a credential helper rotates it, the developer's git creds change), so `/skill:handoff` and `create_pull_request` must handle **401/403 from `octokit.pulls.create`** with a clear "token may have expired — re-run after refreshing `GITHUB_TOKEN`" message rather than assuming the load-time check guarantees freshness. If push later succeeds but PR creation fails for a *non-token* reason (network, permissions, branch protection), the pushed branch is a harmless feature branch — re-run `/skill:handoff` (idempotent: detects the existing remote branch, skips push, retries PR create) or fall back to `gh pr create`.
 
 ### 2.4 No `gh` CLI Dependency
 
@@ -84,6 +84,7 @@ add tests — focus on error handling coverage
 - (Not `session_start`: that event has no message-injection return shape and no pending turn to inject into — see §6.)
 - The agent gets immediate awareness of current state without full history. If it needs more, `get_thread` is available.
 - No state tracking needed — just "most recent N comments."
+- **One-shot guard:** a closure-scoped boolean set during the first `before_agent_start` invocation; it resets naturally when a new session / extension instance is created (consistent with §2.2 statelessness — it does not persist across sessions).
 
 ### 2.9 Duplication Over Forced Abstraction
 
@@ -94,7 +95,18 @@ add tests — focus on error handling coverage
 
 ## 3. Architecture
 
-### 3.1 Layer Diagram
+### 3.1 Runtime Target
+
+**The bridge is a Pi TUI extension.** It loads into `@earendil-works/pi-coding-agent` (the `pi` binary) via `pi install` (§3.7) and runs in the developer's interactive session. It does **not** run inside `pi-cli` or `pi-action`:
+
+- **`pi-action`** (GitHub Action) has no local checkout and no developer at a keyboard — it already *is* the CI agent the bridge hands off *to*. Loading the bridge there would be circular.
+- **`pi-cli`** is a proof-of-concept headless client (per `AGENTS.md`) that wires a synthetic `PlatformContext` for one-shot prompts; it is not a Pi extension host and does not load installed extensions.
+
+> **This resolves the tool-name collision outright.** `createToolsFactory()` (`pi-orchestrator/src/pi/tools/index.ts`) is the only code that registers `get_pr_diff`, `create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`, `create_pull_request_review`, `get_ci_status`, and `get_workflow_run_logs`. That factory is wired in **exclusively** by `buildResourceLoaderOptions()` (`pi-orchestrator/src/pi/resource-loader.ts`), consumed only by `pi-cli` and `pi-action` — never by the Pi TUI. The TUI's built-in tool surface is `bash` / `read` / `edit` / `write` / `grep` / `find` / `ls` plus whatever installed extensions register. So when the bridge registers its own `get_thread`, `get_pr_diff`, `create_comment`, `create_pull_request` (§4), there is **no collision** — those names are simply not present in the TUI runtime.
+
+> **The bridge must not call `createToolsFactory()`** nor depend on `pi-orchestrator`'s tool factories. It registers its own thin wrappers over the `pi-platform-github` provider (reads) and direct Octokit / `simple-git` (writes), per §2.7 / §2.9. Pulling in the orchestrator's tool layer would reintroduce the CI lifecycle coupling the §3.x reuse design explicitly avoids.
+
+### 3.2 Layer Diagram
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -130,11 +142,13 @@ add tests — focus on error handling coverage
 └─────────────────────────────────────────────────────┘
 ```
 
-### 3.2 Package Structure
+> **Skill names in the diagram are abbreviated** for space — the canonical invocation syntax is `/skill:handoff`, `/skill:sync`, `/skill:review` (§2.1, §5).
+
+### 3.3 Package Structure
 
 ```
 pi-action-bridge/
-├── package.json          # npm metadata + Pi manifest ("pi": { extensions, skills }) — see §3.6
+├── package.json          # npm metadata + Pi manifest ("pi": { extensions, skills }) — see §3.7
 ├── tsconfig.json
 ├── src/
 │   ├── index.ts          # Extension entry point
@@ -164,7 +178,7 @@ pi-action-bridge/
 └── README.md
 ```
 
-### 3.3 No new shared package — reuse `pi-platform-github`
+### 3.4 No new shared package — reuse `pi-platform-github`
 
 An earlier draft proposed a `pi-forge-client` package exposing a platform-agnostic `ForgeClient` interface (a generic `request(path, options)`). That abstraction was **dropped** during review:
 
@@ -180,7 +194,7 @@ The provider's CI-oriented methods (`addReaction`, `createFinalComment`, `getPro
 
 **Consequence:** no §7 extraction, no Phase 0, no new vocabulary ("forge"). One client concept (`PlatformProvider`), one noun ("platform").
 
-### 3.4 Bridge Class
+### 3.5 Bridge Class
 
 A single class (no interface hierarchy) that composes:
 - **Git discovery** via `simple-git` — detect repo, branch, resolve branch → PR number
@@ -190,7 +204,7 @@ A single class (no interface hierarchy) that composes:
 
 > **Note:** The bridge *uses* the existing `PlatformProvider` (`pi-orchestrator/src/platform/types.ts`) directly — there is no separate `PlatformClient` type. The provider is CI-oriented (it also exposes `addReaction`, `createFinalComment`, `getPrompt`, `getStartTime`), but those methods **no-op** against the bridge's synthetic context (`payload: {}`, falsy `issue.number`, sentinel `eventName`), as proven by `pi-cli`. So one interface serves both CI and local.
 
-### 3.5 Platform Detection
+### 3.6 Platform Detection
 
 ```typescript
 // Auto-detect from git remote URL
@@ -202,7 +216,7 @@ function detectPlatformFromRemote(remoteUrl: string): PlatformType {
 
 The existing `detectPlatform(serverUrl)` in `packages/pi-platform-github/src/provider.ts` handles platform detection from a server URL. The bridge normalizes the git remote URL (e.g., `git@github.com:owner/repo.git`) to a server URL (e.g., `https://github.com`) and delegates to the shared logic. This avoids duplicating the detection patterns (including GitHub Enterprise `.github.` patterns, Forgejo, Gitea).
 
-### 3.6 Distribution & Installation
+### 3.7 Distribution & Installation
 
 The package declares its Pi resources via the `"pi"` manifest key in `package.json` (per `docs/packages.md`):
 
@@ -257,7 +271,7 @@ On the **first turn** — via the `before_agent_start` event with a one-shot "al
 3. If linked PR found: return a persistent session message (`{ customType, content, display: true }`) with PR metadata + last 3-5 comments — stored in session, sent to the LLM.
 4. If no linked PR: silent, no action
 
-> **Why `before_agent_start`, not `session_start`:** `session_start` handlers have no message-injection return shape and there is no pending turn to inject into at session creation. `before_agent_start` returns `{ message, systemPrompt }` — the documented injection point (see `docs/extensions.md`). A persistent *message* (not `systemPrompt`) is used so the thread context is contextual and compactable, rather than bloating every turn. **Why lazy (first prompt), not eager (session creation):** injecting eagerly would trigger an agent turn with no user prompt; deferring to the user's first `before_agent_start` avoids that, and a developer types their first prompt almost immediately in a TUI. The one-shot guard avoids re-injecting on subsequent turns.
+> **Why `before_agent_start`, not `session_start`:** `session_start` handlers have no message-injection return shape and there is no pending turn to inject into at session creation. `before_agent_start` returns `{ message, systemPrompt }` (SDK type `BeforeAgentStartEventResult` — "Fired after user submits prompt, before agent loop. Can inject a message and/or modify the system prompt", `docs/extensions.md`) — the only message-injection point. A persistent *message* (not `systemPrompt`) is used so the thread context is contextual and compactable, rather than bloating every turn. **Why lazy (first prompt), not eager (session creation):** injecting eagerly would trigger an agent turn with no user prompt; deferring to the user's first `before_agent_start` avoids that, and a developer types their first prompt almost immediately in a TUI. The one-shot guard avoids re-injecting on subsequent turns.
 
 ---
 
@@ -265,7 +279,7 @@ On the **first turn** — via the `before_agent_start` event with a one-shot "al
 
 **None to `pi-platform-github` or `pi-orchestrator`.**
 
-The earlier plan (extract a `pi-forge-client` package, refactor `pi-platform-github` to consume it) is **dropped** — see §3.3. The bridge reuses the existing provider unchanged.
+The earlier plan (extract a `pi-forge-client` package, refactor `pi-platform-github` to consume it) is **dropped** — see §3.4. The bridge reuses the existing provider unchanged.
 
 The only prerequisite is confirming the provider's CI-only methods no-op against a synthetic `PlatformContext` — already true today (documented in `pi-cli/src/context.ts`). If a method turns out *not* to no-op cleanly from the local context, the fix is a small guard in `pi-platform-github` (widening an existing falsy-check), not a package extraction.
 
@@ -307,18 +321,24 @@ The only prerequisite is confirming the provider's CI-only methods no-op against
 
 ## 9. Configuration
 
+The bridge reads its **own** config files — never a slice of Pi's reserved `settings.json`. Pi owns `settings.json` and its schema is fixed and versioned; stashing an extension key there invites drift and silent breakage on SDK upgrades, and there is no SDK settings accessor on `ExtensionContext` to read it safely anyway. So the bridge owns co-located JSONC files that inherit the same scope + trust model:
+
+| Scope | Path | Load rule |
+|-------|------|-----------|
+| Global | `~/.pi/agent/pi-action-bridge.json` | Always |
+| Project | `.pi/pi-action-bridge.json` | Only when `ctx.isProjectTrusted()` — mirrors Pi's own gate for `.pi/settings.json` (`docs/settings.md`) |
+
 ```jsonc
-// .pi/settings.json or ~/.pi/agent/settings.json
+// ~/.pi/agent/pi-action-bridge.json  (global)
+//   or  .pi/pi-action-bridge.json    (project, trusted)
 {
-  "pi-action-bridge": {
-    "platform": "auto",           // "auto" | "github" | "codeberg" | "forgejo"
-    "forgejo_url": "",            // Required for Forgejo
-    "auto_sync": true             // Auto-inject thread context on first turn (see §6)
-  }
+  "platform": "auto",      // "auto" | "github" | "codeberg" | "forgejo"
+  "forgejo_url": "",       // Required when platform is "forgejo"
+  "auto_sync": true        // Auto-inject thread context on first turn (see §6)
 }
 ```
 
-> **The extension reads this itself.** Pi reads a fixed set of known settings keys (`docs/settings.md`); it does **not** hand arbitrary per-extension config to extensions, and there is no SDK settings accessor on `ExtensionContext`. The bridge reads `~/.pi/agent/settings.json` (global) and `.pi/settings.json` (project, only when `ctx.isProjectTrusted()`), merges them (project overrides global, nested merge), and extracts its `"pi-action-bridge"` key. `settings.json` is **JSONC** (allows `//` comments) — strip comments before `JSON.parse`. Defaults (`platform: "auto"`, `auto_sync: true`) apply when the key is absent.
+> **The extension reads this itself.** `ExtensionContext` exposes no settings accessor (`docs/extensions.md`), so the bridge reads its own files directly: global always; project only behind `ctx.isProjectTrusted()`. Merge: project overrides global, nested merge (same semantics Pi applies to `settings.json`, `docs/settings.md`). The files are **JSONC** — strip `//` comments before `JSON.parse`. Defaults (`platform: "auto"`, `auto_sync: true`) apply when absent.
 
 ---
 
