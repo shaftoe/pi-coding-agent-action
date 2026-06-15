@@ -41,17 +41,20 @@
   "author": "Alexander Fortin",
   "license": "MIT",
   "dependencies": {
+    "@alexanderfortin/pi-action": "workspace:*",
+    "@alexanderfortin/pi-cli": "workspace:*",
     "@alexanderfortin/pi-orchestrator": "workspace:*",
-    "@alexanderfortin/pi-platform-github": "workspace:*"
+    "@alexanderfortin/pi-platform-github": "workspace:*",
+    "@earendil-works/pi-coding-agent": "^0.79.4"
   },
   "devDependencies": {
     "@alexanderfortin/semantic-release-keep-a-changelog": "^0.4.2",
-    "@earendil-works/pi-coding-agent": "^0.79.4",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "12.0.8",
     "@semantic-release/npm": "^13.1.5",
+    "@semantic-release/release-notes-generator": "^14.1.0",
     "@types/node": "^25.9.3",
     "@typescript-eslint/eslint-plugin": "^8.61.0",
     "@typescript-eslint/parser": "^8.61.0",
