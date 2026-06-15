@@ -44,7 +44,7 @@
   },
   "devDependencies": {
     "@alexanderfortin/semantic-release-keep-a-changelog": "^0.4.2",
-    "@earendil-works/pi-coding-agent": "^0.79.3",
+    "@earendil-works/pi-coding-agent": "^0.79.4",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^10.0.1",
