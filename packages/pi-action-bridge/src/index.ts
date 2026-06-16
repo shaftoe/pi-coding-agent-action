@@ -19,26 +19,18 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Bridge } from './bridge.js';
 import { getThreadToolFactory } from './tools/get-thread.js';
 import { getPRDiffToolFactory } from './tools/get-pr-diff.js';
+import { registerHandoffCommand } from './handoff.js';
 
 export default function piActionBridge(pi: ExtensionAPI): void {
-  // `/handoff` is registered at load (cheap, no I/O). Commands don't pollute
-  // the tool surface or the system prompt, so this is safe to do unconditionally
-  // — even in a non-forge repo the only cost is a `/handoff` entry in the
-  // command list, which fails clearly if invoked without a forge+token.
-  // Phase 3 replaces this stub with the full orchestration (constitution §2.1).
-  pi.registerCommand('handoff', {
-    description: 'Push branch, open/update PR, post a /pi handoff comment for CI (Phase 3 — stub)',
-    handler: async (_args, ctx) => {
-      ctx.ui.notify(
-        '/handoff is not implemented yet (Phase 3). See packages/pi-action-bridge/CONSTITUTION.md',
-        'info'
-      );
-    },
-  });
+  // The `/handoff` command needs a Bridge (provider + git + Octokit), which is
+  // only available after the `session_start` gate has run. So we defer
+  // registration: the gate registers `/handoff` once the bridge is live. In a
+  // non-forge / tokenless repo, `/handoff` is simply not registered (the user
+  // would get "unknown command" — cleaner than a stub that always errors).
 
   // The Q1/Option-C gate: detect forge + token at session start (real sessions
   // only — never `--list-models`/`--version`/print mode), build the provider if
-  // active, and (Phase 2) register the two read-only tools against it.
+  // active, and register the two read-only tools + the /handoff command.
   pi.on('session_start', async (_event, ctx) => {
     const bridge = await Bridge.create({
       cwd: ctx.cwd,
@@ -57,19 +49,15 @@ export default function piActionBridge(pi: ExtensionAPI): void {
     });
 
     if (!bridge) {
-      // Not a forge repo, unknown host, or no token — inert. No tools to
-      // register. This is the correct state for non-forge repos, tokenless
-      // shells, and `pi --list-models` (which doesn't fire session_start anyway).
       return;
     }
 
-    // Register the two read-only tools against the live provider. Source-
-    // verified (_refreshToolRegistry): tools registered at session_start are
-    // auto-activated and added to the system prompt's active tool set — no
-    // setActiveTools() call needed — and since session_start runs before
-    // before_agent_start, they're live for turn 1.
+    // Register the two read-only tools + the /handoff command against the
+    // live bridge. Source-verified (_refreshToolRegistry): tools registered at
+    // session_start are auto-active for turn 1.
     pi.registerTool(getThreadToolFactory(bridge));
     pi.registerTool(getPRDiffToolFactory(bridge));
+    registerHandoffCommand(pi, bridge);
 
     ctx.ui.notify(
       `pi-action-bridge: active on ${bridge.discovery.parsed.serverUrl} (${bridge.discovery.platformType}).`,

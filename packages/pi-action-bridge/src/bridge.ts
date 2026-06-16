@@ -184,6 +184,21 @@ export class Bridge {
   }
 
   /**
+   * Get the local git committer name (`git config user.name`), for the
+   * passive account-mismatch check (§2.1 step 10, Q3). Returns `undefined`
+   * on error or if unset.
+   */
+  async getLocalGitIdentity(): Promise<string | undefined> {
+    try {
+      const git = simpleGit(this.context.workspace);
+      const name = (await git.raw(['config', 'user.name'])).trim();
+      return name || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * Resolve the open PR linked to the current branch, if any.
    *
    * Used by the read-only tools (`get_thread`, `get_pr_diff`) as the default
