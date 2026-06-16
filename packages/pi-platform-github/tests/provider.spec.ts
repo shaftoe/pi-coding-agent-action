@@ -254,6 +254,20 @@ describe('apiBaseUrlFromServerUrl', () => {
     );
   });
 
+  test('returns /api/v3 for GHE hosts where github is a middle segment (github.company.internal)', () => {
+    // Regression: the old `.github.` substring check matched any host with
+    // `github` as an interior dotted segment, wrongly returning undefined
+    // (github.com default) for self-hosted GHE hosts like
+    // github.company.internal / github.mycompany.com. These must fall
+    // through to the /api/v3 GHE default.
+    expect(apiBaseUrlFromServerUrl('https://github.company.internal')).toBe(
+      'https://github.company.internal/api/v3'
+    );
+    expect(apiBaseUrlFromServerUrl('https://github.mycompany.com')).toBe(
+      'https://github.mycompany.com/api/v3'
+    );
+  });
+
   test('returns /api/v3 for unrecognized hosts (self-hosted GHE default)', () => {
     expect(apiBaseUrlFromServerUrl('https://git.company.internal')).toBe(
       'https://git.company.internal/api/v3'
@@ -280,6 +294,12 @@ describe('apiBaseUrlFromServerUrl', () => {
     expect(apiBaseUrlFromServerUrl('https://codeberg.org/')).toBe('https://codeberg.org/api/v1');
     expect(apiBaseUrlFromServerUrl('https://git.company.internal/')).toBe(
       'https://git.company.internal/api/v3'
+    );
+  });
+
+  test('throws when server URL is empty (aligned with detectPlatform)', () => {
+    expect(() => apiBaseUrlFromServerUrl('')).toThrow(
+      /apiBaseUrlFromServerUrl requires a server URL/
     );
   });
 });
