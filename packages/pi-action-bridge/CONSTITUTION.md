@@ -3,7 +3,7 @@
 > **Codename:** `pi-action-bridge` — bridging local TUI and CI/CD agent workflows
 > **Repository:** `pi-coding-agent-action` (monorepo)
 > **Date:** 2026-06-15
-> **Status:** Design v0.5 — Resolved decisions + verified SDK anchors; see §12 for open items
+> **Status:** Design v0.6 — Resolved decisions + verified SDK anchors (review pass 9 incorporated); see §12 for open items
 
 ---
 
@@ -27,13 +27,13 @@ These decisions are considered locked. Alternatives that were weighed and reject
 - **`/handoff` is a `pi.registerCommand` that orchestrates deterministically and delegates exactly one LLM step.** Its handler is an imperative TS function (`(args, ctx) => …`, `docs/extensions.md`):
 
   1. Parse `args` → `--steer "…"` and `-y`/`--yes` flags.
-  2. Guard `ctx.mode === "tui"` (needs `ctx.ui.confirm` / `ctx.ui.editor`).
+  2. Guard `ctx.mode === "tui"` (needs `ctx.ui.confirm` / `ctx.ui.editor`) **and** `ctx.model` is defined — `ExtensionContext.model` is `Model<any> | undefined` (`dist/core/extensions/types.d.ts`); the `handoff.ts` precedent guards both. If either fails, `ctx.ui.notify(…, "error")` and return.
   3. Dirty-tree check; if dirty, `ctx.ui.confirm(…)` how to proceed.
   4. Resolve branch → PR via git + GitHub API.
   5. Push branch (`simple-git`) — idempotent (skip if remote already has it).
   6. Create / update PR via Octokit — handle 401/403 (§2.3).
   7. Fetch diff via `provider.getPRDiff()`.
-  8. Gather session context: `ctx.sessionManager.getBranch()` → `convertToLlm` → `serializeConversation` (all exported from `@earendil-works/pi-coding-agent`).
+  8. Gather session context **compaction-aware.** `ctx.sessionManager.getBranch()` returns the *full lineage including pre-compaction entries* (`session-manager.js` walks `leafId`→root via `parentId`). Feeding that naively to `complete()` duplicates pre-compaction messages against the compaction summary — redundant, potentially contradictory, token-bloat. Use a compaction-boundary filter: either replicate `getHandoffMessages()` from `examples/extensions/handoff.ts` (keeps `[compaction, …entries from firstKeptEntryId onward]`), or call the SDK-exported `prepareBranchEntries(entries, tokenBudget)` (`@earendil-works/pi-coding-agent`) which is token-budgeted and compaction-aware. Then `convertToLlm` → `serializeConversation` (both exported).
   9. **One** one-shot model call — `complete()` from `@earendil-works/pi-ai`, authed via `ctx.modelRegistry.getApiKeyAndHeaders(ctx.model)`, fed the diff + serialized conversation + `--steer`, with a strict prompt that returns the `## Done` / `## Next` prose (and a PR title/body draft). Uses `ctx.model`.
   10. **Human-in-the-loop review** of the draft via `ctx.ui.editor("Review handoff", draft)` → returns edited text or `undefined` (cancel).
   11. Post: if `-y`/`--yes` or the user confirms the edit, post the `/pi` comment via `create_comment` (§4). On cancel, the push/PR already happened (harmless — idempotent on retry) but no comment is posted.
@@ -203,11 +203,11 @@ pi-action-bridge/
 
 An earlier draft proposed a `pi-forge-client` package exposing a platform-agnostic `ForgeClient` interface (a generic `request(path, options)`). Dropped:
 
-- **Octokit already is the cross-platform client.** GitHub, Codeberg, Forgejo, and Gitea all speak the same GitHub-compatible REST API; the only per-platform switch is Octokit's `baseUrl` (`/api/v3` for GHE vs `/api/v1` for Codeberg/Forgejo/Gitea) — already implemented by `pi-cli/src/octokit.ts` → `apiBaseUrlFromServerUrl`.
+- **Octokit already is the cross-platform client.** GitHub, Codeberg, Forgejo, and Gitea all speak the same GitHub-compatible REST API; the only per-platform switch is Octokit's `baseUrl` (`/api/v3` for GHE vs `/api/v1` for Codeberg/Forgejo/Gitea) — a small pure function `apiBaseUrlFromServerUrl(serverUrl)`, today implemented in `pi-cli/src/octokit.ts`. **`pi-cli` is `"private": true` and not a dependency of the bridge**, so that function is **reimplemented in the bridge** (mirroring the ~25-line reference), not imported. The same applies to `buildPlatformContext()` (`pi-cli/src/context.ts`, ~20 lines) — mirrored, not imported. `detectPlatform()` *is* importable (exported from `@alexanderfortin/pi-platform-github`, L130). Whether to instead **promote** `apiBaseUrlFromServerUrl`/`buildPlatformContext` into `pi-platform-github` (DRY, esp. since the baseUrl logic is platform-detection-adjacent to `detectPlatform`) is an open design choice — §12 Q9.
 - **The generic `request()` signature threw away Octokit's typed `.rest.*` methods** (`issues.get`, `pulls.get`, `pulls.listReviewComments`, diff mediaType). Re-exposing the typed surface would make `ForgeClient` a re-skin of Octokit — a fictional abstraction.
 - Honors §2.9 (duplication over forced abstraction).
 
-**Instead:** the bridge depends on `@alexanderfortin/pi-platform-github` and calls `createGitHubPlatformProvider()` with a **synthetic `PlatformContext`** derived from the git remote (repo owner/name, server URL) — the exact pattern `pi-cli/src/context.ts` → `buildPlatformContext()` uses today.
+**Instead:** the bridge depends on `@alexanderfortin/pi-platform-github` and calls `createGitHubPlatformProvider()` with a **synthetic `PlatformContext`** derived from the git remote (repo owner/name, server URL) — mirroring the pattern `pi-cli/src/context.ts` → `buildPlatformContext()` uses today (reimplemented locally since `pi-cli` is private — see the bullet above and §12 Q9).
 
 The provider's CI-oriented methods (`addReaction`, `createFinalComment`, `getPrompt`, `getStartTime`) **no-op** when the synthetic context carries `payload: {}`, a falsy `issue.number`, and a sentinel `eventName` (documented in `pi-cli/src/context.ts`). So the bridge reuses the provider for reads (`getIssueOrPRThread`, `getPRDiff`) without dragging in CI lifecycle behavior.
 
@@ -308,6 +308,8 @@ On the **first turn** — via the `before_agent_start` event with a one-shot "al
 
 The earlier plan (extract a `pi-forge-client` package, refactor `pi-platform-github` to consume it) is **dropped** — see §3.4. The bridge reuses the existing provider unchanged.
 
+> **Scope caveat — "no refactoring" means "not forced to," not "nothing duplicated."** The bridge *reimplements* two small pure helpers from private `pi-cli` because it cannot import them: `apiBaseUrlFromServerUrl()` (~25 lines, serverUrl→API baseUrl) and `buildPlatformContext()` (~20 lines, synthetic `PlatformContext`). This is consistent with §2.9 (duplication over forced abstraction) and does not contradict "no refactoring required" — no change to `pi-platform-github`/`pi-orchestrator` is *necessary*. The optional alternative — promoting those two helpers into `pi-platform-github` (where `detectPlatform` already lives) — is a DRY improvement tracked as §12 Q9, not a blocker.
+
 The only prerequisite is confirming the provider's CI-only methods no-op against a synthetic `PlatformContext` — already true today (documented in `pi-cli/src/context.ts`). Verified for reads: `getIssueOrPRThread` resolves `owner`/`repo`/`issue_number` from `params ?? deps.context.*` (so the bridge passes explicit values and the synthetic context's zeroed `issue.number` is never read); `getPRDiff(owner, repo, pullNumber, ignoreFiles?)` takes explicit args. If a method turns out *not* to no-op cleanly from the local context, the fix is a small guard in `pi-platform-github` (widening an existing falsy-check), not a package extraction.
 
 ---
@@ -340,7 +342,7 @@ The only prerequisite is confirming the provider's CI-only methods no-op against
 - [ ] Tests for session enrichment
 
 ### Phase 5: Codeberg Support
-- [ ] Codeberg: Octokit `baseUrl` swap (`/api/v1`) — reuses existing `detectPlatform` + `apiBaseUrlFromServerUrl`
+- [ ] Codeberg: Octokit `baseUrl` swap (`/api/v1`) — `detectPlatform` imported from `pi-platform-github`; `apiBaseUrlFromServerUrl` reimplemented locally (or promoted per §12 Q9)
 - [ ] Platform detection for Codeberg (already handled by `detectPlatform`)
 - [ ] Tests for Codeberg support
 
@@ -403,6 +405,7 @@ Resolved through v0.5; the following are still open and block implementation of 
 - **Q6 — PR body content.** `/handoff` creates the PR. Is the body a short pointer to the handoff comment, a full description drafted by the same `complete()` call, or a minimal template? Currently unspecified.
 - **Q7 — Dirty-tree UX options (Phase 3).** `ctx.ui.confirm("Working tree dirty", …)` — what are the choices? (commit / stash / abort / proceed-anyway?) And does `/handoff` offer to run the commit/stash, or just refuse until clean?
 - **Q8 — Summary model (Phase 3).** `complete()` uses `ctx.model`. Defer pinning a cheaper model until cost feedback, or pin now?
+- **Q9 — Promote `apiBaseUrlFromServerUrl` / `buildPlatformContext` into `pi-platform-github`? (cross-cuts Phase 1 & 5.)** Today they live in private `pi-cli`; the bridge must either reimplement them (~45 lines total, honors §2.9) or a small PR promotes them into `pi-platform-github` (where `detectPlatform` already lives — the baseUrl logic is platform-detection-adjacent, so the DRY case is strongest for `apiBaseUrlFromServerUrl`; `buildPlatformContext` is more of a frontend concern, duplication more defensible). Reimplement now and revisit on the third consumer, or promote now?
 
 ---
 
