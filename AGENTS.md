@@ -27,6 +27,11 @@ Monorepo managed with Bun workspaces (`packages/*`):
   - `src/commands/run.ts` — wires argv → token → Octokit + provider → `ActionOrchestrator`.
   - `src/{octokit,context,auth,config}.ts` — CLI-side Octokit/context/token/config construction.
 
+- **`packages/pi-action-bridge`** (`@alexanderfortin/pi-action-bridge`) — Pi TUI extension bridging local sessions and the `pi-coding-agent-action` CI agent. GitHub threads (issues, PRs, reviews) are the shared state machine. Depends on `pi-orchestrator` + `pi-platform-github`; the agent is read-only (two tools, `get_thread`/`get_pr_diff`) and `/handoff` is the sole write path. See `packages/pi-action-bridge/CONSTITUTION.md` for the full design + decision log.
+  - `src/index.ts` — extension entry point: async factory registers `/handoff` + a `session_start` gate (Q1/Option C: detect forge + token, build provider, go inert otherwise).
+  - `src/bridge.ts` — `Bridge` class (git discovery via `simple-git` + synthetic `PlatformContext` + `createGitHubPlatformProvider`); inlines `buildPlatformContext` + Octokit construction (pi-cli is private); token resolution (`GITHUB_TOKEN` → `GH_TOKEN` → `gh auth token`).
+  - `src/detect.ts` — pure remote-URL → server URL / owner / repo normalization + `detectPlatformFromRemote`.
+
 - **`tests/`** (root) — E2E tests (`tests/e2e/`) plus their local fixtures (`tests/e2e/fixtures/`).
 - **`scripts/`** (root) — Repo-level tooling (changelog, version sync, readme deps).
 
