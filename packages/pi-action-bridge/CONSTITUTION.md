@@ -1,15 +1,15 @@
 # Pi Action Extension — Constitution
 
-> **Codename:** `pi-action-bridge` — bridging local CLI and CI/CD agent workflows
+> **Codename:** `pi-action-bridge` — bridging local TUI and CI/CD agent workflows
 > **Repository:** `pi-coding-agent-action` (monorepo)
-> **Date:** 2026-06-09
-> **Status:** Design v0.3 — Reviewed (incorporates PR #295 review pass 6)
+> **Date:** 2026-06-15
+> **Status:** Design v0.5 — Resolved decisions + verified SDK anchors; see §12 for open items
 
 ---
 
 ## 1. Vision
 
-A Pi extension that makes **GitHub threads (issues, PRs, reviews) the persistent memory and coordination layer** between a developer's local Pi CLI sessions and the remote Pi CI/CD agent (running via `pi-coding-agent-action`).
+A Pi extension that makes **GitHub threads (issues, PRs, reviews) the persistent memory and coordination layer** between a developer's local Pi TUI sessions and the remote Pi CI/CD agent (running via `pi-coding-agent-action`).
 
 The developer should be able to **start work locally, hand off to CI, pick it back up on mobile, and return to the terminal** — all without losing context. GitHub becomes the shared state machine; the extension is the local bridge.
 
@@ -19,14 +19,36 @@ The developer should be able to **start work locally, hand off to CI, pick it ba
 
 ## 2. Core Design Decisions (Resolved)
 
-These decisions were reached through a structured grilling session and are considered locked.
+These decisions are considered locked. Alternatives that were weighed and rejected carry a short rationale so they are not re-litigated.
 
-### 2.1 Agent Model: Skills Steer, Tools Execute
+### 2.1 Agent Model: Commands Steer, Tools Execute
 
-- **Skills are the steering wheel, tools are the engine.** The human drives via slash-skills (`/skill:handoff`, `/skill:sync`, `/skill:review`). The agent acts autonomously for context injection and when using tools during a session.
-- `/skill:handoff` is **agent-driven** — the agent reads the diff, summarizes what's done, proposes next steps. Not a dumb script.
-- There is **no imperative `commands/` directory**. Each skill is a SKILL.md document (Markdown) that instructs the agent; the tools are the actual implementation. Skills are invoked per the [Agent Skills standard](https://agentskills.io/specification) as `/skill:<name>` (see `docs/skills.md`). Arguments after the command are appended as free `User: <args>` text — the agent interprets them natively (e.g. `/skill:handoff --steer "focus on error handling"`). `enableSkillCommands` must be on (`"enableSkillCommands": true` in `settings.json` — per the Pi SDK `docs/skills.md`; toggle via `/settings`). `pi.registerCommand()` and `ctx.sendUserMessage()`, referenced in the alternative-considered note below, are likewise SDK `ExtensionAPI` methods (`docs/extensions.md`) — not repo-local constructs.
-- **Alternative considered (not adopted for MVP):** register bare `/handoff` via `pi.registerCommand()`, parse `--steer` in the handler, then `ctx.sendUserMessage()` to inject the skill content and hand off to the agent. Gives a cleaner `/handoff` UX with real arg parsing, but adds a command layer that partly reinvents skill loading. **Escalation trigger:** revisit if `/skill:handoff` feels too verbose in practice.
+- **Commands are the steering wheel, tools are the engine.** The human drives via a single command, `/handoff`. The agent acts autonomously for context injection (§6) and whenever the LLM invokes tools during a normal session.
+- **`/handoff` is a `pi.registerCommand` that orchestrates deterministically and delegates exactly one LLM step.** Its handler is an imperative TS function (`(args, ctx) => …`, `docs/extensions.md`):
+
+  1. Parse `args` → `--steer "…"` and `-y`/`--yes` flags.
+  2. Guard `ctx.mode === "tui"` (needs `ctx.ui.confirm` / `ctx.ui.editor`).
+  3. Dirty-tree check; if dirty, `ctx.ui.confirm(…)` how to proceed.
+  4. Resolve branch → PR via git + GitHub API.
+  5. Push branch (`simple-git`) — idempotent (skip if remote already has it).
+  6. Create / update PR via Octokit — handle 401/403 (§2.3).
+  7. Fetch diff via `provider.getPRDiff()`.
+  8. Gather session context: `ctx.sessionManager.getBranch()` → `convertToLlm` → `serializeConversation` (all exported from `@earendil-works/pi-coding-agent`).
+  9. **One** one-shot model call — `complete()` from `@earendil-works/pi-ai`, authed via `ctx.modelRegistry.getApiKeyAndHeaders(ctx.model)`, fed the diff + serialized conversation + `--steer`, with a strict prompt that returns the `## Done` / `## Next` prose (and a PR title/body draft). Uses `ctx.model`.
+  10. **Human-in-the-loop review** of the draft via `ctx.ui.editor("Review handoff", draft)` → returns edited text or `undefined` (cancel).
+  11. Post: if `-y`/`--yes` or the user confirms the edit, post the `/pi` comment via `create_comment` (§4). On cancel, the push/PR already happened (harmless — idempotent on retry) but no comment is posted.
+
+  The only LLM-authored content is the Done/Next prose (and the PR title/body draft). Everything order-critical — push/PR/post ordering, idempotent retry, the format contract the CI agent depends on — is TS. **Precedent:** `examples/extensions/handoff.ts` in the Pi SDK is exactly this shape (command orchestrates + one `complete()` + `ctx.ui.editor` review + `ctx.ui.custom` loader).
+
+- **Why a command, not a skill.** The deciding axis: a command runs an imperative `(args, ctx)` handler you control deterministically; a skill expands a SKILL.md into the user message and lets the LLM *judge* whether/when to act and whether to honor a format. `/handoff` has order-critical side effects (push → PR → comment) and a format contract the CI action depends on — delegating those to LLM judgment is fragile. A command also gets real arg parsing, dialog UX (`ctx.ui.confirm`, `ctx.ui.editor`), and requires **zero setup** (no `enableSkillCommands: true` in `settings.json`).
+
+- **`--steer` is parsed by the command** from `args` and woven into the `complete()` prompt's `## Next` section (not a separate heading — §2.5). It never reaches the session agent; `pi.sendUserMessage()` is not used by `/handoff`.
+
+- **Dropped: `/sync`.** Redundant. §6 auto-injects PR context on turn 1; mid-session refresh is "what's new on the PR?" in natural language → the agent calls `get_thread`. No dedicated trigger.
+
+- **Dropped: `/review`.** Fetching review comments is "show me the PR reviews" in natural language → `get_thread`. Not in the MVP. (A thin `/review` render-command is a deferred nice-to-have.)
+
+- **API note (correctness, not load-bearing).** `pi.sendUserMessage()` lives on `ExtensionAPI` (`pi`), not on `ExtensionCommandContext` (the command handler's `ctx`); it also exists on `ReplacedSessionContext`, but only inside `withSession()` callbacks. Verified in `dist/core/extensions/types.d.ts`. `/handoff` does not call it — recorded to prevent a future copy-paste from the docs landing on the wrong receiver.
 
 ### 2.2 Statelessness
 
@@ -35,19 +57,20 @@ These decisions were reached through a structured grilling session and are consi
 
 ### 2.3 Authentication (Split)
 
-- **Git operations** (push, branch detection, remote queries via `simple-git`): Uses the developer's existing git credentials — SSH keys, macOS Keychain, credential helpers, etc. No env var needed.
-- **Forge API operations** (threads, diffs, comments, PR creation via Octokit): Requires `GITHUB_TOKEN` or `GH_TOKEN` env var. Fail fast if missing. No fallbacks, no `gh` auth piggybacking, no first-run flows.
-- The extension checks for the token **eagerly, at extension load** (the async factory), and throws a clear error if absent — before any skill can execute. This makes the token check **best-effort at load time**: at the instant of load, the push-succeeds-but-token-missing race (§2.3 split auth) cannot reach `/skill:handoff`. In a long-lived TUI session the token can later become invalid (a short-lived `GITHUB_TOKEN` expires, a credential helper rotates it, the developer's git creds change), so `/skill:handoff` and `create_pull_request` must handle **401/403 from `octokit.pulls.create`** with a clear "token may have expired — re-run after refreshing `GITHUB_TOKEN`" message rather than assuming the load-time check guarantees freshness. If push later succeeds but PR creation fails for a *non-token* reason (network, permissions, branch protection), the pushed branch is a harmless feature branch — re-run `/skill:handoff` (idempotent: detects the existing remote branch, skips push, retries PR create) or fall back to `gh pr create`.
+- **Git operations** (push, branch detection, remote queries via `simple-git`): the developer's existing git credentials — SSH keys, macOS Keychain, credential helpers. No env var.
+- **Forge API operations** (threads, diffs, comments, PR creation via Octokit): requires `GITHUB_TOKEN` or `GH_TOKEN`. Fail fast if missing. No `gh` auth piggybacking, no first-run flows. (Whether `gh auth status` may be consulted as a token *discovery* source before erroring is an open item — §12.)
+- **Token-check timing: OPEN (§12, Q1).** An earlier draft mandated an eager throw in the async factory. Verified against `dist/core/extensions/loader.js` (`loadExtension`, L296): a factory throw is **contained per-extension** — it returns `{ extension: null, error }` collected into `LoadExtensionsResult.errors[]` and does **not** crash the `pi` session. But eager-at-load is still rejected: it would disable the bridge (and emit `Failed to load extension: …`) in every non-Forge / tokenless repo, and factories "may run in invocations that never start a session" (`docs/extensions.md`) — so it slows `pi --list-models` / `--version` too. The leading alternative (Q1, Option C) is a `session_start`-gated design: register the command cheaply at load; in `session_start` (which fires only for real sessions) do the one git-remote + token check and dynamically `pi.registerTool()` the four tools only when remote-is-Forge ∧ token-present. **Decision pending.**
+- **401/403 handling is unconditional, regardless of where the check lives.** In a long-lived TUI session a short-lived `GITHUB_TOKEN` can expire after the check passed, so `/handoff` and `create_pull_request` must catch **401/403 from `octokit.pulls.create`** with a clear "token may have expired — re-run after refreshing `GITHUB_TOKEN`" message. If push succeeds but PR creation fails for a *non-token* reason (network, permissions, branch protection), the pushed branch is a harmless feature branch — re-run `/handoff` (idempotent: detects the existing remote branch, skips push, retries PR create) or fall back to `gh pr create`.
 
 ### 2.4 No `gh` CLI Dependency
 
-- **Native libraries only.** Octokit for GitHub API calls, `simple-git` for git operations.
-- `simple-git` provides a TypeScript API over the real git binary. Push auth just works via the developer's existing credential helpers.
-- **System requirement:** The git binary must be installed and available on PATH. This is documented as a peer dependency — the target audience is developers, so git is expected to be present.
+- **Native libraries only.** Octokit for the GitHub-compatible REST API, `simple-git` for git operations.
+- `simple-git` is a TypeScript API over the real git binary. Push auth just works via the developer's existing credential helpers.
+- **System requirement:** the `git` binary must be installed and on PATH. Documented as a peer dependency — the audience is developers, so git is assumed present.
 
 ### 2.5 Handoff Format
 
-- **Structured prose — no hidden payload.** The handoff is a normal `/pi` comment whose body uses two Markdown headings (`## Done`, `## Next`) to convey what's been completed and what remains:
+- **Structured prose — no hidden payload.** The handoff is a normal `/pi` comment whose body uses two Markdown headings (`## Done`, `## Next`):
 
 ```markdown
 /pi 🤖 Handoff from local session
@@ -60,35 +83,33 @@ These decisions were reached through a structured grilling session and are consi
 add tests — focus on error handling coverage
 ```
 
-- **Why two headings, not three.** An earlier draft used `## Done` / `## Next` / `## Steering` (mirroring the original JSON payload's `done` / `next` / `steer` fields). The distinction between "Next" (what to do) and "Steering" (how to do it) is artificial for an LLM consumer: the CI agent reads "add tests, focus on error handling" equally well whether it's under one heading or two. The real difference was *provenance* (tasks inferred by the local agent vs. guidance supplied by the user via `--steer`), not content type — and the CI agent doesn't care who said what. Collapsing them into a single `## Next` section also removes a decision point for the composing agent ("which heading does this go in?") and follows the agent-native principle already established in this section: if a structured JSON blob gave an LLM nothing prose doesn't, then splitting task-list from approach-guidance gives an LLM nothing a single heading doesn't. The `--steer` argument remains valuable as an *input* to the local agent — it just gets woven into the Next section naturally.
-- **Why prose, not a hidden JSON payload.** The earlier design embedded a JSON blob in an HTML comment (`<!-- pi-handoff-payload ... -->`). That does not work: `pi-platform-github`'s `sanitizeContent()` strips HTML comments (defense-in-depth against prompt injection) before the body reaches the CI agent — via `getPrompt()` and via `get_thread`/`transformComment()` alike. Markdown headings, lists, bold, and emoji survive sanitization; HTML comments do not.
-- **Agent-native.** §2.1 makes `/skill:handoff` agent-driven. The local agent fills the prose headings; the CI agent (an LLM) reads them natively. A structured JSON blob gave an LLM nothing prose doesn't.
+- **Why two headings, not three.** An earlier draft had `## Done` / `## Next` / `## Steering`. The distinction between "Next" (what to do) and "Steering" (how to do it) is artificial for an LLM consumer, and the real difference was *provenance* (agent-inferred tasks vs. user `--steer`), which the CI agent does not care about. Collapsing to a single `## Next` also removes a decision point for the drafting model. `--steer` remains valuable as *input* to the `complete()` call; it is woven into `## Next` naturally.
+- **Why prose, not a hidden JSON payload.** An earlier design embedded a JSON blob in an HTML comment (`<!-- pi-handoff-payload … -->`). That does not work: `pi-platform-github`'s `sanitizeContent()` strips HTML comments (defense-in-depth against prompt injection) before the body reaches the CI agent — via `getPrompt()` and via thread reads alike. Markdown headings, lists, bold, and emoji survive; HTML comments do not.
+- **Why prose, not a fenced ```` ```handoff ```` block.** A fenced block also survives sanitization and is machine-scan-friendly, but duplicates the prose. Pure headings are the default; fall back to a fenced block only if a future non-LLM consumer needs parseable structure.
 - **No version field.** The `"v": 1` forward-compat field is dropped. The format is natural language; the CI agent adapts to whatever structure it reads. Revisit only if a non-LLM consumer ever needs a schema (YAGNI today).
 - **`/pi` prefix preserved** so the CI action picks it up as a normal invocation — **zero changes to the action**.
-- **Variant not adopted:** a fenced ```` ```handoff ```` code block also survives sanitization and is machine-scan-friendly, but duplicates the prose. Pure headings are the default; fall back to a fenced block only if a future non-LLM consumer needs parseable structure.
 
 ### 2.6 No CI Observation Layer
 
-- **Dropped `get_ci_status`, `get_ci_logs`, `/ci` skill, `triggerWorkflow`.** CI results come through the thread as comments — the action already writes them back. Unless doing specific debugging, action job runs are not interesting to the local agent.
+- **No `get_ci_status`, `get_ci_logs`, `/ci`, `triggerWorkflow`.** CI results come back through the thread as comments — the action already writes them. Unless doing specific debugging, action job runs are not interesting to the local agent.
 - The bridge reads CI state the same way it reads everything else: through `get_thread`.
 
 ### 2.7 Write Operations: Minimal Surface
 
-- **Dropped `create_review`.** The local agent reads reviews (via `get_thread`), doesn't write them. That's the CI action's job.
-- **Dropped `steer_ci` as a separate tool.** Steering is just `create_comment` with a `/pi` prefix.
-- **`create_comment` is first-class, not trivial.** It's the bridge's primary write path and the channel by which steering + handoff reach CI. The bridge owns it outright (a direct Octokit call, not shared) — `pi-platform-github`'s `createFinalComment` is CI-coupled (dispatches on `payload.comment`, appends an action-run footer) and not reusable locally. `create_comment` supports three modes (see §4): **plain** (free-form Markdown), **steering** (`/pi <instruction>`), and **handoff** (`/pi` + structured-prose headings, §2.5). All are top-level issue/PR comments via `octokit.rest.issues.createComment`; the only shared convention is the `/pi` trigger prefix.
+- **No `create_review`.** The local agent reads reviews (via `get_thread`), doesn't write them. That's the CI action's job.
+- **No separate `steer_ci` tool.** Steering is `create_comment` with a `/pi` prefix.
+- **`create_comment` is first-class, not trivial.** It's the bridge's primary write path and the channel by which steering + handoff reach CI. The bridge owns it outright (a direct Octokit call, not shared): `pi-platform-github`'s `createFinalComment` is CI-coupled (dispatches on `payload.comment`, appends an action-run footer) and is not reusable locally. `create_comment` supports three modes (§4): **plain** (free-form Markdown), **steering** (`/pi <instruction>`), and **handoff** (`/pi` + structured-prose headings, §2.5). All are top-level issue/PR comments via `octokit.rest.issues.createComment`; the only shared convention is the `/pi` trigger prefix. (Whether `/handoff` is the sole writer of comments and "plain" mode is dropped from the tool surface is an open item — §12.)
 
 ### 2.8 Session Enrichment
 
-- On the **first turn** (`before_agent_start`, with a one-shot guard), if the current branch is linked to a PR, **auto-inject PR metadata + last 3-5 recent comments** as a persistent session message.
-- (Not `session_start`: that event has no message-injection return shape and no pending turn to inject into — see §6.)
+- On the **first turn** (`before_agent_start`, with a one-shot guard), if the current branch is linked to a PR, **auto-inject PR metadata + recent comments** as a persistent session message.
 - The agent gets immediate awareness of current state without full history. If it needs more, `get_thread` is available.
-- No state tracking needed — just "most recent N comments."
-- **One-shot guard:** a closure-scoped boolean set during the first `before_agent_start` invocation; it resets naturally when a new session / extension instance is created (consistent with §2.2 statelessness — it does not persist across sessions).
+- No state tracking — just "most recent N comments."
+- **One-shot guard:** a closure-scoped boolean set during the first `before_agent_start`; it resets when a new session / extension instance is created (consistent with §2.2).
 
 ### 2.9 Duplication Over Forced Abstraction
 
-- The CI action and the bridge have **different `createPullRequest` implementations**. The CI action uses the Git Data API (blobs, trees, refs) because it has no real checkout. The bridge uses `simple-git` push + `octokit.pulls.create`. That's fine — no forced sharing where the workflows are genuinely different.
+- The CI action and the bridge have **different `createPullRequest` implementations**. The CI action uses the Git Data API (blobs, trees, refs) because it has no real checkout. The bridge uses `simple-git` push + `octokit.pulls.create`. No forced sharing where the workflows are genuinely different.
 - Shared code only where it's genuinely shared: thread fetching, diff fetching, types, pure helpers.
 
 ---
@@ -100,25 +121,25 @@ add tests — focus on error handling coverage
 **The bridge is a Pi TUI extension.** It loads into `@earendil-works/pi-coding-agent` (the `pi` binary) via `pi install` (§3.7) and runs in the developer's interactive session. It does **not** run inside `pi-cli` or `pi-action`:
 
 - **`pi-action`** (GitHub Action) has no local checkout and no developer at a keyboard — it already *is* the CI agent the bridge hands off *to*. Loading the bridge there would be circular.
-- **`pi-cli`** is a proof-of-concept headless client (per `AGENTS.md`) that wires a synthetic `PlatformContext` for one-shot prompts; it is not a Pi extension host and does not load installed extensions.
+- **`pi-cli`** is a proof-of-concept headless client (`AGENTS.md`) that wires a synthetic `PlatformContext` for one-shot prompts; it is not a Pi extension host and does not load installed extensions.
 
-> **This resolves the tool-name collision outright.** `createToolsFactory()` (`pi-orchestrator/src/pi/tools/index.ts`) is the only code that registers `get_pr_diff`, `create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`, `create_pull_request_review`, `get_ci_status`, and `get_workflow_run_logs`. That factory is wired in **exclusively** by `buildResourceLoaderOptions()` (`pi-orchestrator/src/pi/resource-loader.ts`), consumed only by `pi-cli` and `pi-action` — never by the Pi TUI. The TUI's built-in tool surface is `bash` / `read` / `edit` / `write` / `grep` / `find` / `ls` plus whatever installed extensions register. So when the bridge registers its own `get_thread`, `get_pr_diff`, `create_comment`, `create_pull_request` (§4), there is **no collision** — those names are simply not present in the TUI runtime.
+> **This resolves the tool-name collision outright.** `createToolsFactory()` (`pi-orchestrator/src/pi/tools/index.ts`) is the only code that registers `get_pr_diff`, `create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`, `create_pull_request_review`, `get_ci_status`, `get_workflow_run_logs`. That factory is wired in **exclusively** by `buildResourceLoaderOptions()` (`pi-orchestrator/src/pi/resource-loader.ts`), consumed only by `pi-cli` and `pi-action` — never by the Pi TUI. The TUI's built-in tool surface is `bash` / `read` / `edit` / `write` / `grep` / `find` / `ls` plus whatever installed extensions register. So when the bridge registers its own `get_thread`, `get_pr_diff`, `create_comment`, `create_pull_request` (§4), there is **no collision** — those names are not present in the TUI runtime.
 
-> **The bridge must not call `createToolsFactory()`** nor depend on `pi-orchestrator`'s tool factories. It registers its own thin wrappers over the `pi-platform-github` provider (reads) and direct Octokit / `simple-git` (writes), per §2.7 / §2.9. Pulling in the orchestrator's tool layer would reintroduce the CI lifecycle coupling the §3.x reuse design explicitly avoids.
+> **The bridge must not call `createToolsFactory()`** nor depend on `pi-orchestrator`'s tool factories. It registers its own thin wrappers over the `pi-platform-github` provider (reads) and direct Octokit / `simple-git` (writes), per §2.7 / §2.9. (The bridge does transitively depend on `pi-orchestrator` via `pi-platform-github` — that's fine; the prohibition is on the *tool factories*.) Pulling in the orchestrator's tool layer would reintroduce the CI lifecycle coupling the §3.x reuse design explicitly avoids.
 
 ### 3.2 Layer Diagram
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   Pi CLI (local)                      │
+│                   Pi TUI (local)                      │
 │  ┌─────────────────────────────────────────────────┐ │
 │  │            pi-action-bridge Extension            │ │
 │  │                                                  │ │
 │  │  ┌──────────────────────┐  ┌──────────────────┐ │ │
-│  │  │  Bridge Class        │  │    Skills        │ │ │
+│  │  │  Bridge Class        │  │    Command       │ │ │
 │  │  │  - git discovery     │  │  /handoff        │ │ │
-│  │  │  - Octokit (direct)  │  │  /sync           │ │ │
-│  │  │  - session enrich    │  │  /review         │ │ │
+│  │  │  - Octokit (direct)  │  │  (--steer, -y)   │ │ │
+│  │  │  - session enrich    │  │                  │ │ │
 │  │  └──────────┬───────────┘  └──────────────────┘ │ │
 │  │             │                                    │ │
 │  │  ┌──────────▼───────────────────────────────────┐│ │
@@ -142,19 +163,20 @@ add tests — focus on error handling coverage
 └─────────────────────────────────────────────────────┘
 ```
 
-> **Skill names in the diagram are abbreviated** for space — the canonical invocation syntax is `/skill:handoff`, `/skill:sync`, `/skill:review` (§2.1, §5).
+> **`/handoff` is a `pi.registerCommand`** (§2.1, §5), not a skill. `/sync` and `/review` were dropped — their jobs are covered by §6 auto-injection + `get_thread` in natural language.
 
 ### 3.3 Package Structure
 
 ```
 pi-action-bridge/
-├── package.json          # npm metadata + Pi manifest ("pi": { extensions, skills }) — see §3.7
+├── package.json          # npm metadata + Pi manifest ("pi": { extensions }) — see §3.7
 ├── tsconfig.json
 ├── src/
-│   ├── index.ts          # Extension entry point
+│   ├── index.ts          # Extension entry point (async factory)
 │   ├── bridge.ts         # Bridge class: git discovery → synth PlatformContext + provider + Octokit
 │   ├── context.ts        # Build synthetic PlatformContext from git remote (mirrors pi-cli)
 │   ├── detect.ts         # Normalize git remote → server URL; delegate to detectPlatform()
+│   ├── handoff.ts        # /handoff command: orchestration + complete() + HITL review
 │   ├── tools/
 │   │   ├── get-thread.ts       # Wraps provider.getIssueOrPRThread() (issue_number from git/PR)
 │   │   ├── get-pr-diff.ts      # Wraps provider.getPRDiff()
@@ -164,6 +186,7 @@ pi-action-bridge/
 │       └── session-enrichment.ts  # Auto-inject PR context on first turn (before_agent_start)
 ├── tests/
 │   ├── bridge.spec.ts
+│   ├── handoff.spec.ts
 │   ├── platform/
 │   │   └── detect.spec.ts
 │   └── tools/
@@ -171,38 +194,36 @@ pi-action-bridge/
 │       ├── get-pr-diff.spec.ts
 │       ├── create-comment.spec.ts
 │       └── create-pull-request.spec.ts
-├── skills/
-│   ├── handoff.md        # /handoff — agent-driven push + PR + handoff comment
-│   ├── sync.md           # /sync — pull thread context into session
-│   └── review.md         # /review — fetch review comments for addressing
 └── README.md
 ```
 
+> No `skills/` directory and no `"skills"` manifest entry — the extension ships only the command and tools.
+
 ### 3.4 No new shared package — reuse `pi-platform-github`
 
-An earlier draft proposed a `pi-forge-client` package exposing a platform-agnostic `ForgeClient` interface (a generic `request(path, options)`). That abstraction was **dropped** during review:
+An earlier draft proposed a `pi-forge-client` package exposing a platform-agnostic `ForgeClient` interface (a generic `request(path, options)`). Dropped:
 
 - **Octokit already is the cross-platform client.** GitHub, Codeberg, Forgejo, and Gitea all speak the same GitHub-compatible REST API; the only per-platform switch is Octokit's `baseUrl` (`/api/v3` for GHE vs `/api/v1` for Codeberg/Forgejo/Gitea) — already implemented by `pi-cli/src/octokit.ts` → `apiBaseUrlFromServerUrl`.
-- **The generic `request()` signature threw away Octokit's typed `.rest.*` methods** (`issues.get`, `pulls.get`, `pulls.listReviewComments`, `pulls.get` w/ diff mediaType). Re-exposing the typed surface would make `ForgeClient` a re-skin of Octokit — a fictional abstraction.
-- **Honors §2.9** (duplication over forced abstraction).
+- **The generic `request()` signature threw away Octokit's typed `.rest.*` methods** (`issues.get`, `pulls.get`, `pulls.listReviewComments`, diff mediaType). Re-exposing the typed surface would make `ForgeClient` a re-skin of Octokit — a fictional abstraction.
+- Honors §2.9 (duplication over forced abstraction).
 
 **Instead:** the bridge depends on `@alexanderfortin/pi-platform-github` and calls `createGitHubPlatformProvider()` with a **synthetic `PlatformContext`** derived from the git remote (repo owner/name, server URL) — the exact pattern `pi-cli/src/context.ts` → `buildPlatformContext()` uses today.
 
-The provider's CI-oriented methods (`addReaction`, `createFinalComment`, `getPrompt`, `getStartTime`) already **no-op** when the synthetic context carries `payload: {}`, a falsy `issue.number`, and a sentinel `eventName` (documented in `pi-cli/src/context.ts`). So the bridge reuses the provider for reads (`getIssueOrPRThread`, `getPRDiff`) without dragging in CI lifecycle behavior.
+The provider's CI-oriented methods (`addReaction`, `createFinalComment`, `getPrompt`, `getStartTime`) **no-op** when the synthetic context carries `payload: {}`, a falsy `issue.number`, and a sentinel `eventName` (documented in `pi-cli/src/context.ts`). So the bridge reuses the provider for reads (`getIssueOrPRThread`, `getPRDiff`) without dragging in CI lifecycle behavior.
 
-**Bridge-specific writes** (`create_comment`, `create_pull_request`) stay in the bridge as direct Octokit / `simple-git` calls — already the design per §2.7 / §2.9.
+**Bridge-specific writes** (`create_comment`, `create_pull_request`) stay in the bridge as direct Octokit / `simple-git` calls — per §2.7 / §2.9.
 
 **Consequence:** no §7 extraction, no Phase 0, no new vocabulary ("forge"). One client concept (`PlatformProvider`), one noun ("platform").
 
 ### 3.5 Bridge Class
 
 A single class (no interface hierarchy) that composes:
-- **Git discovery** via `simple-git` — detect repo, branch, resolve branch → PR number
-- **Platform API** via `pi-platform-github`'s `createGitHubPlatformProvider()` with a synthetic `PlatformContext` — thread fetching (`getIssueOrPRThread`), diff fetching (`getPRDiff`)
-- **Direct Octokit** — `create_comment`, `create_pull_request` (bridge-specific writes per §2.7 / §2.9)
-- **Session enrichment** — auto-inject context on the first turn (`before_agent_start`)
+- **Git discovery** via `simple-git` — detect repo, branch, resolve branch → PR number.
+- **Platform API** via `pi-platform-github`'s `createGitHubPlatformProvider()` with a synthetic `PlatformContext` — thread fetching (`getIssueOrPRThread`), diff fetching (`getPRDiff`).
+- **Direct Octokit** — `create_comment`, `create_pull_request` (bridge-specific writes per §2.7 / §2.9).
+- **Session enrichment** — auto-inject context on the first turn (`before_agent_start`).
 
-> **Note:** The bridge *uses* the existing `PlatformProvider` (`pi-orchestrator/src/platform/types.ts`) directly — there is no separate `PlatformClient` type. The provider is CI-oriented (it also exposes `addReaction`, `createFinalComment`, `getPrompt`, `getStartTime`), but those methods **no-op** against the bridge's synthetic context (`payload: {}`, falsy `issue.number`, sentinel `eventName`), as proven by `pi-cli`. So one interface serves both CI and local.
+> The bridge *uses* the existing `PlatformProvider` (`pi-orchestrator/src/platform/types.ts`) directly — there is no separate `PlatformClient` type. The provider is CI-oriented (it also exposes `addReaction`, `createFinalComment`, `getPrompt`, `getStartTime`), but those methods **no-op** against the bridge's synthetic context (`payload: {}`, falsy `issue.number`, sentinel `eventName`), as proven by `pi-cli`. One interface serves both CI and local.
 
 ### 3.6 Platform Detection
 
@@ -214,7 +235,7 @@ function detectPlatformFromRemote(remoteUrl: string): PlatformType {
 }
 ```
 
-The existing `detectPlatform(serverUrl)` in `packages/pi-platform-github/src/provider.ts` handles platform detection from a server URL. The bridge normalizes the git remote URL (e.g., `git@github.com:owner/repo.git`) to a server URL (e.g., `https://github.com`) and delegates to the shared logic. This avoids duplicating the detection patterns (including GitHub Enterprise `.github.` patterns, Forgejo, Gitea).
+The existing `detectPlatform(serverUrl)` in `packages/pi-platform-github/src/provider.ts` handles platform detection from a server URL. The bridge normalizes the git remote URL (e.g. `git@github.com:owner/repo.git`) to a server URL (e.g. `https://github.com`) and delegates to the shared logic. This avoids duplicating the detection patterns (GitHub Enterprise `.github.`, Forgejo, Gitea).
 
 ### 3.7 Distribution & Installation
 
@@ -225,8 +246,7 @@ The package declares its Pi resources via the `"pi"` manifest key in `package.js
   "name": "@alexanderfortin/pi-action-bridge",
   "keywords": ["pi-package"],
   "pi": {
-    "extensions": ["./src/index.ts"],
-    "skills": ["./skills"]
+    "extensions": ["./src/index.ts"]
   }
 }
 ```
@@ -236,7 +256,8 @@ A workspace package is **not** auto-discovered by Pi. To load the bridge:
 - **Dev / workspace** — local-path install: `pi install ./packages/pi-action-bridge`; or reference in `.pi/settings.json`: `{ "packages": ["./packages/pi-action-bridge"] }`.
 - **Distributed** — publish to npm: `pi install npm:@alexanderfortin/pi-action-bridge`; or git: `pi install git:github.com/<org>/pi-coding-agent-action`.
 - The `pi-package` keyword enables gallery discoverability.
-- Each `skills/*.md` must include `name` + `description` **frontmatter** to load (per `docs/skills.md`).
+
+No `"skills"` manifest key and no skill frontmatter — the extension exposes only the command (registered in `index.ts`) and the tools.
 
 ---
 
@@ -249,29 +270,35 @@ A workspace package is **not** auto-discovered by Pi. To load the bridge:
 | `create_comment` | Post a top-level comment to an issue/PR via `octokit.rest.issues.createComment`. Three modes: **plain** (free-form Markdown), **steering** (`/pi <instruction>` — picked up by the CI action as a normal invocation), **handoff** (`/pi 🤖 Handoff…` + structured-prose headings, §2.5). Bridge-owned; no CI action-run footer locally. | Direct Octokit call |
 | `create_pull_request` | Push branch via `simple-git` + create PR via Octokit. Agent composes title/body. | `simple-git` + Octokit |
 
-> **Steering vs. handoff — both reach CI, different intent.** Steering is an ad-hoc mid-session directive ("focus on error handling") with no context payload — just `/pi <instruction>`. Handoff is the full state transfer: `## Done` / `## Next` headings summarizing completed and remaining work. The `--steer` argument to `/skill:handoff` is steering *input* that the local agent weaves into the `## Next` section of the handoff comment — it does not get a separate heading (see §2.5).
+> **Tool implementation pattern — factory closure + `AgentToolResult`.** A tool's `execute(toolCallId, params, signal, onUpdate, ctx)` receives `ctx: ExtensionContext`, which carries no provider/Octokit/git (verified in `dist/core/extensions/types.d.ts` → `ToolDefinition.execute`). So each tool factory closes over its dependencies from the factory scope and ignores `ctx` — the same pattern `pi-orchestrator/src/pi/tools/get-thread.ts` uses (`getIssueOrPRThreadToolFactory(provider)` captures `provider`). Each `execute` returns `AgentToolResult<TDetails>` — `{ content: [{ type: 'text', text }], details }` — built via `defineTool` (optionally wrapped in `withCancellation`), exactly as the orchestrator tools do today. The bridge's four tool factories capture the provider/Octokit/`simple-git` instance once at construction; the four `details` types are bridge-local.
+
+> **Steering vs. handoff — both reach CI, different intent.** Steering is an ad-hoc mid-session directive ("focus on error handling") with no context payload — just `/pi <instruction>`. Handoff is the full state transfer: `## Done` / `## Next` headings. The `--steer` argument to `/handoff` is steering *input* that the drafting model weaves into the `## Next` section of the handoff comment — it does not get a separate heading (§2.5).
 
 ---
 
-## 5. Skill Surface (MVP)
+## 5. Command Surface (MVP)
 
-| Skill | Trigger | What the Agent Does |
-|-------|---------|-------------------|
-| `/skill:sync` | User types `/skill:sync [number]` | Fetches the linked thread (or specified #) and presents the current state. The agent infers what's new from its own conversational context — no persisted "last seen" marker is needed. |
-| `/skill:handoff` | User types `/skill:handoff [--steer "..."]` | Checks for uncommitted changes (asks the user how to proceed if working tree is dirty), pushes branch via `simple-git`, creates/updates PR, reads diff to summarize what's done and what's next, posts `/pi` comment with structured-prose handoff (`## Done` / `## Next` headings; see §2.5). The `--steer` argument, if provided, is woven into the `## Next` section — it does not get a separate heading. Idempotent on retry: if the remote branch already exists (e.g. a prior run pushed but PR creation failed), skips push and retries PR create; `gh pr create` is the manual fallback. |
-| `/skill:review` | User types `/skill:review` | Fetches PR review comments via `get_thread`, presents them for the user to address locally |
+| Command | Trigger | What the Handler Does |
+|---------|---------|----------------------|
+| `/handoff` | User types `/handoff [--steer "..."] [-y\|--yes]` | See §2.1 step list. HITL by default (`ctx.ui.editor` review); `-y`/`--yes` skips review and auto-posts. Idempotent on retry: if the remote branch already exists (a prior run pushed but PR creation failed), skips push and retries PR create. Manual fallback: `gh pr create`. |
+
+No `/sync`, no `/review` (§2.1). Their jobs are covered by §6 auto-injection and natural-language `get_thread` calls respectively.
+
+> **`complete()` uses `ctx.model`** — whatever model the user is on. The Done/Next summary does not need an expensive model, but pinning a cheaper one is deferred until cost complaints arise (§12). The summary call is authed via `ctx.modelRegistry.getApiKeyAndHeaders(ctx.model)` and uses a `ctx.ui.custom()` loader (precedent: `examples/extensions/handoff.ts` + `BorderedLoader`).
 
 ---
 
 ## 6. Auto Behavior
 
 On the **first turn** — via the `before_agent_start` event with a one-shot "already injected this session" guard:
-1. Detect current branch via `simple-git`
-2. Resolve branch → PR number via GitHub API
-3. If linked PR found: return a persistent session message (`{ customType, content, display: true }`) with PR metadata + last 3-5 comments — stored in session, sent to the LLM.
-4. If no linked PR: silent, no action
+1. Detect current branch via `simple-git`.
+2. Resolve branch → PR number via GitHub API.
+3. If linked PR found: return a persistent session message (`{ customType, content, display: true }`) with PR metadata + last N comments — stored in session, sent to the LLM.
+4. If no linked PR: silent, no action.
 
 > **Why `before_agent_start`, not `session_start`:** `session_start` handlers have no message-injection return shape and there is no pending turn to inject into at session creation. `before_agent_start` returns `{ message, systemPrompt }` (SDK type `BeforeAgentStartEventResult` — "Fired after user submits prompt, before agent loop. Can inject a message and/or modify the system prompt", `docs/extensions.md`) — the only message-injection point. A persistent *message* (not `systemPrompt`) is used so the thread context is contextual and compactable, rather than bloating every turn. **Why lazy (first prompt), not eager (session creation):** injecting eagerly would trigger an agent turn with no user prompt; deferring to the user's first `before_agent_start` avoids that, and a developer types their first prompt almost immediately in a TUI. The one-shot guard avoids re-injecting on subsequent turns.
+
+> **N is OPEN (§12).** An earlier draft said "last 3–5 comments." Pick a fixed number with a stated token budget before implementing.
 
 ---
 
@@ -281,7 +308,7 @@ On the **first turn** — via the `before_agent_start` event with a one-shot "al
 
 The earlier plan (extract a `pi-forge-client` package, refactor `pi-platform-github` to consume it) is **dropped** — see §3.4. The bridge reuses the existing provider unchanged.
 
-The only prerequisite is confirming the provider's CI-only methods no-op against a synthetic `PlatformContext` — already true today (documented in `pi-cli/src/context.ts`). If a method turns out *not* to no-op cleanly from the local context, the fix is a small guard in `pi-platform-github` (widening an existing falsy-check), not a package extraction.
+The only prerequisite is confirming the provider's CI-only methods no-op against a synthetic `PlatformContext` — already true today (documented in `pi-cli/src/context.ts`). Verified for reads: `getIssueOrPRThread` resolves `owner`/`repo`/`issue_number` from `params ?? deps.context.*` (so the bridge passes explicit values and the synthetic context's zeroed `issue.number` is never read); `getPRDiff(owner, repo, pullNumber, ignoreFiles?)` takes explicit args. If a method turns out *not* to no-op cleanly from the local context, the fix is a small guard in `pi-platform-github` (widening an existing falsy-check), not a package extraction.
 
 ---
 
@@ -291,7 +318,7 @@ The only prerequisite is confirming the provider's CI-only methods no-op against
 - [ ] Create `packages/pi-action-bridge` — package.json, tsconfig, Pi manifest
 - [ ] Bridge class with git discovery (`simple-git`) + synthetic `PlatformContext` + `createGitHubPlatformProvider()`
 - [ ] Platform detection from git remote (delegating to `detectPlatform`)
-- [ ] Auth check (`GITHUB_TOKEN`/`GH_TOKEN` for API) — eager, at extension load, authoritative (§2.3); git credentials for push
+- [ ] Auth gating per the §12 Q1 decision; git credentials for push
 - [ ] Tests for platform detection and bridge class
 - [ ] Update root `AGENTS.md` "Repository Layout" to include `pi-action-bridge`
 
@@ -302,14 +329,14 @@ The only prerequisite is confirming the provider's CI-only methods no-op against
 - [ ] `create_pull_request` tool (`simple-git` + Octokit)
 - [ ] Tests for all tools
 
-### Phase 3: Skills
-- [ ] `/skill:sync` skill (SKILL.md with `name` + `description` frontmatter)
-- [ ] `/skill:handoff` skill
-- [ ] `/skill:review` skill
+### Phase 3: `/handoff` Command
+- [ ] `/handoff` command: arg parsing (`--steer`, `-y`/`--yes`), orchestration, `complete()` summary, `ctx.ui.editor` HITL, post via `create_comment`
+- [ ] Idempotent push/PR retry; 401/403 handling
+- [ ] Tests for `/handoff`
 
 ### Phase 4: Session Enrichment
-- [ ] Auto-detect branch → PR on first turn via `before_agent_start` (controlled by `auto_sync` config, see §9)
-- [ ] Inject PR metadata + last 3-5 comments as a persistent session message (one-shot guard)
+- [ ] Auto-detect branch → PR on first turn via `before_agent_start` (controlled by `auto_sync` config, §9)
+- [ ] Inject PR metadata + last N comments as a persistent session message (one-shot guard)
 - [ ] Tests for session enrichment
 
 ### Phase 5: Codeberg Support
@@ -338,16 +365,16 @@ The bridge reads its **own** config files — never a slice of Pi's reserved `se
 }
 ```
 
-> **The extension reads this itself.** `ExtensionContext` exposes no settings accessor (`docs/extensions.md`), so the bridge reads its own files directly: global always; project only behind `ctx.isProjectTrusted()`. Merge: project overrides global, nested merge (same semantics Pi applies to `settings.json`, `docs/settings.md`). The files are **JSONC** — strip `//` comments before `JSON.parse`. Defaults (`platform: "auto"`, `auto_sync: true`) apply when absent.
+> **The extension reads this itself.** `ExtensionContext` exposes no settings accessor (`docs/extensions.md`), so the bridge reads its own files directly: global always; project only behind `ctx.isProjectTrusted()`. Merge: project overrides global, nested merge (same semantics Pi applies to `settings.json`, `docs/settings.md`). The files are **JSONC**, but **naive `//` stripping corrupts URLs** — a `forgejo_url: "https://forge.example"` value would be truncated at the first `//`. Parse with a **string-aware JSONC stripper** (e.g. [`strip-json-comments`](https://github.com/sindresorhus/strip-json-comments) — zero-dependency, the de-facto standard; or `jsonc-parser`), never a blind `//.*` regex. Defaults (`platform: "auto"`, `auto_sync: true`) apply when absent.
 
 ---
 
 ## 10. Naming
 
-- **Extension package:** `@alexanderfortin/pi-action-bridge` (`packages/pi-action-bridge`) — depends on `@alexanderfortin/pi-platform-github` (reused, not wrapped)
-- **Extension namespace:** `pi-action-bridge`
-- **Skills:** `/skill:handoff`, `/skill:sync`, `/skill:review` (Agent Skills standard; free-text args)
-- **Tools:** `get_thread`, `get_pr_diff`, `create_comment`, `create_pull_request`
+- **Extension package:** `@alexanderfortin/pi-action-bridge` (`packages/pi-action-bridge`) — depends on `@alexanderfortin/pi-platform-github` (reused, not wrapped).
+- **Extension namespace:** `pi-action-bridge`.
+- **Command:** `/handoff` (flags: `--steer`, `-y`/`--yes`).
+- **Tools:** `get_thread`, `get_pr_diff`, `create_comment`, `create_pull_request`.
 
 ---
 
@@ -355,7 +382,7 @@ The bridge reads its **own** config files — never a slice of Pi's reserved `se
 
 | Convention | Local Extension | CI Action |
 |-----------|----------------|-----------|
-| **Handoff comments** | Writes `/pi` comment with structured-prose handoff (Markdown headings; see §2.5) | Reads it as a normal `/pi` invocation |
+| **Handoff comments** | Writes `/pi` comment with structured-prose handoff (Markdown headings; §2.5) | Reads it as a normal `/pi` invocation |
 | **Thread context** | Reads threads via `pi-platform-github` provider | Reads threads via `pi-platform-github` provider |
 | **CI results** | Reads action's result comments in the thread | Writes result comments |
 | **`/pi` trigger** | Posts steering comments via `create_comment` | Detects and processes |
@@ -364,4 +391,19 @@ No changes to the CI action are required. The handoff works via the existing `/p
 
 ---
 
-*This constitution reflects resolved design decisions from the grilling session of 2026-06-09 and incorporates review feedback. Update as the project evolves.*
+## 12. Open Decisions
+
+Resolved through v0.5; the following are still open and block implementation of the noted phases.
+
+- **Q1 — Token-check timing (blocks Phase 1).** Eager-at-load rejected (noisy, too-wide scope, slows `--list-models`). Leading candidate: **Option C** — register `/handoff` cheaply at load; in `session_start` do the one git-remote + token check and dynamically `pi.registerTool()` the four tools only when remote-is-Forge ∧ token-present (`session_start` fires only for real sessions; `pi.registerTool()` post-startup is sanctioned — `examples/extensions/dynamic-tools.ts`). Decide: Option C, or lazy-check-at-first-call (simpler but leaks tools into non-Forge repos)?
+- **Q2 — `gh auth` as a token *discovery* source (gated on Q1).** Currently "no `gh` piggybacking." Under Option C the `session_start` handler already does discovery — consulting `gh auth status` for a token before erroring is cheap and friendlier. Keep the hard rejection, or allow discovery-only?
+- **Q3 — Token/git-account mismatch.** Push creds (account A) vs `GITHUB_TOKEN` (account B) produce a PR authored by B with commits bearing A. Warn at `session_start` (we already know the token identity), or stay silent?
+- **Q4 — `create_comment` "plain" mode.** Keep it (general write tool) or drop it so `/handoff` is the sole writer of comments (smaller surface, less prompt budget)?
+- **Q5 — Enrichment comment count N (blocks Phase 4).** Pick a fixed number with a stated token budget (draft said "3–5").
+- **Q6 — PR body content.** `/handoff` creates the PR. Is the body a short pointer to the handoff comment, a full description drafted by the same `complete()` call, or a minimal template? Currently unspecified.
+- **Q7 — Dirty-tree UX options (Phase 3).** `ctx.ui.confirm("Working tree dirty", …)` — what are the choices? (commit / stash / abort / proceed-anyway?) And does `/handoff` offer to run the commit/stash, or just refuse until clean?
+- **Q8 — Summary model (Phase 3).** `complete()` uses `ctx.model`. Defer pinning a cheaper model until cost feedback, or pin now?
+
+---
+
+*This constitution reflects resolved design decisions through v0.5 and incorporates SDK verification (pass 7) and the skills→commands rewrite (pass 8). Open items are tracked in §12; resolve before implementing the corresponding phase.*
