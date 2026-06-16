@@ -59,6 +59,7 @@
       },
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
+        "typebox": "*",
       },
     },
     "packages/pi-cli": {

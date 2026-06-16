@@ -167,6 +167,54 @@ export class Bridge {
   ) {}
 
   /**
+   * Get the current git branch name, or `undefined` (detached HEAD / not a
+   * repo / git error). Honors §2.2 — resolved on every call, no caching.
+   */
+  async getCurrentBranch(): Promise<string | undefined> {
+    try {
+      const git = simpleGit(this.context.workspace);
+      const branch = (await git.revparse(['--abbrev-ref', 'HEAD'])).trim();
+      if (!branch || branch === 'HEAD') {
+        return undefined; // detached HEAD
+      }
+      return branch;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Resolve the open PR linked to the current branch, if any.
+   *
+   * Used by the read-only tools (`get_thread`, `get_pr_diff`) as the default
+   * when the agent calls them without an explicit number — so the agent can
+   * say "show me the thread" and get the current PR. Honors §2.2 (resolved
+   * dynamically via git + API on every request, no caching).
+   *
+   * **Limitation:** matches PRs whose head is `owner:branch` (same-owner
+   * branches). Fork PRs (head on a different owner) are not matched by the
+   * `pulls.list` `head` filter — pass an explicit `issue_number`/`pull_number`
+   * for those.
+   */
+  async resolveCurrentPR(): Promise<number | undefined> {
+    const branch = await this.getCurrentBranch();
+    if (!branch) {
+      return undefined;
+    }
+    try {
+      const { data } = await this.octokit.rest.pulls.list({
+        owner: this.context.repo.owner,
+        repo: this.context.repo.repo,
+        head: `${this.context.repo.owner}:${branch}`,
+        state: 'open',
+      });
+      return data[0]?.number;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * Discover the git remote at `cwd` without constructing anything that needs
    * a token. Returns `undefined` if `cwd` isn't a git repo, has no `origin`
    * remote, or the remote URL can't be parsed (local path, `git://`, etc.).

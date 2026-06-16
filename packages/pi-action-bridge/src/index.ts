@@ -17,6 +17,8 @@
 
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Bridge } from './bridge.js';
+import { getThreadToolFactory } from './tools/get-thread.js';
+import { getPRDiffToolFactory } from './tools/get-pr-diff.js';
 
 export default function piActionBridge(pi: ExtensionAPI): void {
   // `/handoff` is registered at load (cheap, no I/O). Commands don't pollute
@@ -61,10 +63,14 @@ export default function piActionBridge(pi: ExtensionAPI): void {
       return;
     }
 
-    // Phase 2 will register `get_thread` + `get_pr_diff` against
-    // `bridge.provider` here via `pi.registerTool(...)`. Source-verified:
-    // tools registered at session_start are auto-active for turn 1.
-    // For now, surface that the bridge is live so the gate is observable.
+    // Register the two read-only tools against the live provider. Source-
+    // verified (_refreshToolRegistry): tools registered at session_start are
+    // auto-activated and added to the system prompt's active tool set — no
+    // setActiveTools() call needed — and since session_start runs before
+    // before_agent_start, they're live for turn 1.
+    pi.registerTool(getThreadToolFactory(bridge));
+    pi.registerTool(getPRDiffToolFactory(bridge));
+
     ctx.ui.notify(
       `pi-action-bridge: active on ${bridge.discovery.parsed.serverUrl} (${bridge.discovery.platformType}).`,
       'info'
