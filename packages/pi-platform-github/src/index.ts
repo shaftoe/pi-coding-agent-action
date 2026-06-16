@@ -128,6 +128,7 @@ export type {
 // Platform provider (used by platform/index.ts)
 export {
   detectPlatform,
+  apiBaseUrlFromServerUrl,
   isKnownServerUrl,
   createGitHubPlatformProvider,
   type GitHubPlatformDeps,

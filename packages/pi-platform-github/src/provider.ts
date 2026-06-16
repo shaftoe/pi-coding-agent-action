@@ -114,6 +114,55 @@ export function detectPlatform(serverUrl: string): PlatformType {
 }
 
 /**
+ * Resolve a REST API base URL from a server URL.
+ *
+ * - `https://github.com` (exact): Octokit's default `https://api.github.com`
+ * - `*.github.com` (subdomain, e.g. `github.example.com`): also default
+ * - Self-hosted GHE with custom hostname (e.g. `github.company.internal`):
+ *   {@link detectPlatform} (co-located in this module) defaults to `'github'`
+ *   for unrecognized hosts, so these are treated as GHES-specific: the REST
+ *   API is at `{serverUrl}/api/v3`.
+ * - Codeberg, Forgejo, Gitea: `{serverUrl}/api/v1`
+ *
+ * Returning `undefined` lets the SDK use its built-in `api.github.com`.
+ *
+ * Natural pair of {@link detectPlatform}: both are pure functions of
+ * `serverUrl` with overlapping host pattern-matching, answering
+ * complementary questions (platform *type* vs *API URL*). Kept co-located
+ * to avoid drift when a new host is added.
+ */
+export function apiBaseUrlFromServerUrl(serverUrl: string): string | undefined {
+  const url = serverUrl.replace(/\/$/, '');
+
+  // Exact github.com → Octokit's default.
+  if (url === 'https://github.com') {
+    return undefined;
+  }
+
+  // Standard github.com subdomains (api.github.com, *.github.com).
+  if (url.includes('.github.')) {
+    return undefined;
+  }
+
+  // GitHub.com (fallback for bare 'github.com' without protocol and
+  // edge cases like GitHub AE which uses github.com).
+  if (url.includes('github.com')) {
+    return undefined;
+  }
+
+  // Codeberg, Forgejo, Gitea → /api/v1
+  if (url.includes('codeberg') || url.includes('forgejo') || url.includes('gitea')) {
+    return `${url}/api/v1`;
+  }
+
+  // Self-hosted GitHub Enterprise → /api/v3
+  // This is the standard path for GHES REST API.
+  // Users of other platforms should pass --server-url to get correct
+  // API base URL derivation.
+  return `${url}/api/v3`;
+}
+
+/**
  * Dependencies required to create a GitHub-compatible platform provider.
  *
  * Accepting these as explicit parameters decouples the provider from the
