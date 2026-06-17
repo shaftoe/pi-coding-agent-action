@@ -428,3 +428,4 @@ All design decisions are resolved as of v0.16. This section is a historical reco
 ## TODO:
 
 - add [skip ci] string to commit messages to avoid automated Pi reviews on handoffs
+- make it obvious in the TUI that the bridge is active and what's the actual open PR we're working on, at the moment just shows 'pi-action-bridge: active on https://github.com (github).'
