@@ -424,3 +424,7 @@ All design decisions are resolved as of v0.16. This section is a historical reco
 ---
 
 *This constitution reflects resolved design decisions through v0.16. The agent is read-only (two tools); `/handoff` is the sole write path. The decision log is in §12.*
+
+## TODO:
+
+- add [skip ci] string to commit messages to avoid automated Pi reviews on handoffs
