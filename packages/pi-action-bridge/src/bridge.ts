@@ -264,6 +264,12 @@ export class Bridge {
     onUnknownHost?: (serverUrl: string) => void;
     /** Called (not awaited) when no token could be resolved. */
     onNoToken?: () => void;
+    /**
+     * Override token resolution (default: {@link resolveToken} — env + gh).
+     * Tests pass `() => 'fake-token'` to exercise the construction path for a
+     * non-github forge (e.g. Codeberg) without a real token or network.
+     */
+    tokenResolver?: () => string | undefined;
   }): Promise<Bridge | undefined> {
     const logger = args.logger ?? createLogger();
     const discovery = await Bridge.discover(args.cwd);
@@ -274,7 +280,7 @@ export class Bridge {
       args.onUnknownHost?.(discovery.parsed.serverUrl);
       return undefined;
     }
-    const token = resolveToken();
+    const token = args.tokenResolver ? args.tokenResolver() : resolveToken();
     if (!token) {
       args.onNoToken?.();
       return undefined;

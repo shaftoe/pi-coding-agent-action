@@ -25,6 +25,7 @@ import { loadBridgeConfig } from './config.js';
 import { getThreadToolFactory } from './tools/get-thread.js';
 import { getPRDiffToolFactory } from './tools/get-pr-diff.js';
 import { registerHandoffCommand } from './handoff.js';
+import { registerPickupCommand } from './pickup.js';
 import { registerSessionEnrichment } from './hooks/session-enrichment.js';
 
 export default function piActionBridge(pi: ExtensionAPI): void {
@@ -64,6 +65,7 @@ export default function piActionBridge(pi: ExtensionAPI): void {
     pi.registerTool(getThreadToolFactory(bridge));
     pi.registerTool(getPRDiffToolFactory(bridge));
     registerHandoffCommand(pi, bridge);
+    registerPickupCommand(pi, bridge);
 
     // Session enrichment (Phase 4 / §6): load config once per session here (sync
     // read of a tiny file) and gate the before_agent_start hook on `auto_sync`.

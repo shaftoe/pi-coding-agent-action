@@ -189,6 +189,7 @@ pi-action-bridge/
 │   ├── config.ts         # Bridge-owned JSONC config (§9): global/project scopes, trust gate, string-aware stripJsonc
 │   ├── detect.ts         # Normalize git remote → server URL; delegate to detectPlatform()
 │   ├── handoff.ts        # /handoff command: orchestration + complete() + HITL review
+│   ├── pickup.ts         # /pickup command: inverse of /handoff — resolve PR + sendUserMessage orientation prompt
 │   ├── pull-request.ts   # /handoff-internal: push (simple-git) + create/update PR (Octokit)
 │   ├── tools/
 │   │   ├── get-thread.ts       # Wraps provider.getIssueOrPRThread() (issue_number from git/PR) — read-only
@@ -199,6 +200,8 @@ pi-action-bridge/
 │   ├── bridge.spec.ts
 │   ├── config.spec.ts
 │   ├── detect.spec.ts
+│   ├── handoff.spec.ts
+│   ├── pickup.spec.ts
 │   ├── pull-request.spec.ts
 │   ├── session-enrichment.spec.ts
 │   └── tools.spec.ts
@@ -288,8 +291,11 @@ No `"skills"` manifest key and no skill frontmatter — the extension exposes on
 | Command | Trigger | What the Handler Does |
 |---------|---------|----------------------|
 | `/handoff` | User types `/handoff [-y\|--yes]` | See §2.1 step list. HITL by default (`ctx.ui.editor` review); `-y`/`--yes` skips review and auto-posts. Idempotent on retry: if the remote branch already exists (a prior run pushed but PR creation failed), skips push and retries PR create. Manual fallback: `gh pr create`. |
+| `/pickup` | User types `/pickup [<number>\|#<number>]` | The inverse of `/handoff` — pulls GitHub state *into* the local agent. Resolves the PR from the current branch (or takes an explicit `<number>`, e.g. for a fork PR checked out via `gh pr checkout` that `resolveCurrentPR()`'s same-owner filter can't match), then sends a single user-message prompt via `pi.sendUserMessage()` directing the agent to call `get_thread` + `get_pr_diff` and summarize where things stand. No `complete()`, no Octokit writes, no editor — just resolve-a-number + build-a-string + send. |
 
 No `/sync`, no `/review` (§2.1). Their jobs are covered by §6 auto-injection and natural-language `get_thread` calls respectively.
+
+> **`/pickup` is a read-only seed, not a fetcher.** It does no API calls of its own beyond branch → PR resolution (already used by the read-only tools); the actual thread/diff fetching is delegated to the agent via the prompt, which points it at `get_thread` + `get_pr_diff`. The framing is *active* (a directive to respond with a summary), distinguishing it from §6 auto-enrichment's *passive* context injection. **Relationship to §6:** supplement, not replace — enrichment is one-shot-per-session (re-arming only on new/resume/fork) and gated on `auto_sync: true`, so `/pickup` covers three genuine gaps: a mid-session branch switch (PR A → PR B), `auto_sync: false` users with no on-ramp, and the explicit `/pickup <number>` form for a PR not on the current branch. Gate: `ctx.isIdle()` (no `deliverAs` — `/pickup` is a user-initiated orientation request, not a mid-stream steer; the `/ask` SDK example is the precedent).
 
 > **`complete()` uses `ctx.model` (Q8 resolved v0.13).** The Done/Next summary steers an autonomous CI agent, so quality matters more than marginal token cost — a bad summary wastes far more CI compute than the summary call costs. `/handoff` is a deliberate, low-frequency gesture, so there's no volume to optimize against. Pinning a cheaper model is YAGNI until cost complaints arise; if they do, it's a one-line change (the `complete()` call already takes a `model` arg). The summary call is authed via `ctx.modelRegistry.getApiKeyAndHeaders(ctx.model)` and uses a `ctx.ui.custom()` loader (precedent: `examples/extensions/handoff.ts` + `BorderedLoader`).
 
@@ -353,10 +359,12 @@ The only prerequisite is confirming the provider's CI-only methods no-op against
 - [x] Inject PR metadata + last 3 comments as a persistent session message (one-shot guard) — **fetch-then-slice-last-N** (see §6 gotcha: `max_comments` returns oldest, not most recent)
 - [x] Tests for session enrichment
 
-### Phase 5: Codeberg Support
-- [ ] Codeberg: Octokit `baseUrl` swap (`/api/v1`) — via `detectPlatform` + `apiBaseUrlFromServerUrl` (both imported from `pi-platform-github` post-Q9)
-- [ ] Platform detection for Codeberg (already handled by `detectPlatform`)
-- [ ] Tests for Codeberg support
+### Phase 5: Codeberg / Forgejo / Gitea Support
+- [x] Codeberg: Octokit `baseUrl` swap (`/api/v1`) — via `detectPlatform` + `apiBaseUrlFromServerUrl` (both imported from `pi-platform-github` post-Q9). Verified end-to-end in `bridge.spec.ts`.
+- [x] Platform detection for Codeberg / Forgejo / Gitea (handled by `detectPlatform` — `codeberg` → `'codeberg'`; `forgejo`/`gitea` → `'forgejo'`). Verified for SSH + HTTPS remotes.
+- [x] Tests for Codeberg / Forgejo / Gitea support: `createOctokit` `/api/v1` for all three; `Bridge.discover` for codeberg SSH/HTTPS, forgejo, gitea; `Bridge.create` end-to-end (codeberg + forgejo) asserting `provider.type` + Octokit baseUrl via an injectable `tokenResolver` (no real token/network needed).
+
+> **Tier 1 only (pattern-based detection).** This phase covers hosts whose name contains `codeberg` / `forgejo` / `gitea` — they flow through `detectPlatform` → `isKnownServerUrl` → `apiBaseUrlFromServerUrl` (`/api/v1`) correctly with no per-host config. A self-hosted Forgejo at a *generic* hostname (no telltale substring) still falls through to the GHE default (`/api/v3`) and goes inert via `isKnownServerUrl`; the reserved `platform` / `forgejo_url` config fields (§9) are the future override path for that — intentionally **not consumed yet** (documented "consumed in a later phase" in `config.ts`).
 
 ---
 
@@ -388,6 +396,7 @@ The bridge reads its **own** config files — never a slice of Pi's reserved `se
 - **Extension package:** `@alexanderfortin/pi-action-bridge` (`packages/pi-action-bridge`) — depends on `@alexanderfortin/pi-platform-github` (reused, not wrapped).
 - **Extension namespace:** `pi-action-bridge`.
 - **Command:** `/handoff` (flag: `-y`/`--yes` only) — the sole write path.
+- **Command:** `/pickup [<number>|#<number>]` — the inverse of `/handoff`; read-only seed that prompts the agent to orient on a PR.
 - **Tools (read-only):** `get_thread`, `get_pr_diff`.
 
 
@@ -427,5 +436,5 @@ All design decisions are resolved as of v0.16. This section is a historical reco
 
 ## TODO:
 
-- add [skip ci] string to commit messages to avoid automated Pi reviews on handoffs
-- make it obvious in the TUI that the bridge is active and what's the actual open PR we're working on, at the moment just shows 'pi-action-bridge: active on https://github.com (github).'
+- Wire the reserved `platform` / `forgejo_url` config override (§9) into `Bridge.create`, so a **self-hosted Forgejo at a generic hostname** (no `forgejo`/`gitea` substring) is detected as forgejo and gets `/api/v1` instead of falling through to the GHE default and going inert. The config schema + parsing are already in `config.ts`; only `Bridge.create` consumption is missing.
+- Test edge cases: **fork PRs** (the `pulls.list` `head` filter is same-owner only — `/handoff` + `resolveCurrentPR` miss cross-owner heads) and **expired tokens** mid-session (401/403 from `octokit.pulls.create` is handled, but the read-only tools' error UX on a stale token is unverified).

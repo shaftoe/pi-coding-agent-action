@@ -87,6 +87,16 @@ describe('createOctokit', () => {
     expect(o.request.endpoint.DEFAULTS.baseUrl).toBe('https://codeberg.org/api/v1');
   });
 
+  it('sets /api/v1 baseUrl for a forgejo host', () => {
+    const o = createOctokit('tok', 'https://git.forgejo.example');
+    expect(o.request.endpoint.DEFAULTS.baseUrl).toBe('https://git.forgejo.example/api/v1');
+  });
+
+  it('sets /api/v1 baseUrl for a gitea host', () => {
+    const o = createOctokit('tok', 'https://gitea.example.com');
+    expect(o.request.endpoint.DEFAULTS.baseUrl).toBe('https://gitea.example.com/api/v1');
+  });
+
   it('sets /api/v3 baseUrl for self-hosted GHE', () => {
     const o = createOctokit('tok', 'https://github.company.internal');
     expect(o.request.endpoint.DEFAULTS.baseUrl).toBe('https://github.company.internal/api/v3');
@@ -146,6 +156,53 @@ describe('Bridge.discover', () => {
     expect(d).toBeDefined();
     // detectPlatform silently falls back to 'github', but isKnownHost surfaces it
     expect(d!.isKnownHost).toBe(false);
+  });
+
+  it('discovers a codeberg.org SSH origin as codeberg + known host', async () => {
+    const git = simpleGit(dir);
+    await git.init();
+    await git.addRemote('origin', 'git@codeberg.org:user/project.git');
+    const d = await Bridge.discover(dir);
+    expect(d).toBeDefined();
+    expect(d!.platformType).toBe('codeberg');
+    expect(d!.isKnownHost).toBe(true);
+    expect(d!.parsed).toEqual({
+      serverUrl: 'https://codeberg.org',
+      owner: 'user',
+      repo: 'project',
+    });
+  });
+
+  it('discovers a codeberg.org HTTPS origin as codeberg + known host', async () => {
+    const git = simpleGit(dir);
+    await git.init();
+    await git.addRemote('origin', 'https://codeberg.org/user/project.git');
+    const d = await Bridge.discover(dir);
+    expect(d).toBeDefined();
+    expect(d!.platformType).toBe('codeberg');
+    expect(d!.isKnownHost).toBe(true);
+  });
+
+  it('discovers a forgejo host as forgejo + known host', async () => {
+    const git = simpleGit(dir);
+    await git.init();
+    await git.addRemote('origin', 'https://git.forgejo.example/u/r.git');
+    const d = await Bridge.discover(dir);
+    expect(d).toBeDefined();
+    expect(d!.platformType).toBe('forgejo');
+    expect(d!.isKnownHost).toBe(true);
+    expect(d!.parsed.serverUrl).toBe('https://git.forgejo.example');
+  });
+
+  it('discovers a gitea host as forgejo + known host', async () => {
+    // Gitea is GitHub-compatible and detected as 'forgejo' (§3.4).
+    const git = simpleGit(dir);
+    await git.init();
+    await git.addRemote('origin', 'git@gitea.example.com:o/r.git');
+    const d = await Bridge.discover(dir);
+    expect(d).toBeDefined();
+    expect(d!.platformType).toBe('forgejo');
+    expect(d!.isKnownHost).toBe(true);
   });
 });
 
@@ -210,5 +267,45 @@ describe('Bridge.create', () => {
     expect(bridge.provider.type).toBe('github');
     expect(bridge.context.repo).toEqual({ owner: 'shaftoe', repo: 'repo' });
     expect(typeof bridge.provider.getIssueOrPRThread).toBe('function');
+  });
+
+  it('builds a codeberg provider with /api/v1 base, end-to-end (Phase 5)', async () => {
+    // End-to-end verification (CONSTITUTION Phase 5): a codeberg.org remote
+    // flows through discover → detectPlatform('codeberg') → createOctokit
+    // (/api/v1) → createGitHubPlatformProvider(platformType: 'codeberg').
+    // tokenResolver injects a fake token so no env/gh/network is needed —
+    // provider construction doesn't hit the network, only tool calls do.
+    const git = simpleGit(dir);
+    await git.init();
+    await git.addRemote('origin', 'git@codeberg.org:user/project.git');
+    const bridge = await Bridge.create({
+      cwd: dir,
+      logger: createLogger(),
+      tokenResolver: () => 'fake-codeberg-token',
+    });
+    expect(bridge).toBeDefined();
+    expect(bridge!.provider.type).toBe('codeberg');
+    expect(bridge!.context.repo).toEqual({ owner: 'user', repo: 'project' });
+    expect(bridge!.context.serverUrl).toBe('https://codeberg.org');
+    // The Octokit must target Codeberg's /api/v1 (not GitHub's api or /api/v3).
+    expect(bridge!.octokit.request.endpoint.DEFAULTS.baseUrl).toBe('https://codeberg.org/api/v1');
+    expect(typeof bridge!.provider.getIssueOrPRThread).toBe('function');
+    expect(typeof bridge!.provider.getPRDiff).toBe('function');
+  });
+
+  it('builds a forgejo provider with /api/v1 base, end-to-end (Phase 5)', async () => {
+    const git = simpleGit(dir);
+    await git.init();
+    await git.addRemote('origin', 'https://git.forgejo.example/u/r.git');
+    const bridge = await Bridge.create({
+      cwd: dir,
+      logger: createLogger(),
+      tokenResolver: () => 'fake-forgejo-token',
+    });
+    expect(bridge).toBeDefined();
+    expect(bridge!.provider.type).toBe('forgejo');
+    expect(bridge!.octokit.request.endpoint.DEFAULTS.baseUrl).toBe(
+      'https://git.forgejo.example/api/v1'
+    );
   });
 });
