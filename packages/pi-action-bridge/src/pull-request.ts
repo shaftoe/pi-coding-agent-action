@@ -100,7 +100,15 @@ export async function pushBranch(cwd: string): Promise<void> {
 
 /**
  * Find an open PR whose head matches the current branch on this owner, if any
- * (§2.1 step 4 — create vs. update). Returns the PR number or `undefined`.
+ * (§2.1 step 4 — create vs. update). Returns the PR number **and its base
+ * branch**, or `undefined`.
+ *
+ * The base is returned alongside the number so `/handoff`'s update path can
+ * use the PR's actual base for the local diff (§2.1 step 6: "on an update it
+ * matches the PR's base") instead of guessing via {@link detectDefaultBranch}
+ * — which trusts the local `origin/HEAD` symbolic-ref and can be stale/wrong
+ * (e.g. it once resolved a repo's retired `v1` branch, producing an empty
+ * diff). `pulls.list` already returns `base.ref`, so this costs no extra call.
  *
  * **Limitation:** matches same-owner head branches only (the `head` filter is
  * `owner:branch`). Fork PRs (head on a different owner) are not matched —
@@ -111,14 +119,18 @@ export async function findOpenPR(
   owner: string,
   repo: string,
   branch: string
-): Promise<number | undefined> {
+): Promise<{ number: number; base: string } | undefined> {
   const { data } = await octokit.rest.pulls.list({
     owner,
     repo,
     head: `${owner}:${branch}`,
     state: 'open',
   });
-  return data[0]?.number;
+  const pr = data[0];
+  if (!pr) {
+    return undefined;
+  }
+  return { number: pr.number, base: pr.base.ref };
 }
 
 /** Minimal template for the PR body (Q6): a branch pointer + a handoff pointer. */

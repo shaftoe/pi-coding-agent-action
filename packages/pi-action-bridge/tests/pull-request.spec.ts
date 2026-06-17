@@ -156,7 +156,7 @@ describe('buildPRBody', () => {
 
 /** Build a stub Octokit whose pulls/issues methods return canned data. */
 function makeStubOctokit(opts: {
-  pullsList?: { number: number }[];
+  pullsList?: { number: number; base?: { ref: string } }[];
   pullsCreate?: { number: number; user?: { login?: string } };
   pullsUpdate?: { number: number; user?: { login?: string } };
 }): OctokitInstance {
@@ -178,14 +178,30 @@ function makeStubOctokit(opts: {
 }
 
 describe('findOpenPR', () => {
-  it('returns the number when an open PR exists for the branch', async () => {
-    const octokit = makeStubOctokit({ pullsList: [{ number: 42 }] });
-    await expect(findOpenPR(octokit, 'o', 'r', 'feature-x')).resolves.toBe(42);
+  it('returns the number + base ref when an open PR exists for the branch', async () => {
+    const octokit = makeStubOctokit({
+      pullsList: [{ number: 42, base: { ref: 'develop' } }],
+    });
+    await expect(findOpenPR(octokit, 'o', 'r', 'feature-x')).resolves.toEqual({
+      number: 42,
+      base: 'develop',
+    });
   });
 
   it('returns undefined when no open PR exists', async () => {
     const octokit = makeStubOctokit({ pullsList: [] });
     await expect(findOpenPR(octokit, 'o', 'r', 'feature-x')).resolves.toBeUndefined();
+  });
+
+  it('returns the base from the PR (not a guessed default) — the v1 regression guard', async () => {
+    // Regression: /handoff once guessed the diff base from origin/HEAD and
+    // got a stale `v1`, producing an empty diff. The base now comes straight
+    // off the PR record, so even a weird base name is honored.
+    const octokit = makeStubOctokit({
+      pullsList: [{ number: 7, base: { ref: 'weird-branch' } }],
+    });
+    const result = await findOpenPR(octokit, 'o', 'r', 'feature-x');
+    expect(result?.base).toBe('weird-branch');
   });
 });
 

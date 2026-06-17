@@ -162,8 +162,14 @@ export async function runHandoff(
   // firstKeptEntryId onward]) — mirrors the SDK's getHandoffMessages() helper.
   const conversationText = gatherConversationForDraft(ctx);
 
-  // --- Local diff + truncate (§2.1 step 6, review pass 11) ---
-  const base = await detectDefaultBranch(cwd);
+  // --- Local diff base (§2.1 step 6, fixed) ---
+  // On an update, use the PR's ACTUAL base branch — read from the PR we just
+  // found (no extra API call), never guessed. Guessing via detectDefaultBranch
+  // trusts the local `origin/HEAD` symbolic-ref, which can be stale (it once
+  // pointed at a retired `v1` branch and produced an empty diff + a misleading
+  // "no diff against origin/v1" message). Only the create path (no existing
+  // PR) falls back to detecting the repo's default branch.
+  const base = existingPR ? existingPR.base : await detectDefaultBranch(cwd);
   const rawDiff = await getLocalDiff(cwd, base);
   if (!rawDiff) {
     ctx.ui.notify(
@@ -205,7 +211,7 @@ export async function runHandoff(
       const r = await updatePR(octokit, {
         owner,
         repo,
-        number: existingPR,
+        number: existingPR.number,
         // Only pass title if we parsed one; undefined → omit on update.
         ...(hasTitle ? { title } : {}),
         head: branch,
