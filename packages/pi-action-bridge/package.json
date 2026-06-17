@@ -25,6 +25,8 @@
     "simple-git": "^3.36.0"
   },
   "peerDependencies": {
+    "@earendil-works/pi-agent-core": "^0.79.6",
+    "@earendil-works/pi-ai": "^0.79.6",
     "@earendil-works/pi-coding-agent": "*",
     "typebox": "*"
   }

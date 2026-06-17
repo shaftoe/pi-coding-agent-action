@@ -46,6 +46,19 @@ const DIFF_MAX_LINES = 1000;
 const DIFF_MAX_BYTES = 102_400;
 
 /**
+ * Unique boundary separating the handoff prose from review-only content in
+ * the editor prefill. Distinctive (never model-emitted) so a Markdown
+ * horizontal rule (`---`) in the prose can't be mistaken for it — that
+ * earlier split-on-`---` bug silently truncated `## Next` when the draft or
+ * user included a rule between sections.
+ */
+export const REVIEW_FOOTER_BOUNDARY = '\n\n── review-only below (not posted) ──\n';
+
+/** Review-only footer appended after the boundary in the editor prefill. */
+export const REVIEW_FOOTER =
+  '(Edit the Done/Next prose above. Save to post, or cancel to abort without commenting. The branch + PR are already pushed.)';
+
+/**
  * The system prompt for the one-shot `complete()` call. The exact output format
  * is an implementation detail iterated against real model output (review pass
  * 11, finding 2) — fail-soft: if the response doesn't parse, the raw output is
@@ -76,7 +89,7 @@ Rules:
 - No version fields, no JSON, no HTML comments (they get stripped).`;
 
 /** Parse the `complete()` response into { title, handoff } or return raw for fail-soft. */
-function parseDraft(raw: string): { title: string; handoff: string } | { raw: string } {
+export function parseDraft(raw: string): { title: string; handoff: string } | { raw: string } {
   const text = raw.trim();
   // Expected: "TITLE\n\n## Done\n...\n\n## Next\n..."
   const titleMatch = /^([^\n]+)\n+## Done\b/s.exec(text);
@@ -93,9 +106,48 @@ function parseDraft(raw: string): { title: string; handoff: string } | { raw: st
   return { title, handoff };
 }
 
+/**
+ * Strip a leading `-y`/`--yes` flag from the args and return the remaining
+ * goal text, trimmed. `-y add tests` → `add tests`; `add tests` → `add tests`.
+ *
+ * Without this, the flag leaked into the LLM goal (e.g. `## Goal\n-y add tests`).
+ * Exported for unit testing.
+ */
+export function extractGoal(args: string): string {
+  return args.replace(/^\s*(-y|--yes)\b\s*/, '').trim();
+}
+
 /** Build the final `/pi` comment body from the reviewed handoff prose. */
-function buildCommentBody(handoff: string): string {
+export function buildCommentBody(handoff: string): string {
   return `/pi 🤖 Handoff from local session\n\n${handoff}`;
+}
+
+/**
+ * Decide what to post after the (optional) review step. Pure — the
+ * skip/cancel/post branching lives here so it's unit-testable.
+ *
+ * This exists because the earlier inline logic conflated "review skipped"
+ * (`-y`, `prefill = null`) with "review cancelled" (editor returned
+ * `undefined`) via a single `null`, so `-y` matched the cancel guard and the
+ * comment was never posted.
+ */
+export type PostDecision = { kind: 'post'; text: string } | { kind: 'cancelled' };
+
+export function decidePost(opts: {
+  skipReview: boolean;
+  handoffProse: string;
+  /** The edited text, or `undefined` when the user cancelled the editor. */
+  editorResult: string | undefined;
+}): PostDecision {
+  // -y: post the drafted prose directly; no review step, so no footer/mismatch
+  // note was ever appended — nothing to strip.
+  if (opts.skipReview) {
+    return { kind: 'post', text: opts.handoffProse };
+  }
+  if (opts.editorResult === undefined) {
+    return { kind: 'cancelled' };
+  }
+  return { kind: 'post', text: stripReviewOnlySections(opts.editorResult) };
 }
 
 /**
@@ -114,14 +166,27 @@ export function registerHandoffCommand(pi: ExtensionAPI, bridge: Bridge): void {
   });
 }
 
-/** The orchestration, separated so it's testable in isolation (future). */
+/**
+ * Injectable seams for {@link runHandoff}, so its control flow (the review /
+ * cancel / post decision, and the one-shot `complete()` draft) is testable
+ * without a TUI, network, or real model. The defaults use the real
+ * implementations; tests override `draft`.
+ */
+export interface HandoffDeps {
+  /** Generate the handoff draft (default: {@link runComplete}). */
+  draft?: (ctx: ExtensionCommandContext, userPrompt: string) => Promise<string | null>;
+}
+
+/** The orchestration, separated so it's testable in isolation. */
 // fallow-ignore-next-line complexity
 export async function runHandoff(
   args: string,
   ctx: ExtensionCommandContext,
-  bridge: Bridge
+  bridge: Bridge,
+  deps: HandoffDeps = {}
 ): Promise<void> {
   const skipReview = /^\s*(-y|--yes)\b/.test(args);
+  const goal = extractGoal(args);
 
   // --- Guard: TUI mode + model available (§2.1 step 2) ---
   if (ctx.mode !== 'tui') {
@@ -181,9 +246,18 @@ export async function runHandoff(
   const diff = truncateDiff(rawDiff, DIFF_MAX_LINES, DIFF_MAX_BYTES).text;
 
   // --- One-shot model call (§2.1 step 7) ---
-  const userPrompt = `## Goal\n${args.trim() || 'Continue the work on this branch.'}\n\n## Diff\n\`\`\`diff\n${diff}\n\`\`\`\n\n## Session\n${conversationText}`;
+  const userPrompt = `## Goal\n${goal || 'Continue the work on this branch.'}\n\n## Diff\n\`\`\`diff\n${diff}\n\`\`\`\n\n## Session\n${conversationText}`;
 
-  const draft = await runComplete(ctx, userPrompt);
+  // `complete()` (and the auth resolution inside runComplete) can throw; catch
+  // it like every other operation (push, PR, comment) so the user gets a clear
+  // message instead of an unhandled rejection.
+  let draft: string | null;
+  try {
+    draft = await (deps.draft ?? runComplete)(ctx, userPrompt);
+  } catch (e) {
+    ctx.ui.notify(`Handoff draft failed: ${(e as Error).message}`, 'error');
+    return;
+  }
   if (!draft) {
     ctx.ui.notify('Handoff draft cancelled or empty.', 'info');
     return;
@@ -245,16 +319,21 @@ export async function runHandoff(
       ? `\n\nℹ️ PR will be authored by \`${authorLogin}\`; commits are by \`${localIdentity}\`.`
       : '';
 
-  // --- Build the review prefill ---
+  // --- Review step (§2.1 step 11) + post decision ---
+  // -y skips the editor; otherwise open it with prose + mismatch note + footer.
+  // The decision (post/cancel) is a pure function (`decidePost`) so the skip /
+  // cancel / post branching is unit-tested — it once conflated `null` here,
+  // silently never posting on `-y` (the comment is the whole point).
   const handoffProse = 'handoff' in parsed ? parsed.handoff : parsed.raw;
-  const prefill = skipReview
-    ? null
+  const editorResult = skipReview
+    ? undefined
     : await ctx.ui.editor(
         `Review handoff${existingPR ? ' (update)' : ''} → PR #${prNumber}`,
-        `${handoffProse}${mismatchNote}\n\n---\n(Edit the Done/Next prose above. Save to post, or cancel to abort without commenting. The branch + PR are already pushed.)`
+        `${handoffProse}${mismatchNote}${REVIEW_FOOTER_BOUNDARY}${REVIEW_FOOTER}`
       );
 
-  if (prefill === undefined || prefill === null) {
+  const decision = decidePost({ skipReview, handoffProse, editorResult });
+  if (decision.kind === 'cancelled') {
     // Cancelled — push/PR happened, but no comment. Idempotent on retry.
     ctx.ui.notify(
       `Cancelled. Branch + PR #${prNumber} are up; no handoff comment posted. Re-run /handoff to retry.`,
@@ -264,8 +343,7 @@ export async function runHandoff(
   }
 
   // --- Post the /pi comment (§2.1 step 12) ---
-  // Strip the mismatch note + footer from the posted body (they were review-only).
-  const body = buildCommentBody(stripReviewOnlySections(prefill));
+  const body = buildCommentBody(decision.text);
   try {
     await postHandoffComment(octokit, { owner, repo, issueNumber: prNumber, body });
   } catch (e) {
@@ -369,11 +447,15 @@ async function runComplete(
   });
 }
 
-/** Strip review-only sections (mismatch note + footer) from the posted body. */
-function stripReviewOnlySections(text: string): string {
-  // Remove everything from the first "---" separator onward (the footer),
-  // and the mismatch note line(s) prefixed with ℹ️.
-  const withoutFooter = text.split('\n---\n')[0] ?? text;
+/**
+ * Strip review-only sections (mismatch note + footer) from the posted body.
+ *
+ * Splits on the unique {@link REVIEW_FOOTER_BOUNDARY} (not a bare `---`, which
+ * is a valid Markdown horizontal rule and would truncate legitimate prose that
+ * uses one) and drops the `ℹ️` account-mismatch note line.
+ */
+export function stripReviewOnlySections(text: string): string {
+  const withoutFooter = text.split(REVIEW_FOOTER_BOUNDARY)[0] ?? text;
   return withoutFooter
     .split('\n')
     .filter(line => !line.trim().startsWith('ℹ️'))
