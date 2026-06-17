@@ -22,4 +22,4 @@ Requires the `git` binary on PATH (push uses the developer's existing credential
 
 ## Status
 
-Scaffolded (Phase 1). `/handoff` and the read-only tools are implemented in later phases — see the constitution's roadmap.
+Phases 1–4 are implemented and tested: the scaffold + `session_start` gate (Phase 1), the two read-only tools `get_thread` / `get_pr_diff` (Phase 2), the `/handoff` command (Phase 3), and first-turn session auto-enrichment (Phase 4). Phase 5 (Codeberg) is already handled by the shared `detectPlatform` + `apiBaseUrlFromServerUrl` detection and has no dedicated tests yet — see [`CONSTITUTION.md`](./CONSTITUTION.md) §8.

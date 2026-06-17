@@ -2,24 +2,30 @@
  * @file pi-action-bridge — Pi TUI extension entry point.
  *
  * Bridges a local Pi session and the `pi-coding-agent-action` CI agent. The
- * agent is read-only (two tools, Phase 2); `/handoff` is the sole write path
- * (Phase 3). See `CONSTITUTION.md` for the full design.
+ * agent is read-only (two tools); `/handoff` is the sole write path. See
+ * `CONSTITUTION.md` for the full design.
  *
- * Phase 1 (this file) wires the {@link session_start} gate (§2.3 Option C):
- * cheap factory load — registers `/handoff` only, no I/O — and at session
- * start does the one git-remote + token check. When the cwd is a known forge
- * repo AND a token resolves, it builds the provider/Octokit (ready for Phase 2
- * to register `get_thread` / `get_pr_diff` against); otherwise the bridge goes
- * inert with one info line and registers nothing. This keeps `pi --list-models`
- * / `--version` fast (no factory I/O) and keeps non-forge repos clean (no forge
- * tools in the agent's tool surface).
+ * This file wires the {@link session_start} gate (§2.3 Option C): a cheap
+ * factory (no I/O) that, at session start (real sessions only — never
+ * `pi --list-models` / `--version` / print mode), does the one git-remote +
+ * token check. When the cwd is a known forge repo AND a token resolves, it
+ * builds the provider/Octokit and registers the two read-only tools
+ * (`get_thread`, `get_pr_diff`) plus the `/handoff` command against it;
+ * otherwise the bridge goes inert with one info line and registers nothing.
+ * This keeps `pi --list-models` / `--version` fast (no factory I/O) and keeps
+ * non-forge repos clean (no forge tools in the agent's tool surface).
+ *
+ * Session auto-enrichment (Phase 4, §6) is wired separately via the
+ * {@link before_agent_start} hook in `hooks/session-enrichment.ts`.
  */
 
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Bridge } from './bridge.js';
+import { loadBridgeConfig } from './config.js';
 import { getThreadToolFactory } from './tools/get-thread.js';
 import { getPRDiffToolFactory } from './tools/get-pr-diff.js';
 import { registerHandoffCommand } from './handoff.js';
+import { registerSessionEnrichment } from './hooks/session-enrichment.js';
 
 export default function piActionBridge(pi: ExtensionAPI): void {
   // The `/handoff` command needs a Bridge (provider + git + Octokit), which is
@@ -58,6 +64,13 @@ export default function piActionBridge(pi: ExtensionAPI): void {
     pi.registerTool(getThreadToolFactory(bridge));
     pi.registerTool(getPRDiffToolFactory(bridge));
     registerHandoffCommand(pi, bridge);
+
+    // Session enrichment (Phase 4 / §6): load config once per session here (sync
+    // read of a tiny file) and gate the before_agent_start hook on `auto_sync`.
+    // The hook's one-shot guard is closure-scoped to this session_start call,
+    // so it re-arms naturally on new/resume/fork.
+    const config = loadBridgeConfig({ cwd: ctx.cwd, isTrusted: ctx.isProjectTrusted() });
+    registerSessionEnrichment(pi, bridge, { autoSync: config.auto_sync });
 
     ctx.ui.notify(
       `pi-action-bridge: active on ${bridge.discovery.parsed.serverUrl} (${bridge.discovery.platformType}).`,
