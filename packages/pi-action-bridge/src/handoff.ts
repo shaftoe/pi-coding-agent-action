@@ -169,7 +169,7 @@ export async function runHandoff(
   // pointed at a retired `v1` branch and produced an empty diff + a misleading
   // "no diff against origin/v1" message). Only the create path (no existing
   // PR) falls back to detecting the repo's default branch.
-  const base = existingPR ? existingPR.base : await detectDefaultBranch(cwd);
+  const base = existingPR ? existingPR.base : await detectDefaultBranch(cwd, octokit, owner, repo);
   const rawDiff = await getLocalDiff(cwd, base);
   if (!rawDiff) {
     ctx.ui.notify(

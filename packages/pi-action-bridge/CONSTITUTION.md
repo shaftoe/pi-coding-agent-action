@@ -33,7 +33,7 @@ These decisions are considered locked. Alternatives that were weighed and reject
   3. **Dirty-tree check (Q7).** `simple-git` `.status()` — if anything is uncommitted (modified/not_added/staged but uncommitted), `ctx.ui.notify("Working tree is dirty — commit or stash first, then re-run /handoff", "warning")` and **abort**. `/handoff` never mutates the working tree: no auto-commit (commit message ≠ handoff prose — category error), no auto-stash (silent mutation). The user handles it however they prefer — a `/commit` prompt, a terminal tab, whatever — then re-runs `/handoff` (idempotent on retry per step 8). If the tree is clean, proceed silently (no prompt).
   4. Resolve branch → PR via git + GitHub API (does a PR already exist for this branch? create vs. update).
   5. Gather session context **compaction-aware.** `ctx.sessionManager.getBranch()` returns the *full lineage including pre-compaction entries* (`session-manager.js` walks `leafId`→root via `parentId`). Feeding that naively to `complete()` duplicates pre-compaction messages against the compaction summary — redundant, potentially contradictory, token-bloat. Use a compaction-boundary filter: either replicate `getHandoffMessages()` from `examples/extensions/handoff.ts` (keeps `[compaction, …entries from firstKeptEntryId onward]`), or call the SDK-exported `prepareBranchEntries(entries, tokenBudget)` (`@earendil-works/pi-coding-agent`) which is token-budgeted and compaction-aware. Then `convertToLlm` → `serializeConversation` (both exported).
-  6. Fetch the **local** diff via `simple-git` (`git diff origin/<base>...HEAD`, triple-dot so it captures everything on the feature branch since divergence) and truncate it via `truncateDiff(diff, 1000, 102_400)` (imported from `@alexanderfortin/pi-orchestrator/pi/tools/get-pr-diff` — same 1000-line / 100KB budget the `get_pr_diff` tool uses). **Why local, not `provider.getPRDiff()` (review pass 11):** the provider's `fetchPRDiff(deps, owner, repo, pullNumber: number, …)` calls `octokit.rest.pulls.get({ pull_number })` — a PR *must exist*. For the create case (step 4 found no PR) there's no `pullNumber`, so the provider call is a chicken-and-egg against the step ordering. The local diff has no such dependency, is offline/fast, and summarizes *your* work (on update the remote PR may include others' commits). It also bypasses the provider's lack of truncation — truncation lives in the orchestrator *tool wrapper*, not `fetchPRDiff`, so `/handoff` must truncate itself (hence the imported `truncateDiff`). The `<base>` is the upstream default branch (`main`, overridable if needed); on a create it's the only base available, on an update it matches the PR's base. (The `get_pr_diff` **tool** still uses `provider.getPRDiff()` — §4 — that's a different consumer reading an existing PR mid-session, no chicken-and-egg.)
+  6. Fetch the **local** diff via `simple-git` (`git diff origin/<base>...HEAD`, triple-dot so it captures everything on the feature branch since divergence) and truncate it via `truncateDiff(diff, 1000, 102_400)` (imported from `@alexanderfortin/pi-orchestrator/pi/tools/get-pr-diff` — same 1000-line / 100KB budget the `get_pr_diff` tool uses). **Why local, not `provider.getPRDiff()` (review pass 11):** the provider's `fetchPRDiff(deps, owner, repo, pullNumber: number, …)` calls `octokit.rest.pulls.get({ pull_number })` — a PR *must exist*. For the create case (step 4 found no PR) there's no `pullNumber`, so the provider call is a chicken-and-egg against the step ordering. The local diff has no such dependency, is offline/fast, and summarizes *your* work (on update the remote PR may include others' commits). It also bypasses the provider's lack of truncation — truncation lives in the orchestrator *tool wrapper*, not `fetchPRDiff`, so `/handoff` must truncate itself (hence the imported `truncateDiff`). The `<base>` is the upstream default branch; on an update it matches the PR's `base.ref` (read directly from the PR record, zero extra API calls — never guessed); on a create it's resolved authoritatively via `octokit.rest.repos.get({ owner, repo }).default_branch`, with local `origin/HEAD` heuristics as a fallback for offline/network-error cases (so a stale symbolic-ref can never produce an empty or wrong diff base). (The `get_pr_diff` **tool** still uses `provider.getPRDiff()` — §4 — that's a different consumer reading an existing PR mid-session, no chicken-and-egg.)
   7. **One** one-shot model call — `complete()` from `@earendil-works/pi-ai`, authed via `ctx.modelRegistry.getApiKeyAndHeaders(ctx.model)`, fed the diff + serialized conversation, with a strict prompt that returns the `## Done` / `## Next` prose **and a one-line PR title**. Uses `ctx.model`. (The PR body is *not* drafted by `complete()` — it's a static template, step 9.) **Response format:** the exact prompt + output contract is an implementation detail iterated in `handoff.ts` against real model output (pre-writing a prompt in a spec is counterproductive). **Fail-soft:** if the response doesn't parse (e.g. title not cleanly separable), dump the raw `complete()` output into the `ctx.ui.editor` review step (step 11) for the human to clean up — don't hard-fail the handoff over a parsing detail.
   8. Push branch (`simple-git`) — idempotent (skip if remote already has it).
   9. Create / update PR via Octokit — title from step 7; body = minimal template (Q6): two visible lines, a branch pointer (`**Branch:** feat-x → main`) and a handoff pointer (`**Handoff:** see the /pi 🤖 Handoff comment`), no LLM-authored body content. Handle 401/403 (§2.3). For an *update*, the title can be left unchanged or re-drafted; the body is always overwritten to the template.
@@ -62,7 +62,7 @@ These decisions are considered locked. Alternatives that were weighed and reject
 
 - **Git operations** (push, branch detection, remote queries via `simple-git`): the developer's existing git credentials — SSH keys, macOS Keychain, credential helpers. No env var.
 - **Forge API operations** (threads, diffs, comments, PR creation via Octokit): requires a token, discovered in this order: `GITHUB_TOKEN` env var → `GH_TOKEN` env var → `gh auth token` (best-effort, only if `gh` is on PATH and the env vars are both absent) → **hard error** if none. Fail fast if missing. **No first-run flows** — the bridge never invokes `gh auth login` or any interactive prompt; it only *reads* a token `gh` already has stored. All forge operations stay Octokit; `gh` is **discovery-only, never a write path** (no `gh pr create`, no shelling out).
-- **Token-check timing: `session_start`-gated dynamic registration (Option C).** The async factory registers `/handoff` only (cheap, no I/O — commands don't pollute the tool surface or the system prompt). In the `session_start` handler — which fires only for real sessions, never for `pi --list-models` / `--version` / print mode (`docs/extensions.md`) — the bridge does the one git-remote + token check:
+- **Token-check timing: `session_start`-gated dynamic registration (Option C).** The async factory is a no-op stub (no I/O). **Both** `/handoff` and the read-only tools are registered inside the `session_start` handler — which fires only for real sessions, never for `pi --list-models` / `--version` / print mode (`docs/extensions.md`). This is a refinement of the original Q1 design (which described the factory as registering `/handoff` eagerly): `/handoff` needs a `Bridge` instance (provider + git + Octokit), which is only constructed inside the gate after the forge + token check passes. Registering an inert `/handoff` stub in the factory was considered but rejected — a stub that always errors with "bridge not ready" is worse UX than simply not registering the command in non-forge repos (the user gets "unknown command," which is honest). In the `session_start` handler the bridge does the one git-remote + token check:
   - `simple-git` `git remote get-url origin` (try/catch the not-a-git-repo case → treat as inert-skip, same as non-Forge).
   - Normalize the remote → `detectPlatform()` (imported from `pi-platform-github`).
   - **If remote-is-Forge ∧ `GITHUB_TOKEN`/`GH_TOKEN` present:** build the provider/Octokit and dynamically `pi.registerTool()` the two read-only tools (`get_thread`, `get_pr_diff`). Source-verified (`dist/core/agent-session.js` → `_refreshToolRegistry`): a tool registered via `pi.registerTool()` is **auto-activated and added to the system prompt's active tool set** — no `pi.setActiveTools()` call needed — and since `session_start` runs before `before_agent_start`, the tools are live for turn 1. (This is the same pattern `examples/extensions/dynamic-tools.ts` uses, registering at `session_start` and working bare.)
@@ -184,8 +184,9 @@ pi-action-bridge/
 ├── package.json          # npm metadata + Pi manifest ("pi": { extensions }) — see §3.7
 ├── tsconfig.json
 ├── src/
-│   ├── index.ts          # Extension entry point (async factory)
+│   ├── index.ts          # Extension entry point (async factory + session_start gate)
 │   ├── bridge.ts         # Bridge class: git discovery → synth PlatformContext + provider + Octokit (incl. inline buildPlatformContext)
+│   ├── config.ts         # Bridge-owned JSONC config (§9): global/project scopes, trust gate, string-aware stripJsonc
 │   ├── detect.ts         # Normalize git remote → server URL; delegate to detectPlatform()
 │   ├── handoff.ts        # /handoff command: orchestration + complete() + HITL review
 │   ├── pull-request.ts   # /handoff-internal: push (simple-git) + create/update PR (Octokit)
@@ -196,12 +197,11 @@ pi-action-bridge/
 │       └── session-enrichment.ts  # Auto-inject PR context on first turn (before_agent_start)
 ├── tests/
 │   ├── bridge.spec.ts
-│   ├── handoff.spec.ts
-│   ├── platform/
-│   │   └── detect.spec.ts
-│   └── tools/
-│       ├── get-thread.spec.ts
-│       └── get-pr-diff.spec.ts
+│   ├── config.spec.ts
+│   ├── detect.spec.ts
+│   ├── pull-request.spec.ts
+│   ├── session-enrichment.spec.ts
+│   └── tools.spec.ts
 └── README.md
 ```
 
@@ -211,7 +211,7 @@ pi-action-bridge/
 
 An earlier draft proposed a `pi-forge-client` package exposing a platform-agnostic `ForgeClient` interface (a generic `request(path, options)`). Dropped:
 
-- **Octokit already is the cross-platform client.** GitHub, Codeberg, Forgejo, and Gitea all speak the same GitHub-compatible REST API; the only per-platform switch is Octokit's `baseUrl` (`/api/v3` for GHE vs `/api/v1` for Codeberg/Forgejo/Gitea). The pure function `apiBaseUrlFromServerUrl(serverUrl)` (today in `pi-cli/src/octokit.ts`) and `detectPlatform(serverUrl)` (in `pi-platform-github`) are a **natural pair**: both pure functions of `serverUrl`, both pattern-match the same host substrings (`codeberg`/`forgejo`/`gitea`/`github.com`/`.github.`), answering complementary questions about the same platform (*what type* vs *what API URL*). They are not redundant — `detectPlatform` collapses github.com and self-hosted GHE both to `'github'`, while `apiBaseUrlFromServerUrl` distinguishes them (github.com → default; GHE → `/api/v3`) — so neither derives from the other. Keeping them split across two packages is a concrete drift risk: adding a forge host means editing both. **Q9 decision (v0.12): promote `apiBaseUrlFromServerUrl` into `pi-platform-github** (a small prerequisite PR — see Phase 1) — colocating the natural pair, overriding rule-of-three on cohesion grounds.
+- **Octokit already is the cross-platform client.** GitHub, Codeberg, Forgejo, and Gitea all speak the same GitHub-compatible REST API; the only per-platform switch is Octokit's `baseUrl` (`/api/v3` for GHE vs `/api/v1` for Codeberg/Forgejo/Gitea). The pure function `apiBaseUrlFromServerUrl(serverUrl)` and `detectPlatform(serverUrl)` (both in `pi-platform-github`, co-located per Q9) are a **natural pair**: both pure functions of `serverUrl`, both pattern-match forge host substrings (`codeberg`/`forgejo`/`gitea`/`github.com`), answering complementary questions about the same platform (*what type* vs *what API URL*). They are not redundant — `detectPlatform` collapses github.com and self-hosted GHE both to `'github'`, while `apiBaseUrlFromServerUrl` distinguishes them (github.com → default; GHE → `/api/v3`) — so neither derives from the other. Keeping them split across two packages was a concrete drift risk: adding a forge host meant editing both. **Q9 decision (v0.12): promote `apiBaseUrlFromServerUrl` into `pi-platform-github`** (done in this PR) — colocating the natural pair, overriding rule-of-three on cohesion grounds.
 - **`buildPlatformContext` is different: stay inlined.** It carries no platform logic or pattern-matching — it just assembles a `PlatformContext` from caller args (`repo`, `workspace`, `serverUrl`, …) with sentinel values. Its two callers (`pi-cli` from CLI flags; the bridge from a git remote) gather inputs differently, so promoting it earns ~nothing. It's ~10 lines, inlined in the bridge's `bridge.ts`. Rule-of-three says wait for a third consumer before abstracting.
 - **The generic `request()` signature threw away Octokit's typed `.rest.*` methods** (`issues.get`, `pulls.get`, `pulls.listReviewComments`, diff mediaType). Re-exposing the typed surface would make `ForgeClient` a re-skin of Octokit — a fictional abstraction.
 - Honors §2.9 (duplication over forced abstraction).
@@ -317,7 +317,7 @@ On the **first turn** — via the `before_agent_start` event with a one-shot "al
 
 The earlier plan (extract a `pi-forge-client` package, refactor `pi-platform-github` to consume it) is **dropped** — see §3.4. The bridge reuses the existing provider unchanged for reads.
 
-> **The one recommended (small) `pi-platform-github` change (Q9).** Promote `apiBaseUrlFromServerUrl(serverUrl)` from private `pi-cli/src/octokit.ts` into `pi-platform-github` (alongside `detectPlatform`). It's a natural pair — same input, overlapping host pattern-matching, complementary output (platform *type* vs *API URL*) — and splitting them across packages is a drift risk. This is a ~25-line move + export, not a design change; `pi-cli` keeps calling it (now imported). `buildPlatformContext` is *not* promoted — it's frontend-specific assembly (~10 lines), inlined in the bridge. See §3.4. If you choose to defer even this small promotion and just reimplement `apiBaseUrlFromServerUrl` locally, nothing breaks (it's stable, pure, ~25 lines) — but the drift risk remains.
+> **The one `pi-platform-github` change (Q9).** `apiBaseUrlFromServerUrl(serverUrl)` was promoted from private `pi-cli/src/octokit.ts` into `pi-platform-github` (alongside `detectPlatform`) — done in this PR. It's a natural pair — same input, complementary output (platform *type* vs *API URL*) — and splitting them across packages was a drift risk. This was a ~25-line move + export, not a design change; `pi-cli` now imports it. `buildPlatformContext` was *not* promoted — it's frontend-specific assembly (~10 lines), inlined in the bridge. See §3.4.
 
 > **Scope caveat — "no refactoring" means "not forced to," not "nothing duplicated."** Even if `apiBaseUrlFromServerUrl` is promoted, the bridge still inlines `buildPlatformContext` (~10 lines of context assembly) because `pi-cli` is private and that helper is too frontend-specific to abstract. This is consistent with §2.9 (duplication over forced abstraction).
 
@@ -328,30 +328,30 @@ The only prerequisite is confirming the provider's CI-only methods no-op against
 ## 8. Implementation Roadmap
 
 ### Phase 1: Bridge Scaffold
-- [ ] **(Q9 prerequisite)** Promote `apiBaseUrlFromServerUrl(serverUrl)` from `pi-cli/src/octokit.ts` into `pi-platform-github` (alongside `detectPlatform`) and export it. Small ~25-line move; `pi-cli` imports it after the move. Run `bun run validate`.
-- [ ] Create `packages/pi-action-bridge` — package.json, tsconfig, Pi manifest
-- [ ] Async factory: registers `/handoff` only (no I/O) — cheap load, inert in non-Forge repos and for `pi --list-models`/`--version`
-- [ ] `session_start` gate: git-remote check (`simple-git`, try/catch not-a-repo) → `detectPlatform` → if Forge ∧ token, build provider/Octokit and `pi.registerTool()` the two read-only tools; else register nothing + one info line (§2.3 Q1 decision)
-- [ ] Bridge class with git discovery (`simple-git`) + synthetic `PlatformContext` (inline `buildPlatformContext`, ~10 lines) + `createGitHubPlatformProvider()`
-- [ ] Platform detection from git remote (delegating to `detectPlatform` + `apiBaseUrlFromServerUrl`, both imported from `pi-platform-github`)
-- [ ] Git credentials for push (developer's existing helpers)
-- [ ] Tests for platform detection and bridge class
-- [ ] Update root `AGENTS.md` "Repository Layout" to include `pi-action-bridge`
+- [x] **(Q9 prerequisite)** Promote `apiBaseUrlFromServerUrl(serverUrl)` from `pi-cli/src/octokit.ts` into `pi-platform-github` (alongside `detectPlatform`) and export it. Small ~25-line move; `pi-cli` imports it after the move. Run `bun run validate`. — *Done in this PR.*
+- [x] Create `packages/pi-action-bridge` — package.json, tsconfig, Pi manifest
+- [x] Async factory: no-op stub (no I/O) — `/handoff` + tools are registered inside the `session_start` gate (refinement of Q1; see §2.3)
+- [x] `session_start` gate: git-remote check (`simple-git`, try/catch not-a-repo) → `detectPlatform` → if Forge ∧ token, build provider/Octokit and `pi.registerTool()` the two read-only tools + register `/handoff`; else register nothing + one info line (§2.3 Q1 decision)
+- [x] Bridge class with git discovery (`simple-git`) + synthetic `PlatformContext` (inline `buildPlatformContext`, ~10 lines) + `createGitHubPlatformProvider()`
+- [x] Platform detection from git remote (delegating to `detectPlatform` + `apiBaseUrlFromServerUrl`, both imported from `pi-platform-github`)
+- [x] Git credentials for push (developer's existing helpers)
+- [x] Tests for platform detection and bridge class
+- [x] Update root `AGENTS.md` "Repository Layout" to include `pi-action-bridge`
 
 ### Phase 2: Read-Only Tools
-- [ ] `get_thread` tool (wraps `provider.getIssueOrPRThread()`) — read-only
-- [ ] `get_pr_diff` tool (wraps `provider.getPRDiff()`) — read-only
-- [ ] Tests for both tools
+- [x] `get_thread` tool (wraps `provider.getIssueOrPRThread()`) — read-only
+- [x] `get_pr_diff` tool (wraps `provider.getPRDiff()`) — read-only
+- [x] Tests for both tools
 
 ### Phase 3: `/handoff` Command
-- [ ] `/handoff` command: arg parsing (`-y`/`--yes`), orchestration, `complete()` summary, `ctx.ui.editor` HITL, post handoff comment via direct Octokit; PR create/update via command-internal `pull-request.ts`
-- [ ] Idempotent push/PR retry; 401/403 handling
-- [ ] Tests for `/handoff`
+- [x] `/handoff` command: arg parsing (`-y`/`--yes`), orchestration, `complete()` summary, `ctx.ui.editor` HITL, post handoff comment via direct Octokit; PR create/update via command-internal `pull-request.ts`
+- [x] Idempotent push/PR retry; 401/403 handling
+- [x] Tests for `/handoff`
 
 ### Phase 4: Session Enrichment
-- [ ] Auto-detect branch → PR on first turn via `before_agent_start` (controlled by `auto_sync` config, §9)
-- [ ] Inject PR metadata + last 3 comments as a persistent session message (one-shot guard) — **fetch-then-slice-last-N** (see §6 gotcha: `max_comments` returns oldest, not most recent)
-- [ ] Tests for session enrichment
+- [x] Auto-detect branch → PR on first turn via `before_agent_start` (controlled by `auto_sync` config, §9)
+- [x] Inject PR metadata + last 3 comments as a persistent session message (one-shot guard) — **fetch-then-slice-last-N** (see §6 gotcha: `max_comments` returns oldest, not most recent)
+- [x] Tests for session enrichment
 
 ### Phase 5: Codeberg Support
 - [ ] Codeberg: Octokit `baseUrl` swap (`/api/v1`) — via `detectPlatform` + `apiBaseUrlFromServerUrl` (both imported from `pi-platform-github` post-Q9)
@@ -410,7 +410,7 @@ No changes to the CI action are required. The handoff works via the existing `/p
 
 All design decisions are resolved as of v0.16. This section is a historical record of the grilling sessions (Q1–Q10) with rationale, kept so the reasoning isn't re-litigated. Resolved items are struck through; the relevant section is cross-referenced for the current spec.
 
-- **~~Q1~~ — Token-check timing. ✅ Resolved v0.7:** Option C — async factory registers `/handoff` only; `session_start` handler does the git-remote + token check and dynamically `pi.registerTool()`s the two read-only tools only when remote-is-Forge ∧ token-present (source-verified: registered tools are auto-active and feed the system prompt by turn 1). Rejects eager-factory-throw (contained but noisy, too-wide scope, slows `--list-models`) and lazy-per-execute (leaks forge tools into non-Forge tool surface). See §2.3.
+- **~~Q1~~ — Token-check timing. ✅ Resolved v0.7 (refined in impl):** Option C — `session_start`-gated registration. The async factory is a no-op stub; **both** `/handoff` and the two read-only tools are registered inside the `session_start` handler after the forge + token check passes. (The original design text described the factory as registering `/handoff` eagerly and deferring only the tools; the implementation defers `/handoff` too, because it needs a `Bridge` instance that the gate constructs. An inert `/handoff` stub in the factory was rejected — "unknown command" in non-forge repos is cleaner than a stub that always errors.) Rejects eager-factory-throw (contained but noisy, too-wide scope, slows `--list-models`) and lazy-per-execute (leaks forge tools into non-Forge tool surface). See §2.3.
 - **~~Q2~~ — `gh auth` as a token *discovery* source. ✅ Resolved v0.8:** discovery-only. Token resolution order: `GITHUB_TOKEN` → `GH_TOKEN` → `gh auth token` (best-effort if `gh` on PATH and env vars absent) → hard error. No `gh auth login` / interactive prompts ("no first-run flows" preserved). All forge operations stay Octokit — `gh` is discovery-only, **never** a write path. §2.4 reworded to "No *Hard* `gh` CLI Dependency." See §2.3.
 - **~~Q3~~ — Token/git-account mismatch. ✅ Resolved v0.9:** no `session_start` call (corrected the false premise that identity is free — it costs `octokit.users.getAuthenticated()`, and `ghp_` tokens aren't locally decodable). Commits are authored by local git identity (bridge uses `simple-git`, not the Git Data API — CI's `appendCoAuthoredBy`/`actor` trailer doesn't apply). PR author is the token account. Mismatch is usually intentional (team tokens), so no warning; instead `/handoff` shows a free passive info line at HITL review when `result.user.login` ≠ `git config user.name` (both values already in hand). See §2.3.
 - **~~Q4~~ — `create_comment`. ✅ Resolved v0.11 (supersedes v0.10):** the tool is **dropped entirely**, not just made steering-only. The agent is read-only — its two tools (`get_thread`, `get_pr_diff`) only fetch context. All writes are `/handoff`-internal (push, PR, handoff comment). `create_pull_request` was likewise demoted from a tool to a `/handoff`-internal function (`src/pull-request.ts`). Rationale: steering is a human decision (not autonomous), and opening PRs is a deliberate handoff gesture with a format contract. See §2.7 / §4.

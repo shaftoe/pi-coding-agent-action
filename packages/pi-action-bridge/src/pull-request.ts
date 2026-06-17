@@ -31,13 +31,41 @@ export async function isCleanWorkingTree(cwd: string): Promise<boolean> {
 /**
  * Detect the upstream default branch (e.g. `main`), for the local-diff base.
  *
- * Tries `git symbolic-ref refs/remotes/origin/HEAD` first (set by `git clone`
- * and `git remote set-head`); falls back to `main`, then `master`. Per §2.1
- * step 6, the base is the upstream default branch (the only base available on
- * a create; matches the PR's base on an update).
+ * **Authoritative source first:** queries `octokit.rest.repos.get` for the
+ * repo's true `default_branch`. This is the only way to avoid being fooled by
+ * a stale `origin/HEAD` symbolic-ref (which can still resolve successfully
+ * while pointing at a retired branch — e.g. `origin/v1` — producing an empty
+ * or wrong diff base). `/handoff` is a rare, deliberate action that already
+ * makes several API calls, so one extra round-trip for correctness is
+ * negligible.
+ *
+ * **Local fallback** (offline / network error / rate limit): tries
+ * `git symbolic-ref refs/remotes/origin/HEAD`, then probes `main`/`master`,
+ * then assumes `main`. These can be stale but are strictly better than
+ * crashing when the network is unavailable.
+ *
+ * Per §2.1 step 6, the base is the upstream default branch (the only base
+ * available on a create; matches the PR's base on an update — the update path
+ * uses the PR's `base.ref` directly and never calls this function).
  */
 // fallow-ignore-next-line complexity
-export async function detectDefaultBranch(cwd: string): Promise<string> {
+export async function detectDefaultBranch(
+  cwd: string,
+  octokit: OctokitInstance,
+  owner: string,
+  repo: string
+): Promise<string> {
+  // --- Authoritative: the repo's actual default branch via API ---
+  try {
+    const { data } = await octokit.rest.repos.get({ owner, repo });
+    if (data.default_branch) {
+      return data.default_branch;
+    }
+  } catch {
+    // Network error / rate limit → fall through to local heuristics.
+  }
+
+  // --- Local fallback (offline) ---
   const git = simpleGit(cwd);
   try {
     const ref = (await git.raw(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])).trim();
@@ -49,8 +77,8 @@ export async function detectDefaultBranch(cwd: string): Promise<string> {
   } catch {
     // origin/HEAD not set — fall through.
   }
-  // Fallbacks: probe common default names. `revparse --verify origin/<name>`
-  // succeeds iff that remote branch exists.
+  // Probe common default names. `rev-parse --verify origin/<name>` succeeds
+  // iff that remote branch exists.
   for (const candidate of ['main', 'master']) {
     try {
       const result = await git.raw(['rev-parse', '--verify', `origin/${candidate}`]);

@@ -76,21 +76,26 @@ describe('git helpers', () => {
   });
 
   describe('detectDefaultBranch', () => {
-    it('falls back to "main" when origin/HEAD is unset', async () => {
+    it('uses the API default_branch as the authoritative source', async () => {
       await makeRepo(dir, { withMain: true });
-      await expect(detectDefaultBranch(dir)).resolves.toBe('main');
+      const octokit = makeReposStubOctokit({ defaultBranch: 'develop' });
+      await expect(detectDefaultBranch(dir, octokit, 'o', 'r')).resolves.toBe('develop');
     });
 
-    it('falls back to "master" when main does not exist but master does', async () => {
+    it('falls back to local origin/HEAD when the API fails (offline)', async () => {
+      // Set up a repo whose origin/HEAD points at main.
+      await makeRepo(dir, { withMain: true });
       const git = simpleGit(dir);
-      await git.init();
-      await git.addConfig('user.email', 't@t');
-      await git.addConfig('user.name', 't');
-      await git.addConfig('init.defaultBranch', 'master');
-      await git.raw(['commit', '--allow-empty', '-m', 'init']);
-      // No origin set; rev-parse --verify origin/master fails, so we fall to
-      // the last-resort 'main'. This documents the no-origin behavior.
-      await expect(detectDefaultBranch(dir)).resolves.toBe('main');
+      await git.raw(['update-ref', 'refs/remotes/origin/main', 'HEAD']);
+      await git.raw(['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main']);
+      const octokit = makeReposStubOctokit({ shouldFail: true });
+      await expect(detectDefaultBranch(dir, octokit, 'o', 'r')).resolves.toBe('main');
+    });
+
+    it('falls back to "main" when the API fails and origin/HEAD is unset', async () => {
+      await makeRepo(dir, { withMain: true });
+      const octokit = makeReposStubOctokit({ shouldFail: true });
+      await expect(detectDefaultBranch(dir, octokit, 'o', 'r')).resolves.toBe('main');
     });
   });
 
@@ -172,6 +177,24 @@ function makeStubOctokit(opts: {
     },
     issues: {
       createComment: async () => ({ data: { id: 1 } }),
+    },
+  };
+  return { rest } as unknown as OctokitInstance;
+}
+
+/** Build a stub Octokit whose repos.get returns a canned default_branch. */
+function makeReposStubOctokit(opts: {
+  defaultBranch?: string;
+  shouldFail?: boolean;
+}): OctokitInstance {
+  const rest = {
+    repos: {
+      get: async () => {
+        if (opts.shouldFail) {
+          throw new Error('network error');
+        }
+        return { data: { default_branch: opts.defaultBranch ?? 'main' } };
+      },
     },
   };
   return { rest } as unknown as OctokitInstance;
