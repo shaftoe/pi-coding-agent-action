@@ -57,7 +57,8 @@ describe('extractGoal', () => {
 });
 
 describe('parseDraft', () => {
-  const valid = 'Add auth module\n\n## Done\n- wired middleware\n- added module\n\n## Next\nadd tests';
+  const valid =
+    'Add auth module\n\n## Done\n- wired middleware\n- added module\n\n## Next\nadd tests';
   it('parses title + handoff from a well-formed draft', () => {
     const r = parseDraft(valid);
     expect('title' in r).toBe(true);

@@ -119,9 +119,38 @@ export async function getLocalDiff(cwd: string, base: string): Promise<string> {
  * Push the current branch to origin. Idempotent (§2.1 step 8): if the remote
  * already has the branch, this is a no-op or fast-forward. Sets upstream on
  * first push so the branch tracks `origin/<branch>`.
+ *
+ * **Before pushing**, checks whether the latest commit already contains
+ * `[skip ci]`. If not, creates an empty `[skip ci]` marker commit so the
+ * push event does not trigger the CI action (which would start reviewing
+ * before the `/pi` handoff comment is posted). The `/pi` comment — posted
+ * after the push — is the intended trigger for the CI action to process the
+ * handoff.
+ *
+ * This does NOT violate the no-mutate rule (Q7): the working tree was
+ * already verified clean (step 3), an empty commit touches no files, and
+ * `[skip ci]` is a standard CI-control convention — not "committing work
+ * product." Re-running `pushBranch` on an idempotent retry detects the
+ * existing `[skip ci]` marker and skips the extra commit.
  */
 export async function pushBranch(cwd: string): Promise<void> {
   const git = simpleGit(cwd);
+
+  // Check whether the latest commit already has [skip ci] — if so, skip
+  // adding another one (idempotent retry guard). Uses `git.raw` for both
+  // log and commit because `simple-git`'s typed `log()` doesn't support
+  // `--format=%s` (it overrides the output format with its own parser).
+  try {
+    const lastMsg = (await git.raw(['log', '-1', '--format=%s'])).trim();
+    if (!/\[skip ci\]/i.test(lastMsg)) {
+      await git.raw(['commit', '--allow-empty', '-m', '[skip ci] handoff checkpoint']);
+    }
+  } catch {
+    // Log failure is non-fatal: an empty or fresh repo with no commits can
+    // still push (it will fail later if there's nothing to push, but that's
+    // the caller's problem).
+  }
+
   // -u sets upstream on first push; subsequent pushes fast-forward harmlessly.
   await git.push(['-u', 'origin', 'HEAD']);
 }

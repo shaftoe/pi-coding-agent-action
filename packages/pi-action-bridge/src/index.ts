@@ -72,9 +72,17 @@ export default function piActionBridge(pi: ExtensionAPI): void {
     const config = loadBridgeConfig({ cwd: ctx.cwd, isTrusted: ctx.isProjectTrusted() });
     registerSessionEnrichment(pi, bridge, { autoSync: config.auto_sync });
 
-    ctx.ui.notify(
-      `pi-action-bridge: active on ${bridge.discovery.parsed.serverUrl} (${bridge.discovery.platformType}).`,
-      'info'
-    );
+    // Show rich status: platform + branch + PR (if on a PR branch).
+    const [branch, currentPR] = await Promise.all([
+      bridge.getCurrentBranch(),
+      bridge.resolveCurrentPR(),
+    ]);
+    const branchLabel = branch ?? 'detached HEAD';
+    const prLabel = currentPR ? ` (#${currentPR})` : '';
+    const statusText = `${bridge.discovery.parsed.serverUrl} (${bridge.discovery.platformType}) · ${branchLabel}${prLabel}`;
+    // Persistent status line (visible in the TUI status bar).
+    ctx.ui.setStatus('pi-action-bridge:active', statusText);
+    // One-shot startup notification.
+    ctx.ui.notify(`pi-action-bridge: active on ${statusText}.`, 'info');
   });
 }

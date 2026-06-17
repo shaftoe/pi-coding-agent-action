@@ -139,6 +139,41 @@ describe('git helpers', () => {
       await makeRepo(dir, { withMain: true });
       await expect(pushBranch(dir)).rejects.toThrow();
     });
+
+    it('adds [skip ci] empty commit when latest commit lacks it', async () => {
+      const git = simpleGit(dir);
+      await git.init();
+      await git.addConfig('user.email', 't@t');
+      await git.addConfig('user.name', 't');
+      await git.raw(['symbolic-ref', 'HEAD', 'refs/heads/main']);
+      await Bun.write(join(dir, 'base.txt'), 'base');
+      await git.add('base.txt');
+      await git.commit('init');
+      // No [skip ci] yet. pushBranch will fail (no origin), but the empty
+      // commit should be created before the push attempt.
+      await expect(pushBranch(dir)).rejects.toThrow();
+      const lastMsg = (await git.raw(['log', '-1', '--format=%s'])).trim();
+      // The latest commit is the [skip ci] marker (added before push failed).
+      expect(lastMsg).toMatch(/\[skip ci\]/i);
+    });
+
+    it('skips duplicate [skip ci] commit when last commit already has it', async () => {
+      const git = simpleGit(dir);
+      await git.init();
+      await git.addConfig('user.email', 't@t');
+      await git.addConfig('user.name', 't');
+      await git.raw(['symbolic-ref', 'HEAD', 'refs/heads/main']);
+      await Bun.write(join(dir, 'base.txt'), 'base');
+      await git.add('base.txt');
+      await git.commit('init');
+      // Add the [skip ci] marker manually.
+      await git.raw(['commit', '--allow-empty', '-m', '[skip ci] handoff checkpoint']);
+      await expect(pushBranch(dir)).rejects.toThrow();
+      // Confirm only ONE [skip ci] commit exists (the marker was not duplicated).
+      const allLogs = (await git.raw(['log', '--oneline', '-5'])).trim().split('\n');
+      const skipCiCount = allLogs.filter(l => /\[skip ci\]/i.test(l)).length;
+      expect(skipCiCount).toBe(1);
+    });
   });
 });
 
