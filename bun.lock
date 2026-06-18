@@ -7,9 +7,9 @@
       "dependencies": {
         "@alexanderfortin/pi-orchestrator": "workspace:*",
         "@alexanderfortin/pi-platform-github": "workspace:*",
-        "@earendil-works/pi-agent-core": "^0.79.6",
-        "@earendil-works/pi-ai": "^0.79.6",
-        "@earendil-works/pi-coding-agent": "^0.79.6",
+        "@earendil-works/pi-agent-core": "^0.79.7",
+        "@earendil-works/pi-ai": "^0.79.7",
+        "@earendil-works/pi-coding-agent": "^0.79.7",
       },
       "devDependencies": {
         "@alexanderfortin/semantic-release-keep-a-changelog": "^0.4.2",
@@ -38,9 +38,9 @@
         "@actions/github": "^9.1.1",
         "@alexanderfortin/pi-orchestrator": "workspace:*",
         "@alexanderfortin/pi-platform-github": "workspace:*",
-        "@earendil-works/pi-agent-core": "^0.79.6",
-        "@earendil-works/pi-ai": "^0.79.6",
-        "@earendil-works/pi-coding-agent": "^0.79.6",
+        "@earendil-works/pi-agent-core": "^0.79.7",
+        "@earendil-works/pi-ai": "^0.79.7",
+        "@earendil-works/pi-coding-agent": "^0.79.7",
         "@js-temporal/polyfill": "^0.5.1",
       },
       "devDependencies": {
@@ -56,9 +56,9 @@
       "dependencies": {
         "@alexanderfortin/pi-orchestrator": "workspace:*",
         "@alexanderfortin/pi-platform-github": "workspace:*",
-        "@earendil-works/pi-agent-core": "^0.79.6",
-        "@earendil-works/pi-ai": "^0.79.6",
-        "@earendil-works/pi-coding-agent": "^0.79.6",
+        "@earendil-works/pi-agent-core": "^0.79.7",
+        "@earendil-works/pi-ai": "^0.79.7",
+        "@earendil-works/pi-coding-agent": "^0.79.7",
         "@js-temporal/polyfill": "^0.5.1",
         "@octokit/core": "^7.0.6",
         "@octokit/plugin-rest-endpoint-methods": "^17.0.0",
@@ -74,9 +74,9 @@
         "typebox": "^1.2.16",
       },
       "peerDependencies": {
-        "@earendil-works/pi-agent-core": "^0.79.6",
-        "@earendil-works/pi-ai": "^0.79.6",
-        "@earendil-works/pi-coding-agent": "^0.79.6",
+        "@earendil-works/pi-agent-core": "^0.79.7",
+        "@earendil-works/pi-ai": "^0.79.7",
+        "@earendil-works/pi-coding-agent": "^0.79.7",
       },
     },
     "packages/pi-platform-github": {
@@ -174,13 +174,13 @@
 
     "@colors/colors": ["@colors/colors@1.5.0", "", {}, "sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ=="],
 
-    "@earendil-works/pi-agent-core": ["@earendil-works/pi-agent-core@0.79.6", "", { "dependencies": { "@earendil-works/pi-ai": "^0.79.6", "ignore": "7.0.5", "typebox": "1.1.38", "yaml": "2.9.0" } }, "sha512-SXZc4rQI+3zgUmAJDbU0GzFEHCPHbhItjN7QLsahj3TKfQAon4guwCqsrwZBLH5lPcub2+evTojPNrPItL62tA=="],
+    "@earendil-works/pi-agent-core": ["@earendil-works/pi-agent-core@0.79.7", "", { "dependencies": { "@earendil-works/pi-ai": "^0.79.7", "ignore": "7.0.5", "typebox": "1.1.38", "yaml": "2.9.0" } }, "sha512-kbwGwqq2oy0fr1WYCCgKavUriEL7pWQN/vkF8oCnZ8H+0xu86kAp1iHEVWsMm+NyslLCe4SA1ushfMT/yFhQfQ=="],
 
-    "@earendil-works/pi-ai": ["@earendil-works/pi-ai@0.79.6", "", { "dependencies": { "@anthropic-ai/sdk": "0.91.1", "@aws-sdk/client-bedrock-runtime": "3.1048.0", "@google/genai": "1.52.0", "@mistralai/mistralai": "2.2.1", "@smithy/node-http-handler": "4.7.3", "http-proxy-agent": "7.0.2", "https-proxy-agent": "7.0.6", "openai": "6.26.0", "partial-json": "0.1.7", "typebox": "1.1.38" }, "bin": { "pi-ai": "dist/cli.js" } }, "sha512-KGepEdgEeWDs7Imwlp96tBsO8TjSIpcDBvazsCDtHRa81+uwJI/YGetTegI52pMlKhVpJFLIGajRi4PCGC5MUg=="],
+    "@earendil-works/pi-ai": ["@earendil-works/pi-ai@0.79.7", "", { "dependencies": { "@anthropic-ai/sdk": "0.91.1", "@aws-sdk/client-bedrock-runtime": "3.1048.0", "@google/genai": "1.52.0", "@mistralai/mistralai": "2.2.1", "@smithy/node-http-handler": "4.7.3", "http-proxy-agent": "7.0.2", "https-proxy-agent": "7.0.6", "openai": "6.26.0", "partial-json": "0.1.7", "typebox": "1.1.38" }, "bin": { "pi-ai": "dist/cli.js" } }, "sha512-KTe2euBoBEmFb0W+KR05Im8Qq4coU+eo46++UgNAfT3L8OIBv3QU+/pif9EqaFQ1QUmirv8kgy4TQltvrCu7iQ=="],
 
-    "@earendil-works/pi-coding-agent": ["@earendil-works/pi-coding-agent@0.79.6", "", { "dependencies": { "@earendil-works/pi-agent-core": "^0.79.6", "@earendil-works/pi-ai": "^0.79.6", "@earendil-works/pi-tui": "^0.79.6", "@silvia-odwyer/photon-node": "0.3.4", "chalk": "5.6.2", "cross-spawn": "7.0.6", "diff": "8.0.4", "glob": "13.0.6", "highlight.js": "10.7.3", "hosted-git-info": "9.0.3", "ignore": "7.0.5", "jiti": "2.7.0", "minimatch": "10.2.5", "proper-lockfile": "4.1.2", "semver": "7.8.0", "typebox": "1.1.38", "undici": "8.3.0", "yaml": "2.9.0" }, "optionalDependencies": { "@mariozechner/clipboard": "0.3.9" }, "bin": { "pi": "dist/cli.js" } }, "sha512-xPQDoA3+4Q8UsInST8OGFHPHyi7JQIbx51ku5kf2VuhXrrTv/npjVTXYD3A3D5xs6QRebV0B2mQqHfXaxQAplw=="],
+    "@earendil-works/pi-coding-agent": ["@earendil-works/pi-coding-agent@0.79.7", "", { "dependencies": { "@earendil-works/pi-agent-core": "^0.79.7", "@earendil-works/pi-ai": "^0.79.7", "@earendil-works/pi-tui": "^0.79.7", "@silvia-odwyer/photon-node": "0.3.4", "chalk": "5.6.2", "cross-spawn": "7.0.6", "diff": "8.0.4", "glob": "13.0.6", "highlight.js": "10.7.3", "hosted-git-info": "9.0.3", "ignore": "7.0.5", "jiti": "2.7.0", "minimatch": "10.2.5", "proper-lockfile": "4.1.2", "semver": "7.8.0", "typebox": "1.1.38", "undici": "8.3.0", "yaml": "2.9.0" }, "optionalDependencies": { "@mariozechner/clipboard": "0.3.9" }, "bin": { "pi": "dist/cli.js" } }, "sha512-oEV3+jL4nD6taBiBZxiZifBaMx3FEcyYDlVlcKfPtrv6r3x4FUu4EOR6ISB+MA8IRLYp6NsGs3d5q8BHmVhE+g=="],
 
-    "@earendil-works/pi-tui": ["@earendil-works/pi-tui@0.79.6", "", { "dependencies": { "get-east-asian-width": "1.6.0", "marked": "18.0.5" } }, "sha512-6JCq780X0UuqvJsUDSJmi4V54ObB8qSwFQiBOI1jhPpC+Ydusd8SEXn2HtyIqve/utMgwcZT9aOyZM72m26A0w=="],
+    "@earendil-works/pi-tui": ["@earendil-works/pi-tui@0.79.7", "", { "dependencies": { "get-east-asian-width": "1.6.0", "marked": "18.0.5" } }, "sha512-FtPN6H8gBvaVJWmPAmtB2dviecoCyrxB6SJUBuZ62p8zdiDgDlfAiYxNqTA2/R2iklqBZA83YcLLFWeMAyFuHw=="],
 
     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.28.1", "", { "os": "aix", "cpu": "ppc64" }, "sha512-Svl7tq8k/08+p6CXPpRjQ1fKX+1odH/BQbb48fV6fj3CWHhsoIOoY87w1oHXm0qEpkIK3ZfVgp0hed3XBXzXMQ=="],
 
