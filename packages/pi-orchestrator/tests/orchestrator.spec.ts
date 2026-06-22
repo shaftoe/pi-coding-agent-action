@@ -915,6 +915,92 @@ describe('ActionOrchestrator', () => {
     });
   });
 
+  describe('token usage report', () => {
+    test('logs token usage report when session stats available', async () => {
+      const sessionStats = {
+        inputTokens: 1500,
+        outputTokens: 500,
+        totalTokens: 2000,
+        cost: 0.042,
+        version: '1.0.0',
+      };
+      setAgentRunResult(mockPiAgent, { result: 'Done!', sessionStats });
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
+      expect(infoCalls).toContain(
+        '📊 Token usage: input 1,500 · output 500 · total 2,000 · cost $0.0420'
+      );
+    });
+
+    test('omits cost from report when cost is zero', async () => {
+      const sessionStats = {
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        cost: 0,
+        version: '1.0.0',
+      };
+      setAgentRunResult(mockPiAgent, { result: 'Done!', sessionStats });
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
+      expect(infoCalls).toContain('📊 Token usage: input 100 · output 50 · total 150');
+    });
+
+    test('uses absolute value for cost (handles negative balance reporting)', async () => {
+      const sessionStats = {
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        cost: -0.005,
+        version: '1.0.0',
+      };
+      setAgentRunResult(mockPiAgent, { result: 'Done!', sessionStats });
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
+      expect(infoCalls).toContain(
+        '📊 Token usage: input 100 · output 50 · total 150 · cost $0.0050'
+      );
+    });
+
+    test('does not log token usage report when session stats unavailable', async () => {
+      setAgentRunResult(mockPiAgent, { result: 'Done!' });
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
+      expect(infoCalls.some((c: string) => c.startsWith('📊 Token usage:'))).toBe(false);
+    });
+
+    test('logs token usage report even when session ends with error', async () => {
+      const sessionStats = {
+        inputTokens: 500,
+        outputTokens: 100,
+        totalTokens: 600,
+        cost: 0.02,
+        version: '1.0.0',
+      };
+      setAgentRunResult(mockPiAgent, { error: 'quota exceeded', sessionStats });
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
+      expect(infoCalls).toContain(
+        '📊 Token usage: input 500 · output 100 · total 600 · cost $0.0200'
+      );
+    });
+  });
+
   describe('base_url configuration', () => {
     test('passes baseUrl when provided', async () => {
       const orchestrator = createOrchestrator({

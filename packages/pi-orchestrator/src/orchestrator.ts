@@ -196,6 +196,28 @@ export class ActionOrchestrator {
   }
 
   /**
+   * Log a token-usage report to the action logs.
+   *
+   * The usage is also surfaced as action outputs and (when a comment is
+   * posted) in the comment footer. Logging it explicitly guarantees
+   * visibility for non-interactive runs where no comment is produced
+   * (e.g. agent creates/updates a PR via a tool and returns empty text,
+   * or there is no issue/PR context to comment on).
+   */
+  private logTokenUsageReport(sessionStats: SessionStats): void {
+    const parts: string[] = [
+      `input ${sessionStats.inputTokens.toLocaleString('en-US')}`,
+      `output ${sessionStats.outputTokens.toLocaleString('en-US')}`,
+      `total ${sessionStats.totalTokens.toLocaleString('en-US')}`,
+    ];
+    const cost = Math.abs(sessionStats.cost);
+    if (cost > 0) {
+      parts.push(`cost $${cost.toFixed(4)}`);
+    }
+    this.logger.info(`📊 Token usage: ${parts.join(' · ')}`);
+  }
+
+  /**
    * Export session output for a given format (HTML or JSONL).
    *
    * Shared implementation for session exports: creates the export directory
@@ -248,6 +270,7 @@ export class ActionOrchestrator {
       this.outputSink.setOutput('input_tokens', sessionStats.inputTokens);
       this.outputSink.setOutput('output_tokens', sessionStats.outputTokens);
       this.outputSink.setOutput('cost', sessionStats.cost);
+      this.logTokenUsageReport(sessionStats);
     }
 
     const executionDuration = startTime.until(Temporal.Now.instant());
