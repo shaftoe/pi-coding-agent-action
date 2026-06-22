@@ -21,11 +21,22 @@
  *   `getShareViewerUrl()` (`https://pi.dev/session/`), producing links of
  *   the form `https://pi.dev/session/#<gistId>` (note the `#` fragment —
  *   the viewer reads `location.hash`, so a slash-path URL would silently
- *   fail to load).
+ *   fail to load). The `PI_SHARE_VIEWER_URL` env var overrides the default,
+ *   giving parity with the interactive `/share` command for users who
+ *   self-host the viewer.
  */
 
-/** Default pi.dev session viewer base URL (trailing slash). */
-export const DEFAULT_SHARE_VIEWER_URL = 'https://pi.dev/session/';
+/**
+ * Default session viewer base URL (trailing slash).
+ *
+ * Respects the `PI_SHARE_VIEWER_URL` environment variable so users who
+ * self-host the viewer can point the CI action at the same URL they use
+ * for pi's interactive `/share` command. Falls back to pi.dev.
+ */
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing -- intentional ||: empty-string env var must fall through to the default (a "" viewer URL would produce broken share links) */
+export const DEFAULT_SHARE_VIEWER_URL =
+  process.env.PI_SHARE_VIEWER_URL || 'https://pi.dev/session/';
+/* eslint-enable @typescript-eslint/prefer-nullish-coalescing */
 
 /** Default GitHub Gist REST API endpoint. */
 export const DEFAULT_GITHUB_GIST_API = 'https://api.github.com/gists';

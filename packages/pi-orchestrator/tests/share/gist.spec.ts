@@ -125,6 +125,29 @@ describe('createSessionGist', () => {
     );
   });
 
+  test('DEFAULT_SHARE_VIEWER_URL defaults to pi.dev when env var is unset', () => {
+    // The env var is not set in the test environment, so the constant
+    // should fall back to the pi.dev viewer URL.
+    expect(DEFAULT_SHARE_VIEWER_URL).toBe('https://pi.dev/session/');
+  });
+
+  test('respects PI_SHARE_VIEWER_URL env var override via dynamic import', async () => {
+    const original = process.env.PI_SHARE_VIEWER_URL;
+    process.env.PI_SHARE_VIEWER_URL = 'https://viewer.example.com/s/';
+    try {
+      // Use a unique query string to force a fresh module evaluation so
+      // the module-level constant is re-evaluated with the env var set.
+      const mod = await import(`../../src/share/gist?env_test=${Date.now()}`);
+      expect(mod.DEFAULT_SHARE_VIEWER_URL).toBe('https://viewer.example.com/s/');
+    } finally {
+      if (original === undefined) {
+        delete process.env.PI_SHARE_VIEWER_URL;
+      } else {
+        process.env.PI_SHARE_VIEWER_URL = original;
+      }
+    }
+  });
+
   test('throws when the 2xx response lacks id/html_url (malformed)', async () => {
     globalThis.fetch = mock(async () => ({
       ok: true,

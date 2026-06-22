@@ -617,7 +617,7 @@ Both are disabled by default. When enabled, their file paths are exposed via the
 
 ### Session Sharing (`/share` equivalent)
 
-`share_session` replicates pi's interactive `/share` command: it uploads the exported session HTML to a **secret GitHub Gist** and surfaces a [pi.dev](https://pi.dev/session/) viewer link (`https://pi.dev/session/#<gistId>`). No `gh` CLI is required — the action calls the GitHub Gist REST API directly, so it also works from Forgejo/Gitea runners.
+`share_session` replicates pi's interactive `/share` command: it uploads the exported session HTML to a **secret GitHub Gist** and surfaces a [pi.dev](https://pi.dev/session/) viewer link (`https://pi.dev/session/#<gistId>`). No `gh` CLI is required — the action calls the GitHub Gist REST API directly, so it also works from Forgejo/Gitea runners. Set the `PI_SHARE_VIEWER_URL` environment variable to point at a self-hosted viewer instead of pi.dev (same env var the interactive `/share` command reads).
 
 The link is surfaced in three places: the job log footer, a GitHub **notice** annotation, and the **job summary** (`$GITHUB_STEP_SUMMARY`). It is also exposed as the `share_url`, `gist_url`, and `gist_id` outputs for downstream steps.
 
@@ -643,6 +643,13 @@ Enabling `share_session` **auto-enables `export_session_html`** (the gist carrie
   if: ${{ steps.pi.outputs.share_url }}
   run: echo "Session: ${{ steps.pi.outputs.share_url }}"
 ```
+
+> [!NOTE]
+> **Gist cleanup is your responsibility.** The action does not delete shared gists — they accumulate on the account that owns the `github_token`. This mirrors pi's own `/share` behaviour and is intentional (the links must stay valid for the viewer to work), but it means gists will pile up over time. To keep things tidy:
+> - Use a dedicated bot account for sharing so personal gists don't get cluttered.
+> - Each gist's description includes the repo, issue number, and run ID (`Pi session — owner/repo#123 (run 456)`) for easy identification in the gist list.
+> - Periodically prune old gists via the [GitHub Gist API](https://docs.github.com/en/rest/gists/gists#delete-a-gist) or the web UI. The `gist_id` action output is available for automation — e.g. a scheduled workflow could list and delete gists older than a threshold.
+> - The `gist_url` output points to each gist's page where it can be reviewed or deleted manually.
 
 ### Auto-Compaction
 
