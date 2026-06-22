@@ -11,9 +11,18 @@
  *    LLM provider. Resolved from a provider-specific environment variable
  *    (e.g. `ANTHROPIC_API_KEY` for `--provider anthropic`).
  *
+ * The GitHub token resolver lives in `@alexanderfortin/pi-platform-github`
+ * (shared with the `pi-action-bridge` extension) and is re-exported here so
+ * the CLI's auth surface stays in one module. Provider-token resolution is
+ * CLI-only and stays below.
+ *
  * Both are env-var-only by design: no `--token` flags, no `gh auth token`
  * fallback, no keychain reads.
  */
+
+// Canonical implementation lives in pi-platform-github; re-exported so the
+// CLI keeps a single auth import site (`../auth.js`).
+export { resolveGitHubToken } from '@alexanderfortin/pi-platform-github';
 
 /**
  * Map a `--provider` id to the canonical environment variable name that
@@ -52,29 +61,6 @@ export const PROVIDER_ENV_VARS: Readonly<Record<string, string>> = {
   xiaomi: 'XIAOMI_API_KEY',
   'xiaomi-token-plan-cn': 'XIAOMI_TOKEN_PLAN_CN_API_KEY',
 };
-
-/**
- * Resolve the GitHub API token from the environment.
- *
- * Resolution order (first match wins):
- *   1. `GITHUB_TOKEN`
- *   2. `GH_TOKEN`
- *
- * Throws a descriptive error when neither is set.
- */
-export function resolveGitHubToken(env: NodeJS.ProcessEnv = process.env): string {
-  const gh = env.GITHUB_TOKEN;
-  if (gh && gh.trim() !== '') {
-    return gh;
-  }
-  const ghShort = env.GH_TOKEN;
-  if (ghShort && ghShort.trim() !== '') {
-    return ghShort;
-  }
-  throw new Error(
-    'Missing GitHub token. Set GITHUB_TOKEN (or GH_TOKEN) in your environment and retry.'
-  );
-}
 
 /**
  * Resolve the LLM provider API token for the given provider id.

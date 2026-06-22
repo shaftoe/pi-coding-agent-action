@@ -8,37 +8,14 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { PROVIDER_ENV_VARS, resolveGitHubToken, resolveProviderToken } from '../src/auth.js';
+import { PROVIDER_ENV_VARS, resolveProviderToken } from '../src/auth.js';
+import { resolveGitHubToken } from '@alexanderfortin/pi-platform-github';
 
-describe('resolveGitHubToken', () => {
-  it('returns GITHUB_TOKEN when set', () => {
-    const token = resolveGitHubToken({ GITHUB_TOKEN: 'ghp_abc' });
-    expect(token).toBe('ghp_abc');
-  });
-
-  it('falls back to GH_TOKEN when GITHUB_TOKEN is absent', () => {
-    const token = resolveGitHubToken({ GH_TOKEN: 'ghp_short' });
-    expect(token).toBe('ghp_short');
-  });
-
-  it('prefers GITHUB_TOKEN over GH_TOKEN when both are set', () => {
-    const token = resolveGitHubToken({ GITHUB_TOKEN: 'primary', GH_TOKEN: 'secondary' });
-    expect(token).toBe('primary');
-  });
-
-  it('ignores empty-string env values and falls through to the next source', () => {
-    const token = resolveGitHubToken({ GITHUB_TOKEN: '   ', GH_TOKEN: 'fallback' });
-    expect(token).toBe('fallback');
-  });
-
-  it('throws naming both env vars when neither is set', () => {
-    expect(() => resolveGitHubToken({})).toThrow(/GITHUB_TOKEN.*GH_TOKEN/);
-  });
-
-  it('throws when both env vars are empty', () => {
-    expect(() => resolveGitHubToken({ GITHUB_TOKEN: '', GH_TOKEN: '' })).toThrow(
-      /GITHUB_TOKEN.*GH_TOKEN/
-    );
+describe('resolveGitHubToken (re-exported from pi-platform-github)', () => {
+  // Smoke-test that the CLI's auth barrel re-exports the canonical resolver.
+  // Full coverage lives in packages/pi-platform-github/tests/auth.spec.ts.
+  it('prefers GITHUB_TOKEN over GH_TOKEN', () => {
+    expect(resolveGitHubToken({ GITHUB_TOKEN: 'primary', GH_TOKEN: 'secondary' })).toBe('primary');
   });
 });
 

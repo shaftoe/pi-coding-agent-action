@@ -125,9 +125,13 @@ export type {
   ScanDirectoryParams,
 } from './git';
 
+// GitHub API token resolution (used by pi-cli + pi-action-bridge)
+export { resolveGitHubToken } from './auth';
+
 // Platform provider (used by platform/index.ts)
 export {
   detectPlatform,
+  apiBaseUrlFromServerUrl,
   isKnownServerUrl,
   createGitHubPlatformProvider,
   type GitHubPlatformDeps,

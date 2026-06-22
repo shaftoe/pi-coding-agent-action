@@ -1,0 +1,21 @@
+{
+  "name": "@alexanderfortin/pi-action-bridge",
+  "private": true,
+  "version": "2.20.4",
+  "type": "module",
+  "keywords": ["pi-package"],
+  "dependencies": {
+    "@alexanderfortin/pi-platform-github": "workspace:*",
+    "@octokit/core": "^7.0.6",
+    "@octokit/plugin-rest-endpoint-methods": "^17.0.0",
+    "simple-git": "^3.36.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.79.10",
+    "typebox": "^1.3.0"
+  },
+  "pi": {
+    "prompts": ["./prompts"],
+    "extensions": ["./src/index.ts"]
+  }
+}

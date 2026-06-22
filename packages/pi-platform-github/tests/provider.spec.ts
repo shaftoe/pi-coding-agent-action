@@ -14,6 +14,7 @@ setupGitHubTestEnv({ envPathPrefix: 'gh-event-platform' });
 import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
 import {
   detectPlatform,
+  apiBaseUrlFromServerUrl,
   isKnownServerUrl,
   createGitHubPlatformProvider,
 } from '@alexanderfortin/pi-platform-github';
@@ -225,5 +226,80 @@ describe('PlatformProvider interface compliance', () => {
     for (const method of requiredMethods) {
       expect(typeof provider[method]).toBe('function');
     }
+  });
+});
+
+describe('apiBaseUrlFromServerUrl', () => {
+  test('returns undefined for exact github.com', () => {
+    expect(apiBaseUrlFromServerUrl('https://github.com')).toBeUndefined();
+  });
+
+  test('returns undefined for github.com subdomains', () => {
+    expect(apiBaseUrlFromServerUrl('https://api.github.com')).toBeUndefined();
+    expect(apiBaseUrlFromServerUrl('https://gist.github.com')).toBeUndefined();
+  });
+
+  test('returns /api/v3 for self-hosted GHE hostnames like github.example.com', () => {
+    // These hostnames don't contain '.github.' (no dot before 'github'),
+    // so they fall through to the unrecognized-host default (/api/v3).
+    // This is correct: GHES REST API is at {host}/api/v3.
+    expect(apiBaseUrlFromServerUrl('https://github.example.com')).toBe(
+      'https://github.example.com/api/v3'
+    );
+  });
+
+  test('returns /api/v3 for corporate GHE hostnames like github.internal.corp', () => {
+    expect(apiBaseUrlFromServerUrl('https://github.internal.corp')).toBe(
+      'https://github.internal.corp/api/v3'
+    );
+  });
+
+  test('returns /api/v3 for GHE hosts where github is a middle segment (github.company.internal)', () => {
+    // Regression: the old `.github.` substring check matched any host with
+    // `github` as an interior dotted segment, wrongly returning undefined
+    // (github.com default) for self-hosted GHE hosts like
+    // github.company.internal / github.mycompany.com. These must fall
+    // through to the /api/v3 GHE default.
+    expect(apiBaseUrlFromServerUrl('https://github.company.internal')).toBe(
+      'https://github.company.internal/api/v3'
+    );
+    expect(apiBaseUrlFromServerUrl('https://github.mycompany.com')).toBe(
+      'https://github.mycompany.com/api/v3'
+    );
+  });
+
+  test('returns /api/v3 for unrecognized hosts (self-hosted GHE default)', () => {
+    expect(apiBaseUrlFromServerUrl('https://git.company.internal')).toBe(
+      'https://git.company.internal/api/v3'
+    );
+  });
+
+  test('returns /api/v1 for codeberg.org', () => {
+    expect(apiBaseUrlFromServerUrl('https://codeberg.org')).toBe('https://codeberg.org/api/v1');
+  });
+
+  test('returns /api/v1 for forgejo hosts', () => {
+    expect(apiBaseUrlFromServerUrl('https://git.forgejo.example')).toBe(
+      'https://git.forgejo.example/api/v1'
+    );
+  });
+
+  test('returns /api/v1 for gitea hosts', () => {
+    expect(apiBaseUrlFromServerUrl('https://git.gitea.internal')).toBe(
+      'https://git.gitea.internal/api/v1'
+    );
+  });
+
+  test('strips trailing slash from input', () => {
+    expect(apiBaseUrlFromServerUrl('https://codeberg.org/')).toBe('https://codeberg.org/api/v1');
+    expect(apiBaseUrlFromServerUrl('https://git.company.internal/')).toBe(
+      'https://git.company.internal/api/v3'
+    );
+  });
+
+  test('throws when server URL is empty (aligned with detectPlatform)', () => {
+    expect(() => apiBaseUrlFromServerUrl('')).toThrow(
+      /apiBaseUrlFromServerUrl requires a server URL/
+    );
   });
 });

@@ -114,6 +114,64 @@ export function detectPlatform(serverUrl: string): PlatformType {
 }
 
 /**
+ * Resolve a REST API base URL from a server URL.
+ *
+ * - `https://github.com` (exact): Octokit's default `https://api.github.com`
+ * - `*.github.com` (subdomain, e.g. `github.example.com`): also default
+ * - Self-hosted GHE with custom hostname (e.g. `github.company.internal`):
+ *   {@link detectPlatform} (co-located in this module) defaults to `'github'`
+ *   for unrecognized hosts, so these are treated as GHES-specific: the REST
+ *   API is at `{serverUrl}/api/v3`.
+ * - Codeberg, Forgejo, Gitea: `{serverUrl}/api/v1`
+ *
+ * Returning `undefined` lets the SDK use its built-in `api.github.com`.
+ *
+ * Natural pair of {@link detectPlatform}: both are pure functions of
+ * `serverUrl` with overlapping host pattern-matching, answering
+ * complementary questions (platform *type* vs *API URL*). Kept co-located
+ * to avoid drift when a new host is added.
+ */
+export function apiBaseUrlFromServerUrl(serverUrl: string): string | undefined {
+  if (!serverUrl) {
+    throw new Error('apiBaseUrlFromServerUrl requires a server URL, got an empty string.');
+  }
+  const url = serverUrl.replace(/\/$/, '');
+
+  // Exact github.com → Octokit's default.
+  if (url === 'https://github.com') {
+    return undefined;
+  }
+
+  // Standard github.com subdomains (api.github.com, gist.github.com,
+  // *.github.com). These are real github.com hosts whose API is the
+  // default api.github.com. Scoped to endsWith so that a self-hosted GHE
+  // host like `github.company.internal` (where `github` is an interior
+  // segment, not a github.com subdomain) does NOT match here and correctly
+  // falls through to the /api/v3 GHE default below.
+  if (url.endsWith('.github.com')) {
+    return undefined;
+  }
+
+  // Note: we intentionally do NOT use a broad `url.includes('github.com')`
+  // check here. That would false-positive on self-hosted GHE hosts whose
+  // names merely contain the literal `github.com` substring (e.g.
+  // `github.mycompany.com`). The exact-match and endsWith checks above
+  // already cover every legitimate github.com host; anything else falls
+  // through to the /api/v3 GHE default below.
+
+  // Codeberg, Forgejo, Gitea → /api/v1
+  if (url.includes('codeberg') || url.includes('forgejo') || url.includes('gitea')) {
+    return `${url}/api/v1`;
+  }
+
+  // Self-hosted GitHub Enterprise → /api/v3
+  // This is the standard path for GHES REST API.
+  // Users of other platforms should pass --server-url to get correct
+  // API base URL derivation.
+  return `${url}/api/v3`;
+}
+
+/**
  * Dependencies required to create a GitHub-compatible platform provider.
  *
  * Accepting these as explicit parameters decouples the provider from the

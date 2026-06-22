@@ -27,6 +27,8 @@ Monorepo managed with Bun workspaces (`packages/*`):
   - `src/commands/run.ts` — wires argv → token → Octokit + provider → `ActionOrchestrator`.
   - `src/{octokit,context,auth,config}.ts` — CLI-side Octokit/context/token/config construction.
 
+- **`packages/pi-action-bridge`** (`@alexanderfortin/pi-action-bridge`) — Pi TUI extension bridging local sessions and the `pi-coding-agent-action` CI agent. GitHub threads (issues, PRs, reviews) are the shared state machine.
+
 - **`tests/`** (root) — E2E tests (`tests/e2e/`) plus their local fixtures (`tests/e2e/fixtures/`).
 - **`scripts/`** (root) — Repo-level tooling (changelog, version sync, readme deps).
 
