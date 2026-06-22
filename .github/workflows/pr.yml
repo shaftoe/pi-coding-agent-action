@@ -33,7 +33,7 @@ jobs:
         id: pi
         uses: shaftoe/pi-coding-agent-action@develop
         with:
-          share_session: true
+          export_session_html: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
           provider: ${{ vars.PROVIDER }}
           model: ${{ vars.MODEL }}
