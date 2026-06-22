@@ -166,4 +166,32 @@ describe('createLoggingFactory', () => {
 
     expect(() => factory(mockPi)).not.toThrow();
   });
+
+  test('registers compaction event handlers (Pi v0.79.10+)', () => {
+    const mockCore: CoreAdapter = {
+      getInput: () => '',
+      setFailed: () => {},
+      setOutput: () => {},
+      notice: () => {},
+      debug: () => {},
+      info: () => {},
+      warning: () => {},
+      error: () => {},
+    };
+
+    const registeredEvents: string[] = [];
+    const mockPi = {
+      on: (event: string) => {
+        registeredEvents.push(event);
+      },
+      getAllTools: () => [],
+      getThinkingLevel: () => 'off',
+    } as unknown as ExtensionAPI;
+
+    const factory = createLoggingFactory(mockCore);
+    factory(mockPi);
+
+    expect(registeredEvents).toContain('session_before_compact');
+    expect(registeredEvents).toContain('session_compact');
+  });
 });

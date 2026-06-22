@@ -13,6 +13,8 @@ import {
   formatSystemPromptSection,
   formatToolsSection,
   formatUserPromptSection,
+  compactionReasonLabel,
+  formatCompactionLine,
   type ExtensionLoadingInfo,
   type LogLine,
 } from '@alexanderfortin/pi-orchestrator';
@@ -248,6 +250,68 @@ describe('formatUserPromptSection', () => {
     const texts = allInfo(lines);
     expect(texts[1]!.length).toBeLessThanOrEqual(500 + 3);
     expect(texts[1]!.endsWith('...')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// compactionReasonLabel / formatCompactionLine
+// ---------------------------------------------------------------------------
+
+describe('compactionReasonLabel', () => {
+  test('maps manual reason', () => {
+    expect(compactionReasonLabel('manual')).toBe('manual /compact');
+  });
+
+  test('maps threshold reason', () => {
+    expect(compactionReasonLabel('threshold')).toBe('context threshold reached');
+  });
+
+  test('maps overflow reason', () => {
+    expect(compactionReasonLabel('overflow')).toBe('context overflow recovery');
+  });
+});
+
+describe('formatCompactionLine', () => {
+  test('emits a before line with the reason label', () => {
+    const line = formatCompactionLine('before', 'threshold', false);
+    expect(line.level).toBe('info');
+    expect(line.text).toBe('🧹 Compacting context (context threshold reached)');
+  });
+
+  test('emits an after line with the reason label', () => {
+    const line = formatCompactionLine('after', 'overflow', false);
+    expect(line.level).toBe('info');
+    expect(line.text).toBe('✅ Context compacted (context overflow recovery)');
+  });
+
+  test('includes the retry indicator when willRetry is true', () => {
+    const line = formatCompactionLine('before', 'overflow', true);
+    expect(line.text).toBe(
+      '🧹 Compacting context (context overflow recovery) — turn will be retried'
+    );
+  });
+
+  test('omits the retry indicator when willRetry is false', () => {
+    const line = formatCompactionLine('after', 'manual', false);
+    expect(line.text).not.toContain('retried');
+    expect(line.text).toBe('✅ Context compacted (manual /compact)');
+  });
+
+  test('covers every reason for the before phase', () => {
+    for (const reason of ['manual', 'threshold', 'overflow'] as const) {
+      const line = formatCompactionLine('before', reason, false);
+      expect(line.text).toContain(compactionReasonLabel(reason));
+      expect(line.text).toContain('🧹');
+    }
+  });
+
+  test('covers every reason for the after phase', () => {
+    for (const reason of ['manual', 'threshold', 'overflow'] as const) {
+      const line = formatCompactionLine('after', reason, true);
+      expect(line.text).toContain(compactionReasonLabel(reason));
+      expect(line.text).toContain('✅');
+      expect(line.text).toContain('turn will be retried');
+    }
   });
 });
 

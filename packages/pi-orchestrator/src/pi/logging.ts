@@ -128,6 +128,51 @@ export function formatSystemPromptSection(systemPrompt: string): LogLine[] {
 }
 
 /**
+ * A compaction trigger reason, as reported by the Pi SDK's
+ * `session_before_compact` / `session_compact` events (v0.79.10+).
+ */
+export type CompactionReason = 'manual' | 'threshold' | 'overflow';
+
+/**
+ * Map a compaction reason to a human-readable label. Exported for unit testing.
+ */
+export function compactionReasonLabel(reason: CompactionReason): string {
+  switch (reason) {
+    case 'manual':
+      return 'manual /compact';
+    case 'threshold':
+      return 'context threshold reached';
+    case 'overflow':
+      return 'context overflow recovery';
+  }
+}
+
+/**
+ * Format a log line for a context-compaction event.
+ *
+ * Uses the `reason` and `willRetry` metadata introduced in Pi v0.79.10 to
+ * give visibility into why the context was compacted (manual, threshold, or
+ * overflow recovery) and whether the aborted turn is retried afterwards.
+ *
+ * @param phase     - Whether this is the `before` or `after` compaction event.
+ * @param reason    - What triggered the compaction.
+ * @param willRetry - Whether the aborted turn is retried after compaction.
+ * @returns A single {@link LogLine} describing the compaction event.
+ */
+export function formatCompactionLine(
+  phase: 'before' | 'after',
+  reason: CompactionReason,
+  willRetry: boolean
+): LogLine {
+  const label = compactionReasonLabel(reason);
+  const retry = willRetry ? ' — turn will be retried' : '';
+  if (phase === 'before') {
+    return info(`🧹 Compacting context (${label})${retry}`);
+  }
+  return info(`✅ Context compacted (${label})${retry}`);
+}
+
+/**
  * Format the User Prompt block, including an image-attachment count when
  * images are present. Exported for unit testing.
  */
@@ -202,6 +247,18 @@ export const loggingFactory = (
   pi.on('after_provider_response', async event => {
     logger.info('');
     logger.debug(`📡 Provider response: status ${event.status}`);
+  });
+
+  // Log context-compaction lifecycle. The `reason`/`willRetry` metadata
+  // (Pi v0.79.10+) lets us distinguish manual, threshold, and overflow
+  // compaction flows — especially useful when auto-compaction is enabled,
+  // so longer sessions that fill the context window are visible in the logs.
+  pi.on('session_before_compact', async event => {
+    emitLogLines(logger, [formatCompactionLine('before', event.reason, event.willRetry)]);
+  });
+
+  pi.on('session_compact', async event => {
+    emitLogLines(logger, [formatCompactionLine('after', event.reason, event.willRetry)]);
   });
 
   pi.on('before_agent_start', async (event, ctx) => {
