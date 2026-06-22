@@ -12,7 +12,7 @@ import {
   DEFAULT_SHARE_VIEWER_URL,
   DEFAULT_GITHUB_GIST_API,
   GIST_CREATE_TIMEOUT_MS,
-} from '@alexanderfortin/pi-orchestrator';
+} from '../../src/share/gist';
 
 describe('createSessionGist', () => {
   const originalFetch = globalThis.fetch;

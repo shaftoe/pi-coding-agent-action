@@ -4,20 +4,21 @@
  * Tests that the config gathering logic correctly parses @actions/core
  * inputs into a PiConfig object with proper defaults and validation.
  *
- * NOTE on mock.module: Bun's mock.module() snapshots the factory's return
- * value — subsequent mockImplementation() calls on the original mock
- * objects have NO effect on the module-level exports.  Therefore we call
- * mock.module() directly in beforeEach / each test with a custom factory
- * that provides the exact implemention we need.
+ * Mock strategy: we register the shared `coreMock` object via a DIRECT
+ * `mock.module()` call (Bun hoists direct calls before import resolution).
+ * Both this direct call and `registerCoreMock()` (used by other test files)
+ * point to the **same** `coreMock` object, so regardless of which
+ * registration Bun processes first, `@actions/core` always resolves to
+ * `coreMock`. Per-test overrides are then applied via
+ * `coreMock.getInput.mockImplementation(...)`.
  */
 
 import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { coreMock } from '../../../pi-orchestrator/tests/helpers/core-mock';
 
-// Mock @actions/core BEFORE importing the module-under-test.
-mock.module('@actions/core', () => ({
-  getInput: mock((_name: string) => ''),
-  debug: mock(),
-}));
+// Register the mock DIRECTLY (hoisted by Bun) pointing to the shared coreMock
+// object — same object registerCoreMock() uses, so order doesn't matter.
+mock.module('@actions/core', () => coreMock);
 
 import { gatherActionsConfig } from '../../src/adapters/config';
 
@@ -26,8 +27,7 @@ import { gatherActionsConfig } from '../../src/adapters/config';
 // ---------------------------------------------------------------------------
 
 /**
- * Re-register the @actions/core mock with getInput returning the given
- * overrides on top of required defaults.
+ * Set per-test input overrides on top of required defaults.
  */
 function mockCore(overrides: Record<string, string> = {}): void {
   const defaults: Record<string, string> = {
@@ -38,10 +38,7 @@ function mockCore(overrides: Record<string, string> = {}): void {
     prompt: '',
     ...overrides,
   };
-  mock.module('@actions/core', () => ({
-    getInput: mock((name: string) => defaults[name] ?? ''),
-    debug: mock(),
-  }));
+  coreMock.getInput.mockImplementation((name: string) => defaults[name] ?? '');
 }
 
 // ---------------------------------------------------------------------------
@@ -50,6 +47,9 @@ function mockCore(overrides: Record<string, string> = {}): void {
 
 describe('gatherActionsConfig', () => {
   beforeEach(() => {
+    coreMock.getInput.mockClear();
+    coreMock.debug.mockClear();
+    coreMock.setSecret.mockClear();
     mockCore();
   });
 
@@ -240,6 +240,18 @@ describe('gatherActionsConfig', () => {
       // effective HTML-export flag (exportSessionHtml || shareSession).
       expect(config.shareSession).toBe(true);
       expect(config.exportSessionHtml).toBe(false);
+    });
+
+    test('registers github_token as a secret for log masking', () => {
+      mockCore({ github_token: 'ghp_secret' });
+      gatherActionsConfig();
+      expect(coreMock.setSecret).toHaveBeenCalledWith('ghp_secret');
+    });
+
+    test('does not call setSecret when github_token is empty', () => {
+      mockCore({ github_token: '' });
+      gatherActionsConfig();
+      expect(coreMock.setSecret).not.toHaveBeenCalled();
     });
   });
 });

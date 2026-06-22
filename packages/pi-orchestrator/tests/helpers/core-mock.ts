@@ -1,22 +1,29 @@
 /**
  * Shared @actions/core mock for tests.
  *
- * NOTE: Bun's mock.module() snapshots the factory's return value —
- * subsequent mockImplementation() calls on coreMock.* have NO effect on
- * the module-level exports.  Do NOT call registerCoreMock() and then
- * try to mockImplementation(); instead, in each test file that needs a
- * custom mock, call mock.module() directly in beforeEach (see
- * packages/pi-action/tests/adapters/config.spec.ts for an example).
+ * `mock.module()` in Bun is process-global and first-call-wins: if multiple
+ * test files register a mock for the same module, only the first registration
+ * takes effect. To avoid order-dependent test failures across packages, every
+ * test file that needs to mock `@actions/core` must use this shared helper.
  *
- * This module exists so test files that need the mock struct (setOutput,
- * setFailed, etc.) can import coreMock and refer to it in expectations:
- *
- *   import { coreMock } from './helpers/core-mock';
+ * Usage:
+ *   import { coreMock, registerCoreMock } from './helpers/core-mock';
+ *   registerCoreMock();          // call once at file top-level, before imports
+ *   // ...later in tests:
+ *   coreMock.setOutput.mockImplementation(...);
  *   expect(coreMock.setOutput).toHaveBeenCalledWith(...);
  *
- * The registerCoreMock() call is intentionally a no-op — it exists for
- * backward compat / to document where the initial registration used to
- * live.  New test files should ignore it.
+ * The mock object is shared across all test files in the process — clear spies
+ * in `beforeEach` via `coreMock.setOutput.mockClear()`.
+ *
+ * NOTE: Bun only hoists **direct** `mock.module()` calls before import
+ * resolution.  Calls wrapped inside another function (like
+ * `registerCoreMock()`) are NOT hoisted, so any module that imports
+ * `@actions/core` at load time will receive the real module if the mock
+ * hasn't been registered yet.  Test files that need per-test `getInput`
+ * overrides should call `mock.module()` directly instead of relying on this
+ * helper — see `packages/pi-action/tests/adapters/config.spec.ts` for the
+ * pattern.
  */
 import { mock } from 'bun:test';
 
@@ -39,15 +46,14 @@ export const coreMock = {
 let registered = false;
 
 /**
- * @deprecated mock.module() creates snapshots — modifying coreMock after
- *   registration has no effect.  Call mock.module() directly in your test
- *   file's beforeEach instead (see config.spec.ts for the pattern).
+ * Register the @actions/core mock. Safe to call from multiple test files —
+ * only the first call registers; subsequent calls are no-ops against the
+ * same shared object.
  */
 export function registerCoreMock(): void {
   if (registered) {
     return;
   }
   registered = true;
-  // Intentionally left empty — module-level mock.module() snapshots are
-  // incompatible with per-test mockImplementation() updates.
+  mock.module('@actions/core', () => coreMock);
 }

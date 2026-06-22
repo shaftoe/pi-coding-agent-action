@@ -176,6 +176,11 @@ export function gatherActionsConfig(): PiConfig {
 
   // --- Session sharing inputs --------------------------------------------
   const githubToken = core.getInput('github_token') || undefined;
+  // Register the token for log masking — it may be a PAT/App token with
+  // elevated scopes (e.g. gist) that should never appear in clear text.
+  if (githubToken) {
+    core.setSecret(githubToken);
+  }
 
   // --- Assemble PiConfig (only include optional keys when set) -----------
   return {
