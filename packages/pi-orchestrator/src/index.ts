@@ -30,8 +30,14 @@ export {
   formatToolsSection,
   formatSystemPromptSection,
   formatUserPromptSection,
+  formatCompactionSection,
 } from './pi/logging';
-export type { ExtensionLoadingInfo, LogLine } from './pi/logging';
+export type {
+  ExtensionLoadingInfo,
+  LogLine,
+  CompactionReason,
+  CompactionSectionInput,
+} from './pi/logging';
 export { resolveExtensions, getResourceLoader } from './pi/resource-loader';
 export { createPRToolFactory } from './pi/tools/create-pr';
 export { createReviewToolFactory } from './pi/tools/create-review';

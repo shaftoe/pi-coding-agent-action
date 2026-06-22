@@ -167,3 +167,76 @@ describe('createLoggingFactory', () => {
     expect(() => factory(mockPi)).not.toThrow();
   });
 });
+
+describe('createLoggingFactory compaction events', () => {
+  // Build a capturing logger + ExtensionAPI so we can drive individual event
+  // handlers and assert on the routed log output.
+  function setup() {
+    const messages: { level: 'info' | 'warning' | 'debug' | 'notice' | 'error'; text: string }[] =
+      [];
+    const logger = {
+      debug: (m: string) => messages.push({ level: 'debug', text: m }),
+      info: (m: string) => messages.push({ level: 'info', text: m }),
+      warning: (m: string) => messages.push({ level: 'warning', text: m }),
+      notice: (m: string) => messages.push({ level: 'notice', text: m }),
+      error: (m: string) => messages.push({ level: 'error', text: m }),
+    };
+    const handlers = new Map<string, (...args: unknown[]) => unknown>();
+    const mockPi = {
+      on: (event: string, handler: (...args: unknown[]) => unknown) => {
+        handlers.set(event, handler);
+      },
+      getAllTools: () => [],
+      getThinkingLevel: () => 'off',
+    } as unknown as ExtensionAPI;
+
+    createLoggingFactory(logger)(mockPi);
+    return { messages, handlers };
+  }
+
+  test('subscribes to session_before_compact and session_compact', () => {
+    const { handlers } = setup();
+    expect(handlers.has('session_before_compact')).toBe(true);
+    expect(handlers.has('session_compact')).toBe(true);
+  });
+
+  test('session_before_compact routes overflow-retry to warning level', async () => {
+    const { messages, handlers } = setup();
+    const handler = handlers.get('session_before_compact')!;
+    await handler({
+      type: 'session_before_compact',
+      preparation: { tokensBefore: 185000 },
+      branchEntries: [],
+      reason: 'overflow',
+      willRetry: true,
+      signal: new AbortController().signal,
+    });
+
+    const warnings = messages.filter(m => m.level === 'warning').map(m => m.text);
+    const infos = messages.filter(m => m.level === 'info').map(m => m.text);
+    expect(infos).toEqual([]);
+    expect(warnings).toContain('🗜️  Context compaction starting');
+    expect(warnings).toContain('  Reason:           overflow · turn retried');
+    expect(warnings).toContain('  Tokens before:    185,000');
+    expect(warnings.some(t => t.includes('overflowed mid-turn'))).toBe(true);
+  });
+
+  test('session_compact routes threshold compaction to info level', async () => {
+    const { messages, handlers } = setup();
+    const handler = handlers.get('session_compact')!;
+    await handler({
+      type: 'session_compact',
+      compactionEntry: { tokensBefore: 120000 },
+      fromExtension: false,
+      reason: 'threshold',
+      willRetry: false,
+    });
+
+    const warnings = messages.filter(m => m.level === 'warning').map(m => m.text);
+    const infos = messages.filter(m => m.level === 'info').map(m => m.text);
+    expect(warnings).toEqual([]);
+    expect(infos).toContain('🗜️  Context compaction completed');
+    expect(infos).toContain('  Reason:           threshold');
+    expect(infos).toContain('  Tokens before:    120,000');
+  });
+});

@@ -139,6 +139,60 @@ export function formatUserPromptSection(prompt: string, images?: readonly unknow
   return lines;
 }
 
+/** Why a context compaction was triggered. Mirrors the Pi SDK enum. */
+export type CompactionReason = 'manual' | 'threshold' | 'overflow';
+
+/** Inputs for {@link formatCompactionSection}. */
+export interface CompactionSectionInput {
+  /** Whether this is the "starting" (before) or "completed" (after) phase. */
+  phase: 'before' | 'after';
+  /** What triggered the compaction. */
+  reason: CompactionReason;
+  /** True when the aborted turn is retried after compaction (overflow recovery). */
+  willRetry: boolean;
+  /** Estimated context tokens immediately before compaction. */
+  tokensBefore: number;
+}
+
+/**
+ * Format a context-compaction lifecycle event.
+ *
+ * Overflow-retry compactions (`reason: 'overflow'`, `willRetry: true`) — where
+ * the context window overflowed mid-turn, aborting and retrying the turn after
+ * summarization — are surfaced at warning level so operators can correlate
+ * them with slow/expensive runs. Ordinary (manual/threshold) compactions log
+ * at info level.
+ *
+ * The `before` phase carries an explanatory heads-up line; the `after` phase
+ * omits it to avoid repetition (it only confirms completion).
+ *
+ * Exported for unit testing.
+ */
+export function formatCompactionSection(input: CompactionSectionInput): LogLine[] {
+  const lines: LogLine[] = [];
+  const phaseLabel = input.phase === 'before' ? 'starting' : 'completed';
+  const retrySuffix = input.willRetry ? ' · turn retried' : '';
+  const isOverflowRetry = input.reason === 'overflow' && input.willRetry;
+
+  const headline = `🗜️  Context compaction ${phaseLabel}`;
+  const reasonLine = `  Reason:           ${input.reason}${retrySuffix}`;
+  const tokensLine = `  Tokens before:    ${input.tokensBefore.toLocaleString()}`;
+
+  const push = isOverflowRetry ? warning : info;
+  lines.push(push(headline));
+  lines.push(push(reasonLine));
+  lines.push(push(tokensLine));
+
+  if (isOverflowRetry && input.phase === 'before') {
+    lines.push(
+      warning(
+        '  ⚠️  Context window overflowed mid-turn — the turn was aborted and will be retried after summarization. This typically increases run latency and cost.'
+      )
+    );
+  }
+  return lines;
+}
+
 /**
  * Emit an array of `LogLine`s through the given logger.
  */
@@ -202,6 +256,33 @@ export const loggingFactory = (
   pi.on('after_provider_response', async event => {
     logger.info('');
     logger.debug(`📡 Provider response: status ${event.status}`);
+  });
+
+  // Surface context compaction so operators can correlate slow/expensive runs
+  // with overflow-retry compactions (reason: 'overflow', willRetry: true)
+  // versus ordinary threshold compactions. See formatCompactionSection().
+  pi.on('session_before_compact', async event => {
+    emitLogLines(
+      logger,
+      formatCompactionSection({
+        phase: 'before',
+        reason: event.reason,
+        willRetry: event.willRetry,
+        tokensBefore: event.preparation.tokensBefore,
+      })
+    );
+  });
+
+  pi.on('session_compact', async event => {
+    emitLogLines(
+      logger,
+      formatCompactionSection({
+        phase: 'after',
+        reason: event.reason,
+        willRetry: event.willRetry,
+        tokensBefore: event.compactionEntry.tokensBefore,
+      })
+    );
   });
 
   pi.on('before_agent_start', async (event, ctx) => {

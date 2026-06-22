@@ -13,8 +13,10 @@ import {
   formatSystemPromptSection,
   formatToolsSection,
   formatUserPromptSection,
+  formatCompactionSection,
   type ExtensionLoadingInfo,
   type LogLine,
+  type CompactionSectionInput,
 } from '@alexanderfortin/pi-orchestrator';
 
 function allInfo(lines: readonly LogLine[]): string[] {
@@ -252,6 +254,131 @@ describe('formatUserPromptSection', () => {
 });
 
 // ---------------------------------------------------------------------------
+// formatCompactionSection
+// ---------------------------------------------------------------------------
+
+describe('formatCompactionSection', () => {
+  test('ordinary threshold compaction logs at info level (before phase)', () => {
+    const lines = formatCompactionSection({
+      phase: 'before',
+      reason: 'threshold',
+      willRetry: false,
+      tokensBefore: 120000,
+    });
+    expect(allWarning(lines)).toEqual([]);
+    expect(allInfo(lines)).toContain('🗜️  Context compaction starting');
+    expect(allInfo(lines)).toContain('  Reason:           threshold');
+    expect(allInfo(lines)).toContain('  Tokens before:    120,000');
+    // No overflow explanation for ordinary compactions.
+    expect(lines.some(l => l.text.includes('overflowed mid-turn'))).toBe(false);
+  });
+
+  test('after phase reports "completed"', () => {
+    const lines = formatCompactionSection({
+      phase: 'after',
+      reason: 'threshold',
+      willRetry: false,
+      tokensBefore: 120000,
+    });
+    expect(allWarning(lines)).toEqual([]);
+    expect(allInfo(lines)).toContain('🗜️  Context compaction completed');
+  });
+
+  test('manual compaction logs at info level', () => {
+    const lines = formatCompactionSection({
+      phase: 'before',
+      reason: 'manual',
+      willRetry: false,
+      tokensBefore: 5000,
+    });
+    expect(allWarning(lines)).toEqual([]);
+    expect(allInfo(lines)).toContain('  Reason:           manual');
+  });
+
+  test('overflow-retry compaction escalates to warning level (before phase)', () => {
+    const lines = formatCompactionSection({
+      phase: 'before',
+      reason: 'overflow',
+      willRetry: true,
+      tokensBefore: 185000,
+    });
+    // Everything is at warning level.
+    expect(allInfo(lines)).toEqual([]);
+    expect(allWarning(lines)).toContain('🗜️  Context compaction starting');
+    expect(allWarning(lines)).toContain('  Reason:           overflow · turn retried');
+    expect(allWarning(lines)).toContain('  Tokens before:    185,000');
+    // The explanatory heads-up is present in the before phase.
+    expect(allWarning(lines).some(t => t.includes('overflowed mid-turn'))).toBe(true);
+  });
+
+  test('overflow-retry compaction after phase warns but omits the explanation', () => {
+    const lines = formatCompactionSection({
+      phase: 'after',
+      reason: 'overflow',
+      willRetry: true,
+      tokensBefore: 185000,
+    });
+    expect(allInfo(lines)).toEqual([]);
+    expect(allWarning(lines)).toContain('🗜️  Context compaction completed');
+    expect(allWarning(lines)).toContain('  Reason:           overflow · turn retried');
+    // The explanatory heads-up is NOT repeated in the after phase.
+    expect(lines.some(l => l.text.includes('overflowed mid-turn'))).toBe(false);
+  });
+
+  test('overflow without retry does not escalate (treated as ordinary)', () => {
+    // reason: 'overflow' but willRetry: false is not an overflow-retry.
+    const lines = formatCompactionSection({
+      phase: 'before',
+      reason: 'overflow',
+      willRetry: false,
+      tokensBefore: 185000,
+    });
+    expect(allWarning(lines)).toEqual([]);
+    expect(allInfo(lines)).toContain('  Reason:           overflow');
+    expect(allInfo(lines).some(t => t.includes('turn retried'))).toBe(false);
+  });
+
+  test('appends "· turn retried" only when willRetry is true', () => {
+    const withRetry = formatCompactionSection({
+      phase: 'before',
+      reason: 'threshold',
+      willRetry: true,
+      tokensBefore: 100,
+    });
+    expect(allInfo(withRetry)).toContain('  Reason:           threshold · turn retried');
+
+    const withoutRetry = formatCompactionSection({
+      phase: 'before',
+      reason: 'threshold',
+      willRetry: false,
+      tokensBefore: 100,
+    });
+    expect(allInfo(withoutRetry)).toContain('  Reason:           threshold');
+    expect(allInfo(withoutRetry).some(t => t.includes('turn retried'))).toBe(false);
+  });
+
+  test('formats tokensBefore with locale separators', () => {
+    const lines = formatCompactionSection({
+      phase: 'before',
+      reason: 'threshold',
+      willRetry: false,
+      tokensBefore: 1234567,
+    });
+    expect(allInfo(lines)).toContain('  Tokens before:    1,234,567');
+  });
+
+  test('CompactionSectionInput type is constructible', () => {
+    const input: CompactionSectionInput = {
+      phase: 'before',
+      reason: 'threshold',
+      willRetry: false,
+      tokensBefore: 0,
+    };
+    expect(input.phase).toBe('before');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Cross-cutting: LogLine shape
 // ---------------------------------------------------------------------------
 
@@ -268,6 +395,12 @@ describe('LogLine type invariants', () => {
       ...formatToolsSection([{ name: 't', sourceInfo: {} }]),
       ...formatSystemPromptSection('p'),
       ...formatUserPromptSection('p'),
+      ...formatCompactionSection({
+        phase: 'before',
+        reason: 'overflow',
+        willRetry: true,
+        tokensBefore: 100,
+      }),
     ];
     for (const l of all) {
       expect(['info', 'warning']).toContain(l.level);
