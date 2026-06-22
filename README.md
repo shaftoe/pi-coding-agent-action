@@ -89,9 +89,9 @@ Dependencies (including Pi itself) are [updated regularly](./.github/workflows/d
 |---|---|---|
 | `@actions/core` | `3.0.1` | GitHub Actions core I/O (inputs, outputs, logging) |
 | `@actions/github` | `9.1.1` | GitHub API client (Octokit wrapper) |
-| `@earendil-works/pi-agent-core` | `0.79.9` | Pi Agent Core — agent orchestration primitives |
-| `@earendil-works/pi-ai` | `0.79.9` | Pi AI — AI model abstractions and providers |
-| `@earendil-works/pi-coding-agent` | `0.79.9` | Pi SDK — AI coding agent runtime |
+| `@earendil-works/pi-agent-core` | `0.79.10` | Pi Agent Core — agent orchestration primitives |
+| `@earendil-works/pi-ai` | `0.79.10` | Pi AI — AI model abstractions and providers |
+| `@earendil-works/pi-coding-agent` | `0.79.10` | Pi SDK — AI coding agent runtime |
 | `@js-temporal/polyfill` | `0.5.1` | Temporal API polyfill |
 | `@octokit/core` | `7.0.6` | Octokit REST API client core |
 | `@octokit/plugin-rest-endpoint-methods` | `17.0.0` | Octokit REST API endpoint methods |
