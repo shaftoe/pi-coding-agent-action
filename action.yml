@@ -6,7 +6,7 @@ branding:
 
 inputs:
   github_token:
-    description: 'GitHub token for API access'
+    description: 'GitHub token for API access. The default `GITHUB_TOKEN` works for all standard operations. To use `share_session`, provide a classic PAT (`gist` scope), fine-grained PAT (Account → Gists: read/write), or GitHub App token instead — the default `GITHUB_TOKEN` cannot create gists.'
     required: true
 
   provider:
@@ -86,14 +86,9 @@ inputs:
     default: 'false'
 
   share_session:
-    description: 'Share the session like pi''s /share command: upload the exported session HTML to a secret GitHub Gist and surface a pi.dev-style viewer link. Requires a GitHub PAT/App token with gist scope (see share_gist_token) — the default GITHUB_TOKEN cannot create gists. Auto-enables export_session_html.'
+    description: 'Share the session like pi''s /share command: upload the exported session HTML to a secret GitHub Gist and surface a pi.dev-style viewer link. Uses the github_token input to create the gist, so provide a PAT/App token with gist scope there (the default GITHUB_TOKEN cannot create gists). Auto-enables export_session_html.'
     required: false
     default: 'false'
-
-  share_gist_token:
-    description: 'GitHub token with gist scope used to create the share gist when share_session is enabled. A classic PAT (gist scope), a fine-grained PAT (Account → Gists: read/write), or a GitHub App installation token all work. The default GITHUB_TOKEN does NOT have gist scope.'
-    required: false
-    default: ''
 
   share_viewer_url:
     description: 'Base URL of the session viewer used to build share links. Links are produced as `${url}#<gistId>`. Defaults to the pi.dev viewer (https://pi.dev/session/).'

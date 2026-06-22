@@ -1485,7 +1485,7 @@ describe('ActionOrchestrator', () => {
     test('shares the session to a gist and surfaces the viewer link', async () => {
       const orchestrator = createOrchestrator({
         shareSession: true,
-        shareGistToken: 'ghp_token',
+        githubToken: 'ghp_token',
       });
       await orchestrator.execute();
 
@@ -1517,7 +1517,7 @@ describe('ActionOrchestrator', () => {
     test('enriches the gist description with repo/issue/run context', async () => {
       const orchestrator = createOrchestrator({
         shareSession: true,
-        shareGistToken: 'ghp_token',
+        githubToken: 'ghp_token',
       });
       await orchestrator.execute();
 
@@ -1529,7 +1529,7 @@ describe('ActionOrchestrator', () => {
     test('auto-enables export_session_html so the HTML is produced', async () => {
       const orchestrator = createOrchestrator({
         shareSession: true,
-        shareGistToken: 't',
+        githubToken: 't',
         exportSessionHtml: false,
       });
       await orchestrator.execute();
@@ -1538,13 +1538,13 @@ describe('ActionOrchestrator', () => {
       expect(mockOutputSink.setOutput).toHaveBeenCalledWith('session_html_path', expect.anything());
     });
 
-    test('skips sharing with a notice when no gist token is configured', async () => {
+    test('skips sharing with a notice when no github_token is configured', async () => {
       const orchestrator = createOrchestrator({ shareSession: true });
       await orchestrator.execute();
 
       expect(globalThis.fetch).not.toHaveBeenCalled();
       expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('share_url', expect.anything());
-      expect(mockCore.notice).toHaveBeenCalledWith(expect.stringContaining('no gist token'));
+      expect(mockCore.notice).toHaveBeenCalledWith(expect.stringContaining('no github_token'));
     });
 
     test('continues execution when gist creation fails', async () => {
@@ -1558,7 +1558,7 @@ describe('ActionOrchestrator', () => {
 
       const orchestrator = createOrchestrator({
         shareSession: true,
-        shareGistToken: 'bad',
+        githubToken: 'bad',
       });
       await orchestrator.execute();
 
@@ -1576,7 +1576,7 @@ describe('ActionOrchestrator', () => {
 
       const orchestrator = createOrchestrator({
         shareSession: true,
-        shareGistToken: 'ghp_token',
+        githubToken: 'ghp_token',
       });
       await orchestrator.execute();
 
@@ -1593,7 +1593,7 @@ describe('ActionOrchestrator', () => {
 
       const orchestrator = createOrchestrator({
         shareSession: true,
-        shareGistToken: 'ghp_token',
+        githubToken: 'ghp_token',
       });
       await orchestrator.execute();
 

@@ -175,7 +175,7 @@ export function gatherActionsConfig(): PiConfig {
   const prNumber = parsePositiveIntInput(core.getInput('pr_number'));
 
   // --- Session sharing inputs --------------------------------------------
-  const shareGistToken = core.getInput('share_gist_token') || undefined;
+  const githubToken = core.getInput('github_token') || undefined;
   const shareViewerUrl = core.getInput('share_viewer_url') || undefined;
 
   // --- Assemble PiConfig (only include optional keys when set) -----------
@@ -193,7 +193,7 @@ export function gatherActionsConfig(): PiConfig {
     exportSessionJsonl,
     autoCompaction,
     shareSession,
-    ...(shareGistToken ? { shareGistToken } : {}),
+    ...(githubToken ? { githubToken } : {}),
     ...(shareViewerUrl ? { shareViewerUrl } : {}),
     ...(diffMaxLines ? { diffMaxLines } : {}),
     ...(diffMaxBytes ? { diffMaxBytes } : {}),

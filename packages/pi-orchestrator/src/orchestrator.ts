@@ -260,9 +260,9 @@ export class ActionOrchestrator {
    *
    * Runs only when {@link PiConfig.shareSession} is enabled. Reads the
    * HTML file produced by {@link exportSessionOutput}; if the export was
-   * disabled or failed (file missing), the content is too large, or no
-   * gist token is configured, the share is skipped with a notice — it
-   * never fails the run.
+   * disabled or failed (file missing), the content is too large, or the
+   * configured `github_token` lacks gist scope (API call fails), the
+   * share is skipped with a notice — it never fails the run.
    */
   private async runSessionShare(): Promise<void> {
     if (!this.config.shareSession) {
@@ -271,10 +271,10 @@ export class ActionOrchestrator {
     }
 
     const tag = 'session-share';
-    const token = this.config.shareGistToken;
+    const token = this.config.githubToken;
     if (!token) {
       this.logger.notice(
-        `[${tag}] skipped: no gist token provided (set share_gist_token to a GitHub PAT/App token with gist scope)`
+        `[${tag}] skipped: no github_token configured (provide a PAT/App token with gist scope via github_token)`
       );
       return;
     }

@@ -624,7 +624,7 @@ The link is surfaced in three places: the job log footer, a GitHub **notice** an
 Enabling `share_session` **auto-enables `export_session_html`** (the gist carries the HTML export's bytes), so you don't need to set both.
 
 > [!IMPORTANT]
-> **A GitHub token with `gist` scope is required.** The default `secrets.GITHUB_TOKEN` **cannot** create gists. Provide a classic PAT (with the `gist` scope), a fine-grained PAT (Account → **Gists: read/write**), or a GitHub App installation token via the `share_gist_token` input.
+> **A GitHub token with `gist` scope is required.** The default `secrets.GITHUB_TOKEN` **cannot** create gists. Set the `github_token` input to a classic PAT (with the `gist` scope), a fine-grained PAT (Account → **Gists: read/write**), or a GitHub App installation token — the same token is used for all GitHub API operations.
 
 > [!WARNING]
 > Secret gists are **URL-obscured, not access-controlled** — anyone with the link can read the rendered session, which may include code, file contents, or secrets the agent touched. Only enable `share_session` for runs where that exposure is acceptable, and prefer a dedicated bot account so shared gists are easy to audit and delete.
@@ -634,8 +634,7 @@ Enabling `share_session` **auto-enables `export_session_html`** (the gist carrie
   id: pi
   with:
     share_session: true
-    share_gist_token: ${{ secrets.GH_GIST_TOKEN }}   # PAT w/ gist scope — NOT secrets.GITHUB_TOKEN
-    github_token: ${{ secrets.GITHUB_TOKEN }}
+    github_token: ${{ secrets.GH_PAT }}   # PAT w/ gist scope — NOT secrets.GITHUB_TOKEN
     provider: openai
     model: gpt-5.4
     token: ${{ secrets.OPENAI_API_KEY }}
@@ -676,15 +675,14 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | `export_session_html` | Export the session as a self-contained HTML file. Auto-enabled when `share_session` is true | No | `false` |
 | `export_session_jsonl` | Export the session as a JSONL file (one JSON object per line) for programmatic consumption | No | `false` |
 | `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
-| `github_token` | GitHub token for API access | Yes | - |
+| `github_token` | GitHub token for API access. The default `GITHUB_TOKEN` works for all standard operations; to use `share_session`, provide a PAT/App token with gist scope instead | Yes | - |
 | `load_builtin_extensions` | Whether to load built-in GitHub tools (see [Custom Tools](#custom-tools) for the full list) | No | `true` |
 | `loaded_tools` | Controls which tools are available in the session. Defaults to `all`. Accepts a list of tool names (one per line) to load — unknown names cause the run to fail early | No | `all` |
 | `model` | Model to use (e.g., gpt-5.4, gpt-4o, gemini-2.5-pro) | Yes | - |
 | `pr_number` | Pull request number to target. Use with `workflow_dispatch` to run the agent on a specific PR without a triggering event. When set, the action fetches PR context from the API and targets all operations at the specified PR | No | - |
 | `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
 | `provider` | LLM provider (openai, google, anthropic, etc.) | Yes | - |
-| `share_gist_token` | GitHub token with **gist** scope used to create the share gist. **The default `GITHUB_TOKEN` cannot create gists** — use a classic PAT (`gist` scope), fine-grained PAT (Account → Gists: read/write), or GitHub App token. Required when `share_session` is true | No | - |
-| `share_session` | Share the session like pi's `/share` command: upload the exported HTML to a secret GitHub Gist and surface a pi.dev viewer link. Auto-enables `export_session_html` | No | `false` |
+| `share_session` | Share the session like pi's `/share` command: upload the exported HTML to a secret GitHub Gist and surface a pi.dev viewer link. Uses the `github_token` input (PAT/App token with gist scope required). Auto-enables `export_session_html` | No | `false` |
 | `share_viewer_url` | Base URL of the session viewer used to build share links (produced as `${url}#<gistId>`) | No | `https://pi.dev/session/` |
 | `thinking_level` | Model thinking level (off\|low\|medium\|high) | No | off |
 | `token` | Provider API token. Required for most providers, but can be omitted when using providers that support alternative auth mechanisms (e.g., `google-vertex` with Application Default Credentials) | No | - |

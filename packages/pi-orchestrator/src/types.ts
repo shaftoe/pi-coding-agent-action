@@ -229,14 +229,20 @@ export interface PiConfig extends DiffConfig {
    * Share the session like pi's `/share` command: upload the exported
    * HTML to a secret GitHub Gist and surface a pi.dev-style viewer link.
    *
-   * Requires {@link shareGistToken} (a GitHub PAT/App token with gist
-   * scope — the default `GITHUB_TOKEN` cannot create gists). When enabled,
+   * Uses {@link githubToken} to create the gist. The default Actions
+   * `GITHUB_TOKEN` cannot create gists, so `github_token` must be a
+   * classic PAT (`gist` scope), fine-grained PAT (Account → Gists:
+   * read/write), or GitHub App token when this is enabled. When enabled,
    * {@link exportSessionHtml} is auto-enabled since the gist carries the
    * HTML export's bytes.
    */
   shareSession?: boolean;
-  /** GitHub token with gist scope used by {@link shareSession}. */
-  shareGistToken?: string;
+  /**
+   * GitHub API token (the `github_token` action input). Used for all
+   * GitHub REST API operations, including gist creation when
+   * {@link shareSession} is enabled.
+   */
+  githubToken?: string;
   /**
    * Viewer base URL for share links. Defaults to pi.dev
    * (`https://pi.dev/session/`); links are built as `${url}#${gistId}`.

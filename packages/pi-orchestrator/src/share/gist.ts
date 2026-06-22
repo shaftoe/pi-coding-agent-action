@@ -48,7 +48,8 @@ export interface CreateGistInput {
    * permission.
    *
    * The default Actions `GITHUB_TOKEN` **cannot** create gists — gists are
-   * not in its scope set.
+   * not in its scope set. Use a PAT/App token via the `github_token` input
+   * when {@link shareSession} is enabled.
    */
   token: string;
   /** File contents — typically the exported session HTML. */

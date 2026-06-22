@@ -315,15 +315,15 @@ describe('gatherActionsConfig', () => {
       expect(gatherActionsConfig().shareSession).toBe(true);
     });
 
-    test('omits shareGistToken when empty', () => {
-      expect(gatherActionsConfig().shareGistToken).toBeUndefined();
+    test('omits githubToken when empty', () => {
+      expect(gatherActionsConfig().githubToken).toBeUndefined();
     });
 
-    test('parses share_gist_token when provided', () => {
+    test('parses github_token when provided', () => {
       coreMock.getInput.mockImplementation((name: string) =>
-        name === 'share_gist_token' ? 'ghp_secret' : ''
+        name === 'github_token' ? 'ghp_secret' : ''
       );
-      expect(gatherActionsConfig().shareGistToken).toBe('ghp_secret');
+      expect(gatherActionsConfig().githubToken).toBe('ghp_secret');
     });
 
     test('omits shareViewerUrl when empty (defaults applied by orchestrator)', () => {
