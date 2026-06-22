@@ -41,6 +41,13 @@ export const coreMock = {
   setSecret: mock(),
   addPath: mock(),
   setCommandEcho: mock(),
+  summary: {
+    // addRaw returns `this` so `core.summary.addRaw(md).write()` chains
+    addRaw: mock(function (this: unknown) {
+      return this;
+    }),
+    write: mock(async () => {}),
+  },
 };
 
 let registered = false;

@@ -20,6 +20,8 @@ describe('ActionsOutputSink', () => {
   beforeEach(() => {
     coreMock.setOutput.mockClear();
     coreMock.setFailed.mockClear();
+    coreMock.summary.addRaw.mockClear();
+    coreMock.summary.write.mockClear();
     sink = new ActionsOutputSink();
   });
 
@@ -71,5 +73,35 @@ describe('ActionsOutputSink', () => {
 
     process.env.RUNNER_TEMP = originalRunnerTemp;
     process.env.GITHUB_RUN_ID = originalGithubRunId;
+  });
+
+  describe('appendSummary', () => {
+    test('chains addRaw and write on core.summary', async () => {
+      await sink.appendSummary('🔗 **Session:** https://pi.dev/session/#abc\n');
+
+      expect(coreMock.summary.addRaw).toHaveBeenCalledWith(
+        '🔗 **Session:** https://pi.dev/session/#abc\n'
+      );
+      expect(coreMock.summary.write).toHaveBeenCalledTimes(1);
+    });
+
+    test('addRaw returns the summary object so chaining works', async () => {
+      // core.summary.addRaw(md).write() — addRaw must return the same object
+      // that has .write(), otherwise the chain throws "is not a function".
+      await sink.appendSummary('test');
+      const result = coreMock.summary.addRaw.mock.results[0];
+      expect(result).toBeDefined();
+      expect(result?.value).toBe(coreMock.summary);
+    });
+
+    test('propagates errors from write() (throws outside a runner)', async () => {
+      coreMock.summary.write.mockRejectedValueOnce(
+        new Error('Unable to find environment variable for $GITHUB_STEP_SUMMARY')
+      );
+
+      await expect(sink.appendSummary('test')).rejects.toThrow(
+        'Unable to find environment variable for $GITHUB_STEP_SUMMARY'
+      );
+    });
   });
 });
