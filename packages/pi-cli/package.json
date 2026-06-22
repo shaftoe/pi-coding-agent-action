@@ -20,9 +20,9 @@
   "dependencies": {
     "@alexanderfortin/pi-orchestrator": "workspace:*",
     "@alexanderfortin/pi-platform-github": "workspace:*",
-    "@earendil-works/pi-agent-core": "^0.79.9",
-    "@earendil-works/pi-ai": "^0.79.9",
-    "@earendil-works/pi-coding-agent": "^0.79.9",
+    "@earendil-works/pi-agent-core": "^0.79.10",
+    "@earendil-works/pi-ai": "^0.79.10",
+    "@earendil-works/pi-coding-agent": "^0.79.10",
     "@js-temporal/polyfill": "^0.5.1",
     "@octokit/core": "^7.0.6",
     "@octokit/plugin-rest-endpoint-methods": "^17.0.0",
