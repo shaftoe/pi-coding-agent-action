@@ -357,7 +357,7 @@ describe('formatCompactionSection', () => {
     expect(allInfo(withoutRetry).some(t => t.includes('turn retried'))).toBe(false);
   });
 
-  test('formats tokensBefore with locale separators', () => {
+  test('formats tokensBefore with en-US grouping separators', () => {
     const lines = formatCompactionSection({
       phase: 'before',
       reason: 'threshold',

@@ -6,7 +6,7 @@
  */
 
 import type { Logger } from '../types';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, SessionBeforeCompactEvent } from '@earendil-works/pi-coding-agent';
 import { getPiVersion } from '../version';
 
 /**
@@ -139,8 +139,11 @@ export function formatUserPromptSection(prompt: string, images?: readonly unknow
   return lines;
 }
 
-/** Why a context compaction was triggered. Mirrors the Pi SDK enum. */
-export type CompactionReason = 'manual' | 'threshold' | 'overflow';
+/**
+ * Why a context compaction was triggered. Derived from the Pi SDK event so
+ * it auto-stays-in-sync if the SDK adds new reasons.
+ */
+export type CompactionReason = SessionBeforeCompactEvent['reason'];
 
 /** Inputs for {@link formatCompactionSection}. */
 export interface CompactionSectionInput {
@@ -176,7 +179,9 @@ export function formatCompactionSection(input: CompactionSectionInput): LogLine[
 
   const headline = `🗜️  Context compaction ${phaseLabel}`;
   const reasonLine = `  Reason:           ${input.reason}${retrySuffix}`;
-  const tokensLine = `  Tokens before:    ${input.tokensBefore.toLocaleString()}`;
+  // en-US gives deterministic digit grouping (e.g. 1,234,567) regardless of
+  // the host locale, which keeps the output — and the tests — stable.
+  const tokensLine = `  Tokens before:    ${input.tokensBefore.toLocaleString('en-US')}`;
 
   const push = isOverflowRetry ? warning : info;
   lines.push(push(headline));
