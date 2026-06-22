@@ -47,7 +47,7 @@ jobs:
         id: pi
         uses: shaftoe/pi-coding-agent-action@develop
         with:
-          export_session_html: true
+          share_session: true
           github_token: ${{ secrets.gh_token }}
           provider: ${{ vars.PROVIDER }}
           model: ${{ vars.MODEL }}
