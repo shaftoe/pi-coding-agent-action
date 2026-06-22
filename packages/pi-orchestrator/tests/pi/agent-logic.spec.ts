@@ -667,6 +667,26 @@ describe('Agent', () => {
       expect(typeof sessionFile).toBe('string');
     });
 
+    test('uses file-backed session when shareSession is true (even with exports disabled)', async () => {
+      // shareSession auto-enables the HTML export path, which requires a
+      // file-backed session. Without persistence, exportToHtml() throws
+      // "Cannot export in-memory session to HTML" and sharing silently
+      // skips — this was a critical bug in the initial share_session PR.
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        shareSession: true,
+        exportSessionHtml: false,
+        exportSessionJsonl: false,
+      });
+
+      await agent.ready();
+
+      const sessionFile = getSessionFilePath(agent);
+      expect(sessionFile).toBeDefined();
+      expect(typeof sessionFile).toBe('string');
+      expect(sessionFile).toMatch(/\.jsonl$/);
+    });
+
     test('uses in-memory session when exportSessionHtml and exportSessionJsonl are false', async () => {
       const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
         ...defaultAgentConfig,

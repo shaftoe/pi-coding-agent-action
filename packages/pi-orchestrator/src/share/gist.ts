@@ -30,6 +30,16 @@ export const DEFAULT_SHARE_VIEWER_URL = 'https://pi.dev/session/';
 /** Default GitHub Gist REST API endpoint. */
 export const DEFAULT_GITHUB_GIST_API = 'https://api.github.com/gists';
 
+/**
+ * Maximum content size (bytes) accepted by {@link createSessionGist}.
+ *
+ * The GitHub Gist REST API rejects oversized payloads with a generic 422
+ * error. This guard lets the caller skip with an actionable notice instead.
+ * 10 MB is a conservative practical ceiling (the API's hard limit is higher
+ * but undocumented); session HTML rarely exceeds a few MB.
+ */
+export const MAX_GIST_CONTENT_BYTES = 10 * 1024 * 1024;
+
 /** Inputs for {@link createSessionGist}. */
 export interface CreateGistInput {
   /**

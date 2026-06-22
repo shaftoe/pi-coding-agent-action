@@ -26,7 +26,12 @@ import {
 import { formatCost } from './format';
 import type { CreateReactionType, PlatformProvider } from './platform';
 import { getActionVersion, formatActionVersion } from './version';
-import { createSessionGist, DEFAULT_SHARE_VIEWER_URL } from './share/gist';
+import {
+  createSessionGist,
+  DEFAULT_SHARE_VIEWER_URL,
+  MAX_GIST_CONTENT_BYTES,
+  type CreatedGist,
+} from './share/gist';
 
 /**
  * Build the body of the success comment posted at the end of a run.
@@ -136,6 +141,7 @@ export class ActionOrchestrator {
     const exportPromises: Promise<void>[] = [];
     // Sharing rides on the HTML export (the gist carries its bytes), so
     // share_session implicitly enables it regardless of export_session_html.
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- intentional ||: boolean flags, must fall through false
     const exportHtml = this.config.exportSessionHtml || this.config.shareSession;
     if (exportHtml) {
       exportPromises.push(this.exportSessionOutput(pi, 'html'));
@@ -254,8 +260,9 @@ export class ActionOrchestrator {
    *
    * Runs only when {@link PiConfig.shareSession} is enabled. Reads the
    * HTML file produced by {@link exportSessionOutput}; if the export was
-   * disabled or failed (file missing), or no gist token is configured,
-   * the share is skipped with a notice — it never fails the run.
+   * disabled or failed (file missing), the content is too large, or no
+   * gist token is configured, the share is skipped with a notice — it
+   * never fails the run.
    */
   private async runSessionShare(): Promise<void> {
     if (!this.config.shareSession) {
@@ -274,33 +281,97 @@ export class ActionOrchestrator {
 
     // Reconstruct the HTML export path (same path exportSessionOutput writes).
     const htmlPath = path.join(this.outputSink.getExportDirectory('html'), 'session.html');
-    if (!fs.existsSync(htmlPath)) {
-      this.logger.notice(`[${tag}] skipped: session HTML export not found at ${htmlPath}`);
-      return;
+    const content = this.readShareContent(htmlPath, tag);
+    if (content === undefined) {
+      return; // skip notice already logged in readShareContent
     }
 
-    let content: string;
+    await this.createAndSurfaceGist(token, content, tag);
+  }
+
+  /**
+   * Read the session HTML file for sharing.
+   *
+   * Returns the content string, or `undefined` when the file is missing,
+   * unreadable, or exceeds {@link MAX_GIST_CONTENT_BYTES} (a skip notice is
+   * logged in each case).
+   */
+  private readShareContent(htmlPath: string, tag: string): string | undefined {
+    if (!fs.existsSync(htmlPath)) {
+      this.logger.notice(`[${tag}] skipped: session HTML export not found at ${htmlPath}`);
+      return undefined;
+    }
+
     try {
-      content = fs.readFileSync(htmlPath, 'utf8');
+      const content = fs.readFileSync(htmlPath, 'utf8');
+      const contentBytes = Buffer.byteLength(content, 'utf8');
+      if (contentBytes > MAX_GIST_CONTENT_BYTES) {
+        this.logger.notice(
+          `[${tag}] skipped: session HTML is ${contentBytes} bytes, exceeds ` +
+            `${MAX_GIST_CONTENT_BYTES}-byte gist limit`
+        );
+        return undefined;
+      }
+      return content;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.notice(`[${tag}] skipped: failed to read session HTML: ${msg}`);
-      return;
+      return undefined;
     }
+  }
 
+  /**
+   * Create the gist, surface the viewer link, and set action outputs.
+   *
+   * Gist creation failures are caught and logged as a notice (the run
+   * continues). The job-summary write is wrapped separately so a summary
+   * failure doesn't produce a misleading "failed to share session" message
+   * — by that point the gist exists and the outputs are already set.
+   */
+  private async createAndSurfaceGist(token: string, content: string, tag: string): Promise<void> {
     const viewerUrl = this.config.shareViewerUrl ?? DEFAULT_SHARE_VIEWER_URL;
+    const description = this.buildShareDescription();
+
+    let gist: CreatedGist;
     try {
-      const gist = await createSessionGist({ token, content }, viewerUrl);
-      this.logger.info(`[${tag}] shared session as gist ${gist.id}: ${gist.gistUrl}`);
-      this.logger.info(`[${tag}] view session: ${gist.shareUrl}`);
-      this.logger.notice(gist.shareUrl);
-      this.outputSink.setOutput('share_url', gist.shareUrl);
-      this.outputSink.setOutput('gist_url', gist.gistUrl);
-      this.outputSink.setOutput('gist_id', gist.id);
-      await this.outputSink.appendSummary?.(`🔗 **Session:** ${gist.shareUrl}\n`);
+      gist = await createSessionGist({ token, content, description }, viewerUrl);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.notice(`[${tag}] failed to share session: ${msg}`);
+      return;
+    }
+
+    this.logger.info(`[${tag}] shared session as gist ${gist.id}: ${gist.gistUrl}`);
+    this.logger.info(`[${tag}] view session: ${gist.shareUrl}`);
+    this.logger.notice(`Session shared: ${gist.shareUrl}`);
+    this.outputSink.setOutput('share_url', gist.shareUrl);
+    this.outputSink.setOutput('gist_url', gist.gistUrl);
+    this.outputSink.setOutput('gist_id', gist.id);
+
+    // Summary write is non-critical — sharing already succeeded (gist exists,
+    // outputs are set). Wrap separately so a summary failure doesn't log a
+    // misleading "failed to share session" notice.
+    try {
+      await this.outputSink.appendSummary?.(`🔗 **Session:** ${gist.shareUrl}\n`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.debug(`[${tag}] job summary write skipped: ${msg}`);
+    }
+  }
+
+  /**
+   * Build a gist description enriched with repo/issue/run context for
+   * auditability (gists accumulate indefinitely on the bot account).
+   * Falls back to a generic label when context is unavailable.
+   */
+  private buildShareDescription(): string {
+    try {
+      const ctx = this.platformProvider.getContext();
+      const repoPart = `${ctx.repo.owner}/${ctx.repo.repo}#${ctx.issue.number}`;
+      const runPart = ctx.runId ? ` (run ${ctx.runId})` : '';
+      return `Pi session — ${repoPart}${runPart}`;
+    } catch {
+      return 'Pi agent session';
     }
   }
 

@@ -55,7 +55,12 @@ export { getActionVersion, getPiVersion, formatActionVersion } from './version';
 export type { ActionBuildInfo } from './version';
 
 // Session sharing (gist)
-export { createSessionGist, DEFAULT_SHARE_VIEWER_URL, DEFAULT_GITHUB_GIST_API } from './share/gist';
+export {
+  createSessionGist,
+  DEFAULT_SHARE_VIEWER_URL,
+  DEFAULT_GITHUB_GIST_API,
+  MAX_GIST_CONTENT_BYTES,
+} from './share/gist';
 export type { CreateGistInput, CreatedGist } from './share/gist';
 
 // Types

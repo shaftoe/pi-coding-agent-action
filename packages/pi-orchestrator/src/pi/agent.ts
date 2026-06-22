@@ -164,9 +164,14 @@ export class Agent {
     const loadedTools = this.config.loadedTools;
     // Use a file-backed session when HTML/JSONL export is needed — the SDK's
     // exportToHtml() requires a session file and throws "Cannot export
-    // in-memory session to HTML" for in-memory sessions.
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- intentional ||: flags can be explicitly false, must fall through
-    const needsPersistence = this.config.exportSessionHtml || this.config.exportSessionJsonl;
+    // in-memory session to HTML" for in-memory sessions. shareSession
+    // auto-enables the HTML export (the gist carries its bytes), so it must
+    // trigger persistence too — otherwise exportToHtml() throws and sharing
+    // is silently skipped.
+    /* eslint-disable @typescript-eslint/prefer-nullish-coalescing -- intentional ||: flags are boolean|undefined and must fall through false; ?? only falls through null/undefined */
+    const needsPersistence =
+      this.config.exportSessionHtml || this.config.exportSessionJsonl || this.config.shareSession;
+    /* eslint-enable @typescript-eslint/prefer-nullish-coalescing */
     const sessionManager = needsPersistence
       ? SessionManager.create(services.cwd)
       : SessionManager.inMemory(services.cwd);
