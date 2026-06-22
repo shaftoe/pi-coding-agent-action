@@ -32,4 +32,15 @@ export class ActionsOutputSink implements OutputSink {
       `pi-session-${format}-${process.env.GITHUB_RUN_ID ?? 'local'}`
     );
   }
+
+  /**
+   * Append markdown to the GitHub Actions job summary (`$GITHUB_STEP_SUMMARY`).
+   *
+   * Uses `@actions/core`'s `summary` helper, which appends (rather than
+   * overwrites) so multiple calls compose. No-op outside a GitHub Actions
+   * runner (the env var is unset).
+   */
+  async appendSummary(markdown: string): Promise<void> {
+    await core.summary.addRaw(markdown).write();
+  }
 }

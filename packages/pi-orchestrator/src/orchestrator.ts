@@ -26,6 +26,7 @@ import {
 import { formatCost } from './format';
 import type { CreateReactionType, PlatformProvider } from './platform';
 import { getActionVersion, formatActionVersion } from './version';
+import { createSessionGist, DEFAULT_SHARE_VIEWER_URL } from './share/gist';
 
 /**
  * Build the body of the success comment posted at the end of a run.
@@ -96,6 +97,7 @@ export class ActionOrchestrator {
       const { result, sessionStats, error } = await pi.run(prompt);
 
       await this.runSessionExports(pi);
+      await this.runSessionShare();
 
       if (error) {
         await this.handleSessionError(error, result, startTime, reaction, sessionStats);
@@ -132,7 +134,10 @@ export class ActionOrchestrator {
    */
   private async runSessionExports(pi: PiAgent): Promise<void> {
     const exportPromises: Promise<void>[] = [];
-    if (this.config.exportSessionHtml) {
+    // Sharing rides on the HTML export (the gist carries its bytes), so
+    // share_session implicitly enables it regardless of export_session_html.
+    const exportHtml = this.config.exportSessionHtml || this.config.shareSession;
+    if (exportHtml) {
       exportPromises.push(this.exportSessionOutput(pi, 'html'));
     } else {
       this.logger.debug('[session-html] export disabled by configuration');
@@ -237,6 +242,66 @@ export class ActionOrchestrator {
       parts.push(`cost $${cost}`);
     }
     this.logger.info(`📊 Token usage: ${parts.join(' · ')}`);
+  }
+
+  /**
+   * Share the session as a secret GitHub Gist (pi `/share` equivalent).
+   *
+   * Uploads the exported session HTML to a gist and surfaces the viewer
+   * link in three places: the logs footer (`info`), a GitHub notice
+   * annotation (`notice`), and the job summary (`appendSummary`). Also
+   * exposes `share_url` / `gist_url` / `gist_id` as action outputs.
+   *
+   * Runs only when {@link PiConfig.shareSession} is enabled. Reads the
+   * HTML file produced by {@link exportSessionOutput}; if the export was
+   * disabled or failed (file missing), or no gist token is configured,
+   * the share is skipped with a notice — it never fails the run.
+   */
+  private async runSessionShare(): Promise<void> {
+    if (!this.config.shareSession) {
+      this.logger.debug('[session-share] sharing disabled by configuration');
+      return;
+    }
+
+    const tag = 'session-share';
+    const token = this.config.shareGistToken;
+    if (!token) {
+      this.logger.notice(
+        `[${tag}] skipped: no gist token provided (set share_gist_token to a GitHub PAT/App token with gist scope)`
+      );
+      return;
+    }
+
+    // Reconstruct the HTML export path (same path exportSessionOutput writes).
+    const htmlPath = path.join(this.outputSink.getExportDirectory('html'), 'session.html');
+    if (!fs.existsSync(htmlPath)) {
+      this.logger.notice(`[${tag}] skipped: session HTML export not found at ${htmlPath}`);
+      return;
+    }
+
+    let content: string;
+    try {
+      content = fs.readFileSync(htmlPath, 'utf8');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.notice(`[${tag}] skipped: failed to read session HTML: ${msg}`);
+      return;
+    }
+
+    const viewerUrl = this.config.shareViewerUrl ?? DEFAULT_SHARE_VIEWER_URL;
+    try {
+      const gist = await createSessionGist({ token, content }, viewerUrl);
+      this.logger.info(`[${tag}] shared session as gist ${gist.id}: ${gist.gistUrl}`);
+      this.logger.info(`[${tag}] view session: ${gist.shareUrl}`);
+      this.logger.notice(gist.shareUrl);
+      this.outputSink.setOutput('share_url', gist.shareUrl);
+      this.outputSink.setOutput('gist_url', gist.gistUrl);
+      this.outputSink.setOutput('gist_id', gist.id);
+      await this.outputSink.appendSummary?.(`🔗 **Session:** ${gist.shareUrl}\n`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.notice(`[${tag}] failed to share session: ${msg}`);
+    }
   }
 
   /**

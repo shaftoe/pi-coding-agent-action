@@ -302,4 +302,56 @@ describe('gatherActionsConfig', () => {
       expect(gatherActionsConfig().baseUrl).toBeUndefined();
     });
   });
+
+  describe('session sharing inputs', () => {
+    test('share_session defaults to false', () => {
+      expect(gatherActionsConfig().shareSession).toBe(false);
+    });
+
+    test('parses share_session true', () => {
+      coreMock.getInput.mockImplementation((name: string) =>
+        name === 'share_session' ? 'true' : ''
+      );
+      expect(gatherActionsConfig().shareSession).toBe(true);
+    });
+
+    test('omits shareGistToken when empty', () => {
+      expect(gatherActionsConfig().shareGistToken).toBeUndefined();
+    });
+
+    test('parses share_gist_token when provided', () => {
+      coreMock.getInput.mockImplementation((name: string) =>
+        name === 'share_gist_token' ? 'ghp_secret' : ''
+      );
+      expect(gatherActionsConfig().shareGistToken).toBe('ghp_secret');
+    });
+
+    test('omits shareViewerUrl when empty (defaults applied by orchestrator)', () => {
+      expect(gatherActionsConfig().shareViewerUrl).toBeUndefined();
+    });
+
+    test('parses share_viewer_url when provided', () => {
+      coreMock.getInput.mockImplementation((name: string) =>
+        name === 'share_viewer_url' ? 'https://example.com/v/' : ''
+      );
+      expect(gatherActionsConfig().shareViewerUrl).toBe('https://example.com/v/');
+    });
+
+    test('does not auto-enable exportSessionHtml at config time (orchestrator responsibility)', () => {
+      coreMock.getInput.mockImplementation((name: string) => {
+        if (name === 'share_session') {
+          return 'true';
+        }
+        if (name === 'export_session_html') {
+          return 'false';
+        }
+        return '';
+      });
+      const config = gatherActionsConfig();
+      // Config adapter parses inputs verbatim; the orchestrator derives the
+      // effective HTML-export flag (exportSessionHtml || shareSession).
+      expect(config.shareSession).toBe(true);
+      expect(config.exportSessionHtml).toBe(false);
+    });
+  });
 });

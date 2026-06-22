@@ -76,7 +76,7 @@ inputs:
     default: ''
 
   export_session_html:
-    description: 'Export the Pi session as a self-contained HTML file and expose its path via the `session_html_path` output. Set to false to disable.'
+    description: 'Export the Pi session as a self-contained HTML file and expose its path via the `session_html_path` output. Set to false to disable. Auto-enabled when share_session is true.'
     required: false
     default: 'false'
 
@@ -84,6 +84,21 @@ inputs:
     description: 'Export the Pi session as a JSONL file (one JSON object per line) and expose its path via the `session_jsonl_path` output. Set to true to enable.'
     required: false
     default: 'false'
+
+  share_session:
+    description: 'Share the session like pi''s /share command: upload the exported session HTML to a secret GitHub Gist and surface a pi.dev-style viewer link. Requires a GitHub PAT/App token with gist scope (see share_gist_token) — the default GITHUB_TOKEN cannot create gists. Auto-enables export_session_html.'
+    required: false
+    default: 'false'
+
+  share_gist_token:
+    description: 'GitHub token with gist scope used to create the share gist when share_session is enabled. A classic PAT (gist scope), a fine-grained PAT (Account → Gists: read/write), or a GitHub App installation token all work. The default GITHUB_TOKEN does NOT have gist scope.'
+    required: false
+    default: ''
+
+  share_viewer_url:
+    description: 'Base URL of the session viewer used to build share links. Links are produced as `${url}#<gistId>`. Defaults to the pi.dev viewer (https://pi.dev/session/).'
+    required: false
+    default: 'https://pi.dev/session/'
 
   auto_compaction:
     description: 'Enable automatic context compaction when the conversation grows too large for the model context window. When enabled, Pi will summarize older messages to free up context space, allowing longer sessions without hitting context limits.'
@@ -113,6 +128,12 @@ outputs:
   duration_seconds:
     description: 'Wall-clock duration of agent execution in seconds'
   session_html_path:
-    description: 'Path to the exported session HTML file (when export_session_html is enabled)'
+    description: 'Path to the exported session HTML file (when export_session_html is enabled, or when share_session is enabled)'
   session_jsonl_path:
     description: 'Path to the exported session JSONL file (when export_session_jsonl is enabled)'
+  share_url:
+    description: 'Pi.dev-style viewer link for the shared session (https://pi.dev/session/#<gistId>), when share_session is enabled and succeeds'
+  gist_url:
+    description: 'GitHub Gist URL holding the shared session HTML, when share_session is enabled and succeeds'
+  gist_id:
+    description: 'GitHub Gist ID holding the shared session HTML, when share_session is enabled and succeeds'

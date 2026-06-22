@@ -1,0 +1,101 @@
+/**
+ * Tests for the gist-sharing util (`createSessionGist`).
+ *
+ * Verifies the exact HTTP contract (method, headers, body) and the shape of
+ * the returned viewer link (including the `#` fragment the pi.dev viewer
+ * reads from `location.hash`). Uses a mocked global `fetch`.
+ */
+
+import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import {
+  createSessionGist,
+  DEFAULT_SHARE_VIEWER_URL,
+  DEFAULT_GITHUB_GIST_API,
+} from '@alexanderfortin/pi-orchestrator';
+
+describe('createSessionGist', () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = mock(async () => ({
+      ok: true,
+      status: 201,
+      json: async () => ({
+        id: 'abc123def456',
+        html_url: 'https://gist.github.com/bot/abc123def456',
+        files: {
+          'session.html': { raw_url: 'https://gist.githubusercontent.com/bot/abc123def456/raw' },
+        },
+      }),
+      text: async () => '',
+    })) as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test('creates a secret gist with the correct HTTP contract', async () => {
+    await createSessionGist({ token: 'ghp_token', content: '<html>session</html>' });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    const calls = (globalThis.fetch as any).mock.calls;
+    const [url, init] = calls[0];
+    expect(url).toBe(DEFAULT_GITHUB_GIST_API);
+    expect(init?.method).toBe('POST');
+    const headers = init?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer ghp_token');
+    expect(headers.Accept).toBe('application/vnd.github+json');
+
+    const body = JSON.parse(init?.body as string);
+    expect(body.public).toBe(false);
+    expect(body.files['session.html'].content).toBe('<html>session</html>');
+  });
+
+  test('returns a pi.dev share link with the # fragment', async () => {
+    const gist = await createSessionGist({ token: 't', content: 'x' });
+    expect(gist.id).toBe('abc123def456');
+    expect(gist.gistUrl).toBe('https://gist.github.com/bot/abc123def456');
+    expect(gist.rawUrl).toBe('https://gist.githubusercontent.com/bot/abc123def456/raw');
+    expect(gist.shareUrl).toBe(`${DEFAULT_SHARE_VIEWER_URL}#abc123def456`);
+  });
+
+  test('honours a custom viewer URL', async () => {
+    const gist = await createSessionGist({ token: 't', content: 'x' }, 'https://example.com/v/');
+    expect(gist.shareUrl).toBe('https://example.com/v/#abc123def456');
+  });
+
+  test('honours a custom filename, description, public flag, and API URL', async () => {
+    await createSessionGist({
+      token: 't',
+      content: 'data',
+      filename: 'session.jsonl',
+      description: 'custom',
+      public: true,
+      apiUrl: 'https://ghe.example.com/api/v3/gists',
+    });
+
+    const calls = (globalThis.fetch as any).mock.calls;
+    const [requestUrl, init] = calls[0];
+    expect(init?.headers).toMatchObject({ Authorization: 'Bearer t' });
+    const body = JSON.parse(init?.body as string);
+    expect(body.description).toBe('custom');
+    expect(body.public).toBe(true);
+    expect(body.files['session.jsonl'].content).toBe('data');
+    expect(requestUrl).toBe('https://ghe.example.com/api/v3/gists');
+  });
+
+  test('throws with status + body detail on non-2xx', async () => {
+    globalThis.fetch = mock(async () => ({
+      ok: false,
+      status: 422,
+      statusText: 'Unprocessable Entity',
+      json: async () => ({}),
+      text: async () => '{"message":"validation failed"}',
+    })) as unknown as typeof fetch;
+
+    await expect(createSessionGist({ token: 't', content: 'x' })).rejects.toThrow(
+      /422 Unprocessable Entity.*validation failed/
+    );
+  });
+});

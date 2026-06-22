@@ -167,11 +167,16 @@ export function gatherActionsConfig(): PiConfig {
   const exportSessionHtml = parseBooleanInput(core.getInput('export_session_html'), true);
   const exportSessionJsonl = parseBooleanInput(core.getInput('export_session_jsonl'), false);
   const autoCompaction = parseBooleanInput(core.getInput('auto_compaction'), false);
+  const shareSession = parseBooleanInput(core.getInput('share_session'), false);
 
   // --- Optional positive-integer inputs ----------------------------------
   const diffMaxLines = parsePositiveIntInput(core.getInput('diff_max_lines'));
   const diffMaxBytes = parsePositiveIntInput(core.getInput('diff_max_bytes'));
   const prNumber = parsePositiveIntInput(core.getInput('pr_number'));
+
+  // --- Session sharing inputs --------------------------------------------
+  const shareGistToken = core.getInput('share_gist_token') || undefined;
+  const shareViewerUrl = core.getInput('share_viewer_url') || undefined;
 
   // --- Assemble PiConfig (only include optional keys when set) -----------
   return {
@@ -187,6 +192,9 @@ export function gatherActionsConfig(): PiConfig {
     exportSessionHtml,
     exportSessionJsonl,
     autoCompaction,
+    shareSession,
+    ...(shareGistToken ? { shareGistToken } : {}),
+    ...(shareViewerUrl ? { shareViewerUrl } : {}),
     ...(diffMaxLines ? { diffMaxLines } : {}),
     ...(diffMaxBytes ? { diffMaxBytes } : {}),
     ...(diffIgnorePatterns?.length ? { diffIgnorePatterns } : {}),

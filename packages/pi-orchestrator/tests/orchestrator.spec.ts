@@ -7,8 +7,10 @@
  * action itself.
  */
 
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
 import { Temporal } from '@js-temporal/polyfill';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { ActionOrchestrator } from '@alexanderfortin/pi-orchestrator';
 import type {
   CoreAdapter,
@@ -104,6 +106,7 @@ describe('ActionOrchestrator', () => {
       getExportDirectory: mock(
         (format: 'html' | 'jsonl') => `/tmp/pi-session-${format}-test`
       ) as any,
+      appendSummary: mock(async () => {}) as any,
     };
 
     // Create mock git adapter
@@ -1437,6 +1440,114 @@ describe('ActionOrchestrator', () => {
       await orchestrator.execute();
 
       expectFactoryCalledWith(mockPiFactory, mockCore, mockProvider, { prNumber: 42 });
+    });
+  });
+
+  describe('share_session configuration', () => {
+    const originalFetch = globalThis.fetch;
+    const htmlPath = '/tmp/pi-session-html-test/session.html';
+
+    beforeEach(() => {
+      fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
+      fs.writeFileSync(htmlPath, '<html>session</html>');
+      globalThis.fetch = mock(async () => ({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          id: 'abc123def456',
+          html_url: 'https://gist.github.com/bot/abc123def456',
+          files: {
+            'session.html': { raw_url: 'https://gist.githubusercontent.com/bot/abc123def456/raw' },
+          },
+        }),
+        text: async () => '',
+      })) as unknown as typeof fetch;
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    test('does not share when disabled (default)', async () => {
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('share_url', expect.anything());
+    });
+
+    test('shares the session to a gist and surfaces the viewer link', async () => {
+      const orchestrator = createOrchestrator({
+        shareSession: true,
+        shareGistToken: 'ghp_token',
+      });
+      await orchestrator.execute();
+
+      // action outputs
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith(
+        'share_url',
+        'https://pi.dev/session/#abc123def456'
+      );
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith(
+        'gist_url',
+        'https://gist.github.com/bot/abc123def456'
+      );
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('gist_id', 'abc123def456');
+
+      // logs footer (info) + GitHub notice annotation
+      expect(mockCore.info).toHaveBeenCalledWith(
+        expect.stringContaining('view session: https://pi.dev/session/#abc123def456')
+      );
+      expect(mockCore.notice).toHaveBeenCalledWith('https://pi.dev/session/#abc123def456');
+
+      // job summary
+      expect(mockOutputSink.appendSummary).toHaveBeenCalledWith(
+        expect.stringContaining('https://pi.dev/session/#abc123def456')
+      );
+    });
+
+    test('auto-enables export_session_html so the HTML is produced', async () => {
+      const orchestrator = createOrchestrator({
+        shareSession: true,
+        shareGistToken: 't',
+        exportSessionHtml: false,
+      });
+      await orchestrator.execute();
+
+      expect(mockPiAgent.exportSessionHtml).toHaveBeenCalled();
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('session_html_path', expect.anything());
+    });
+
+    test('skips sharing with a notice when no gist token is configured', async () => {
+      const orchestrator = createOrchestrator({ shareSession: true });
+      await orchestrator.execute();
+
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('share_url', expect.anything());
+      expect(mockCore.notice).toHaveBeenCalledWith(expect.stringContaining('no gist token'));
+    });
+
+    test('continues execution when gist creation fails', async () => {
+      globalThis.fetch = mock(async () => ({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        json: async () => ({}),
+        text: async () => 'bad credentials',
+      })) as unknown as typeof fetch;
+
+      const orchestrator = createOrchestrator({
+        shareSession: true,
+        shareGistToken: 'bad',
+      });
+      await orchestrator.execute();
+
+      // Action still completes successfully
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('success', true);
+      expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('share_url', expect.anything());
+      expect(mockCore.notice).toHaveBeenCalledWith(
+        expect.stringContaining('failed to share session')
+      );
     });
   });
 });
