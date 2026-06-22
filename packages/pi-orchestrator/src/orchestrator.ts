@@ -274,8 +274,9 @@ export class ActionOrchestrator {
       return;
     }
 
-    // Reconstruct the HTML export path (same path exportSessionOutput writes).
-    const htmlPath = path.join(this.outputSink.getExportDirectory('html'), 'session.html');
+    // Reuse the same path exportSessionOutput writes (single source of truth
+    // for the filename convention — avoids drifting out of sync).
+    const htmlPath = this.sessionExportPath('html');
     const content = this.readShareContent(htmlPath, tag);
     if (content === undefined) {
       return; // skip notice already logged in readShareContent
@@ -380,6 +381,16 @@ export class ActionOrchestrator {
   }
 
   /**
+   * Resolve the on-disk path a session export is written to for the given
+   * format. Single source of truth for the `session.<format>` naming
+   * convention shared by {@link exportSessionOutput} (writes the file) and
+   * {@link runSessionShare} (reads it back to upload).
+   */
+  private sessionExportPath(format: 'html' | 'jsonl'): string {
+    return path.join(this.outputSink.getExportDirectory(format), `session.${format}`);
+  }
+
+  /**
    * Export session output for a given format (HTML or JSONL).
    *
    * Shared implementation for session exports: creates the export directory
@@ -389,11 +400,10 @@ export class ActionOrchestrator {
   private async exportSessionOutput(pi: PiAgent, format: 'html' | 'jsonl'): Promise<void> {
     const tag = `session-${format}`;
     const formatLabel = format.toUpperCase();
-    const outputDir = this.outputSink.getExportDirectory(format);
-    const outputPath = path.join(outputDir, `session.${format}`);
+    const outputPath = this.sessionExportPath(format);
 
     try {
-      fs.mkdirSync(outputDir, { recursive: true });
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
       const exportFn = format === 'html' ? pi.exportSessionHtml : pi.exportSessionJsonl;
       await exportFn.call(pi, outputPath);
       this.logger.info(`[${tag}] exported session ${formatLabel} to ${outputPath}`);
