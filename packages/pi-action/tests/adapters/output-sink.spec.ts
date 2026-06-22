@@ -1,11 +1,26 @@
 /**
  * Tests for ActionsOutputSink — the GitHub Actions output sink implementation.
+ *
+ * NOTE on mock.module: Bun's mock.module() snapshots the factory's return
+ * value — use `mock.module` at the top of the file with mocked functions
+ * that you can reference in expectations.
  */
 
-import { describe, expect, test, beforeEach } from 'bun:test';
-import { coreMock, registerCoreMock } from '../../../pi-orchestrator/tests/helpers/core-mock';
+import { describe, expect, test, beforeEach, mock } from 'bun:test';
 
-registerCoreMock();
+const mockSetOutput = mock();
+const mockSetFailed = mock();
+
+// Mock @actions/core BEFORE importing the module-under-test.
+mock.module('@actions/core', () => ({
+  setOutput: mockSetOutput,
+  setFailed: mockSetFailed,
+  debug: mock(),
+  info: mock(),
+  warning: mock(),
+  error: mock(),
+  isDebug: mock(() => false),
+}));
 
 import { ActionsOutputSink } from '../../src/adapters/output-sink';
 
@@ -13,30 +28,30 @@ describe('ActionsOutputSink', () => {
   let sink: ActionsOutputSink;
 
   beforeEach(() => {
-    coreMock.setOutput.mockClear();
-    coreMock.setFailed.mockClear();
+    mockSetOutput.mockClear();
+    mockSetFailed.mockClear();
     sink = new ActionsOutputSink();
   });
 
   test('setOutput delegates to core.setOutput', () => {
     sink.setOutput('response', 'test response');
-    expect(coreMock.setOutput).toHaveBeenCalledWith('response', 'test response');
+    expect(mockSetOutput).toHaveBeenCalledWith('response', 'test response');
   });
 
   test('setOutput handles numeric values', () => {
     sink.setOutput('tokens', 42);
-    expect(coreMock.setOutput).toHaveBeenCalledWith('tokens', 42);
+    expect(mockSetOutput).toHaveBeenCalledWith('tokens', 42);
   });
 
   test('setOutput handles boolean values', () => {
     sink.setOutput('success', true);
-    expect(coreMock.setOutput).toHaveBeenCalledWith('success', true);
+    expect(mockSetOutput).toHaveBeenCalledWith('success', true);
   });
 
   test('setFailed delegates to core.setFailed', () => {
     const error = new Error('test error');
     sink.setFailed(error);
-    expect(coreMock.setFailed).toHaveBeenCalledWith(error);
+    expect(mockSetFailed).toHaveBeenCalledWith(error);
   });
 
   test('getExportDirectory returns path with format', () => {

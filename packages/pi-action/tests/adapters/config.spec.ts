@@ -3,75 +3,74 @@
  *
  * Tests that the config gathering logic correctly parses @actions/core
  * inputs into a PiConfig object with proper defaults and validation.
+ *
+ * NOTE on mock.module: Bun's mock.module() snapshots the factory's return
+ * value — subsequent mockImplementation() calls on the original mock
+ * objects have NO effect on the module-level exports.  Therefore we call
+ * mock.module() directly in beforeEach / each test with a custom factory
+ * that provides the exact implemention we need.
  */
 
-import { describe, expect, test, beforeEach } from 'bun:test';
-import { coreMock, registerCoreMock } from '../../../pi-orchestrator/tests/helpers/core-mock';
+import { describe, expect, test, beforeEach, mock } from 'bun:test';
 
-registerCoreMock();
+// Mock @actions/core BEFORE importing the module-under-test.
+mock.module('@actions/core', () => ({
+  getInput: mock((_name: string) => ''),
+  debug: mock(),
+}));
 
 import { gatherActionsConfig } from '../../src/adapters/config';
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Re-register the @actions/core mock with getInput returning the given
+ * overrides on top of required defaults.
+ */
+function mockCore(overrides: Record<string, string> = {}): void {
+  const defaults: Record<string, string> = {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-5',
+    token: 'test-token',
+    thinking_level: '',
+    prompt: '',
+    ...overrides,
+  };
+  mock.module('@actions/core', () => ({
+    getInput: mock((name: string) => defaults[name] ?? ''),
+    debug: mock(),
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 describe('gatherActionsConfig', () => {
   beforeEach(() => {
-    coreMock.getInput.mockClear();
-    coreMock.debug.mockClear();
-    coreMock.getInput.mockImplementation((name: string) => {
-      const defaults: Record<string, string> = {
-        provider: 'anthropic',
-        model: 'claude-sonnet-4-5',
-        token: 'test-token',
-        thinking_level: '',
-        prompt: '',
-      };
-      return defaults[name] ?? '';
-    });
+    mockCore();
   });
 
   describe('required fields validation', () => {
     test('throws descriptive error when provider is missing', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'provider') {
-          return '';
-        }
-        return 'value';
-      });
+      mockCore({ provider: '' });
       expect(() => gatherActionsConfig()).toThrow('Missing required input: `provider`');
     });
 
     test('provider error mentions possible values', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'provider') {
-          return '';
-        }
-        return 'value';
-      });
+      mockCore({ provider: '' });
       expect(() => gatherActionsConfig()).toThrow(/anthropic/);
     });
 
     test('throws descriptive error when model is missing', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'model') {
-          return '';
-        }
-        return 'value';
-      });
+      mockCore({ model: '' });
       expect(() => gatherActionsConfig()).toThrow('Missing required input: `model`');
     });
 
     test('allows empty token for provider-side auth', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'token') {
-          return '';
-        }
-        if (name === 'provider') {
-          return 'google-vertex';
-        }
-        if (name === 'model') {
-          return 'gemini-2.5-pro';
-        }
-        return '';
-      });
+      mockCore({ provider: 'google-vertex', model: 'gemini-2.5-pro', token: '' });
       const config = gatherActionsConfig();
       expect(config.token).toBe('');
     });
@@ -101,54 +100,29 @@ describe('gatherActionsConfig', () => {
 
   describe('boolean input parsing', () => {
     test('parses load_builtin_extensions false', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'load_builtin_extensions') {
-          return 'false';
-        }
-        return 'value';
-      });
+      mockCore({ load_builtin_extensions: 'false' });
       expect(gatherActionsConfig().loadBuiltinExtensions).toBe(false);
     });
 
     test('parses export_session_html false', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'export_session_html') {
-          return 'false';
-        }
-        return 'value';
-      });
+      mockCore({ export_session_html: 'false' });
       expect(gatherActionsConfig().exportSessionHtml).toBe(false);
     });
 
     test('parses export_session_jsonl true', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'export_session_jsonl') {
-          return 'true';
-        }
-        return 'value';
-      });
+      mockCore({ export_session_jsonl: 'true' });
       expect(gatherActionsConfig().exportSessionJsonl).toBe(true);
     });
 
     test('parses auto_compaction true', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'auto_compaction') {
-          return 'true';
-        }
-        return 'value';
-      });
+      mockCore({ auto_compaction: 'true' });
       expect(gatherActionsConfig().autoCompaction).toBe(true);
     });
   });
 
   describe('extensions parsing', () => {
     test('parses newline-separated extensions', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'extensions') {
-          return 'npm:package-one\ngit:github.com/user/repo\n./local-path.ts';
-        }
-        return 'value';
-      });
+      mockCore({ extensions: 'npm:package-one\ngit:github.com/user/repo\n./local-path.ts' });
       const config = gatherActionsConfig();
       expect(config.extensions).toEqual([
         'npm:package-one',
@@ -158,12 +132,7 @@ describe('gatherActionsConfig', () => {
     });
 
     test('omits extensions when input is empty', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'extensions') {
-          return '';
-        }
-        return 'value';
-      });
+      mockCore({ extensions: '' });
       const config = gatherActionsConfig();
       expect(config.extensions).toBeUndefined();
     });
@@ -171,11 +140,8 @@ describe('gatherActionsConfig', () => {
 
   describe('loaded_tools parsing', () => {
     test('parses newline-separated tool names (YAML list style)', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'loaded_tools') {
-          return 'get_pr_diff\ncreate_pull_request\nget_issue_or_pr_thread';
-        }
-        return 'value';
+      mockCore({
+        loaded_tools: 'get_pr_diff\ncreate_pull_request\nget_issue_or_pr_thread',
       });
       const config = gatherActionsConfig();
       expect(config.loadedTools).toEqual([
@@ -186,34 +152,19 @@ describe('gatherActionsConfig', () => {
     });
 
     test('returns undefined for "all"', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'loaded_tools') {
-          return 'all';
-        }
-        return 'value';
-      });
+      mockCore({ loaded_tools: 'all' });
       const config = gatherActionsConfig();
       expect(config.loadedTools).toBeUndefined();
     });
 
     test('returns undefined for empty input', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'loaded_tools') {
-          return '';
-        }
-        return 'value';
-      });
+      mockCore({ loaded_tools: '' });
       const config = gatherActionsConfig();
       expect(config.loadedTools).toBeUndefined();
     });
 
     test('deduplicates tool names', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'loaded_tools') {
-          return 'read\nread\nwrite';
-        }
-        return 'value';
-      });
+      mockCore({ loaded_tools: 'read\nread\nwrite' });
       const config = gatherActionsConfig();
       expect(config.loadedTools).toEqual(['read', 'write']);
     });
@@ -221,84 +172,44 @@ describe('gatherActionsConfig', () => {
 
   describe('diff configuration', () => {
     test('parses diff_max_lines', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'diff_max_lines') {
-          return '500';
-        }
-        return 'value';
-      });
+      mockCore({ diff_max_lines: '500' });
       expect(gatherActionsConfig().diffMaxLines).toBe(500);
     });
 
     test('parses diff_max_bytes', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'diff_max_bytes') {
-          return '204800';
-        }
-        return 'value';
-      });
+      mockCore({ diff_max_bytes: '204800' });
       expect(gatherActionsConfig().diffMaxBytes).toBe(204800);
     });
 
     test('parses diff_ignore_patterns', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'diff_ignore_patterns') {
-          return 'dist/ package-lock.json';
-        }
-        return 'value';
-      });
+      mockCore({ diff_ignore_patterns: 'dist/ package-lock.json' });
       expect(gatherActionsConfig().diffIgnorePatterns).toEqual(['dist/', 'package-lock.json']);
     });
 
     test('ignores non-numeric diff_max_lines', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'diff_max_lines') {
-          return 'not-a-number';
-        }
-        return 'value';
-      });
+      mockCore({ diff_max_lines: 'not-a-number' });
       expect(gatherActionsConfig().diffMaxLines).toBeUndefined();
     });
 
     test('ignores negative diff_max_lines', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'diff_max_lines') {
-          return '-1';
-        }
-        return 'value';
-      });
+      mockCore({ diff_max_lines: '-1' });
       expect(gatherActionsConfig().diffMaxLines).toBeUndefined();
     });
 
     test('ignores zero diff_max_lines', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'diff_max_lines') {
-          return '0';
-        }
-        return 'value';
-      });
+      mockCore({ diff_max_lines: '0' });
       expect(gatherActionsConfig().diffMaxLines).toBeUndefined();
     });
   });
 
   describe('base_url', () => {
     test('parses base_url when provided', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'base_url') {
-          return 'https://my-proxy.example.com/v1';
-        }
-        return 'value';
-      });
+      mockCore({ base_url: 'https://my-proxy.example.com/v1' });
       expect(gatherActionsConfig().baseUrl).toBe('https://my-proxy.example.com/v1');
     });
 
     test('omits base_url when empty', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'base_url') {
-          return '';
-        }
-        return 'value';
-      });
+      mockCore({ base_url: '' });
       expect(gatherActionsConfig().baseUrl).toBeUndefined();
     });
   });
@@ -309,9 +220,7 @@ describe('gatherActionsConfig', () => {
     });
 
     test('parses share_session true', () => {
-      coreMock.getInput.mockImplementation((name: string) =>
-        name === 'share_session' ? 'true' : ''
-      );
+      mockCore({ share_session: 'true' });
       expect(gatherActionsConfig().shareSession).toBe(true);
     });
 
@@ -320,22 +229,12 @@ describe('gatherActionsConfig', () => {
     });
 
     test('parses github_token when provided', () => {
-      coreMock.getInput.mockImplementation((name: string) =>
-        name === 'github_token' ? 'ghp_secret' : ''
-      );
+      mockCore({ github_token: 'ghp_secret' });
       expect(gatherActionsConfig().githubToken).toBe('ghp_secret');
     });
 
     test('does not auto-enable exportSessionHtml at config time (orchestrator responsibility)', () => {
-      coreMock.getInput.mockImplementation((name: string) => {
-        if (name === 'share_session') {
-          return 'true';
-        }
-        if (name === 'export_session_html') {
-          return 'false';
-        }
-        return '';
-      });
+      mockCore({ share_session: 'true', export_session_html: 'false' });
       const config = gatherActionsConfig();
       // Config adapter parses inputs verbatim; the orchestrator derives the
       // effective HTML-export flag (exportSessionHtml || shareSession).
