@@ -243,11 +243,6 @@ export interface PiConfig extends DiffConfig {
    * {@link shareSession} is enabled.
    */
   githubToken?: string;
-  /**
-   * Viewer base URL for share links. Defaults to pi.dev
-   * (`https://pi.dev/session/`); links are built as `${url}#${gistId}`.
-   */
-  shareViewerUrl?: string;
   /** Override the default system prompt. */
   systemPrompt?: string;
   /** Working directory. Defaults to `process.cwd()`. */

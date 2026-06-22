@@ -683,7 +683,6 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
 | `provider` | LLM provider (openai, google, anthropic, etc.) | Yes | - |
 | `share_session` | Share the session like pi's `/share` command: upload the exported HTML to a secret GitHub Gist and surface a pi.dev viewer link. Uses the `github_token` input (PAT/App token with gist scope required). Auto-enables `export_session_html` | No | `false` |
-| `share_viewer_url` | Base URL of the session viewer used to build share links (produced as `${url}#<gistId>`) | No | `https://pi.dev/session/` |
 | `thinking_level` | Model thinking level (off\|low\|medium\|high) | No | off |
 | `token` | Provider API token. Required for most providers, but can be omitted when using providers that support alternative auth mechanisms (e.g., `google-vertex` with Application Default Credentials) | No | - |
 | `trigger` | Trigger phrase used to invoke the action | No | /pi  |

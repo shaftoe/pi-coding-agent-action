@@ -326,17 +326,6 @@ describe('gatherActionsConfig', () => {
       expect(gatherActionsConfig().githubToken).toBe('ghp_secret');
     });
 
-    test('omits shareViewerUrl when empty (defaults applied by orchestrator)', () => {
-      expect(gatherActionsConfig().shareViewerUrl).toBeUndefined();
-    });
-
-    test('parses share_viewer_url when provided', () => {
-      coreMock.getInput.mockImplementation((name: string) =>
-        name === 'share_viewer_url' ? 'https://example.com/v/' : ''
-      );
-      expect(gatherActionsConfig().shareViewerUrl).toBe('https://example.com/v/');
-    });
-
     test('does not auto-enable exportSessionHtml at config time (orchestrator responsibility)', () => {
       coreMock.getInput.mockImplementation((name: string) => {
         if (name === 'share_session') {

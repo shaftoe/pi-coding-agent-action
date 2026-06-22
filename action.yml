@@ -90,11 +90,6 @@ inputs:
     required: false
     default: 'false'
 
-  share_viewer_url:
-    description: 'Base URL of the session viewer used to build share links. Links are produced as `${url}#<gistId>`. Defaults to the pi.dev viewer (https://pi.dev/session/).'
-    required: false
-    default: 'https://pi.dev/session/'
-
   auto_compaction:
     description: 'Enable automatic context compaction when the conversation grows too large for the model context window. When enabled, Pi will summarize older messages to free up context space, allowing longer sessions without hitting context limits.'
     required: false

@@ -176,7 +176,6 @@ export function gatherActionsConfig(): PiConfig {
 
   // --- Session sharing inputs --------------------------------------------
   const githubToken = core.getInput('github_token') || undefined;
-  const shareViewerUrl = core.getInput('share_viewer_url') || undefined;
 
   // --- Assemble PiConfig (only include optional keys when set) -----------
   return {
@@ -194,7 +193,6 @@ export function gatherActionsConfig(): PiConfig {
     autoCompaction,
     shareSession,
     ...(githubToken ? { githubToken } : {}),
-    ...(shareViewerUrl ? { shareViewerUrl } : {}),
     ...(diffMaxLines ? { diffMaxLines } : {}),
     ...(diffMaxBytes ? { diffMaxBytes } : {}),
     ...(diffIgnorePatterns?.length ? { diffIgnorePatterns } : {}),

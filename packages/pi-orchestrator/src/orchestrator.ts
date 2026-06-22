@@ -26,12 +26,7 @@ import {
 import { formatCost } from './format';
 import type { CreateReactionType, PlatformProvider } from './platform';
 import { getActionVersion, formatActionVersion } from './version';
-import {
-  createSessionGist,
-  DEFAULT_SHARE_VIEWER_URL,
-  MAX_GIST_CONTENT_BYTES,
-  type CreatedGist,
-} from './share/gist';
+import { createSessionGist, MAX_GIST_CONTENT_BYTES, type CreatedGist } from './share/gist';
 
 /**
  * Build the body of the success comment posted at the end of a run.
@@ -329,12 +324,11 @@ export class ActionOrchestrator {
    * — by that point the gist exists and the outputs are already set.
    */
   private async createAndSurfaceGist(token: string, content: string, tag: string): Promise<void> {
-    const viewerUrl = this.config.shareViewerUrl ?? DEFAULT_SHARE_VIEWER_URL;
     const description = this.buildShareDescription();
 
     let gist: CreatedGist;
     try {
-      gist = await createSessionGist({ token, content, description }, viewerUrl);
+      gist = await createSessionGist({ token, content, description });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.notice(`[${tag}] failed to share session: ${msg}`);
