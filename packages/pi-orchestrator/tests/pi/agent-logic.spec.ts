@@ -424,6 +424,56 @@ describe('Agent', () => {
         error: undefined,
       });
     });
+
+    test('exposes session stats via getSessionStats()', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      injectMockSession(
+        agent,
+        buildMockSession({
+          stats: { input: 80, output: 20, total: 100, cost: 0.05 },
+          messages: [],
+        })
+      );
+
+      await agent.run('Hello');
+
+      expect(agent.getSessionStats()).toEqual({
+        inputTokens: 80,
+        outputTokens: 20,
+        totalTokens: 100,
+        cost: 0.05,
+        version: expect.any(String),
+      });
+    });
+
+    test('getSessionStats() returns partial usage after prompt() throws', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      const throwingSession = {
+        ...buildMockSession({
+          stats: { input: 250, output: 30, total: 280, cost: 0.012 },
+          messages: [],
+        }),
+        prompt: async () => {
+          throw new Error('network blew up');
+        },
+      };
+      injectMockSession(agent, throwingSession);
+
+      await expect(agent.run('Hello')).rejects.toThrow('network blew up');
+
+      // Partial usage is still recoverable after the rejection.
+      expect(agent.getSessionStats()).toEqual({
+        inputTokens: 250,
+        outputTokens: 30,
+        totalTokens: 280,
+        cost: 0.012,
+        version: expect.any(String),
+      });
+    });
   });
 
   describe('loadedTools validation', () => {

@@ -182,6 +182,15 @@ describe('formatSessionStatsLines', () => {
     expect(result).toContain('Cost: $0.12');
   });
 
+  test('omits Cost when tiny positive cost rounds to zero at 2 decimals', () => {
+    // 0.001 > 0 but toFixed(2) rounds to "0.00" — shared formatCost helper
+    // rounds before the threshold check, so the Cost line is omitted.
+    const result = formatSessionStatsLines(
+      buildMetadata({ sessionStats: buildStats({ totalTokens: 100, cost: 0.001, version: '' }) })
+    );
+    expect(result).toEqual(['Tokens: 100']);
+  });
+
   test('includes Pi SDK version when present', () => {
     const result = formatSessionStatsLines(
       buildMetadata({ sessionStats: buildStats({ totalTokens: 100, cost: 0, version: '1.2.3' }) })

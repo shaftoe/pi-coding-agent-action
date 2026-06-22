@@ -22,7 +22,7 @@ import type { RestEndpointMethodTypes } from '@octokit/plugin-rest-endpoint-meth
 import { Temporal } from '@js-temporal/polyfill';
 import type { GitHubModuleDeps } from './types';
 import type { CommentMetadata } from '@alexanderfortin/pi-orchestrator';
-import { formatActionVersion } from '@alexanderfortin/pi-orchestrator';
+import { formatActionVersion, formatCost } from '@alexanderfortin/pi-orchestrator';
 
 /**
  * Metadata to include in the comment footer.
@@ -78,9 +78,9 @@ export function formatModelMetadata(metadata: CommentMetadata): string | undefin
  * when a version is present. Returns an empty array when there are no
  * session stats at all.
  *
- * Cost is rendered via `Math.abs()` to accommodate pay-as-you-go providers
- * (e.g. ppq.ai) that report spending as a negative number against an
- * account balance.
+ * Cost formatting (absolute value, zero omission) is handled by the shared
+ * {@link formatCost} helper so this surface stays in lockstep with the
+ * action-log report.
  */
 export function formatSessionStatsLines(metadata: CommentMetadata): string[] {
   const stats = metadata.sessionStats;
@@ -89,9 +89,9 @@ export function formatSessionStatsLines(metadata: CommentMetadata): string[] {
   }
   const lines: string[] = [];
   lines.push(`Tokens: ${formatNumber(stats.totalTokens)}`);
-  const cost = Math.abs(stats.cost);
-  if (cost > 0) {
-    lines.push(`Cost: $${cost.toFixed(2)}`);
+  const cost = formatCost(stats.cost, 2);
+  if (cost) {
+    lines.push(`Cost: $${cost}`);
   }
   if (stats.version) {
     lines.push(`Pi SDK v${stats.version}`);

@@ -94,6 +94,15 @@ export interface GitAdapter {
 export interface PiAgent {
   /** Run the agent with the given text prompt and receive the AI response with session statistics. */
   run(text: string): Promise<PromptResult>;
+  /**
+   * Return the session statistics accumulated so far.
+   *
+   * Safe to call even after {@link run} rejected (e.g. the underlying
+   * `prompt()` threw mid-turn): the session object persists and may still
+   * hold partial token usage. Returns `undefined` when the session was
+   * never initialised or stats are unavailable.
+   */
+  getSessionStats(): SessionStats | undefined;
   /** Export the session as a self-contained HTML file to the given path. */
   exportSessionHtml(outputPath: string): Promise<string>;
   /** Export the session as a JSONL file to the given path. */

@@ -260,10 +260,23 @@ export class Agent {
     this.events.onPromptComplete?.();
 
     const result = this.outputChunks.join('');
-    const sessionStats = this.getSessionStats();
+    const sessionStats = this.collectSessionStats();
     const error = this.getSessionError();
 
     return { result, sessionStats, error };
+  }
+
+  /**
+   * Public accessor for the session statistics accumulated so far.
+   *
+   * Delegates to {@link collectSessionStats}. Safe to call after {@link run}
+   * rejected — the session persists and may hold partial token usage from
+   * a turn that failed mid-flight.
+   *
+   * @returns Session stats or `undefined` when unavailable.
+   */
+  getSessionStats(): SessionStats | undefined {
+    return this.collectSessionStats();
   }
 
   /**
@@ -340,12 +353,12 @@ export class Agent {
   }
 
   /**
-   * Get session statistics including token usage.
+   * Collect session statistics including token usage from the underlying SDK.
    *
    * @returns Session stats or undefined if session not ready or stats unavailable.
-   * @private Internal method used by run().
+   * @private Internal helper used by {@link run} and {@link getSessionStats}.
    */
-  private getSessionStats(): SessionStats | undefined {
+  private collectSessionStats(): SessionStats | undefined {
     if (!this.session) {
       return undefined;
     }

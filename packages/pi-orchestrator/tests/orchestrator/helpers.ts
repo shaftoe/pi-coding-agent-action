@@ -40,6 +40,21 @@ export function setAgentRunError(agent: PiAgent, error: unknown) {
 }
 
 /**
+ * Configure the agent's `getSessionStats` mock to return the given stats.
+ *
+ * Used to simulate partial usage recovered from a `PiAgent` after `run`
+ * rejected (e.g. the underlying `prompt()` threw mid-turn).
+ */
+export function setAgentGetSessionStats(
+  agent: PiAgent,
+  sessionStats: Record<string, unknown> | undefined
+) {
+  const fn = mock(() => sessionStats);
+  (agent as any).getSessionStats = fn;
+  return fn;
+}
+
+/**
  * Configure `git.addReaction` to resolve with the given reaction shape.
  * Returns the reaction for later `deleteReaction` assertions.
  */

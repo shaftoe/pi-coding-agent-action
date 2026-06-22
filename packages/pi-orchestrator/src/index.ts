@@ -7,6 +7,9 @@
 // Core business logic
 export { ActionOrchestrator, buildSessionSuccessBody, buildSessionErrorBody } from './orchestrator';
 
+// Formatting helpers
+export { formatCost } from './format';
+
 // Agent
 export { Agent } from './pi';
 export { createToolsFactory } from './pi/tools';

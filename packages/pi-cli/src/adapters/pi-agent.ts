@@ -48,6 +48,9 @@ export const createCliPiAgent: PiAgentFactory = (
       await agent.ready();
       return agent.run(text);
     },
+    getSessionStats() {
+      return agent.getSessionStats();
+    },
     async exportSessionHtml(outputPath: string) {
       return agent.exportSessionHtml(outputPath);
     },

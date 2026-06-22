@@ -22,6 +22,7 @@ import type { CreateReactionType, PlatformProvider } from '@alexanderfortin/pi-o
 import {
   setAgentRunResult,
   setAgentRunError,
+  setAgentGetSessionStats,
   setAddReactionReturn,
   getFinalCommentCall,
   expectFactoryCalledWith,
@@ -128,8 +129,10 @@ describe('ActionOrchestrator', () => {
     }));
     const exportSessionHtmlMock = mock(async (outputPath: string) => outputPath);
     const exportSessionJsonlMock = mock(async (outputPath: string) => outputPath);
+    const getSessionStatsMock = mock(() => undefined);
     mockPiAgent = {
       run: runMock as any,
+      getSessionStats: getSessionStatsMock as any,
       exportSessionHtml: exportSessionHtmlMock as any,
       exportSessionJsonl: exportSessionJsonlMock as any,
     };
@@ -971,6 +974,27 @@ describe('ActionOrchestrator', () => {
       );
     });
 
+    test('omits cost when tiny positive cost rounds to zero at 4 decimals', async () => {
+      // 0.00001 > 0 but toFixed(4) rounds back to "0.0000" — the shared
+      // formatCost helper rounds before the threshold check, so the segment
+      // is omitted rather than shown as a confusing "cost $0.0000".
+      const sessionStats = {
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        cost: 0.00001,
+        version: '1.0.0',
+      };
+      setAgentRunResult(mockPiAgent, { result: 'Done!', sessionStats });
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
+      expect(infoCalls).toContain('📊 Token usage: input 100 · output 50 · total 150');
+      expect(infoCalls.some((c: string) => c.includes('cost $0.0000'))).toBe(false);
+    });
+
     test('does not log token usage report when session stats unavailable', async () => {
       setAgentRunResult(mockPiAgent, { result: 'Done!' });
 
@@ -998,6 +1022,49 @@ describe('ActionOrchestrator', () => {
       expect(infoCalls).toContain(
         '📊 Token usage: input 500 · output 100 · total 600 · cost $0.0200'
       );
+    });
+
+    test('recovers partial token usage when run() throws', async () => {
+      // Simulate pi.run() rejecting after consuming tokens (e.g. the
+      // underlying prompt() threw mid-turn). Partial usage is recovered via
+      // the agent's getSessionStats() so it still shows up in the logs.
+      const partialStats = {
+        inputTokens: 300,
+        outputTokens: 40,
+        totalTokens: 340,
+        cost: 0.015,
+        version: '1.0.0',
+      };
+      setAgentRunError(mockPiAgent, new Error('prompt crashed'));
+      setAgentGetSessionStats(mockPiAgent, partialStats);
+
+      const orchestrator = createOrchestrator();
+
+      await expect(orchestrator.execute()).rejects.toThrow('prompt crashed');
+
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
+      expect(infoCalls).toContain(
+        '📊 Token usage: input 300 · output 40 · total 340 · cost $0.0150'
+      );
+      // Recovered stats also flow to action outputs.
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('input_tokens', 300);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('cost', 0.015);
+      expect(mockPiAgent.getSessionStats).toHaveBeenCalled();
+    });
+
+    test('does not throw when recovering stats after run() rejects', async () => {
+      // pi.run() throws and getSessionStats() is unavailable → finalize
+      // proceeds without stats, action still fails with the original error.
+      setAgentRunError(mockPiAgent, new Error('prompt crashed'));
+      setAgentGetSessionStats(mockPiAgent, undefined);
+
+      const orchestrator = createOrchestrator();
+
+      await expect(orchestrator.execute()).rejects.toThrow('prompt crashed');
+
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
+      expect(infoCalls.some((c: string) => c.startsWith('📊 Token usage:'))).toBe(false);
+      expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('input_tokens', expect.anything());
     });
   });
 
