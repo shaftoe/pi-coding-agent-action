@@ -1448,8 +1448,16 @@ describe('ActionOrchestrator', () => {
     const htmlPath = '/tmp/pi-session-html-test/session.html';
 
     beforeEach(() => {
-      fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
-      fs.writeFileSync(htmlPath, '<html>session</html>');
+      // Override exportSessionHtml to actually write the file when called,
+      // rather than pre-creating it. This ensures runSessionShare only finds
+      // the HTML when exportSessionHtml was truly invoked (via share_session
+      // auto-enable), guarding against the needsPersistence bug where an
+      // in-memory session silently skips the export.
+      mockPiAgent.exportSessionHtml = mock(async (outputPath: string) => {
+        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+        fs.writeFileSync(outputPath, '<html>session</html>');
+        return outputPath;
+      }) as any;
       globalThis.fetch = mock(async () => ({
         ok: true,
         status: 201,
@@ -1571,8 +1579,13 @@ describe('ActionOrchestrator', () => {
     });
 
     test('skips sharing with a notice when session HTML exceeds the size limit', async () => {
-      // Write an oversized HTML file (well over the 10 MB gist limit).
-      fs.writeFileSync(htmlPath, 'x'.repeat(11 * 1024 * 1024));
+      // Override the export mock to produce an oversized file (well over
+      // the 10 MB gist limit) when it's called.
+      mockPiAgent.exportSessionHtml = mock(async (outputPath: string) => {
+        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+        fs.writeFileSync(outputPath, 'x'.repeat(11 * 1024 * 1024));
+        return outputPath;
+      }) as any;
 
       const orchestrator = createOrchestrator({
         shareSession: true,

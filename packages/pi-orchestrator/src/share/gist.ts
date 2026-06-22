@@ -40,6 +40,15 @@ export const DEFAULT_GITHUB_GIST_API = 'https://api.github.com/gists';
  */
 export const MAX_GIST_CONTENT_BYTES = 10 * 1024 * 1024;
 
+/**
+ * Timeout (ms) for the gist creation request.
+ *
+ * Sharing is best-effort, so we'd rather abort and log a notice than hang
+ * the entire action until the job timeout kills it. 15 s is generous for
+ * uploading a few MB of HTML.
+ */
+export const GIST_CREATE_TIMEOUT_MS = 15_000;
+
 /** Inputs for {@link createSessionGist}. */
 export interface CreateGistInput {
   /**
@@ -107,21 +116,37 @@ export async function createSessionGist(
     apiUrl = DEFAULT_GITHUB_GIST_API,
   } = input;
 
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      'Content-Type': 'application/json',
-      'User-Agent': 'pi-coding-agent-action',
-    },
-    body: JSON.stringify({
-      description,
-      public: isPublic,
-      files: { [filename]: { content } },
-    }),
-  });
+  // Abort the request if it stalls so a hung connection can't block the
+  // entire action. The surrounding runSessionShare catch logs the
+  // AbortError as a notice and the run continues.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GIST_CREATE_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+        'User-Agent': 'pi-coding-agent-action',
+      },
+      body: JSON.stringify({
+        description,
+        public: isPublic,
+        files: { [filename]: { content } },
+      }),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === 'AbortError') {
+      throw new Error(`gist create timed out after ${GIST_CREATE_TIMEOUT_MS}ms`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
@@ -131,10 +156,20 @@ export async function createSessionGist(
   }
 
   const json = (await response.json()) as {
-    id: string;
-    html_url: string;
+    id?: string;
+    html_url?: string;
     files?: Record<string, { raw_url?: string }>;
   };
+
+  // Guard against a 2xx response with an unexpected shape (proxy
+  // interference, partial response, future API change). Without this,
+  // a malformed response silently produces undefined gist_id/gist_url
+  // and a share_url of "<viewer>#undefined".
+  if (!json.id || !json.html_url) {
+    throw new Error(
+      `gist create returned unexpected response (no id/html_url): ${JSON.stringify(json).slice(0, 200)}`
+    );
+  }
 
   const file = json.files?.[filename];
 

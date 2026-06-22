@@ -11,6 +11,7 @@ import {
   createSessionGist,
   DEFAULT_SHARE_VIEWER_URL,
   DEFAULT_GITHUB_GIST_API,
+  GIST_CREATE_TIMEOUT_MS,
 } from '@alexanderfortin/pi-orchestrator';
 
 describe('createSessionGist', () => {
@@ -96,6 +97,44 @@ describe('createSessionGist', () => {
 
     await expect(createSessionGist({ token: 't', content: 'x' })).rejects.toThrow(
       /422 Unprocessable Entity.*validation failed/
+    );
+  });
+
+  test('passes an AbortSignal to fetch for timeout safety', async () => {
+    await createSessionGist({ token: 't', content: 'x' });
+
+    const calls = (globalThis.fetch as any).mock.calls;
+    const init = calls[0][1];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  test('throws a timeout error when the request aborts', async () => {
+    // Simulate an aborted request (the timeout fires).
+    globalThis.fetch = mock(async (_url: string, init: RequestInit) => {
+      // Simulate the AbortController firing: reject with an AbortError.
+      if (init.signal) {
+        const err = new Error('The operation was aborted');
+        err.name = 'AbortError';
+        throw err;
+      }
+      return { ok: true, status: 201, json: async () => ({}), text: async () => '' } as any;
+    }) as unknown as typeof fetch;
+
+    await expect(createSessionGist({ token: 't', content: 'x' })).rejects.toThrow(
+      `gist create timed out after ${GIST_CREATE_TIMEOUT_MS}ms`
+    );
+  });
+
+  test('throws when the 2xx response lacks id/html_url (malformed)', async () => {
+    globalThis.fetch = mock(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ message: 'unexpected proxy response' }),
+      text: async () => '',
+    })) as unknown as typeof fetch;
+
+    await expect(createSessionGist({ token: 't', content: 'x' })).rejects.toThrow(
+      /unexpected response.*no id\/html_url/
     );
   });
 });

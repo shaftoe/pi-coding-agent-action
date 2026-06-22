@@ -60,6 +60,7 @@ export {
   DEFAULT_SHARE_VIEWER_URL,
   DEFAULT_GITHUB_GIST_API,
   MAX_GIST_CONTENT_BYTES,
+  GIST_CREATE_TIMEOUT_MS,
 } from './share/gist';
 export type { CreateGistInput, CreatedGist } from './share/gist';
 
