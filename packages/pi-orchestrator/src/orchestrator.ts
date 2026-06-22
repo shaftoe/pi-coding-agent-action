@@ -298,6 +298,16 @@ export class ActionOrchestrator {
     }
 
     try {
+      // Pre-check the on-disk size before loading the file into memory so a
+      // pathological oversized file is rejected without being read.
+      const statBytes = fs.statSync(htmlPath).size;
+      if (statBytes > MAX_GIST_CONTENT_BYTES) {
+        this.logger.notice(
+          `[${tag}] skipped: session HTML is ${statBytes} bytes, exceeds ` +
+            `${MAX_GIST_CONTENT_BYTES}-byte gist limit`
+        );
+        return undefined;
+      }
       const content = fs.readFileSync(htmlPath, 'utf8');
       const contentBytes = Buffer.byteLength(content, 'utf8');
       if (contentBytes > MAX_GIST_CONTENT_BYTES) {
