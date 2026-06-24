@@ -174,10 +174,15 @@ export class Agent {
       const supported = getSupportedThinkingLevels(this.model);
       this.logger.warning(
         `[thinking] Requested level "${requestedThinkingLevel}" is not supported by ` +
-          `${this.config.provider}/${this.config.model}; clamping to "${effectiveThinkingLevel}" ` +
+          `${this.model.provider}/${this.model.id}; clamping to "${effectiveThinkingLevel}" ` +
           `(supported: ${supported.join(', ')})`
       );
       this.thinkingLevel = effectiveThinkingLevel;
+      // Propagate the effective level back to the config so that downstream
+      // consumers (e.g. the orchestrator's comment footer, which reads
+      // `config.thinkingLevel`) report the level actually in use rather than
+      // the originally-requested one.
+      this.config.thinkingLevel = effectiveThinkingLevel;
     }
 
     // Phase 2: Create the session with the resolved model.

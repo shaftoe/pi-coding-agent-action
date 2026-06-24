@@ -566,6 +566,9 @@ describe('Agent', () => {
       await agent.ready();
 
       expect((agent as any).thinkingLevel).toBe('high');
+      // The effective level must also be propagated back to the config so the
+      // orchestrator's comment footer reports the level actually in use.
+      expect((agent as any).config.thinkingLevel).toBe('high');
       const warning = warnings.find(m => m.startsWith('[thinking]'));
       expect(warning).toBeDefined();
       expect(warning).toContain('xhigh');
@@ -614,8 +617,13 @@ describe('Agent', () => {
       await agent.ready();
 
       expect((agent as any).thinkingLevel).toBe('off');
+      // The effective level must also be propagated back to the config.
+      expect((agent as any).config.thinkingLevel).toBe('off');
       const warning = warnings.find(m => m.startsWith('[thinking]'));
       expect(warning).toBeDefined();
+      // For parity with the xhigh test, assert the normalized level surfaces
+      // in the warning message.
+      expect(warning).toContain('off');
     });
   });
 
