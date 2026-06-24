@@ -249,12 +249,18 @@ export class ActionOrchestrator {
    * Called at the end of {@link finalize} so the export info appears in
    * the summary block (after the banner + token usage) rather than
    * mid-stream during the export itself. No-op when no exports succeeded.
+   *
+   * Only paths the user *explicitly* requested (via {@link PiConfig.exportSessionHtml}
+   * / {@link PiConfig.exportSessionJsonl}) are surfaced. When an HTML export
+   * is auto-enabled solely to feed {@link runSessionShare} (i.e. `shareSession`
+   * is on but `exportSessionHtml` is off), the throwaway path is hidden from
+   * the summary so it doesn't advertise a file the user never asked for.
    */
   private logExportPaths(): void {
-    if (this.exportPaths.html) {
+    if (this.exportPaths.html && this.config.exportSessionHtml) {
       this.logger.info(`📄 exported session HTML to ${this.exportPaths.html}`);
     }
-    if (this.exportPaths.jsonl) {
+    if (this.exportPaths.jsonl && this.config.exportSessionJsonl) {
       this.logger.info(`📄 exported session JSONL to ${this.exportPaths.jsonl}`);
     }
   }

@@ -1577,6 +1577,30 @@ describe('ActionOrchestrator', () => {
       expect(mockOutputSink.setOutput).toHaveBeenCalledWith('session_html_path', expect.anything());
     });
 
+    test('hides the auto-exported HTML path from the summary when export_session_html is off', async () => {
+      // Sharing auto-enables the HTML export to feed the gist, but the user
+      // didn't ask for a persisted HTML file — the throwaway path should not
+      // be advertised in the summary block.
+      const orchestrator = createOrchestrator({
+        shareSession: true,
+        githubToken: 'ghp_token',
+        exportSessionHtml: false,
+      });
+      await orchestrator.execute();
+
+      // The HTML was still produced (to feed the gist)...
+      expect(mockPiAgent.exportSessionHtml).toHaveBeenCalled();
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('share_url', expect.anything());
+      // ...but the summary block must not surface the export path.
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
+      const htmlExportCalls = infoCalls.filter((c: string) =>
+        c.includes('📄 exported session HTML')
+      );
+      expect(htmlExportCalls).toHaveLength(0);
+      // The share links are still surfaced regardless.
+      expect(infoCalls).toContain('🔗 Session shared: https://pi.dev/session/#abc123def456');
+    });
+
     test('skips sharing with a notice when no github_token is configured', async () => {
       const orchestrator = createOrchestrator({ shareSession: true });
       await orchestrator.execute();
