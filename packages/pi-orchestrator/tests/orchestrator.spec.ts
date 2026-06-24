@@ -1512,21 +1512,44 @@ describe('ActionOrchestrator', () => {
       );
       expect(mockOutputSink.setOutput).toHaveBeenCalledWith('gist_id', 'abc123def456');
 
-      // GitHub notice annotations for both the viewer link and the gist URL
-      expect(mockCore.notice).toHaveBeenCalledWith(
-        'Session shared: https://pi.dev/session/#abc123def456'
+      // The clickable viewer + gist links are surfaced in the summary
+      // block (info), NOT as GitHub notice annotations.
+      expect(mockCore.info).toHaveBeenCalledWith(
+        '🔗 Session shared: https://pi.dev/session/#abc123def456'
       );
-      expect(mockCore.notice).toHaveBeenCalledWith(
-        'Session gist: https://gist.github.com/bot/abc123def456'
+      expect(mockCore.info).toHaveBeenCalledWith(
+        '🔗 Session gist: https://gist.github.com/bot/abc123def456'
       );
+      // No notice annotations are emitted for the share links.
+      const shareNotices = (mockCore.notice as any).mock.calls
+        .map((c: unknown[]) => String(c[0]))
+        .filter((m: string) => m.includes('Session shared') || m.includes('Session gist'));
+      expect(shareNotices).toHaveLength(0);
       // Diagnostic detail is logged at debug level
       expect(mockCore.debug).toHaveBeenCalledWith(
         expect.stringContaining('view session: https://pi.dev/session/#abc123def456')
       );
 
-      // job summary
+      // The share links sit in the summary block after the banner and
+      // before the export path (banner -> token usage -> share -> export).
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
+      const bannerIndex = infoCalls.indexOf('✅ Agent session completed');
+      const shareIndex = infoCalls.indexOf(
+        '🔗 Session shared: https://pi.dev/session/#abc123def456'
+      );
+      const exportIndex = infoCalls.findIndex((c: string) =>
+        c.includes('📄 exported session HTML')
+      );
+      expect(bannerIndex).toBeGreaterThanOrEqual(0);
+      expect(shareIndex).toBeGreaterThan(bannerIndex);
+      expect(exportIndex).toBeGreaterThan(shareIndex);
+
+      // job summary exposes both clickable links
       expect(mockOutputSink.appendSummary).toHaveBeenCalledWith(
         expect.stringContaining('https://pi.dev/session/#abc123def456')
+      );
+      expect(mockOutputSink.appendSummary).toHaveBeenCalledWith(
+        expect.stringContaining('https://gist.github.com/bot/abc123def456')
       );
     });
 

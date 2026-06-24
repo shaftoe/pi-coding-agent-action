@@ -67,6 +67,15 @@ export class ActionOrchestrator {
    */
   private exportPaths: { html?: string; jsonl?: string } = {};
 
+  /**
+   * Session-share URLs produced during the run.
+   *
+   * Populated by {@link createAndSurfaceGist} and surfaced in the
+   * post-run summary block so the clickable viewer + gist links appear
+   * there instead of as standalone GitHub notice annotations.
+   */
+  private shareUrls: { shareUrl?: string; gistUrl?: string } = {};
+
   constructor(
     private readonly config: PiConfig,
     private readonly logger: Logger,
@@ -251,6 +260,23 @@ export class ActionOrchestrator {
   }
 
   /**
+   * Log the session-share URLs collected during the run.
+   *
+   * Called at the end of {@link finalize} so the clickable viewer and gist
+   * links appear in the summary block (after the banner + token usage)
+   * instead of as standalone GitHub notice annotations. No-op when sharing
+   * didn't run or was skipped.
+   */
+  private logShareUrls(): void {
+    if (this.shareUrls.shareUrl) {
+      this.logger.info(`🔗 Session shared: ${this.shareUrls.shareUrl}`);
+    }
+    if (this.shareUrls.gistUrl) {
+      this.logger.info(`🔗 Session gist: ${this.shareUrls.gistUrl}`);
+    }
+  }
+
+  /**
    * Log a token-usage report to the action logs.
    *
    * The usage is also surfaced as action outputs and (when a comment is
@@ -276,10 +302,10 @@ export class ActionOrchestrator {
    * Share the session as a secret GitHub Gist (pi `/share` equivalent).
    *
    * Uploads the exported session HTML to a gist and surfaces both the
-   * viewer link and the gist URL as GitHub notice annotations (`notice`),
-   * and the viewer link in the job summary (`appendSummary`). Diagnostic
-   * details (gist id, raw URLs) are logged at `debug` level. Also exposes
-   * `share_url` / `gist_url` / `gist_id` as action outputs.
+   * viewer link and the gist URL in the post-run summary block (via
+   * {@link logShareUrls}) and the job summary (`appendSummary`).
+   * Diagnostic details (gist id, raw URLs) are logged at `debug` level.
+   * Also exposes `share_url` / `gist_url` / `gist_id` as action outputs.
    *
    * Runs only when {@link PiConfig.shareSession} is enabled. Reads the
    * HTML file produced by {@link exportSessionOutput}; if the export was
@@ -376,8 +402,7 @@ export class ActionOrchestrator {
 
     this.logger.debug(`[${tag}] shared session as gist ${gist.id}: ${gist.gistUrl}`);
     this.logger.debug(`[${tag}] view session: ${gist.shareUrl}`);
-    this.logger.notice(`Session shared: ${gist.shareUrl}`);
-    this.logger.notice(`Session gist: ${gist.gistUrl}`);
+    this.shareUrls = { shareUrl: gist.shareUrl, gistUrl: gist.gistUrl };
     this.outputSink.setOutput('share_url', gist.shareUrl);
     this.outputSink.setOutput('gist_url', gist.gistUrl);
     this.outputSink.setOutput('gist_id', gist.id);
@@ -386,7 +411,9 @@ export class ActionOrchestrator {
     // outputs are set). Wrap separately so a summary failure doesn't log a
     // misleading "failed to share session" notice.
     try {
-      await this.outputSink.appendSummary?.(`🔗 **Session:** ${gist.shareUrl}\n`);
+      await this.outputSink.appendSummary?.(
+        `🔗 **Session:** ${gist.shareUrl}\n` + `🔗 **Gist:** ${gist.gistUrl}\n`
+      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.debug(`[${tag}] job summary write skipped: ${msg}`);
@@ -475,9 +502,11 @@ export class ActionOrchestrator {
       this.logTokenUsageReport(sessionStats);
     }
 
-    // Surface session-export paths as part of the summary block so they
-    // appear alongside the status banner and token usage, rather than
-    // scattered earlier in the log stream.
+    // Surface session-share URLs and export paths as part of the summary
+    // block so they appear alongside the status banner and token usage,
+    // rather than scattered earlier in the log stream or as standalone
+    // GitHub notice annotations.
+    this.logShareUrls();
     this.logExportPaths();
 
     const executionDuration = startTime.until(Temporal.Now.instant());
