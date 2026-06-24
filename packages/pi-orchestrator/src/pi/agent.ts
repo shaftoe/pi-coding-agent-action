@@ -18,6 +18,7 @@ import {
   SessionManager,
   SettingsManager,
 } from '@earendil-works/pi-coding-agent';
+import { clampThinkingLevel, getSupportedThinkingLevels } from '@earendil-works/pi-ai';
 import { buildResourceLoaderOptions } from './resource-loader';
 import { getPiVersion } from '../version';
 
@@ -159,6 +160,24 @@ export class Agent {
           `Please check that the \`provider\` and \`model\` inputs are correct and that the provider is supported. ` +
           `See https://github.com/shaftoe/pi-coding-agent-action#usage for details.`
       );
+    }
+
+    // Clamp the requested thinking level to what the resolved model actually
+    // supports. This avoids passing an unsupported level (e.g. `xhigh` on a
+    // model that only goes to `high`) — or a genuinely invalid value from a
+    // misconfigured workflow input — straight to the provider. We degrade
+    // gracefully (clamp to the nearest supported level + warn) rather than
+    // throwing, since a level that one model doesn't support is not an error.
+    const requestedThinkingLevel = this.thinkingLevel;
+    const effectiveThinkingLevel = clampThinkingLevel(this.model, requestedThinkingLevel);
+    if (effectiveThinkingLevel !== requestedThinkingLevel) {
+      const supported = getSupportedThinkingLevels(this.model);
+      this.logger.warning(
+        `[thinking] Requested level "${requestedThinkingLevel}" is not supported by ` +
+          `${this.config.provider}/${this.config.model}; clamping to "${effectiveThinkingLevel}" ` +
+          `(supported: ${supported.join(', ')})`
+      );
+      this.thinkingLevel = effectiveThinkingLevel;
     }
 
     // Phase 2: Create the session with the resolved model.

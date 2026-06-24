@@ -39,6 +39,21 @@ function createCoreWithErrorCapture(): { core: any; messages: string[] } {
   return { core, messages };
 }
 
+/**
+ * Build a `CoreAdapter` whose `.warning(msg)` calls push `msg` into the returned
+ * array. Used to assert that thinking-level clamp warnings are surfaced.
+ */
+function createCoreWithWarningCapture(): { core: any; messages: string[] } {
+  const messages: string[] = [];
+  const core = {
+    ...mockCoreAdapter,
+    warning: mock((msg: string) => {
+      messages.push(msg);
+    }),
+  };
+  return { core, messages };
+}
+
 /** Default agent config used by most tests in this file. */
 const defaultAgentConfig = {
   model: 'claude-sonnet-4-5',
@@ -535,6 +550,72 @@ describe('Agent', () => {
 
       const result = await agent.ready();
       expect(result).toBe(agent);
+    });
+  });
+
+  describe('thinking level clamping', () => {
+    // claude-sonnet-4-5 supports off–high but NOT xhigh.
+    test('clamps unsupported xhigh to high and warns', async () => {
+      const { core: testCore, messages: warnings } = createCoreWithWarningCapture();
+
+      const agent = new Agent(testCore as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        thinkingLevel: 'xhigh',
+      });
+
+      await agent.ready();
+
+      expect((agent as any).thinkingLevel).toBe('high');
+      const warning = warnings.find(m => m.startsWith('[thinking]'));
+      expect(warning).toBeDefined();
+      expect(warning).toContain('xhigh');
+      expect(warning).toContain('claude-sonnet-4-5');
+      expect(warning).toContain('high');
+      // The supported-levels list should exclude xhigh.
+      expect(warning).toContain('off, minimal, low, medium, high');
+    });
+
+    test('does not clamp a supported level (high)', async () => {
+      const { core: testCore, messages: warnings } = createCoreWithWarningCapture();
+
+      const agent = new Agent(testCore as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        thinkingLevel: 'high',
+      });
+
+      await agent.ready();
+
+      expect((agent as any).thinkingLevel).toBe('high');
+      expect(warnings.find(m => m.startsWith('[thinking]'))).toBeUndefined();
+    });
+
+    test('does not clamp the default off level', async () => {
+      const { core: testCore, messages: warnings } = createCoreWithWarningCapture();
+
+      const agent = new Agent(testCore as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        thinkingLevel: 'off',
+      });
+
+      await agent.ready();
+
+      expect((agent as any).thinkingLevel).toBe('off');
+      expect(warnings.find(m => m.startsWith('[thinking]'))).toBeUndefined();
+    });
+
+    test('normalizes invalid input (empty string) to off and warns', async () => {
+      const { core: testCore, messages: warnings } = createCoreWithWarningCapture();
+
+      const agent = new Agent(testCore as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        thinkingLevel: '' as any,
+      });
+
+      await agent.ready();
+
+      expect((agent as any).thinkingLevel).toBe('off');
+      const warning = warnings.find(m => m.startsWith('[thinking]'));
+      expect(warning).toBeDefined();
     });
   });
 
