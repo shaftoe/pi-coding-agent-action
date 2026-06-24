@@ -9,7 +9,8 @@
  *    (`pi-agent-core`, `pi-ai`, `pi-coding-agent`) must move together across
  *    the monorepo. The root `package.json` is the single source of truth; this
  *    script propagates its `@earendil-works/*` specs into every package's
- *    `dependencies`, `devDependencies` and `peerDependencies`. This prevents
+ *    `dependencies`, `devDependencies`, `optionalDependencies` and
+ *    `peerDependencies`. This prevents
  *    drift where (for example) a dep bump lands in the root and action but a
  *    bridge `devDependency` is left behind, causing duplicate resolutions and
  *    peer-dependency mismatches in the lockfile.
@@ -24,7 +25,12 @@ import { join } from 'node:path';
 /** Dependency scope whose versions are synced from the root. */
 const SYNCED_SCOPE = '@earendil-works';
 /** package.json fields that may hold dependency version specs. */
-const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies'] as const;
+const DEP_FIELDS = [
+  'dependencies',
+  'devDependencies',
+  'optionalDependencies',
+  'peerDependencies',
+] as const;
 
 const rootPkg = JSON.parse(readFileSync('package.json', 'utf-8'));
 const version = rootPkg.version;
@@ -67,7 +73,10 @@ for (const pkg of packages) {
       if (!(name in syncedDeps)) continue;
       const current = deps[name]!;
       const target = syncedDeps[name]!;
-      if (current === target) continue;
+      if (current === target) {
+        console.info(`✓ ${pkg} ${field}.${name} already at ${target}`);
+        continue;
+      }
       deps[name] = target;
       changed = true;
       console.info(`↑ ${pkg} ${field}.${name} ${current} → ${target}`);
