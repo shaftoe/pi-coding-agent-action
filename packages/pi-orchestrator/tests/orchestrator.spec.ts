@@ -320,19 +320,23 @@ describe('ActionOrchestrator', () => {
       expect(text).toBe('✅ Agent session completed');
     });
 
-    test('logs completion banner after session html export', async () => {
+    test('logs session html export path in summary block after banner', async () => {
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
       const bannerIndex = infoCalls.indexOf('✅ Agent session completed');
-      const htmlExportCalls = infoCalls.filter((c: string) => c.includes('[session-html]'));
+      const htmlExportIndex = infoCalls.findIndex((c: string) =>
+        c.includes('📄 exported session HTML')
+      );
 
-      // The completion banner should appear after the HTML export log
-      if (htmlExportCalls.length > 0) {
-        const htmlExportIndex = infoCalls.findIndex((c: string) => c.includes('[session-html]'));
-        expect(bannerIndex).toBeGreaterThan(htmlExportIndex);
-      }
+      // The export path summary should appear after the banner (deferred
+      // to the summary block, not logged mid-stream during the export).
+      expect(bannerIndex).toBeGreaterThanOrEqual(0);
+      expect(htmlExportIndex).toBeGreaterThan(bannerIndex);
+      // The mid-stream [session-html] log is now at debug level, not info.
+      const staleInfoLogs = infoCalls.filter((c: string) => c.includes('[session-html]'));
+      expect(staleInfoLogs).toHaveLength(0);
     });
 
     test('includes execution duration in final comment metadata', async () => {
@@ -1508,12 +1512,16 @@ describe('ActionOrchestrator', () => {
       );
       expect(mockOutputSink.setOutput).toHaveBeenCalledWith('gist_id', 'abc123def456');
 
-      // logs footer (info) + GitHub notice annotation (descriptive prefix)
-      expect(mockCore.info).toHaveBeenCalledWith(
-        expect.stringContaining('view session: https://pi.dev/session/#abc123def456')
-      );
+      // GitHub notice annotations for both the viewer link and the gist URL
       expect(mockCore.notice).toHaveBeenCalledWith(
         'Session shared: https://pi.dev/session/#abc123def456'
+      );
+      expect(mockCore.notice).toHaveBeenCalledWith(
+        'Session gist: https://gist.github.com/bot/abc123def456'
+      );
+      // Diagnostic detail is logged at debug level
+      expect(mockCore.debug).toHaveBeenCalledWith(
+        expect.stringContaining('view session: https://pi.dev/session/#abc123def456')
       );
 
       // job summary
