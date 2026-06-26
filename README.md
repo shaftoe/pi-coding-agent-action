@@ -733,7 +733,7 @@ Refer to [the official Pi documentation](https://pi.dev/docs/latest) to learn ho
 ## Disclaimer
 
 > [!NOTE]
-> Codeberg/Forgejo compatibility _should_ work but hasn't been tested yet.
+> Codeberg/Forgejo compatibility has been confirmed on self-hosted **Forgejo** instances, where the action runs the Pi agent as expected (at least in non-interactive mode). Not every feature has been exercised yet on these platforms — PRs documenting additional coverage are welcome.
 
 ## Development
 
