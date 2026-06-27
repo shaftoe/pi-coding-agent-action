@@ -361,17 +361,6 @@ Set the `server_url` input to the externally-reachable URL to override it:
     server_url: https://git.example.com
 ```
 
-Alternatively, set the `GITHUB_SERVER_URL` environment variable on the step:
-
-```yaml
-- uses: shaftoe/pi-coding-agent-action@v2
-  env:
-    GITHUB_SERVER_URL: https://git.example.com
-  with: { ... }
-```
-
-When both are set, the `server_url` input takes precedence.
-
 > [!NOTE]
 > The override only affects **user-facing URLs and platform detection**. The API client (Octokit) keeps using the runner-advertised `GITHUB_API_URL`, which must remain reachable from inside the runner so API calls succeed. If API calls fail on a self-hosted runner, override `GITHUB_API_URL` (e.g. via `env:`) to a reachable endpoint.
 

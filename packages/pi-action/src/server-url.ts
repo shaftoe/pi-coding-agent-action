@@ -20,17 +20,33 @@
 export const DEFAULT_SERVER_URL = 'https://github.com';
 
 /**
+ * Strip every trailing slash from a URL.
+ *
+ * A root-less origin such as `https://git.example.com` is the canonical form
+ * all URL builders expect, so normalizing at the source keeps downstream
+ * template-literal permalink builders (commit/PR/action-run URLs) from
+ * producing double-slash links when a user passes a trailing slash.
+ */
+function stripTrailingSlashes(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+/**
  * Resolve the effective forge server URL.
  *
  * Precedence (highest first):
- *   1. `serverUrlInput` — the `server_url` action input; an explicit override
- *      for self-hosted setups where the runner-advertised `GITHUB_SERVER_URL`
- *      points at an internally-reachable address.
+ *   1. `serverUrlInput` — the `server_url` action input; the single explicit
+ *      override for self-hosted setups where the runner-advertised
+ *      `GITHUB_SERVER_URL` points at an internally-reachable address.
  *   2. `contextServerUrl` — the value the runner advertises via the
  *      `GITHUB_SERVER_URL` environment variable (surfaced by `@actions/github`'s
- *      `context.serverUrl`). Setting that env var on the step is therefore an
- *      alternative way to override the URL without using the action input.
+ *      `context.serverUrl`), e.g. `https://github.com` on github.com or the
+ *      GitHub Enterprise / Forgejo host on a properly configured runner.
  *   3. {@link DEFAULT_SERVER_URL} — the canonical GitHub URL.
+ *
+ * The `server_url` action input is the only supported override mechanism — to
+ * avoid two confusing ways of doing the same thing, users should not also set
+ * `GITHUB_SERVER_URL` on the step.
  *
  * Pure so it can be unit-tested independently of `@actions/core` /
  * `@actions/github`, which carry import-time side effects in `run.ts`.
@@ -39,7 +55,7 @@ export const DEFAULT_SERVER_URL = 'https://github.com';
  *   already trims, but this is re-trimmed defensively).
  * @param contextServerUrl - The runner-advertised server URL
  *   (`github.context.serverUrl`), or `undefined`.
- * @returns The resolved, non-empty server URL.
+ * @returns The resolved, non-empty, trailing-slash-normalized server URL.
  */
 export function resolveServerUrl(
   serverUrlInput: string | undefined,
@@ -47,13 +63,13 @@ export function resolveServerUrl(
 ): string {
   const override = serverUrlInput?.trim();
   if (override) {
-    return override;
+    return stripTrailingSlashes(override);
   }
   // Treat an empty/whitespace-only advertised URL as missing — a blank value
   // is never a usable server URL, so fall back to the default.
   const context = contextServerUrl?.trim();
   if (context) {
-    return context;
+    return stripTrailingSlashes(context);
   }
   return DEFAULT_SERVER_URL;
 }

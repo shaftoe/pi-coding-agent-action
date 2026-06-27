@@ -68,6 +68,33 @@ describe('resolveServerUrl', () => {
     });
   });
 
+  describe('trailing-slash normalization', () => {
+    test('strips a single trailing slash from the input override', () => {
+      expect(resolveServerUrl('https://git.example.com/', 'http://localhost:3000')).toBe(
+        'https://git.example.com'
+      );
+    });
+
+    test('strips multiple trailing slashes from the input override', () => {
+      expect(resolveServerUrl('https://git.example.com///', undefined)).toBe(
+        'https://git.example.com'
+      );
+    });
+
+    test('preserves internal path separators', () => {
+      // Only *trailing* slashes are stripped; a path like /sub must survive.
+      expect(resolveServerUrl('https://git.example.com/sub', undefined)).toBe(
+        'https://git.example.com/sub'
+      );
+    });
+
+    test('normalizes the runner-advertised URL too', () => {
+      expect(resolveServerUrl('', 'https://github.example.com/')).toBe(
+        'https://github.example.com'
+      );
+    });
+  });
+
   describe('self-hosted Forgejo scenario (issue #339)', () => {
     // A Forgejo instance reachable from the host as http://localhost:3000 but
     // externally as https://git.example.com. The runner advertises the internal
