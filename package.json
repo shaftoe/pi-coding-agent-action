@@ -59,9 +59,9 @@
     "@typescript-eslint/eslint-plugin": "^8.62.0",
     "@typescript-eslint/parser": "^8.62.0",
     "bun-types": "1.3.14",
-    "eslint": "^10.5.0",
+    "eslint": "^10.6.0",
     "fallow": "^2.102.0",
-    "prettier": "^3.8.4",
+    "prettier": "^3.8.5",
     "semantic-release": "^25.0.5",
     "typescript": "^6.0.3"
   }
