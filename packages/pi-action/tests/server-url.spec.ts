@@ -95,6 +95,53 @@ describe('resolveServerUrl', () => {
     });
   });
 
+  describe('slash-only input does not collapse to empty', () => {
+    // A slash-only value (e.g. `server_url: /`) is truthy after trim but
+    // `stripTrailingSlashes('/')` returns ''. That must NOT be returned as the
+    // resolved URL — it would break every permalink builder with a leading `//`.
+    test('slash-only input falls back to the advertised URL', () => {
+      expect(resolveServerUrl('/', 'https://github.com')).toBe('https://github.com');
+    });
+
+    test('multiple-slashes-only input falls back to the advertised URL', () => {
+      expect(resolveServerUrl('///', 'https://git.example.com')).toBe('https://git.example.com');
+    });
+
+    test('slash-only input with no advertised URL falls back to the default', () => {
+      expect(resolveServerUrl('/', undefined)).toBe(DEFAULT_SERVER_URL);
+    });
+
+    test('slash-only advertised URL also falls back to the default', () => {
+      expect(resolveServerUrl('', '/')).toBe(DEFAULT_SERVER_URL);
+    });
+  });
+
+  describe('override-vs-baseline comparison (run.ts log consistency)', () => {
+    // run.ts derives the "override active" log by comparing the resolved URL
+    // against the no-input baseline — both through resolveServerUrl() — so the
+    // two sides are normalized identically. These tests lock that invariant in
+    // so a trailing-slash difference never flips the comparison.
+    test('override equivalent to advertised (differs only by trailing slash) is not an override', () => {
+      const resolved = resolveServerUrl('https://git.example.com/', 'https://git.example.com');
+      const baseline = resolveServerUrl(undefined, 'https://git.example.com');
+      expect(resolved).toBe(baseline);
+      expect(resolved).toBe('https://git.example.com');
+    });
+
+    test('no input + advertised URL with trailing slash is not a false-positive override', () => {
+      const resolved = resolveServerUrl('', 'https://github.example.com/');
+      const baseline = resolveServerUrl(undefined, 'https://github.example.com/');
+      expect(resolved).toBe(baseline);
+      expect(resolved).toBe('https://github.example.com');
+    });
+
+    test('a genuine override is still detected after normalization', () => {
+      const resolved = resolveServerUrl('https://git.example.com/', 'http://localhost:3000');
+      const baseline = resolveServerUrl(undefined, 'http://localhost:3000');
+      expect(resolved).not.toBe(baseline);
+    });
+  });
+
   describe('self-hosted Forgejo scenario (issue #339)', () => {
     // A Forgejo instance reachable from the host as http://localhost:3000 but
     // externally as https://git.example.com. The runner advertises the internal

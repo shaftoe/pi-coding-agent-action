@@ -61,15 +61,20 @@ export function resolveServerUrl(
   serverUrlInput: string | undefined,
   contextServerUrl: string | undefined
 ): string {
-  const override = serverUrlInput?.trim();
+  // `server_url` action input — the only supported override. Trailing slashes
+  // are stripped before the truthiness check so a slash-only value (e.g. `/`
+  // or `///`) collapses to an empty string and falls through instead of being
+  // returned as the resolved URL (which would break every downstream
+  // permalink builder with a leading `//`).
+  const override = stripTrailingSlashes(serverUrlInput?.trim() ?? '');
   if (override) {
-    return stripTrailingSlashes(override);
+    return override;
   }
-  // Treat an empty/whitespace-only advertised URL as missing — a blank value
-  // is never a usable server URL, so fall back to the default.
-  const context = contextServerUrl?.trim();
+  // Runner-advertised `GITHUB_SERVER_URL`. A blank or slash-only value is
+  // never a usable server URL, so fall back to the default.
+  const context = stripTrailingSlashes(contextServerUrl?.trim() ?? '');
   if (context) {
-    return stripTrailingSlashes(context);
+    return context;
   }
   return DEFAULT_SERVER_URL;
 }

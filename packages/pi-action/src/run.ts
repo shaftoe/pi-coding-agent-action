@@ -16,7 +16,7 @@ import { createRealPiAgent } from './adapters/pi-agent-adapter';
 import { gatherActionsConfig } from './adapters/config';
 import { ActionsOutputSink } from './adapters/output-sink';
 import { createGitHubPlatformProvider, detectPlatform } from '@alexanderfortin/pi-platform-github';
-import { resolveServerUrl, DEFAULT_SERVER_URL } from './server-url';
+import { resolveServerUrl } from './server-url';
 
 /**
  * Configure the Pi SDK's package directory for the bundled action.
@@ -77,11 +77,18 @@ export async function run() {
   // runner-advertised `GITHUB_SERVER_URL` (via `github.context.serverUrl`) —
   // useful on self-hosted runners where the advertised URL is only reachable
   // from inside the host network. Falls back to github.com.
-  const serverUrl = resolveServerUrl(coreAdapter.getInput('server_url'), github.context.serverUrl);
-  const advertisedServerUrl = github.context.serverUrl || DEFAULT_SERVER_URL;
-  if (serverUrl !== advertisedServerUrl) {
+  //
+  // The baseline is derived through the same helper so both sides of the
+  // "override active" comparison are trailing-slash-normalized identically —
+  // a raw `github.context.serverUrl` comparison would log a false positive
+  // when the advertised URL has a trailing slash (and a false negative when
+  // an equivalent override differs only by a trailing slash).
+  const serverUrlInput = coreAdapter.getInput('server_url');
+  const serverUrl = resolveServerUrl(serverUrlInput, github.context.serverUrl);
+  const baselineServerUrl = resolveServerUrl(undefined, github.context.serverUrl);
+  if (serverUrl !== baselineServerUrl) {
     coreAdapter.info(
-      `[run] server_url override active: using ${serverUrl} (runner advertises ${advertisedServerUrl})`
+      `[run] server_url override active: using ${serverUrl} (runner advertises ${baselineServerUrl})`
     );
   }
 

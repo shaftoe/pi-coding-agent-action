@@ -363,6 +363,8 @@ Set the `server_url` input to the externally-reachable URL to override it:
 
 > [!NOTE]
 > The override only affects **user-facing URLs and platform detection**. The API client (Octokit) keeps using the runner-advertised `GITHUB_API_URL`, which must remain reachable from inside the runner so API calls succeed. If API calls fail on a self-hosted runner, override `GITHUB_API_URL` (e.g. via `env:`) to a reachable endpoint.
+>
+> Platform detection switches off `github` only when the host name carries a recognizable marker (`forgejo`, `gitea`, or `codeberg`). A Forgejo instance at a generic host like `https://git.example.com` keeps the default `github` platform type — links are still corrected, but platform-specific behavior stays GitHub-compatible.
 
 ### Custom Extensions
 
