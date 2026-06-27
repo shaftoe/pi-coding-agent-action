@@ -243,6 +243,27 @@ export interface PiConfig extends DiffConfig {
    * {@link shareSession} is enabled.
    */
   githubToken?: string;
+  /**
+   * Storage backend for session sharing: `'github'` (default) or
+   * `'opengist'`. When `'opengist'`, the exported session HTML is uploaded
+   * to a self-hosted Opengist instance (via {@link shareGistApiUrl}) instead
+   * of GitHub Gists, and the `share_url` points at a self-rendering raw-HTML
+   * link rather than the pi.dev viewer (which only reads GitHub gists).
+   */
+  shareGistProvider?: 'github' | 'opengist';
+  /**
+   * API URL for the share gist provider. For `'opengist'` this is the
+   * instance's create endpoint, e.g. `https://gist.l3x.in/api/gists`
+   * (required when {@link shareGistProvider} is `'opengist'`). For GitHub,
+   * an optional override (defaults to `https://api.github.com/gists`).
+   */
+  shareGistApiUrl?: string;
+  /**
+   * Token used to create the shared gist. For Opengist, an access token
+   * (`og_…`) with the `gist:write` scope. Falls back to {@link githubToken}
+   * when unset, so the GitHub path keeps working with a single token.
+   */
+  shareGistToken?: string;
   /** Override the default system prompt. */
   systemPrompt?: string;
   /** Working directory. Defaults to `process.cwd()`. */

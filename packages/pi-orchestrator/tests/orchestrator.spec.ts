@@ -1601,13 +1601,13 @@ describe('ActionOrchestrator', () => {
       expect(infoCalls).toContain('🔗 Session shared: https://pi.dev/session/#abc123def456');
     });
 
-    test('skips sharing with a notice when no github_token is configured', async () => {
+    test('skips sharing with a notice when no share token is configured', async () => {
       const orchestrator = createOrchestrator({ shareSession: true });
       await orchestrator.execute();
 
       expect(globalThis.fetch).not.toHaveBeenCalled();
       expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('share_url', expect.anything());
-      expect(mockCore.notice).toHaveBeenCalledWith(expect.stringContaining('no github_token'));
+      expect(mockCore.notice).toHaveBeenCalledWith(expect.stringContaining('no share token'));
     });
 
     test('continues execution when gist creation fails', async () => {
@@ -1677,6 +1677,93 @@ describe('ActionOrchestrator', () => {
       expect(mockCore.debug).toHaveBeenCalledWith(
         expect.stringContaining('job summary write skipped')
       );
+    });
+
+    test('shares to Opengist and surfaces a raw-HTML share link', async () => {
+      // Opengist create response: id + html_url; the provider derives a
+      // raw/HEAD link that renders the self-contained session.
+      globalThis.fetch = mock(async () => ({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          id: 'og-uuid-123',
+          html_url: 'https://gist.l3x.in/bot/my-session',
+          slug_url: 'my-session',
+        }),
+        text: async () => '',
+      })) as unknown as typeof fetch;
+
+      const orchestrator = createOrchestrator({
+        shareSession: true,
+        shareGistProvider: 'opengist',
+        shareGistApiUrl: 'https://gist.l3x.in/api/gists',
+        shareGistToken: 'og_opengist-token',
+      });
+      await orchestrator.execute();
+
+      // The request hit the Opengist route with the Opengist body shape.
+      const calls = (globalThis.fetch as any).mock.calls;
+      const [url, init] = calls[0];
+      expect(url).toBe('https://gist.l3x.in/api/gists');
+      const body = JSON.parse(init.body);
+      expect(body.visibility).toBe('unlisted');
+      expect(body.title).toBe('Pi session — test-owner/test-repo#1 (run 123)');
+      expect(init.headers.Authorization).toBe('Bearer og_opengist-token');
+
+      // Outputs carry the raw-HTML link (renders standalone), not pi.dev.
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith(
+        'share_url',
+        'https://gist.l3x.in/bot/my-session/raw/HEAD/session.html'
+      );
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith(
+        'gist_url',
+        'https://gist.l3x.in/bot/my-session'
+      );
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('gist_id', 'og-uuid-123');
+
+      expect(mockCore.info).toHaveBeenCalledWith(
+        '🔗 Session shared: https://gist.l3x.in/bot/my-session/raw/HEAD/session.html'
+      );
+    });
+
+    test('skips Opengist sharing with a notice when share_gist_api_url is missing', async () => {
+      const orchestrator = createOrchestrator({
+        shareSession: true,
+        shareGistProvider: 'opengist',
+        shareGistToken: 'og_token',
+        // shareGistApiUrl intentionally omitted
+      });
+      await orchestrator.execute();
+
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('share_url', expect.anything());
+      expect(mockCore.notice).toHaveBeenCalledWith(
+        expect.stringContaining('opengist provider requires share_gist_api_url')
+      );
+    });
+
+    test('uses githubToken as the share token fallback for Opengist', async () => {
+      globalThis.fetch = mock(async () => ({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          id: 'og-uuid',
+          html_url: 'https://gist.l3x.in/bot/s',
+        }),
+        text: async () => '',
+      })) as unknown as typeof fetch;
+
+      const orchestrator = createOrchestrator({
+        shareSession: true,
+        shareGistProvider: 'opengist',
+        shareGistApiUrl: 'https://gist.l3x.in/api/gists',
+        // shareGistToken unset — should fall back to githubToken
+        githubToken: 'ghp_fallback',
+      });
+      await orchestrator.execute();
+
+      const init = (globalThis.fetch as any).mock.calls[0][1];
+      expect(init.headers.Authorization).toBe('Bearer ghp_fallback');
     });
   });
 });

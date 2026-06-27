@@ -90,6 +90,21 @@ inputs:
     required: false
     default: 'false'
 
+  share_gist_provider:
+    description: 'Storage backend for session sharing. Defaults to `github` (GitHub Gists + pi.dev viewer). Set to `opengist` to upload to a self-hosted Opengist instance instead — in that case also set share_gist_api_url (and a share_gist_token or github_token with gist:write access). When opengist is used, share_url points at a self-rendering raw-HTML link (the pi.dev viewer cannot read non-GitHub gists).'
+    required: false
+    default: 'github'
+
+  share_gist_api_url:
+    description: 'API URL for the share gist provider. Required when share_gist_provider is `opengist`: the instance''s create endpoint, e.g. `https://gist.l3x.in/api/gists` (Opengist''s REST API lives under /api/, not /api/v1/). Optional override for the github provider (defaults to https://api.github.com/gists).'
+    required: false
+    default: ''
+
+  share_gist_token:
+    description: 'Token used to create the shared gist. For opengist, an Opengist access token (og_…) with the gist:write scope. Falls back to github_token when unset, so the github provider keeps working with a single token.'
+    required: false
+    default: ''
+
   auto_compaction:
     description: 'Enable automatic context compaction when the conversation grows too large for the model context window. When enabled, Pi will summarize older messages to free up context space, allowing longer sessions without hitting context limits.'
     required: false
@@ -122,8 +137,8 @@ outputs:
   session_jsonl_path:
     description: 'Path to the exported session JSONL file (when export_session_jsonl is enabled)'
   share_url:
-    description: 'Pi.dev-style viewer link for the shared session (https://pi.dev/session/#<gistId>), when share_session is enabled and succeeds'
+    description: 'Shareable session link. For the github provider: a pi.dev viewer link (https://pi.dev/session/#<gistId>). For the opengist provider: a self-rendering raw-HTML URL on the configured instance. Set when share_session is enabled and succeeds.'
   gist_url:
-    description: 'GitHub Gist URL holding the shared session HTML, when share_session is enabled and succeeds'
+    description: 'URL of the gist holding the shared session HTML (GitHub Gist page or Opengist page), when share_session is enabled and succeeds'
   gist_id:
-    description: 'GitHub Gist ID holding the shared session HTML, when share_session is enabled and succeeds'
+    description: 'ID of the gist holding the shared session HTML, when share_session is enabled and succeeds'

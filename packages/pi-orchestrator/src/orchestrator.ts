@@ -26,7 +26,8 @@ import {
 import { formatCost } from './format';
 import type { CreateReactionType, PlatformProvider } from './platform';
 import { getActionVersion, formatActionVersion } from './version';
-import { createSessionGist, MAX_GIST_CONTENT_BYTES, type CreatedGist } from './share/gist';
+import { MAX_GIST_CONTENT_BYTES, type CreatedGist, type GistProvider } from './share/gist';
+import { resolveGistProvider, resolveShareToken } from './share/provider';
 
 /**
  * Build the body of the success comment posted at the end of a run.
@@ -326,10 +327,24 @@ export class ActionOrchestrator {
     }
 
     const tag = 'session-share';
-    const token = this.config.githubToken;
+    const token = resolveShareToken(this.config);
     if (!token) {
       this.logger.notice(
-        `[${tag}] skipped: no github_token configured (provide a PAT/App token with gist scope via github_token)`
+        `[${tag}] skipped: no share token configured ` +
+          '(provide a PAT/App token with gist scope via github_token, ' +
+          'or an Opengist access token via share_gist_token)'
+      );
+      return;
+    }
+
+    const provider = resolveGistProvider(this.config);
+    // Opengist is self-hosted, so there is no default API endpoint — the
+    // operator must point us at their instance. Skip with an actionable
+    // notice instead of letting the provider throw deep in the call stack.
+    if (provider.name === 'opengist' && !this.config.shareGistApiUrl) {
+      this.logger.notice(
+        `[${tag}] skipped: opengist provider requires share_gist_api_url ` +
+          '(e.g. https://gist.l3x.in/api/gists)'
       );
       return;
     }
@@ -342,7 +357,7 @@ export class ActionOrchestrator {
       return; // skip notice already logged in readShareContent
     }
 
-    await this.createAndSurfaceGist(token, content, tag);
+    await this.createAndSurfaceGist(provider, token, content, tag);
   }
 
   /**
@@ -394,12 +409,22 @@ export class ActionOrchestrator {
    * failure doesn't produce a misleading "failed to share session" message
    * — by that point the gist exists and the outputs are already set.
    */
-  private async createAndSurfaceGist(token: string, content: string, tag: string): Promise<void> {
+  private async createAndSurfaceGist(
+    provider: GistProvider,
+    token: string,
+    content: string,
+    tag: string
+  ): Promise<void> {
     const description = this.buildShareDescription();
 
     let gist: CreatedGist;
     try {
-      gist = await createSessionGist({ token, content, description });
+      gist = await provider.create({
+        token,
+        content,
+        description,
+        ...(this.config.shareGistApiUrl ? { apiUrl: this.config.shareGistApiUrl } : {}),
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.notice(`[${tag}] failed to share session: ${msg}`);

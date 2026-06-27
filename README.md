@@ -604,7 +604,9 @@ The link is surfaced in two places: the job log footer and the **job summary** (
 Enabling `share_session` **auto-enables `export_session_html`** (the gist carries the HTML export's bytes), so you don't need to set both.
 
 > [!IMPORTANT]
-> **A GitHub token with `gist` scope is required.** The default `secrets.GITHUB_TOKEN` **cannot** create gists. Set the `github_token` input to a classic PAT (with the `gist` scope), a fine-grained PAT (Account → **Gists: read/write**), or a GitHub App installation token — the same token is used for all GitHub API operations.
+> **A GitHub token with `gist` scope is required** for the default (`github`) provider. The default `secrets.GITHUB_TOKEN` **cannot** create gists. Set the `github_token` input to a classic PAT (with the `gist` scope), a fine-grained PAT (Account → **Gists: read/write**), or a GitHub App installation token — the same token is used for all GitHub API operations.
+>
+> Using a self-hosted [Opengist](https://github.com/thomiceli/opengist) instance instead? See [Opengist backend](#opengist-backend) below.
 
 > [!WARNING]
 > Secret gists are **URL-obscured, not access-controlled** — anyone with the link can read the rendered session, which may include code, file contents, or secrets the agent touched. Only enable `share_session` for runs where that exposure is acceptable, and prefer a dedicated bot account so shared gists are easy to audit and delete.
@@ -630,6 +632,34 @@ Enabling `share_session` **auto-enables `export_session_html`** (the gist carrie
 > - Each gist's description includes the repo, issue number, and run ID (`Pi session — owner/repo#123 (run 456)`) for easy identification in the gist list.
 > - Periodically prune old gists via the [GitHub Gist API](https://docs.github.com/en/rest/gists/gists#delete-a-gist) or the web UI. The `gist_id` action output is available for automation — e.g. a scheduled workflow could list and delete gists older than a threshold.
 > - The `gist_url` output points to each gist's page where it can be reviewed or deleted manually.
+
+#### Opengist backend
+
+By default `share_session` uploads to **GitHub Gists** and links to the `pi.dev/session` viewer. You can instead upload to a self-hosted [Opengist](https://github.com/thomiceli/opengist) instance (e.g. `gist.l3x.in`) by setting `share_gist_provider: opengist`.
+
+The pi.dev viewer **cannot** read non-GitHub gists (it hardcodes `api.github.com`), so for the Opengist backend the `share_url` points directly at the gist's **raw HTML** route. The exported session HTML is self-contained (session data is embedded inline), and Opengist serves `.html` files with `Content-Type: text/html` and an inline disposition, so the raw link renders the full session in any browser with no viewer dependency.
+
+```yaml
+- uses: shaftoe/pi-coding-agent-action@v2
+  id: pi
+  with:
+    share_session: true
+    share_gist_provider: opengist
+    share_gist_api_url: https://gist.l3x.in/api/gists   # Opengist REST API lives under /api/, not /api/v1/
+    share_gist_token: ${{ secrets.OPENGIST_TOKEN }}       # Opengist access token (og_…) with gist:write scope
+    provider: openai
+    model: gpt-5.4
+    token: ${{ secrets.OPENAI_API_KEY }}
+
+- name: Echo share link
+  if: ${{ steps.pi.outputs.share_url }}
+  run: echo "Session: ${{ steps.pi.outputs.share_url }}"
+```
+
+Notes:
+- The Opengist REST API create endpoint is `POST <instance>/api/gists`. Create an access token in **Settings → Access Tokens** (it starts with `og_`) and grant it the `gist:write` scope. See the [Opengist API docs](https://opengist.io/docs).
+- Gists are created as `unlisted` (not listed publicly, but readable via the unguessable URL) — the closest analogue of a GitHub "secret" gist.
+- `share_gist_token` is optional: when unset, the action falls back to `github_token`, so you can reuse a single token if your Opengist setup accepts it.
 
 ### Auto-Compaction
 
@@ -665,7 +695,10 @@ For complex, multi-step tasks that generate a lot of context (e.g. large code re
 | `pr_number` | Pull request number to target. Use with `workflow_dispatch` to run the agent on a specific PR without a triggering event. When set, the action fetches PR context from the API and targets all operations at the specified PR | No | - |
 | `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
 | `provider` | LLM provider (openai, google, anthropic, etc.) | Yes | - |
-| `share_session` | Share the session like pi's `/share` command: upload the exported HTML to a secret GitHub Gist and surface a pi.dev viewer link. Uses the `github_token` input (PAT/App token with gist scope required). Auto-enables `export_session_html` | No | `false` |
+| `share_session` | Share the session like pi's `/share` command: upload the exported HTML to a gist and surface a viewer link. Uses GitHub Gists by default (`share_gist_provider: github`) or a self-hosted Opengist instance. Auto-enables `export_session_html` | No | `false` |
+| `share_gist_provider` | Storage backend for `share_session`: `github` (GitHub Gists + pi.dev viewer) or `opengist` (self-hosted instance; requires `share_gist_api_url`) | No | `github` |
+| `share_gist_api_url` | API URL for the share gist provider. Required for `opengist` (e.g. `https://gist.l3x.in/api/gists`); optional override for `github` | No | - |
+| `share_gist_token` | Token used to create the shared gist. Opengist access token (`og_…`, `gist:write` scope) for `opengist`; falls back to `github_token` | No | - |
 | `thinking_level` | Model thinking level | No | off |
 | `token` | Provider API token. Required for most providers, but can be omitted when using providers that support alternative auth mechanisms (e.g., `google-vertex` with Application Default Credentials) | No | - |
 | `trigger` | Trigger phrase used to invoke the action | No | /pi  |
@@ -680,14 +713,14 @@ The action exposes the following outputs, which can be consumed by downstream st
 |--------|-------------|----------|
 | `cost` | Cost of the invocation in USD (omitted if unavailable) | `0.042` |
 | `duration_seconds` | Wall-clock duration of agent execution in seconds | `12.7` |
-| `gist_id` | GitHub Gist ID holding the shared session HTML (when `share_session` succeeds) | `abc123def456` |
-| `gist_url` | GitHub Gist URL holding the shared session HTML (when `share_session` succeeds) | `https://gist.github.com/bot/abc123def456` |
+| `gist_id` | ID of the gist holding the shared session HTML — a GitHub Gist ID or Opengist UUID (when `share_session` succeeds) | `abc123def456` |
+| `gist_url` | Gist page URL — GitHub Gist or Opengist (when `share_session` succeeds) | `https://gist.github.com/bot/abc123def456` |
 | `input_tokens` | Number of input tokens consumed (omitted if unavailable) | `1500` |
 | `output_tokens` | Number of output tokens generated (omitted if unavailable) | `800` |
 | `response` | The main agent response text (or error message on failure) | `Here is the fix for the bug...` |
 | `session_html_path` | Path to the exported session HTML file (when `export_session_html` is enabled, or when `share_session` is enabled) | `/tmp/pi-session-html/session.html` |
 | `session_jsonl_path` | Path to the exported session JSONL file (when `export_session_jsonl` is enabled) | `/tmp/pi-session-jsonl/session.jsonl` |
-| `share_url` | pi.dev-style viewer link for the shared session (when `share_session` succeeds) | `https://pi.dev/session/#abc123def456` |
+| `share_url` | Shareable session link. GitHub provider: a pi.dev viewer link (`https://pi.dev/session/#<gistId>`). Opengist provider: a self-rendering raw-HTML URL on the instance (when `share_session` succeeds) | `https://pi.dev/session/#abc123def456` |
 | `success` | Whether the agent completed successfully (`true` / `false`) | `true` |
 
 > [!WARNING]

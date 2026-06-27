@@ -60,6 +60,47 @@ export const MAX_GIST_CONTENT_BYTES = 10 * 1024 * 1024;
  */
 export const GIST_CREATE_TIMEOUT_MS = 15_000;
 
+/**
+ * Identity of a gist-storage backend (GitHub Gists, Opengist, …).
+ *
+ * Each provider speaks its own create-API contract and builds a
+ * {@link CreatedGist} with an appropriate `shareUrl` (GitHub → pi.dev
+ * viewer; Opengist → a self-rendering raw-HTML link).
+ */
+export interface GistProvider {
+  /** Stable identifier (`'github'` | `'opengist'`), used in logs. */
+  readonly name: 'github' | 'opengist';
+  /** Create a gist holding the session content and return share details. */
+  create(input: CreateGistInput): Promise<CreatedGist>;
+}
+
+/**
+ * POST JSON to `url` with an AbortController-based timeout, translating an
+ * `AbortError` into an actionable timeout message.
+ *
+ * Shared by all gist providers so the timeout/abort behaviour is identical
+ * regardless of the backend's request shape. The caller owns the headers and
+ * body; this helper only attaches the timeout signal.
+ */
+export async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number = GIST_CREATE_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (e) {
+    if (e instanceof Error && e.name === 'AbortError') {
+      throw new Error(`gist create timed out after ${timeoutMs}ms`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /** Inputs for {@link createSessionGist}. */
 export interface CreateGistInput {
   /**
@@ -128,13 +169,11 @@ export async function createSessionGist(
   } = input;
 
   // Abort the request if it stalls so a hung connection can't block the
-  // entire action. The surrounding runSessionShare catch logs the
-  // AbortError as a notice and the run continues.
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), GIST_CREATE_TIMEOUT_MS);
-  let response: Response;
-  try {
-    response = await fetch(apiUrl, {
+  // entire action. The surrounding runSessionShare catch logs the timeout
+  // error as a notice and the run continues.
+  const response = await fetchWithTimeout(
+    apiUrl,
+    {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -148,16 +187,9 @@ export async function createSessionGist(
         public: isPublic,
         files: { [filename]: { content } },
       }),
-      signal: controller.signal,
-    });
-  } catch (e) {
-    if (e instanceof Error && e.name === 'AbortError') {
-      throw new Error(`gist create timed out after ${GIST_CREATE_TIMEOUT_MS}ms`);
-    }
-    throw e;
-  } finally {
-    clearTimeout(timeout);
-  }
+    },
+    GIST_CREATE_TIMEOUT_MS
+  );
 
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
@@ -191,3 +223,14 @@ export async function createSessionGist(
     shareUrl: `${viewerUrl}#${json.id}`,
   };
 }
+
+/**
+ * GitHub Gists provider (default). Wraps {@link createSessionGist} behind the
+ * {@link GistProvider} interface so the orchestrator is agnostic to the
+ * storage backend. The viewer URL defaults to {@link DEFAULT_SHARE_VIEWER_URL}
+ * (honours `PI_SHARE_VIEWER_URL`).
+ */
+export const githubGistProvider: GistProvider = {
+  name: 'github',
+  create: (input: CreateGistInput) => createSessionGist(input),
+};

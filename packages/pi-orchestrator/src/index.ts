@@ -56,7 +56,22 @@ export type { ActionBuildInfo } from './version';
 
 // Session sharing (gist)
 export { createSessionGist } from './share/gist';
-export type { CreateGistInput, CreatedGist } from './share/gist';
+export type { CreateGistInput, CreatedGist, GistProvider } from './share/gist';
+export {
+  DEFAULT_SHARE_VIEWER_URL,
+  DEFAULT_GITHUB_GIST_API,
+  MAX_GIST_CONTENT_BYTES,
+  GIST_CREATE_TIMEOUT_MS,
+  fetchWithTimeout,
+  githubGistProvider,
+} from './share/gist';
+export {
+  createOpengistGist,
+  opengistGistProvider,
+  DEFAULT_OPENGIST_API_PATH,
+} from './share/opengist';
+export { resolveGistProvider, resolveShareToken } from './share/provider';
+export type { ShareProviderConfig } from './share/provider';
 
 // Types
 export type {
