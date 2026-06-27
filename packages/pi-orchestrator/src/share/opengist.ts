@@ -101,7 +101,6 @@ export async function createOpengistGist(input: CreateGistInput): Promise<Create
   const json = (await response.json()) as {
     id?: string;
     html_url?: string;
-    slug_url?: string;
   };
 
   assertGistHasIdAndUrl(json);
@@ -116,6 +115,16 @@ export async function createOpengistGist(input: CreateGistInput): Promise<Create
   // resolves live, so verify the rendered link after upgrading your instance.
   // `html_url` is `<origin>/<user>/<identifier>`, so appending the raw segment
   // yields a stable URL.
+  //
+  // SECURITY (Opengist only): unlike the GitHub provider — where the session
+  // renders on `pi.dev`, an origin isolated from where gists are stored — this
+  // raw link is served from the **same origin** as the Opengist app the viewer
+  // is logged into. The exported HTML carries the viewer JS plus rendered tool
+  // output / file contents, so anything that isn't escaped by the session
+  // exporter runs with the Opengist origin's privileges (cookies, authenticated
+  // `/api/...` calls) — a stored-XSS vector absent from the GitHub backend.
+  // Operators should prefer a dedicated/isolated Opengist instance (or account)
+  // for shared sessions; see the README WARNING.
   const base = json.html_url.replace(/\/$/, '');
   const rawUrl = `${base}/raw/HEAD/${encodeURIComponent(filename)}`;
 

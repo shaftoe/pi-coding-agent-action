@@ -1688,7 +1688,6 @@ describe('ActionOrchestrator', () => {
         json: async () => ({
           id: 'og-uuid-123',
           html_url: 'https://gist.l3x.in/bot/my-session',
-          slug_url: 'my-session',
         }),
         text: async () => '',
       })) as unknown as typeof fetch;

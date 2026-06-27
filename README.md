@@ -639,6 +639,9 @@ By default `share_session` uploads to **GitHub Gists** and links to the `pi.dev/
 
 The pi.dev viewer **cannot** read non-GitHub gists (it hardcodes `api.github.com`), so for the Opengist backend the `share_url` points directly at the gist's **raw HTML** route. The exported session HTML is self-contained (session data is embedded inline), and Opengist serves `.html` files with `Content-Type: text/html` and an inline disposition, so the raw link renders the full session in any browser with no viewer dependency.
 
+> [!WARNING]
+> **Same-origin XSS surface (Opengist only).** With the default (`github`) provider the rendered session is served from `pi.dev` — an isolated origin separate from where gists are stored. The Opengist `share_url`, by contrast, renders the session's HTML on the **same origin** as your Opengist instance (e.g. `gist.l3x.in`), which the viewer is typically logged into. The exported HTML carries the viewer JavaScript plus any rendered tool output and file contents; if any of that is not escaped by the session exporter, it executes with the Opengist origin's privileges (session cookies, authenticated `/api/...` calls) — a stored-XSS vector that does **not** exist for the GitHub backend. Mitigations: prefer a dedicated or isolated Opengist instance (or a separate viewer account) for shared sessions, and only enable `share_session` when you trust the session contents.
+
 ```yaml
 - uses: shaftoe/pi-coding-agent-action@v2
   id: pi
