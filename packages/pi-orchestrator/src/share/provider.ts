@@ -23,11 +23,10 @@ export interface ShareProviderConfig {
   shareGistProvider?: 'github' | 'opengist';
   /**
    * Gist-creation token for the chosen provider. For Opengist this is an
-   * access token (`og_…`) with the `gist:write` scope. Falls back to
-   * `githubToken` when unset, preserving backwards compatibility for GitHub.
+   * access token (`og_…`) with the `gist:write` scope.
    */
   shareGistToken?: string;
-  /** GitHub token, used as the share token fallback. */
+  /** GitHub token, used as the share token for the github provider. */
   githubToken?: string;
 }
 
@@ -42,13 +41,24 @@ export function resolveGistProvider(config: ShareProviderConfig): GistProvider {
 }
 
 /**
- * Resolve the token used to create the shared gist.
+ * Resolve the token used to create the shared gist, picking the credential
+ * that matches the selected provider and only crossing over when the
+ * preferred token is absent.
  *
- * Prefers `shareGistToken` (letting Opengist users supply an Opengist access
- * token that differs from their GitHub PAT), then falls back to `githubToken`
- * so the GitHub path keeps working with the single `github_token` input.
+ * - **opengist** prefers `shareGistToken` (an `og_…` token), falling back to
+ *   `githubToken`.
+ * - **github** (default) prefers `githubToken`, falling back to
+ *   `shareGistToken`.
+ *
+ * This provider-aware selection prevents mismatched combos — e.g. an `og_`
+ * Opengist token being sent to `api.github.com`, or a `ghp_` GitHub token
+ * being sent to an Opengist instance — from producing confusing auth
+ * failures, while keeping the single-`github_token` GitHub workflow intact.
  */
 export function resolveShareToken(config: ShareProviderConfig): string | undefined {
+  const isOpengist = config.shareGistProvider === 'opengist';
+  const primary = isOpengist ? config.shareGistToken : config.githubToken;
+  const fallback = isOpengist ? config.githubToken : config.shareGistToken;
   /* eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- intentional ||: an empty-string token must fall through to the fallback (a "" token would fail auth) */
-  return config.shareGistToken || config.githubToken;
+  return primary || fallback;
 }

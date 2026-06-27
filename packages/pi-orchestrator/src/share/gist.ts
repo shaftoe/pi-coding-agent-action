@@ -101,6 +101,49 @@ export async function fetchWithTimeout(
   }
 }
 
+/**
+ * Minimum shape shared by every gist-create response we understand
+ * (GitHub Gists and Opengist both return `id` + `html_url`).
+ */
+export interface GistCreateResponse {
+  id?: string;
+  html_url?: string;
+}
+
+/**
+ * Throw an actionable error when a gist-create response is non-2xx.
+ *
+ * Shared by all providers so the error wording is identical regardless of
+ * the backend. Reads the body only on the failure path.
+ */
+export async function assertGistResponseOk(response: Response): Promise<void> {
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(
+      `gist create failed: ${response.status} ${response.statusText}${detail ? ` — ${detail}` : ''}`
+    );
+  }
+}
+
+/**
+ * Guard against a 2xx response with an unexpected shape (proxy interference,
+ * partial response, future API change). Without this, a malformed response
+ * silently produces `undefined` ids/urls and a `<viewer>#undefined` share link.
+ *
+ * Shared by all providers — both GitHub and Opengist return `id` + `html_url`.
+ * Implemented as a generic `asserts` so callers keep type narrowing on `id` /
+ * `html_url` (and any extra fields they declared on the response type).
+ */
+export function assertGistHasIdAndUrl<T extends GistCreateResponse>(
+  json: T
+): asserts json is T & { id: string; html_url: string } {
+  if (!json.id || !json.html_url) {
+    throw new Error(
+      `gist create returned unexpected response (no id/html_url): ${JSON.stringify(json).slice(0, 200)}`
+    );
+  }
+}
+
 /** Inputs for {@link createSessionGist}. */
 export interface CreateGistInput {
   /**
@@ -191,12 +234,7 @@ export async function createSessionGist(
     GIST_CREATE_TIMEOUT_MS
   );
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(
-      `gist create failed: ${response.status} ${response.statusText}${detail ? ` — ${detail}` : ''}`
-    );
-  }
+  await assertGistResponseOk(response);
 
   const json = (await response.json()) as {
     id?: string;
@@ -204,15 +242,7 @@ export async function createSessionGist(
     files?: Record<string, { raw_url?: string }>;
   };
 
-  // Guard against a 2xx response with an unexpected shape (proxy
-  // interference, partial response, future API change). Without this,
-  // a malformed response silently produces undefined gist_id/gist_url
-  // and a share_url of "<viewer>#undefined".
-  if (!json.id || !json.html_url) {
-    throw new Error(
-      `gist create returned unexpected response (no id/html_url): ${JSON.stringify(json).slice(0, 200)}`
-    );
-  }
+  assertGistHasIdAndUrl(json);
 
   const file = json.files?.[filename];
 

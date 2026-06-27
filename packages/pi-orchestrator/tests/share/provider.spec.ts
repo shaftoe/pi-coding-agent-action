@@ -29,11 +29,39 @@ describe('resolveGistProvider', () => {
 });
 
 describe('resolveShareToken', () => {
-  test('prefers shareGistToken over githubToken', () => {
-    expect(resolveShareToken({ shareGistToken: 'og_123', githubToken: 'ghp_456' })).toBe('og_123');
+  test('prefers shareGistToken over githubToken for the opengist provider', () => {
+    expect(
+      resolveShareToken({
+        shareGistProvider: 'opengist',
+        shareGistToken: 'og_123',
+        githubToken: 'ghp_456',
+      })
+    ).toBe('og_123');
   });
 
-  test('falls back to githubToken when shareGistToken is unset', () => {
+  test('falls back to githubToken for opengist when shareGistToken is unset', () => {
+    expect(resolveShareToken({ shareGistProvider: 'opengist', githubToken: 'ghp_456' })).toBe(
+      'ghp_456'
+    );
+  });
+
+  test('prefers githubToken over shareGistToken for the github provider', () => {
+    expect(
+      resolveShareToken({
+        shareGistProvider: 'github',
+        shareGistToken: 'og_123',
+        githubToken: 'ghp_456',
+      })
+    ).toBe('ghp_456');
+  });
+
+  test('crosses over to shareGistToken for github when githubToken is unset', () => {
+    expect(resolveShareToken({ shareGistProvider: 'github', shareGistToken: 'og_123' })).toBe(
+      'og_123'
+    );
+  });
+
+  test('defaults to the githubToken preference when the provider is unset', () => {
     expect(resolveShareToken({ githubToken: 'ghp_456' })).toBe('ghp_456');
   });
 
@@ -42,6 +70,12 @@ describe('resolveShareToken', () => {
   });
 
   test('ignores an empty shareGistToken and falls back', () => {
-    expect(resolveShareToken({ githubToken: 'ghp_456' })).toBe('ghp_456');
+    expect(resolveShareToken({ shareGistToken: '', githubToken: 'ghp_456' })).toBe('ghp_456');
+  });
+
+  test('ignores an empty githubToken and crosses over to shareGistToken for github', () => {
+    expect(
+      resolveShareToken({ shareGistProvider: 'github', githubToken: '', shareGistToken: 'og_123' })
+    ).toBe('og_123');
   });
 });

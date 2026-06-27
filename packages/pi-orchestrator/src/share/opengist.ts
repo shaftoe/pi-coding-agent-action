@@ -30,6 +30,8 @@ import {
   type GistProvider,
   GIST_CREATE_TIMEOUT_MS,
   fetchWithTimeout,
+  assertGistResponseOk,
+  assertGistHasIdAndUrl,
 } from './gist';
 
 /**
@@ -94,12 +96,7 @@ export async function createOpengistGist(input: CreateGistInput): Promise<Create
     GIST_CREATE_TIMEOUT_MS
   );
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(
-      `gist create failed: ${response.status} ${response.statusText}${detail ? ` — ${detail}` : ''}`
-    );
-  }
+  await assertGistResponseOk(response);
 
   const json = (await response.json()) as {
     id?: string;
@@ -107,18 +104,18 @@ export async function createOpengistGist(input: CreateGistInput): Promise<Create
     slug_url?: string;
   };
 
-  if (!json.id || !json.html_url) {
-    throw new Error(
-      `gist create returned unexpected response (no id/html_url): ${JSON.stringify(json).slice(0, 200)}`
-    );
-  }
+  assertGistHasIdAndUrl(json);
 
   // The exported session HTML is fully self-contained, so Opengist's raw web
   // route renders the whole session in a browser with no viewer dependency.
   // The route is `GET /:user/:gistname/raw/:revision/:file`; "HEAD" resolves to
-  // the latest revision (the same value Opengist uses internally for its embed
-  // view). `html_url` is `<origin>/<user>/<identifier>`, so appending the raw
-  // segment yields a stable, always-valid URL.
+  // the latest revision (the value Opengist uses for its embed view — see
+  // https://opengist.io/docs). This is an instance-specific behaviour: if a
+  // future Opengist release stops accepting `HEAD` on the raw route, every
+  // share link would 404. The tests assert the URL shape, not that it
+  // resolves live, so verify the rendered link after upgrading your instance.
+  // `html_url` is `<origin>/<user>/<identifier>`, so appending the raw segment
+  // yields a stable URL.
   const base = json.html_url.replace(/\/$/, '');
   const rawUrl = `${base}/raw/HEAD/${encodeURIComponent(filename)}`;
 

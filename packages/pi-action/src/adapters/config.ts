@@ -177,6 +177,16 @@ export function gatherActionsConfig(): PiConfig {
       : shareGistProviderRaw === 'github'
         ? 'github'
         : undefined;
+  // An unknown value (typo, or a backend we don't support yet) silently
+  // collapses to the github default. Warn so a misconfigured provider is
+  // visible instead of quietly creating a GitHub gist with ignored Opengist
+  // config.
+  if (shareGistProviderRaw && !shareGistProvider) {
+    core.warning(
+      `Unknown share_gist_provider "${shareGistProviderRaw}"; falling back to github. ` +
+        'Valid values are "github" and "opengist".'
+    );
+  }
   const shareGistApiUrl = core.getInput('share_gist_api_url').trim() || undefined;
   const shareGistToken = core.getInput('share_gist_token').trim() || undefined;
   if (shareGistToken) {

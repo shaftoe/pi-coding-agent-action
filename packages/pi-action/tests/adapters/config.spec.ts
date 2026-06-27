@@ -50,6 +50,7 @@ describe('gatherActionsConfig', () => {
     coreMock.getInput.mockClear();
     coreMock.debug.mockClear();
     coreMock.setSecret.mockClear();
+    coreMock.warning.mockClear();
     mockCore();
   });
 
@@ -263,9 +264,18 @@ describe('gatherActionsConfig', () => {
       expect(gatherActionsConfig().shareGistProvider).toBe('opengist');
     });
 
-    test('normalizes an unknown share_gist_provider to undefined', () => {
+    test('normalizes an unknown share_gist_provider to undefined and warns', () => {
       mockCore({ share_gist_provider: 'dropbox' });
       expect(gatherActionsConfig().shareGistProvider).toBeUndefined();
+      expect(coreMock.warning).toHaveBeenCalledWith(
+        expect.stringMatching(/Unknown share_gist_provider "dropbox".*falling back to github/)
+      );
+    });
+
+    test('does not warn for a recognised share_gist_provider', () => {
+      mockCore({ share_gist_provider: 'opengist' });
+      gatherActionsConfig();
+      expect(coreMock.warning).not.toHaveBeenCalled();
     });
 
     test('parses share_gist_api_url', () => {

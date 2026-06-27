@@ -660,6 +660,7 @@ Notes:
 - The Opengist REST API create endpoint is `POST <instance>/api/gists`. Create an access token in **Settings → Access Tokens** (it starts with `og_`) and grant it the `gist:write` scope. See the [Opengist API docs](https://opengist.io/docs).
 - Gists are created as `unlisted` (not listed publicly, but readable via the unguessable URL) — the closest analogue of a GitHub "secret" gist.
 - `share_gist_token` is optional: when unset, the action falls back to `github_token`, so you can reuse a single token if your Opengist setup accepts it.
+- The `share_url` uses the gist's **raw route** (`<gist page>/raw/HEAD/session.html`), which Opengist serves as `text/html` so the self-contained session renders directly in a browser. The `HEAD` revision resolves to the latest commit (see the [Opengist docs](https://opengist.io/docs)). Because this raw-route behaviour is instance-specific, **verify it after upgrading Opengist** by creating a shared session and opening the link in a fresh browser — if your version doesn't accept `HEAD` on the raw route, share links will 404.
 
 ### Auto-Compaction
 
