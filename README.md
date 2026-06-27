@@ -345,6 +345,36 @@ jobs:
 > [!TIP]
 > Use `workflow_dispatch` alongside `schedule` to allow manual runs for testing or ad-hoc execution. Combine with `export_session_html` and `export_session_jsonl` to archive periodic task results as workflow artifacts.
 
+### Self-hosted server URL
+
+Self-hosted runners (e.g. a **Forgejo** instance behind Docker or internal networking) may advertise a `GITHUB_SERVER_URL` that is only reachable from inside the host network — `http://localhost:3000` or a Docker alias. The action derives user-facing links (commits, PRs, action runs) and platform detection from that URL, so they would point at the wrong host.
+
+Set the `server_url` input to the externally-reachable URL to override it:
+
+```yaml
+- uses: shaftoe/pi-coding-agent-action@v2
+  with:
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    provider: openai
+    model: gpt-5.4
+    token: ${{ secrets.OPENAI_API_KEY }}
+    server_url: https://git.example.com
+```
+
+Alternatively, set the `GITHUB_SERVER_URL` environment variable on the step:
+
+```yaml
+- uses: shaftoe/pi-coding-agent-action@v2
+  env:
+    GITHUB_SERVER_URL: https://git.example.com
+  with: { ... }
+```
+
+When both are set, the `server_url` input takes precedence.
+
+> [!NOTE]
+> The override only affects **user-facing URLs and platform detection**. The API client (Octokit) keeps using the runner-advertised `GITHUB_API_URL`, which must remain reachable from inside the runner so API calls succeed. If API calls fail on a self-hosted runner, override `GITHUB_API_URL` (e.g. via `env:`) to a reachable endpoint.
+
 ### Custom Extensions
 
 You can load custom Pi extensions to add additional custom tools or modify agent behavior:
@@ -703,6 +733,7 @@ For complex, multi-step tasks that generate a lot of context (e.g. large code re
 | `share_gist_provider` | Storage backend for `share_session`: `github` (GitHub Gists + pi.dev viewer) or `opengist` (self-hosted instance; requires `share_gist_api_url`) | No | `github` |
 | `share_gist_api_url` | API URL for the share gist provider. Required for `opengist` (e.g. `https://gist.l3x.in/api/gists`); optional override for `github` | No | - |
 | `share_gist_token` | Token used to create the shared gist. Opengist access token (`og_…`, `gist:write` scope) for `opengist`; falls back to `github_token` | No | - |
+| `server_url` | Override the forge server URL (e.g. `https://git.example.com`) when the runner-advertised `GITHUB_SERVER_URL` points at an internally-reachable host (e.g. `http://localhost:3000` on a Forgejo runner behind Docker). Affects user-facing links (commits, PRs, action runs) and platform detection only — the API client keeps using the runner's `GITHUB_API_URL`. See [Self-hosted server URL](#self-hosted-server-url) | No | - |
 | `thinking_level` | Model thinking level | No | off |
 | `token` | Provider API token. Required for most providers, but can be omitted when using providers that support alternative auth mechanisms (e.g., `google-vertex` with Application Default Credentials) | No | - |
 | `trigger` | Trigger phrase used to invoke the action | No | /pi  |

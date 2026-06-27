@@ -115,6 +115,11 @@ inputs:
     required: false
     default: ''
 
+  server_url:
+    description: 'Override the forge server URL (e.g. https://git.example.com). Self-hosted runners (Forgejo/Gitea behind Docker or internal networking) may advertise a GITHUB_SERVER_URL that is only reachable from inside the host network (e.g. http://localhost:3000); set this to the externally-reachable URL so that derived links (commits, PRs, action runs) and platform detection point at the right host. When unset, the runner-advertised GITHUB_SERVER_URL is used (set that env var on the step as an alternative). Note: this only affects user-facing URLs and platform detection — the API client keeps using the runner-advertised GITHUB_API_URL.'
+    required: false
+    default: ''
+
 runs:
   using: 'node24'
   main: 'dist/index.js'

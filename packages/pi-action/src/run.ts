@@ -16,6 +16,7 @@ import { createRealPiAgent } from './adapters/pi-agent-adapter';
 import { gatherActionsConfig } from './adapters/config';
 import { ActionsOutputSink } from './adapters/output-sink';
 import { createGitHubPlatformProvider, detectPlatform } from '@alexanderfortin/pi-platform-github';
+import { resolveServerUrl } from './server-url';
 
 /**
  * Configure the Pi SDK's package directory for the bundled action.
@@ -72,12 +73,24 @@ export async function run() {
     payload.pull_request = payload.pull_request ?? { number: prNumber };
   }
 
+  // Resolve the effective server URL. The `server_url` input overrides the
+  // runner-advertised `GITHUB_SERVER_URL` (via `github.context.serverUrl`) —
+  // useful on self-hosted runners where the advertised URL is only reachable
+  // from inside the host network. Falls back to github.com.
+  const serverUrl = resolveServerUrl(coreAdapter.getInput('server_url'), github.context.serverUrl);
+  const advertisedServerUrl = github.context.serverUrl || 'https://github.com';
+  if (serverUrl !== advertisedServerUrl) {
+    coreAdapter.info(
+      `[run] server_url override active: using ${serverUrl} (runner advertises ${advertisedServerUrl})`
+    );
+  }
+
   const platformContext = {
     repo: github.context.repo,
     issue: { number: issueNumber },
     eventName: github.context.eventName,
     payload,
-    serverUrl: github.context.serverUrl || 'https://github.com',
+    serverUrl,
     runId: github.context.runId,
     workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
     ...(githubCtx.actor !== undefined ? { actor: githubCtx.actor } : {}),
@@ -91,7 +104,7 @@ export async function run() {
     octokit,
     context: platformContext,
     logger: coreAdapter,
-    platformType: detectPlatform(platformContext.serverUrl),
+    platformType: detectPlatform(serverUrl),
     ...(triggerValue ? { trigger: triggerValue } : {}),
     ...(branchNameTemplate ? { branchNameTemplate } : {}),
   });
