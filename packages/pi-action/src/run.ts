@@ -138,8 +138,11 @@ export async function run() {
     ...(branchNameTemplate ? { branchNameTemplate } : {}),
   });
 
-  // Create the git adapter with explicit deps
-  const gitAdapter = new RealGitAdapter(coreAdapter, octokit, platformContext);
+  // Create the git adapter with explicit deps.
+  // platformType is threaded through so the footer URL builder
+  // (buildActionRunUrl) can pick the correct URL format for the
+  // target platform (e.g. Forgejo/Codeberg job-level URLs).
+  const gitAdapter = new RealGitAdapter(coreAdapter, octokit, platformContext, platformType);
 
   const orchestrator = new ActionOrchestrator(
     config,

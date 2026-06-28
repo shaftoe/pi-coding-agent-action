@@ -13,7 +13,12 @@ import {
   getStartTimeFromContext,
   type GitHubModuleDeps,
 } from '@alexanderfortin/pi-platform-github';
-import type { GitAdapter, CommentMetadata, CoreAdapter } from '@alexanderfortin/pi-orchestrator';
+import type {
+  GitAdapter,
+  CommentMetadata,
+  CoreAdapter,
+  PlatformType,
+} from '@alexanderfortin/pi-orchestrator';
 
 /**
  * Production adapter for git hosting platform operations.
@@ -28,12 +33,14 @@ export class RealGitAdapter implements GitAdapter {
   constructor(
     private readonly core: CoreAdapter,
     octokit: GitHubModuleDeps['octokit'],
-    context: GitHubModuleDeps['context']
+    context: GitHubModuleDeps['context'],
+    platformType?: PlatformType
   ) {
     this.deps = {
       octokit,
       context,
       logger: core,
+      ...(platformType !== undefined ? { platformType } : {}),
     };
   }
 

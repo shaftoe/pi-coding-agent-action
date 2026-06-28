@@ -74,4 +74,70 @@ describe('RealGitAdapter', () => {
     const result = gitAdapter.getStartTime();
     expect(result).toBeUndefined();
   });
+
+  test('constructor accepts an optional platformType (forgejo)', () => {
+    expect(
+      () => new RealGitAdapter(createMockCoreAdapter(), mockOctokit as any, mockContext, 'forgejo')
+    ).not.toThrow();
+  });
+
+  test('createFinalComment threads platformType into deps so the footer uses the Forgejo URL format', async () => {
+    // Regression guard for the bug where RealGitAdapter dropped platformType,
+    // causing buildActionRunUrl to emit the bare GitHub URL even on Forgejo.
+    const created: { body: string }[] = [];
+    const forgejoOctokit = {
+      rest: {
+        issues: {
+          createComment: async (params: { body: string }) => {
+            created.push({ body: params.body });
+            return { data: {} };
+          },
+        },
+      },
+    };
+    const gitAdapter = new RealGitAdapter(
+      createMockCoreAdapter(),
+      forgejoOctokit as any,
+      mockContext,
+      'forgejo'
+    );
+    // createFinalComment on the adapter is fire-and-forget (void), so call the
+    // underlying module function directly with the same deps shape to assert
+    // the URL format. We verify via the adapter's own path by spying on the
+    // octokit call.
+    await gitAdapter.createFinalComment('hello', {
+      provider: 'p',
+      model: 'm',
+    });
+    expect(created).toHaveLength(1);
+    // Forgejo/Codeberg URLs include the /jobs/0/attempt/<n> suffix.
+    expect(created[0]!.body).toContain(
+      'https://github.com/test-owner/test-repo/actions/runs/123456789/jobs/0/attempt/1'
+    );
+  });
+
+  test('createFinalComment omits platformType when not provided, yielding the GitHub URL format', async () => {
+    const created: { body: string }[] = [];
+    const ghOctokit = {
+      rest: {
+        issues: {
+          createComment: async (params: { body: string }) => {
+            created.push({ body: params.body });
+            return { data: {} };
+          },
+        },
+      },
+    };
+    const gitAdapter = new RealGitAdapter(createMockCoreAdapter(), ghOctokit as any, mockContext);
+    await gitAdapter.createFinalComment('hello', {
+      provider: 'p',
+      model: 'm',
+    });
+    expect(created).toHaveLength(1);
+    // GitHub URL has no job/attempt suffix.
+    expect(created[0]!.body).toContain(
+      'https://github.com/test-owner/test-repo/actions/runs/123456789'
+    );
+    expect(created[0]!.body).not.toContain('/jobs/0/attempt/');
+  });
 });
