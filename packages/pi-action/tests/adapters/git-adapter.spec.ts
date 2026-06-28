@@ -95,16 +95,17 @@ describe('RealGitAdapter', () => {
         },
       },
     };
+    // Use a Forgejo-style serverUrl so the asserted URL is self-documenting
+    // (a "forgejo" footer should not live under github.com).
+    const forgejoContext = { ...mockContext, serverUrl: 'https://codeberg.org' };
     const gitAdapter = new RealGitAdapter(
       createMockCoreAdapter(),
       forgejoOctokit as any,
-      mockContext,
+      forgejoContext,
       'forgejo'
     );
-    // createFinalComment on the adapter is fire-and-forget (void), so call the
-    // underlying module function directly with the same deps shape to assert
-    // the URL format. We verify via the adapter's own path by spying on the
-    // octokit call.
+    // Exercises the full RealGitAdapter → createFinalComment → buildActionRunUrl
+    // path by capturing the body posted to octokit.rest.issues.createComment.
     await gitAdapter.createFinalComment('hello', {
       provider: 'p',
       model: 'm',
@@ -112,7 +113,7 @@ describe('RealGitAdapter', () => {
     expect(created).toHaveLength(1);
     // Forgejo/Codeberg URLs include the /jobs/0/attempt/<n> suffix.
     expect(created[0]!.body).toContain(
-      'https://github.com/test-owner/test-repo/actions/runs/123456789/jobs/0/attempt/1'
+      'https://codeberg.org/test-owner/test-repo/actions/runs/123456789/jobs/0/attempt/1'
     );
   });
 
