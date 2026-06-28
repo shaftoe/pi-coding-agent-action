@@ -1,7 +1,7 @@
 /**
  * Tests for platform abstraction module.
  *
- * Tests platform detection, provider creation, and the module's
+ * Tests platform input parsing, provider creation, and the module's
  * public API surface.
  */
 
@@ -13,9 +13,8 @@ setupGitHubTestEnv({ envPathPrefix: 'gh-event-platform' });
 // Import after mocks are set up
 import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
 import {
-  detectPlatform,
+  parsePlatformType,
   apiBaseUrlFromServerUrl,
-  isKnownServerUrl,
   createGitHubPlatformProvider,
 } from '@alexanderfortin/pi-platform-github';
 import type { GitHubPlatformDeps } from '@alexanderfortin/pi-platform-github';
@@ -44,149 +43,54 @@ function makeMockDeps(overrides?: Partial<GitHubPlatformDeps>): GitHubPlatformDe
   };
 }
 
-describe('detectPlatform', () => {
-  test('returns github for github.com server URL', () => {
-    expect(detectPlatform('https://github.com')).toBe('github');
+describe('parsePlatformType', () => {
+  test('defaults to github for empty / undefined input', () => {
+    expect(parsePlatformType('')).toBe('github');
+    expect(parsePlatformType(undefined)).toBe('github');
+    expect(parsePlatformType('   ')).toBe('github');
   });
 
-  test('throws when server URL is empty', () => {
-    expect(() => detectPlatform('')).toThrow(/requires a server URL/);
+  test('returns github for github', () => {
+    expect(parsePlatformType('github')).toBe('github');
   });
 
-  test('returns codeberg for codeberg.org server URL', () => {
-    expect(detectPlatform('https://codeberg.org')).toBe('codeberg');
+  test('returns codeberg for codeberg', () => {
+    expect(parsePlatformType('codeberg')).toBe('codeberg');
   });
 
-  test('returns forgejo for server URL containing forgejo', () => {
-    expect(detectPlatform('https://forgejo.example.com')).toBe('forgejo');
+  test('returns forgejo for forgejo', () => {
+    expect(parsePlatformType('forgejo')).toBe('forgejo');
   });
 
-  test('returns forgejo for server URL containing gitea', () => {
-    expect(detectPlatform('https://gitea.example.com')).toBe('forgejo');
+  test('returns forgejo for gitea (API-compatible alias)', () => {
+    expect(parsePlatformType('gitea')).toBe('forgejo');
   });
 
-  test('returns github for unknown non-github.com server URL (default fallback)', () => {
-    // Self-hosted GHE and other GitHub-compatible hosts default to 'github'
-    // instead of throwing. See detectPlatform docstring for rationale.
-    expect(detectPlatform('https://git.mycompany.com')).toBe('github');
+  test('is case-insensitive and trims whitespace', () => {
+    expect(parsePlatformType('Forgejo')).toBe('forgejo');
+    expect(parsePlatformType('  CODEBERG  ')).toBe('codeberg');
+    expect(parsePlatformType('\tGiteA\n')).toBe('forgejo');
   });
 
-  test('returns github for GitHub Enterprise-like URL with custom domain', () => {
-    expect(detectPlatform('https://github.mycompany.com')).toBe('github');
+  test('falls back to github for an unrecognized value', () => {
+    expect(parsePlatformType('gitlab')).toBe('github');
+    expect(parsePlatformType('bitbucket')).toBe('github');
+    expect(parsePlatformType('nonsense')).toBe('github');
   });
 
-  test('detects codeberg with subpath URL', () => {
-    expect(detectPlatform('https://codeberg.org/some/repo')).toBe('codeberg');
+  test('invokes onUnknown with the raw input for an unrecognized value', () => {
+    const received: string[] = [];
+    const result = parsePlatformType('gitlab', raw => received.push(raw));
+    expect(result).toBe('github');
+    expect(received).toEqual(['gitlab']);
   });
 
-  test('detects forgejo with nested subdomain', () => {
-    expect(detectPlatform('https://git.forgejo.internal.company.net')).toBe('forgejo');
-  });
-
-  test('detects gitea with trailing slash', () => {
-    expect(detectPlatform('https://gitea.example.com/')).toBe('forgejo');
-  });
-
-  test('returns github for unknown host (default fallback)', () => {
-    expect(detectPlatform('https://unknown.host')).toBe('github');
-    expect(detectPlatform('https://another-unknown.host')).toBe('github');
-  });
-
-  test('detects forgejo from /api/v1 API URL even when hostname is ambiguous', () => {
-    // forge.example.com has no "forgejo"/"gitea"/"codeberg" substring, so
-    // without the API-URL hint it would fall back to 'github'. The
-    // GITHUB_API_URL ending in /api/v1 reliably identifies Forgejo/Gitea.
-    expect(detectPlatform('https://forge.l3x.in', 'https://forge.l3x.in/api/v1')).toBe('forgejo');
-    expect(
-      detectPlatform('https://git.company.internal', 'https://git.company.internal/api/v1')
-    ).toBe('forgejo');
-  });
-
-  test('detects codeberg from /api/v1 API URL containing "codeberg"', () => {
-    expect(detectPlatform('https://codeberg.org', 'https://codeberg.org/api/v1')).toBe('codeberg');
-  });
-
-  test('keeps github when API URL ends in /api/v3 (self-hosted GHE)', () => {
-    expect(
-      detectPlatform('https://github.company.internal', 'https://github.company.internal/api/v3')
-    ).toBe('github');
-  });
-
-  test('keeps github when API URL is api.github.com', () => {
-    expect(detectPlatform('https://github.com', 'https://api.github.com')).toBe('github');
-  });
-
-  test('trailing slash on /api/v1 is handled', () => {
-    expect(detectPlatform('https://forge.l3x.in', 'https://forge.l3x.in/api/v1/')).toBe('forgejo');
-  });
-
-  test('explicit server-URL patterns take precedence over API URL', () => {
-    // A server URL that explicitly contains "forgejo" wins regardless of apiUrl.
-    expect(detectPlatform('https://forgejo.example.com', 'https://api.github.com')).toBe('forgejo');
-    // A server URL that explicitly contains "github.com" wins over /api/v1.
-    expect(detectPlatform('https://github.com', 'https://some.host/api/v1')).toBe('github');
-  });
-
-  test('ignores empty / undefined API URL', () => {
-    expect(detectPlatform('https://unknown.host', undefined)).toBe('github');
-    expect(detectPlatform('https://unknown.host', '')).toBe('github');
-  });
-});
-
-describe('isKnownServerUrl', () => {
-  test('returns true for github.com', () => {
-    expect(isKnownServerUrl('https://github.com')).toBe(true);
-  });
-
-  test('returns true for codeberg', () => {
-    expect(isKnownServerUrl('https://codeberg.org')).toBe(true);
-  });
-
-  test('returns true for forgejo', () => {
-    expect(isKnownServerUrl('https://forgejo.example.com')).toBe(true);
-  });
-
-  test('returns true for gitea', () => {
-    expect(isKnownServerUrl('https://gitea.example.com')).toBe(true);
-  });
-
-  test('returns true for self-hosted GHE matching .github.', () => {
-    expect(isKnownServerUrl('https://something.github.company')).toBe(true);
-    expect(isKnownServerUrl('https://github.company.internal')).toBe(true);
-  });
-
-  test("returns false for hosts only matched by detectPlatform's silent fallback", () => {
-    // detectPlatform returns 'github' for these via the unknown-host default,
-    // but isKnownServerUrl surfaces them as unrecognized so the CLI can warn.
-    expect(isKnownServerUrl('https://github.mycompany.com')).toBe(false);
-    expect(isKnownServerUrl('https://gh.internal.corp')).toBe(false);
-  });
-
-  test('returns false for an unrecognized host (GitLab/Bitbucket case)', () => {
-    expect(isKnownServerUrl('https://gitlab.com')).toBe(false);
-    expect(isKnownServerUrl('https://bitbucket.org')).toBe(false);
-    expect(isKnownServerUrl('https://git.mycompany.com')).toBe(false);
-  });
-
-  test('returns false for empty string', () => {
-    expect(isKnownServerUrl('')).toBe(false);
-  });
-
-  test('agrees with detectPlatform for hosts matched by explicit patterns', () => {
-    // detectPlatform also returns 'github' for unrecognized hosts via its
-    // silent fallback. isKnownServerUrl only returns true for hosts matched
-    // by explicit patterns (the cases above). The list below must NOT
-    // include fallback-only hosts like 'https://github.mycompany.com'.
-    const explicitMatch = [
-      'https://github.com',
-      'https://codeberg.org',
-      'https://forgejo.example.com',
-      'https://gitea.example.com',
-      'https://something.github.company', // matches '.github.' substring
-    ];
-    for (const url of explicitMatch) {
-      expect(isKnownServerUrl(url)).toBe(true);
+  test('does not invoke onUnknown for recognized values (including the empty default)', () => {
+    const calls: string[] = [];
+    for (const value of ['', undefined, 'github', 'forgejo', 'gitea', 'codeberg']) {
+      parsePlatformType(value, raw => calls.push(raw));
     }
+    expect(calls).toEqual([]);
   });
 });
 
@@ -337,7 +241,7 @@ describe('apiBaseUrlFromServerUrl', () => {
     );
   });
 
-  test('throws when server URL is empty (aligned with detectPlatform)', () => {
+  test('throws when server URL is empty', () => {
     expect(() => apiBaseUrlFromServerUrl('')).toThrow(
       /apiBaseUrlFromServerUrl requires a server URL/
     );

@@ -696,6 +696,7 @@ For complex, multi-step tasks that generate a lot of context (e.g. large code re
 | `load_builtin_extensions` | Whether to load built-in GitHub tools (see [Custom Tools](#custom-tools) for the full list) | No | `true` |
 | `loaded_tools` | Controls which tools are available in the session. Defaults to `all`. Accepts a list of tool names (one per line) to load — unknown names cause the run to fail early | No | `all` |
 | `model` | Model to use (e.g., gpt-5.4, gpt-4o, gemini-2.5-pro) | Yes | - |
+| `platform` | Git hosting platform the action is running on: `github` (default), `codeberg`, `forgejo`, or `gitea` (alias for `forgejo`). Determines platform-specific behaviour such as the action-run URL format in the "View action run" footer. The platform is **no longer auto-detected** from the server URL — set it explicitly when running on Forgejo/Codeberg/Gitea (e.g. `platform: forgejo`) | No | `github` |
 | `pr_number` | Pull request number to target. Use with `workflow_dispatch` to run the agent on a specific PR without a triggering event. When set, the action fetches PR context from the API and targets all operations at the specified PR | No | - |
 | `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
 | `provider` | LLM provider (openai, google, anthropic, etc.) | Yes | - |
@@ -703,7 +704,7 @@ For complex, multi-step tasks that generate a lot of context (e.g. large code re
 | `share_gist_provider` | Storage backend for `share_session`: `github` (GitHub Gists + pi.dev viewer) or `opengist` (self-hosted instance; requires `share_gist_api_url`) | No | `github` |
 | `share_gist_api_url` | API URL for the share gist provider. Required for `opengist` (e.g. `https://gist.l3x.in/api/gists`); optional override for `github` | No | - |
 | `share_gist_token` | Token used to create the shared gist. Opengist access token (`og_…`, `gist:write` scope) for `opengist`; falls back to `github_token` | No | - |
-| `server_url` | Override the forge server URL (e.g. `https://git.example.com`) when the runner-advertised `GITHUB_SERVER_URL` points at an internally-reachable host (e.g. `http://localhost:3000` on a Forgejo runner behind Docker). Affects user-facing links (commits, PRs, action runs) and platform detection only — the API client keeps using the runner's `GITHUB_API_URL`. | No | - |
+| `server_url` | Override the forge server URL (e.g. `https://git.example.com`) when the runner-advertised `GITHUB_SERVER_URL` points at an internally-reachable host (e.g. `http://localhost:3000` on a Forgejo runner behind Docker). Affects user-facing links (commits, PRs, action runs) only — the API client keeps using the runner's `GITHUB_API_URL`, and platform selection is controlled by the `platform` input. | No | - |
 | `thinking_level` | Model thinking level | No | off |
 | `token` | Provider API token. Required for most providers, but can be omitted when using providers that support alternative auth mechanisms (e.g., `google-vertex` with Application Default Credentials) | No | - |
 | `trigger` | Trigger phrase used to invoke the action | No | /pi  |
@@ -771,7 +772,7 @@ Refer to [the official Pi documentation](https://pi.dev/docs/latest) to learn ho
 ## Disclaimer
 
 > [!NOTE]
-> Codeberg/Forgejo compatibility has been confirmed on self-hosted **Forgejo** instances, where the action runs the Pi agent as expected (at least in non-interactive mode). Not every feature has been exercised yet on these platforms — PRs documenting additional coverage are welcome.
+> Codeberg/Forgejo compatibility has been confirmed on self-hosted **Forgejo** instances, where the action runs the Pi agent as expected (at least in non-interactive mode). When running on Forgejo/Codeberg/Gitea, set the `platform` input (e.g. `platform: forgejo`) so platform-specific behaviour — such as the job-level action-run URL in the "View action run" footer — uses the correct format. Not every feature has been exercised yet on these platforms — PRs documenting additional coverage are welcome.
 
 ## Development
 

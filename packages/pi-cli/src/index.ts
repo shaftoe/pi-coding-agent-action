@@ -65,8 +65,14 @@ export function buildProgram(): Command {
     .option('--cwd <path>', 'Working directory for the agent.', process.cwd())
     .option(
       '--server-url <url>',
-      'Git host server URL. Drives platform detection and Octokit base URL.',
+      'Git host server URL. Drives the Octokit REST API base URL for non-github.com hosts.',
       'https://github.com'
+    )
+    .option(
+      '--platform <id>',
+      'Git hosting platform: github (default), codeberg, forgejo, or gitea (alias for forgejo). ' +
+        'Determines platform-specific behaviour such as action-run URL format.',
+      'github'
     )
     .option('--verbose', 'Show debug-level logs (mutually exclusive with --quiet).')
     .option('--quiet', 'Suppress all logs except errors (mutually exclusive with --verbose).')

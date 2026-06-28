@@ -15,7 +15,10 @@ import { RealGitAdapter } from './adapters/git-adapter';
 import { createRealPiAgent } from './adapters/pi-agent-adapter';
 import { gatherActionsConfig } from './adapters/config';
 import { ActionsOutputSink } from './adapters/output-sink';
-import { createGitHubPlatformProvider, detectPlatform } from '@alexanderfortin/pi-platform-github';
+import {
+  createGitHubPlatformProvider,
+  parsePlatformType,
+} from '@alexanderfortin/pi-platform-github';
 import { resolveServerUrl } from './server-url';
 
 /**
@@ -112,12 +115,16 @@ export async function run() {
   // Create the platform provider with explicit deps (no singletons)
   const triggerValue = coreAdapter.getInput('trigger');
   const branchNameTemplate = coreAdapter.getInput('branch_name_template');
-  // Detect platform using both the resolved server URL and the
-  // runner-advertised GITHUB_API_URL. The API URL is the most reliable
-  // signal for distinguishing self-hosted Forgejo (/api/v1) from
-  // self-hosted GitHub Enterprise (/api/v3) when the server hostname
-  // doesn't contain "forgejo"/"gitea"/"codeberg" (e.g. forge.example.com).
-  const platformType = detectPlatform(serverUrl, process.env.GITHUB_API_URL);
+  // Platform is an explicit input (default: github). It is no longer
+  // auto-detected from the server URL — hostname-based detection could
+  // not reliably distinguish self-hosted Forgejo from self-hosted GitHub
+  // Enterprise, so users set `platform` directly (e.g. forgejo).
+  const platformType = parsePlatformType(coreAdapter.getInput('platform'), raw =>
+    coreAdapter.warning(
+      `Unknown platform "${raw}"; falling back to github. ` +
+        'Valid values are github, codeberg, forgejo (or gitea).'
+    )
+  );
   const platformProvider = createGitHubPlatformProvider({
     octokit,
     context: platformContext,

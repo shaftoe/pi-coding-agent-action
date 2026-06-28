@@ -130,9 +130,8 @@ export { resolveGitHubToken } from './auth';
 
 // Platform provider (used by platform/index.ts)
 export {
-  detectPlatform,
+  parsePlatformType,
   apiBaseUrlFromServerUrl,
-  isKnownServerUrl,
   createGitHubPlatformProvider,
   type GitHubPlatformDeps,
 } from './provider';

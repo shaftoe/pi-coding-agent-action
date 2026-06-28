@@ -6,8 +6,10 @@
  * GitHub-compatible REST APIs and the same CI/CD environment variables
  * (GITHUB_* env vars), so a single implementation covers all of them.
  *
- * Platform detection is performed by the pure `detectPlatform(serverUrl)`
- * function, which is invoked at the call site (e.g. in `pi-action/run.ts`).
+ * The platform is selected explicitly via the `platform` input (action) /
+ * `--platform` flag (CLI), resolved by the pure {@link parsePlatformType}
+ * function. There is no hostname-based auto-detection — it was unreliable
+ * for distinguishing self-hosted Forgejo from self-hosted GitHub Enterprise.
  * Library code does not read environment variables directly.
  */
 
@@ -42,95 +44,50 @@ import type {
 } from './tools/get-workflow-run-logs';
 
 /**
- * Substring patterns that identify a recognized git host. Matches the
- * branches of {@link detectPlatform}.
+ * Resolve a user-supplied platform string into a {@link PlatformType}.
  *
- * Exported so frontends can warn when a user points at a
- * host that doesn't match any known pattern — `detectPlatform` silently
- * falls back to `'github'` for unrecognized hosts, so callers that want
- * to surface the fallback must check this predicate themselves.
- */
-const KNOWN_HOST_PATTERNS = ['codeberg', 'forgejo', 'gitea', 'github.com', '.github.'] as const;
-
-/**
- * Return `true` iff `serverUrl` matches a host pattern recognized by
- * {@link detectPlatform}. Pure — no environment access.
- */
-export function isKnownServerUrl(serverUrl: string): boolean {
-  if (!serverUrl) {
-    return false;
-  }
-  return KNOWN_HOST_PATTERNS.some(pattern => serverUrl.includes(pattern));
-}
-
-/**
- * Detect the current platform based on a server URL.
+ * The platform is an **explicit input** (action `platform` input / CLI
+ * `--platform` flag) rather than being auto-detected from the server URL.
+ * Hostname-based detection was removed because it could not reliably tell
+ * self-hosted Forgejo (e.g. `forge.example.com`) from self-hosted GitHub
+ * Enterprise, and the API-URL heuristic was fragile.
  *
- * Pure function — no environment access. Callers (typically the action/
- * CLI entry point) are responsible for reading the URL from the
- * appropriate source (e.g. `github.context.serverUrl`) and passing it in.
+ * Resolution rules (case-insensitive, whitespace-trimmed):
+ * - Empty / unset → `'github'` (the default — the most common platform).
+ * - `'github'` → `'github'`
+ * - `'codeberg'` → `'codeberg'`
+ * - `'forgejo'` or `'gitea'` → `'forgejo'` (Gitea is API-compatible with
+ *   Forgejo and shares the same job-level action-run URL format).
+ * - Any other value → `'github'`. When `onUnknown` is provided it is
+ *   invoked with the raw input so the caller (action/CLI) can surface a
+ *   warning before the silent fallback.
  *
- * @param serverUrl - The platform server URL (e.g. 'https://github.com').
- * @param apiUrl - Optional REST API base URL advertised by the runner
- *   (e.g. `GITHUB_API_URL`). When provided, a URL ending in `/api/v1`
- *   reliably identifies Forgejo/Gitea/Codeberg even when the server hostname
- *   does not contain "forgejo"/"gitea"/"codeberg" (e.g. `forge.example.com`).
- *   GitHub Enterprise uses `/api/v3` and GitHub.com uses `api.github.com`,
- *   so this disambiguates self-hosted Forgejo from self-hosted GHE.
- * @returns The detected platform type.
+ * Pure function — no environment access.
+ *
+ * @param raw - The raw platform input string (may be undefined/empty).
+ * @param onUnknown - Optional callback invoked with the raw input when it
+ *   does not match a known platform, so frontends can warn the user.
+ * @returns The resolved platform type.
  */
-// fallow-ignore-next-line complexity
-export function detectPlatform(serverUrl: string, apiUrl?: string): PlatformType {
-  if (!serverUrl) {
-    throw new Error('detectPlatform requires a server URL, got an empty string.');
-  }
-
-  // Check for known Forgejo/Gitea indicators
-  if (serverUrl.includes('codeberg')) {
-    return 'codeberg';
-  }
-  if (serverUrl.includes('forgejo') || serverUrl.includes('gitea')) {
-    return 'forgejo';
-  }
-
-  // github.com, GitHub Enterprise (any hostname), and self-hosted GHE.
-  // Self-hosted GitHub Enterprise instances use custom hostnames like
-  // github.company.internal or gh.internal.corp. We catch these with a
-  // broad match before falling through to the unknown-default below.
-  if (
-    serverUrl.includes('github.com') ||
-    serverUrl.includes('.github.') ||
-    serverUrl === 'https://github.com' ||
-    serverUrl === 'http://github.com'
-  ) {
+export function parsePlatformType(
+  raw: string | undefined,
+  onUnknown?: (raw: string) => void
+): PlatformType {
+  const normalized = (raw ?? '').trim().toLowerCase();
+  if (normalized === '' || normalized === 'github') {
     return 'github';
   }
-
-  // API-URL based detection for Forgejo/Gitea/Codeberg instances whose
-  // hostname does not contain "forgejo"/"gitea"/"codeberg" (e.g.
-  // `forge.example.com`, `git.company.internal`). Forgejo's REST API lives
-  // at `{server}/api/v1`, whereas GitHub Enterprise uses `/api/v3` and
-  // GitHub.com uses `api.github.com`. This is the most reliable signal
-  // available in the runner environment.
-  if (apiUrl) {
-    const normalizedApi = apiUrl.replace(/\/+$/, '');
-    if (normalizedApi.endsWith('/api/v1')) {
-      return normalizedApi.includes('codeberg') || serverUrl.includes('codeberg')
-        ? 'codeberg'
-        : 'forgejo';
-    }
+  if (normalized === 'forgejo' || normalized === 'gitea') {
+    return 'forgejo';
   }
-
-  // Unknown server URL — default to 'github' for self-hosted GitHub
-  // Enterprise and other GitHub-compatible hosts.
-  //
-  // Rationale: the vast majority of unrecognised hosts are corporate GHE
-  // or GHE-like proxies. Falling back to 'github' gives them correct
-  // platform semantics (GitHub-compatible REST API). Codeberg and Forgejo
-  // are already caught by the explicit checks above.
-  //
-  // Frontends that want to surface the silent fallback can call
-  // {@link isKnownServerUrl} to detect this branch.
+  if (normalized === 'codeberg') {
+    return 'codeberg';
+  }
+  // Unrecognized input — surface it (if the caller wants to warn) and
+  // fall back to the GitHub default so a typo never hard-fails the run.
+  if (onUnknown) {
+    onUnknown(raw ?? '');
+  }
   return 'github';
 }
 
@@ -140,17 +97,16 @@ export function detectPlatform(serverUrl: string, apiUrl?: string): PlatformType
  * - `https://github.com` (exact): Octokit's default `https://api.github.com`
  * - `*.github.com` (subdomain, e.g. `github.example.com`): also default
  * - Self-hosted GHE with custom hostname (e.g. `github.company.internal`):
- *   {@link detectPlatform} (co-located in this module) defaults to `'github'`
- *   for unrecognized hosts, so these are treated as GHES-specific: the REST
- *   API is at `{serverUrl}/api/v3`.
+ *   these don't match github.com or a known Forgejo/Gitea indicator, so
+ *   they fall through to the GHES default: the REST API is at
+ *   `{serverUrl}/api/v3`.
  * - Codeberg, Forgejo, Gitea: `{serverUrl}/api/v1`
  *
  * Returning `undefined` lets the SDK use its built-in `api.github.com`.
  *
- * Natural pair of {@link detectPlatform}: both are pure functions of
- * `serverUrl` with overlapping host pattern-matching, answering
- * complementary questions (platform *type* vs *API URL*). Kept co-located
- * to avoid drift when a new host is added.
+ * Note: this derives the REST API base URL from the server URL only (used
+ * by the CLI, which has no runner environment). Platform *type* selection
+ * is now an explicit input resolved by {@link parsePlatformType}.
  */
 export function apiBaseUrlFromServerUrl(serverUrl: string): string | undefined {
   if (!serverUrl) {
@@ -212,9 +168,10 @@ export interface GitHubPlatformDeps {
    */
   trigger?: string;
   /**
-   * Explicit platform type. Required — library code does not read
-   * environment variables. Use `detectPlatform(context.serverUrl)` at
-   * the call site to derive it from the server URL.
+   * Explicit platform type, resolved from the `platform` input / `--platform`
+   * flag via {@link parsePlatformType}. Required — library code does not read
+   * environment variables. Defaults to `'github'` at the call site when the
+   * input is unset.
    */
   platformType: PlatformType;
   /**

@@ -15,7 +15,7 @@ Monorepo managed with Bun workspaces (`packages/*`):
   - `src/tools/` — GitHub-specific tools (CI status, workflow logs, PR create/update, reviews, thread, diff).
   - `src/git/` — GitHub git operations (commit creator, tree builder, file scanner).
   - `src/{reactions,comments,context,context-utils,constants}.ts` — Supporting modules.
-  - Platform detection via `detectPlatform()` (uses `GITHUB_SERVER_URL` env var).
+  - Platform selection via the `platform` input / `--platform` flag, resolved by `parsePlatformType()` (defaults to `github`).
 
 - **`packages/pi-action`** (`@alexanderfortin/pi-action`, private) — GitHub Action entry point. Depends on both packages above.
   - `src/run.ts` — Action entrypoint.
