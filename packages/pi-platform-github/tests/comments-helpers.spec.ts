@@ -175,6 +175,34 @@ describe('buildActionRunUrl', () => {
     // No platformType → treated as GitHub → short URL, no job/attempt suffix.
     expect(url).toBe('https://forge.l3x.in/me/mine/actions/runs/10');
   });
+
+  test('falls back to attempt 1 for a NaN runAttempt (malformed env var)', () => {
+    const url = buildActionRunUrl(
+      buildDeps({
+        owner: 'alex',
+        repo: 'ansible',
+        runId: 28,
+        runAttempt: NaN,
+        serverUrl: 'https://forge.l3x.in',
+        platformType: 'forgejo',
+      })
+    );
+    expect(url).toBe('https://forge.l3x.in/alex/ansible/actions/runs/28/jobs/0/attempt/1');
+  });
+
+  test('falls back to attempt 1 for a zero runAttempt', () => {
+    const url = buildActionRunUrl(
+      buildDeps({
+        owner: 'alex',
+        repo: 'ansible',
+        runId: 28,
+        runAttempt: 0,
+        serverUrl: 'https://forge.l3x.in',
+        platformType: 'forgejo',
+      })
+    );
+    expect(url).toBe('https://forge.l3x.in/alex/ansible/actions/runs/28/jobs/0/attempt/1');
+  });
 });
 
 // ---------------------------------------------------------------------------

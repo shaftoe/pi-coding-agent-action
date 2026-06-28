@@ -67,7 +67,11 @@ export function buildActionRunUrl(deps: GitHubModuleDeps): string | undefined {
   // Forgejo/Codeberg/Gitea require a job-level URL with an attempt segment.
   const isForgejoLike = deps.platformType === 'forgejo' || deps.platformType === 'codeberg';
   if (isForgejoLike) {
-    const attempt = deps.context.runAttempt ?? 1;
+    // Defensive guard: a malformed runAttempt (NaN/0) would otherwise
+    // slip past the default and produce an invalid /attempt/NaN URL.
+    const rawAttempt = deps.context.runAttempt;
+    const attempt =
+      rawAttempt !== undefined && Number.isFinite(rawAttempt) && rawAttempt > 0 ? rawAttempt : 1;
     return `${baseUrl}/jobs/0/attempt/${attempt}`;
   }
 

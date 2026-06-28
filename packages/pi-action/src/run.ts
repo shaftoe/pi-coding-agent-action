@@ -95,6 +95,14 @@ export async function run() {
     );
   }
 
+  // GITHUB_RUN_ATTEMPT is 1 for the first run and increments on re-runs.
+  // Forgejo/Codeberg action-run URLs include it as an /attempt/{n} segment.
+  // Guard against malformed values (NaN/0) that would bypass the ?? 1
+  // fallback in buildActionRunUrl.
+  const runAttemptNum = Number(process.env.GITHUB_RUN_ATTEMPT);
+  const runAttempt =
+    Number.isFinite(runAttemptNum) && runAttemptNum > 0 ? runAttemptNum : undefined;
+
   const platformContext = {
     repo: github.context.repo,
     issue: { number: issueNumber },
@@ -102,11 +110,7 @@ export async function run() {
     payload,
     serverUrl,
     runId: github.context.runId,
-    // GITHUB_RUN_ATTEMPT is 1 for the first run and increments on re-runs.
-    // Forgejo/Codeberg action-run URLs include it as an /attempt/{n} segment.
-    ...(process.env.GITHUB_RUN_ATTEMPT
-      ? { runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT) }
-      : {}),
+    ...(runAttempt !== undefined ? { runAttempt } : {}),
     workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
     ...(githubCtx.actor !== undefined ? { actor: githubCtx.actor } : {}),
     ...(githubCtx.sha !== undefined ? { sha: githubCtx.sha } : {}),
