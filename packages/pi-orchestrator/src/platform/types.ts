@@ -45,14 +45,18 @@ export interface PlatformContext {
    */
   runId?: number;
   /**
-   * The current workflow run attempt number (1 for the first attempt,
-   * incrementing on each re-run). Read from `GITHUB_RUN_ATTEMPT`.
+   * The current workflow run NUMBER (the per-repo sequence, read from
+   * `GITHUB_RUN_NUMBER`).
    *
-   * Optional so non-CI frontends can omit it; `buildActionRunUrl()`
-   * defaults to `1` when absent. Used by Forgejo/Codeberg whose
-   * action-run URLs include an `/attempt/{n}` segment.
+   * This is distinct from {@link runId}, which is the global DB id.
+   * Forgejo/Codeberg serve an action run at `…/actions/runs/{runNumber}`
+   * — using `runId` there produces a 404 — so `buildActionRunUrl()` reads
+   * this field for the Forgejo/Codeberg URL. GitHub itself uses `runId` in
+   * its URLs and ignores this field.
+   *
+   * Optional so non-CI frontends (e.g. the CLI) can omit it.
    */
-  runAttempt?: number;
+  runNumber?: number;
   /** The workspace directory path */
   workspace: string;
   /** The user/actor who triggered the workflow (e.g. for Co-authored-by trailers). */

@@ -97,7 +97,14 @@ describe('RealGitAdapter', () => {
     };
     // Use a Forgejo-style serverUrl so the asserted URL is self-documenting
     // (a "forgejo" footer should not live under github.com).
-    const forgejoContext = { ...mockContext, serverUrl: 'https://codeberg.org' };
+    // runId (44) and runNumber (36) differ: Forgejo serves the run at the
+    // per-repo run NUMBER, so the footer must use 36, not 44.
+    const forgejoContext = {
+      ...mockContext,
+      serverUrl: 'https://codeberg.org',
+      runId: 44,
+      runNumber: 36,
+    };
     const gitAdapter = new RealGitAdapter(
       createMockCoreAdapter(),
       forgejoOctokit as any,
@@ -111,10 +118,10 @@ describe('RealGitAdapter', () => {
       model: 'm',
     });
     expect(created).toHaveLength(1);
-    // Forgejo/Codeberg URLs include the /jobs/0/attempt/<n> suffix.
-    expect(created[0]!.body).toContain(
-      'https://codeberg.org/test-owner/test-repo/actions/runs/123456789/jobs/0/attempt/1'
-    );
+    // Forgejo/Codeberg URLs use the per-repo runNumber, no job/attempt suffix.
+    expect(created[0]!.body).toContain('https://codeberg.org/test-owner/test-repo/actions/runs/36');
+    expect(created[0]!.body).not.toContain('/jobs/');
+    expect(created[0]!.body).not.toContain('/runs/44');
   });
 
   test('createFinalComment omits platformType when not provided, yielding the GitHub URL format', async () => {

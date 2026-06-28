@@ -47,12 +47,16 @@ export type CreateCommentType =
  *
  * URL formats differ by platform:
  * - **GitHub** (incl. GitHub Enterprise): `{server}/{owner}/{repo}/actions/runs/{runId}`
- * - **Forgejo / Codeberg / Gitea**: `{server}/{owner}/{repo}/actions/runs/{runId}/jobs/{jobIndex}/attempt/{attempt}`
+ * - **Forgejo / Codeberg / Gitea**: `{server}/{owner}/{repo}/actions/runs/{runNumber}`
  *
- * Forgejo's web UI requires the job-level suffix (`/jobs/0/attempt/1`) — the
- * bare run URL does not resolve. The job index defaults to `0` (the first —
- * and typically only — job in a workflow that uses this action). The attempt
- * number comes from `context.runAttempt` (defaults to `1`).
+ * Forgejo serves an action run at the **per-repo run NUMBER**, not the global
+ * run id — the two are different values, and `GITHUB_RUN_ID` (what `runId`
+ * holds) 404s when substituted into Forgejo's URL. The canonical `html_url`
+ * Forgejo's own API returns is the bare run URL with no job/attempt suffix.
+ *
+ * GitHub itself uses `GITHUB_RUN_ID` in its URLs, so the runNumber override is
+ * scoped to the Forgejo/Codeberg branch only. When `runNumber` is missing on a
+ * Forgejo-like platform, we fall back to `runId` as a best-effort baseline.
  */
 // fallow-ignore-next-line complexity
 export function buildActionRunUrl(deps: GitHubModuleDeps): string | undefined {
@@ -64,15 +68,18 @@ export function buildActionRunUrl(deps: GitHubModuleDeps): string | undefined {
   }
   const baseUrl = `${serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
 
-  // Forgejo/Codeberg/Gitea require a job-level URL with an attempt segment.
+  // Forgejo/Codeberg serve the run at the per-repo run NUMBER, not the
+  // global run id. Using runId here would 404; the canonical URL has no
+  // job/attempt suffix.
   const isForgejoLike = deps.platformType === 'forgejo' || deps.platformType === 'codeberg';
   if (isForgejoLike) {
-    // Defensive guard: a malformed runAttempt (NaN/0) would otherwise
-    // slip past the default and produce an invalid /attempt/NaN URL.
-    const rawAttempt = deps.context.runAttempt;
-    const attempt =
-      rawAttempt !== undefined && Number.isFinite(rawAttempt) && rawAttempt > 0 ? rawAttempt : 1;
-    return `${baseUrl}/jobs/0/attempt/${attempt}`;
+    const runNumber = deps.context.runNumber;
+    if (!runNumber) {
+      // Graceful fallback: runNumber missing — emit the runId baseline.
+      // Only correct for GitHub, but better than suppressing the footer.
+      return baseUrl;
+    }
+    return `${serverUrl}/${owner}/${repo}/actions/runs/${runNumber}`;
   }
 
   return baseUrl;

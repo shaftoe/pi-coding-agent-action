@@ -24,7 +24,7 @@ function buildDeps(
     owner?: string;
     repo?: string;
     runId?: number;
-    runAttempt?: number;
+    runNumber?: number;
     serverUrl?: string;
     platformType?: import('@alexanderfortin/pi-orchestrator').PlatformType;
   } = {}
@@ -33,7 +33,7 @@ function buildDeps(
     owner = 'test-owner',
     repo = 'test-repo',
     runId = 12345,
-    runAttempt,
+    runNumber,
     serverUrl = 'https://github.com',
     platformType,
   } = overrides;
@@ -46,7 +46,7 @@ function buildDeps(
       payload: {},
       serverUrl,
       runId,
-      ...(runAttempt !== undefined ? { runAttempt } : {}),
+      ...(runNumber !== undefined ? { runNumber } : {}),
       workspace: '/tmp',
     },
     logger: {
@@ -128,80 +128,59 @@ describe('buildActionRunUrl', () => {
     expect(url).toBe('https://github.com/alex/ansible/actions/runs/36');
   });
 
-  test('appends /jobs/0/attempt/1 for Forgejo (default attempt)', () => {
+  test('uses runNumber (not runId) for Forgejo, with no job/attempt suffix', () => {
+    // Regression guard: Forgejo serves a run at the per-repo run NUMBER.
+    // runId (44) and runNumber (36) differ; using runId would 404.
     const url = buildActionRunUrl(
       buildDeps({
         owner: 'alex',
         repo: 'ansible',
-        runId: 28,
+        runId: 44,
+        runNumber: 36,
         serverUrl: 'https://forge.l3x.in',
         platformType: 'forgejo',
       })
     );
-    expect(url).toBe('https://forge.l3x.in/alex/ansible/actions/runs/28/jobs/0/attempt/1');
+    expect(url).toBe('https://forge.l3x.in/alex/ansible/actions/runs/36');
+    // No job/attempt suffix — Forgejo's canonical html_url is the bare run URL.
+    expect(url).not.toContain('/jobs/');
   });
 
-  test('appends /jobs/0/attempt/{n} for Forgejo when runAttempt is set', () => {
-    const url = buildActionRunUrl(
-      buildDeps({
-        owner: 'alex',
-        repo: 'ansible',
-        runId: 28,
-        runAttempt: 3,
-        serverUrl: 'https://forge.l3x.in',
-        platformType: 'forgejo',
-      })
-    );
-    expect(url).toBe('https://forge.l3x.in/alex/ansible/actions/runs/28/jobs/0/attempt/3');
-  });
-
-  test('appends the job/attempt suffix for Codeberg too', () => {
+  test('uses runNumber for Codeberg too, with no suffix', () => {
     const url = buildActionRunUrl(
       buildDeps({
         owner: 'me',
         repo: 'mine',
-        runId: 5,
+        runId: 50,
+        runNumber: 5,
         serverUrl: 'https://codeberg.org',
         platformType: 'codeberg',
       })
     );
-    expect(url).toBe('https://codeberg.org/me/mine/actions/runs/5/jobs/0/attempt/1');
+    expect(url).toBe('https://codeberg.org/me/mine/actions/runs/5');
+  });
+
+  test('falls back to runId when runNumber is missing on Forgejo', () => {
+    // Graceful fallback: without runNumber we emit the runId baseline.
+    // Only correct for GitHub, but better than suppressing the footer.
+    const url = buildActionRunUrl(
+      buildDeps({
+        owner: 'alex',
+        repo: 'ansible',
+        runId: 44,
+        serverUrl: 'https://forge.l3x.in',
+        platformType: 'forgejo',
+      })
+    );
+    expect(url).toBe('https://forge.l3x.in/alex/ansible/actions/runs/44');
   });
 
   test('uses the short format when platformType is unset (backward compat)', () => {
     const url = buildActionRunUrl(
       buildDeps({ owner: 'me', repo: 'mine', runId: 10, serverUrl: 'https://forge.l3x.in' })
     );
-    // No platformType → treated as GitHub → short URL, no job/attempt suffix.
+    // No platformType → treated as GitHub → short URL, no runNumber override.
     expect(url).toBe('https://forge.l3x.in/me/mine/actions/runs/10');
-  });
-
-  test('falls back to attempt 1 for a NaN runAttempt (malformed env var)', () => {
-    const url = buildActionRunUrl(
-      buildDeps({
-        owner: 'alex',
-        repo: 'ansible',
-        runId: 28,
-        runAttempt: NaN,
-        serverUrl: 'https://forge.l3x.in',
-        platformType: 'forgejo',
-      })
-    );
-    expect(url).toBe('https://forge.l3x.in/alex/ansible/actions/runs/28/jobs/0/attempt/1');
-  });
-
-  test('falls back to attempt 1 for a zero runAttempt', () => {
-    const url = buildActionRunUrl(
-      buildDeps({
-        owner: 'alex',
-        repo: 'ansible',
-        runId: 28,
-        runAttempt: 0,
-        serverUrl: 'https://forge.l3x.in',
-        platformType: 'forgejo',
-      })
-    );
-    expect(url).toBe('https://forge.l3x.in/alex/ansible/actions/runs/28/jobs/0/attempt/1');
   });
 });
 
@@ -367,19 +346,18 @@ describe('buildMetadataFooter', () => {
     expect(footer).toContain('https://github.com/test-owner/test-repo/actions/runs/12345');
   });
 
-  test('builds the Forgejo job-level URL in the footer', () => {
+  test('builds the Forgejo run URL (runNumber, no suffix) in the footer', () => {
     const footer = buildMetadataFooter(
       buildDeps({
         owner: 'alex',
         repo: 'ansible',
-        runId: 28,
+        runId: 44,
+        runNumber: 36,
         serverUrl: 'https://forge.l3x.in',
         platformType: 'forgejo',
       }),
       undefined
     );
-    expect(footer).toBe(
-      '[View action run](https://forge.l3x.in/alex/ansible/actions/runs/28/jobs/0/attempt/1)'
-    );
+    expect(footer).toBe('[View action run](https://forge.l3x.in/alex/ansible/actions/runs/36)');
   });
 });
