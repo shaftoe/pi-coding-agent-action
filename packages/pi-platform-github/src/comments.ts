@@ -42,8 +42,17 @@ export type CreateCommentType =
 // ---------------------------------------------------------------------------
 
 /**
- * Build the GitHub Actions run URL from a deps context, or return
+ * Build the GitHub/Forgejo Actions run URL from a deps context, or return
  * `undefined` when any required field is missing.
+ *
+ * URL formats differ by platform:
+ * - **GitHub** (incl. GitHub Enterprise): `{server}/{owner}/{repo}/actions/runs/{runId}`
+ * - **Forgejo / Codeberg / Gitea**: `{server}/{owner}/{repo}/actions/runs/{runId}/jobs/{jobIndex}/attempt/{attempt}`
+ *
+ * Forgejo's web UI requires the job-level suffix (`/jobs/0/attempt/1`) — the
+ * bare run URL does not resolve. The job index defaults to `0` (the first —
+ * and typically only — job in a workflow that uses this action). The attempt
+ * number comes from `context.runAttempt` (defaults to `1`).
  */
 // fallow-ignore-next-line complexity
 export function buildActionRunUrl(deps: GitHubModuleDeps): string | undefined {
@@ -53,7 +62,16 @@ export function buildActionRunUrl(deps: GitHubModuleDeps): string | undefined {
   if (!owner || !repo || !runId) {
     return undefined;
   }
-  return `${serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
+  const baseUrl = `${serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
+
+  // Forgejo/Codeberg/Gitea require a job-level URL with an attempt segment.
+  const isForgejoLike = deps.platformType === 'forgejo' || deps.platformType === 'codeberg';
+  if (isForgejoLike) {
+    const attempt = deps.context.runAttempt ?? 1;
+    return `${baseUrl}/jobs/0/attempt/${attempt}`;
+  }
+
+  return baseUrl;
 }
 
 /**

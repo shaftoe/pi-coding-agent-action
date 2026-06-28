@@ -6,7 +6,7 @@
  */
 
 import type { Logger } from '@alexanderfortin/pi-orchestrator';
-import type { PlatformContext } from '@alexanderfortin/pi-orchestrator';
+import type { PlatformContext, PlatformType } from '@alexanderfortin/pi-orchestrator';
 
 // Re-export shared platform types from the orchestrator so consumers within
 // the GitHub module can import them from a single location.
@@ -74,6 +74,15 @@ export interface GitHubModuleDeps {
    * When provided, overrides the default template.
    */
   readonly branchNameTemplate?: string;
+  /**
+   * The detected platform type ('github' | 'codeberg' | 'forgejo').
+   *
+   * Used by helpers that need platform-specific behaviour (e.g.
+   * `buildActionRunUrl()` builds different URLs for Forgejo/Codeberg vs
+   * GitHub). Optional so unit tests can omit it and get the GitHub
+   * default; production code should always set it via the provider.
+   */
+  readonly platformType?: PlatformType;
 }
 
 /**

@@ -24,14 +24,18 @@ function buildDeps(
     owner?: string;
     repo?: string;
     runId?: number;
+    runAttempt?: number;
     serverUrl?: string;
+    platformType?: import('@alexanderfortin/pi-orchestrator').PlatformType;
   } = {}
 ): GitHubModuleDeps {
   const {
     owner = 'test-owner',
     repo = 'test-repo',
     runId = 12345,
+    runAttempt,
     serverUrl = 'https://github.com',
+    platformType,
   } = overrides;
   return {
     octokit: {} as any,
@@ -42,6 +46,7 @@ function buildDeps(
       payload: {},
       serverUrl,
       runId,
+      ...(runAttempt !== undefined ? { runAttempt } : {}),
       workspace: '/tmp',
     },
     logger: {
@@ -51,6 +56,7 @@ function buildDeps(
       notice: () => {},
       error: () => {},
     },
+    ...(platformType !== undefined ? { platformType } : {}),
   };
 }
 
@@ -113,6 +119,61 @@ describe('buildActionRunUrl', () => {
 
   test('returns undefined when runId is missing (0)', () => {
     expect(buildActionRunUrl(buildDeps({ runId: 0 }))).toBeUndefined();
+  });
+
+  test('uses the short GitHub format when platformType is github (default)', () => {
+    const url = buildActionRunUrl(
+      buildDeps({ owner: 'alex', repo: 'ansible', runId: 36, platformType: 'github' })
+    );
+    expect(url).toBe('https://github.com/alex/ansible/actions/runs/36');
+  });
+
+  test('appends /jobs/0/attempt/1 for Forgejo (default attempt)', () => {
+    const url = buildActionRunUrl(
+      buildDeps({
+        owner: 'alex',
+        repo: 'ansible',
+        runId: 28,
+        serverUrl: 'https://forge.l3x.in',
+        platformType: 'forgejo',
+      })
+    );
+    expect(url).toBe('https://forge.l3x.in/alex/ansible/actions/runs/28/jobs/0/attempt/1');
+  });
+
+  test('appends /jobs/0/attempt/{n} for Forgejo when runAttempt is set', () => {
+    const url = buildActionRunUrl(
+      buildDeps({
+        owner: 'alex',
+        repo: 'ansible',
+        runId: 28,
+        runAttempt: 3,
+        serverUrl: 'https://forge.l3x.in',
+        platformType: 'forgejo',
+      })
+    );
+    expect(url).toBe('https://forge.l3x.in/alex/ansible/actions/runs/28/jobs/0/attempt/3');
+  });
+
+  test('appends the job/attempt suffix for Codeberg too', () => {
+    const url = buildActionRunUrl(
+      buildDeps({
+        owner: 'me',
+        repo: 'mine',
+        runId: 5,
+        serverUrl: 'https://codeberg.org',
+        platformType: 'codeberg',
+      })
+    );
+    expect(url).toBe('https://codeberg.org/me/mine/actions/runs/5/jobs/0/attempt/1');
+  });
+
+  test('uses the short format when platformType is unset (backward compat)', () => {
+    const url = buildActionRunUrl(
+      buildDeps({ owner: 'me', repo: 'mine', runId: 10, serverUrl: 'https://forge.l3x.in' })
+    );
+    // No platformType → treated as GitHub → short URL, no job/attempt suffix.
+    expect(url).toBe('https://forge.l3x.in/me/mine/actions/runs/10');
   });
 });
 
@@ -276,5 +337,21 @@ describe('buildMetadataFooter', () => {
   test('uses default serverUrl when context.serverUrl is empty', () => {
     const footer = buildMetadataFooter(buildDeps({ serverUrl: '' }), undefined);
     expect(footer).toContain('https://github.com/test-owner/test-repo/actions/runs/12345');
+  });
+
+  test('builds the Forgejo job-level URL in the footer', () => {
+    const footer = buildMetadataFooter(
+      buildDeps({
+        owner: 'alex',
+        repo: 'ansible',
+        runId: 28,
+        serverUrl: 'https://forge.l3x.in',
+        platformType: 'forgejo',
+      }),
+      undefined
+    );
+    expect(footer).toBe(
+      '[View action run](https://forge.l3x.in/alex/ansible/actions/runs/28/jobs/0/attempt/1)'
+    );
   });
 });

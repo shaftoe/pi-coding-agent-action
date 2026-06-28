@@ -71,10 +71,16 @@ export function isKnownServerUrl(serverUrl: string): boolean {
  * appropriate source (e.g. `github.context.serverUrl`) and passing it in.
  *
  * @param serverUrl - The platform server URL (e.g. 'https://github.com').
+ * @param apiUrl - Optional REST API base URL advertised by the runner
+ *   (e.g. `GITHUB_API_URL`). When provided, a URL ending in `/api/v1`
+ *   reliably identifies Forgejo/Gitea/Codeberg even when the server hostname
+ *   does not contain "forgejo"/"gitea"/"codeberg" (e.g. `forge.example.com`).
+ *   GitHub Enterprise uses `/api/v3` and GitHub.com uses `api.github.com`,
+ *   so this disambiguates self-hosted Forgejo from self-hosted GHE.
  * @returns The detected platform type.
  */
 // fallow-ignore-next-line complexity
-export function detectPlatform(serverUrl: string): PlatformType {
+export function detectPlatform(serverUrl: string, apiUrl?: string): PlatformType {
   if (!serverUrl) {
     throw new Error('detectPlatform requires a server URL, got an empty string.');
   }
@@ -98,6 +104,21 @@ export function detectPlatform(serverUrl: string): PlatformType {
     serverUrl === 'http://github.com'
   ) {
     return 'github';
+  }
+
+  // API-URL based detection for Forgejo/Gitea/Codeberg instances whose
+  // hostname does not contain "forgejo"/"gitea"/"codeberg" (e.g.
+  // `forge.example.com`, `git.company.internal`). Forgejo's REST API lives
+  // at `{server}/api/v1`, whereas GitHub Enterprise uses `/api/v3` and
+  // GitHub.com uses `api.github.com`. This is the most reliable signal
+  // available in the runner environment.
+  if (apiUrl) {
+    const normalizedApi = apiUrl.replace(/\/+$/, '');
+    if (normalizedApi.endsWith('/api/v1')) {
+      return normalizedApi.includes('codeberg') || serverUrl.includes('codeberg')
+        ? 'codeberg'
+        : 'forgejo';
+    }
   }
 
   // Unknown server URL — default to 'github' for self-hosted GitHub
@@ -229,6 +250,7 @@ export function createGitHubPlatformProvider(deps: GitHubPlatformDeps): Platform
     octokit,
     context: resolvedContext,
     logger,
+    platformType: type,
     ...(trigger !== undefined ? { trigger } : {}),
     ...(deps.branchNameTemplate !== undefined
       ? { branchNameTemplate: deps.branchNameTemplate }

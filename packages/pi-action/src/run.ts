@@ -99,6 +99,11 @@ export async function run() {
     payload,
     serverUrl,
     runId: github.context.runId,
+    // GITHUB_RUN_ATTEMPT is 1 for the first run and increments on re-runs.
+    // Forgejo/Codeberg action-run URLs include it as an /attempt/{n} segment.
+    ...(process.env.GITHUB_RUN_ATTEMPT
+      ? { runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT) }
+      : {}),
     workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
     ...(githubCtx.actor !== undefined ? { actor: githubCtx.actor } : {}),
     ...(githubCtx.sha !== undefined ? { sha: githubCtx.sha } : {}),
@@ -107,11 +112,17 @@ export async function run() {
   // Create the platform provider with explicit deps (no singletons)
   const triggerValue = coreAdapter.getInput('trigger');
   const branchNameTemplate = coreAdapter.getInput('branch_name_template');
+  // Detect platform using both the resolved server URL and the
+  // runner-advertised GITHUB_API_URL. The API URL is the most reliable
+  // signal for distinguishing self-hosted Forgejo (/api/v1) from
+  // self-hosted GitHub Enterprise (/api/v3) when the server hostname
+  // doesn't contain "forgejo"/"gitea"/"codeberg" (e.g. forge.example.com).
+  const platformType = detectPlatform(serverUrl, process.env.GITHUB_API_URL);
   const platformProvider = createGitHubPlatformProvider({
     octokit,
     context: platformContext,
     logger: coreAdapter,
-    platformType: detectPlatform(serverUrl),
+    platformType,
     ...(triggerValue ? { trigger: triggerValue } : {}),
     ...(branchNameTemplate ? { branchNameTemplate } : {}),
   });

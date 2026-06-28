@@ -44,6 +44,15 @@ export interface PlatformContext {
    * which suppresses the "View action run" footer on posted comments.
    */
   runId?: number;
+  /**
+   * The current workflow run attempt number (1 for the first attempt,
+   * incrementing on each re-run). Read from `GITHUB_RUN_ATTEMPT`.
+   *
+   * Optional so non-CI frontends can omit it; `buildActionRunUrl()`
+   * defaults to `1` when absent. Used by Forgejo/Codeberg whose
+   * action-run URLs include an `/attempt/{n}` segment.
+   */
+  runAttempt?: number;
   /** The workspace directory path */
   workspace: string;
   /** The user/actor who triggered the workflow (e.g. for Co-authored-by trailers). */

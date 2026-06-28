@@ -91,6 +91,46 @@ describe('detectPlatform', () => {
     expect(detectPlatform('https://unknown.host')).toBe('github');
     expect(detectPlatform('https://another-unknown.host')).toBe('github');
   });
+
+  test('detects forgejo from /api/v1 API URL even when hostname is ambiguous', () => {
+    // forge.example.com has no "forgejo"/"gitea"/"codeberg" substring, so
+    // without the API-URL hint it would fall back to 'github'. The
+    // GITHUB_API_URL ending in /api/v1 reliably identifies Forgejo/Gitea.
+    expect(detectPlatform('https://forge.l3x.in', 'https://forge.l3x.in/api/v1')).toBe('forgejo');
+    expect(
+      detectPlatform('https://git.company.internal', 'https://git.company.internal/api/v1')
+    ).toBe('forgejo');
+  });
+
+  test('detects codeberg from /api/v1 API URL containing "codeberg"', () => {
+    expect(detectPlatform('https://codeberg.org', 'https://codeberg.org/api/v1')).toBe('codeberg');
+  });
+
+  test('keeps github when API URL ends in /api/v3 (self-hosted GHE)', () => {
+    expect(
+      detectPlatform('https://github.company.internal', 'https://github.company.internal/api/v3')
+    ).toBe('github');
+  });
+
+  test('keeps github when API URL is api.github.com', () => {
+    expect(detectPlatform('https://github.com', 'https://api.github.com')).toBe('github');
+  });
+
+  test('trailing slash on /api/v1 is handled', () => {
+    expect(detectPlatform('https://forge.l3x.in', 'https://forge.l3x.in/api/v1/')).toBe('forgejo');
+  });
+
+  test('explicit server-URL patterns take precedence over API URL', () => {
+    // A server URL that explicitly contains "forgejo" wins regardless of apiUrl.
+    expect(detectPlatform('https://forgejo.example.com', 'https://api.github.com')).toBe('forgejo');
+    // A server URL that explicitly contains "github.com" wins over /api/v1.
+    expect(detectPlatform('https://github.com', 'https://some.host/api/v1')).toBe('github');
+  });
+
+  test('ignores empty / undefined API URL', () => {
+    expect(detectPlatform('https://unknown.host', undefined)).toBe('github');
+    expect(detectPlatform('https://unknown.host', '')).toBe('github');
+  });
 });
 
 describe('isKnownServerUrl', () => {
