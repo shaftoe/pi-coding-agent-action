@@ -103,8 +103,7 @@ const CONTEXT_EXTRACTORS: Record<
   // fallow-ignore-next-line complexity
   pull_request: payload => {
     const pr = payload.pull_request as
-      | { title?: string; number?: number; body?: string }
-      | undefined;
+      { title?: string; number?: number; body?: string } | undefined;
     if (!pr?.title || pr.number === undefined) {
       return undefined;
     }

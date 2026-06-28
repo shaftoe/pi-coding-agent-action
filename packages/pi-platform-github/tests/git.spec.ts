@@ -257,8 +257,7 @@ describe('scanForChanges', () => {
     expect(
       (
         filesByPath.get(path.join('src', 'components', 'Button.tsx')) as
-          | { content: string }
-          | undefined
+          { content: string } | undefined
       )?.content
     ).toBe('export const Button = () => null;');
 

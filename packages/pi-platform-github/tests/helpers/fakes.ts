@@ -230,11 +230,7 @@ export function createFakeBotComment(
  */
 export function createFakeGitHubContext(
   eventName:
-    | 'issue_comment'
-    | 'issues'
-    | 'pull_request'
-    | 'push'
-    | 'workflow_run' = 'issue_comment',
+    'issue_comment' | 'issues' | 'pull_request' | 'push' | 'workflow_run' = 'issue_comment',
   payload?: FakeGitHubPayload,
   overrides?: Partial<FakeGitHubContext>
 ): FakeGitHubContext {
