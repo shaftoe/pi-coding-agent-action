@@ -17,6 +17,7 @@
 import { Octokit } from '@octokit/core';
 import { restEndpointMethods } from '@octokit/plugin-rest-endpoint-methods';
 import type { OctokitInstance } from '@alexanderfortin/pi-platform-github/types';
+import type { PlatformType } from '@alexanderfortin/pi-orchestrator';
 import { apiBaseUrlFromServerUrl } from '@alexanderfortin/pi-platform-github';
 
 /**
@@ -33,9 +34,17 @@ export const OctokitWithRest = Octokit.plugin(restEndpointMethods);
  * @param token - GitHub API token (PAT or `GITHUB_TOKEN`).
  * @param serverUrl - Web URL of the git host (e.g. `https://github.com`).
  *                    Used to derive the API base URL for non-github.com hosts.
+ * @param platformType - Resolved platform type (from `--platform` flag). When
+ *                       forgejo/codeberg, forces `/api/v1` regardless of
+ *                       hostname so self-hosted Forgejo (e.g. `forge.l3x.in`)
+ *                       gets the correct API URL.
  */
-export function createCliOctokit(token: string, serverUrl: string): OctokitInstance {
-  const baseUrl = apiBaseUrlFromServerUrl(serverUrl);
+export function createCliOctokit(
+  token: string,
+  serverUrl: string,
+  platformType?: PlatformType
+): OctokitInstance {
+  const baseUrl = apiBaseUrlFromServerUrl(serverUrl, platformType);
   return new OctokitWithRest({
     auth: token,
     ...(baseUrl !== undefined ? { baseUrl } : {}),

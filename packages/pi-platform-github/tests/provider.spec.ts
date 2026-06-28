@@ -246,4 +246,41 @@ describe('apiBaseUrlFromServerUrl', () => {
       /apiBaseUrlFromServerUrl requires a server URL/
     );
   });
+
+  // --- platformType override --------------------------------------------
+
+  test('platformType=forgejo forces /api/v1 regardless of hostname', () => {
+    // forge.l3x.in has no forgejo/codeberg/gitea indicator in its hostname,
+    // so hostname matching alone would return /api/v3 (wrong).
+    expect(apiBaseUrlFromServerUrl('https://forge.l3x.in', 'forgejo')).toBe(
+      'https://forge.l3x.in/api/v1'
+    );
+    expect(apiBaseUrlFromServerUrl('https://git.company.internal', 'forgejo')).toBe(
+      'https://git.company.internal/api/v1'
+    );
+  });
+
+  test('platformType=codeberg forces /api/v1 regardless of hostname', () => {
+    expect(apiBaseUrlFromServerUrl('https://example.com', 'codeberg')).toBe(
+      'https://example.com/api/v1'
+    );
+  });
+
+  test('platformType=github uses hostname matching (backward compat)', () => {
+    // Explicit github still uses the hostname-based logic below the override.
+    expect(apiBaseUrlFromServerUrl('https://github.com', 'github')).toBeUndefined();
+    expect(apiBaseUrlFromServerUrl('https://codeberg.org', 'github')).toBe(
+      'https://codeberg.org/api/v1'
+    );
+    expect(apiBaseUrlFromServerUrl('https://github.company.internal', 'github')).toBe(
+      'https://github.company.internal/api/v3'
+    );
+  });
+
+  test('platformType undefined uses hostname matching (backward compat)', () => {
+    expect(apiBaseUrlFromServerUrl('https://forge.l3x.in')).toBe('https://forge.l3x.in/api/v3');
+    expect(apiBaseUrlFromServerUrl('https://forge.l3x.in', undefined)).toBe(
+      'https://forge.l3x.in/api/v3'
+    );
+  });
 });

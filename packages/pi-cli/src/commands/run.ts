@@ -98,18 +98,22 @@ export async function runCommand(args: RunCommandArgs): Promise<void> {
 
   // --- Octokit + platform provider (setup error if --repo bad) --------
   const repo = parseRepoFlag(args.repo);
-  const octokit = createCliOctokit(githubToken, args.serverUrl);
-  const platformContext = buildPlatformContext({
-    repo,
-    workspace: args.cwd,
-    serverUrl: args.serverUrl,
-  });
+  // Resolve the platform type first so it can inform both the API base URL
+  // (createCliOctokit) and the provider (footer URL format). This lets
+  // --platform override hostname matching for self-hosted Forgejo hosts
+  // whose URL has no forgejo/codeberg/gitea indicator (e.g. forge.l3x.in).
   const platformType = parsePlatformType(args.platform, raw =>
     logger.warning(
       `Unknown platform '${raw}'; falling back to github. ` +
         `Valid values are github, codeberg, forgejo, or gitea.`
     )
   );
+  const octokit = createCliOctokit(githubToken, args.serverUrl, platformType);
+  const platformContext = buildPlatformContext({
+    repo,
+    workspace: args.cwd,
+    serverUrl: args.serverUrl,
+  });
   const provider = createGitHubPlatformProvider({
     octokit,
     context: platformContext,

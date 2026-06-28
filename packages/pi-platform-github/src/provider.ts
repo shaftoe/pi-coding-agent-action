@@ -104,15 +104,33 @@ export function parsePlatformType(
  *
  * Returning `undefined` lets the SDK use its built-in `api.github.com`.
  *
- * Note: this derives the REST API base URL from the server URL only (used
- * by the CLI, which has no runner environment). Platform *type* selection
- * is now an explicit input resolved by {@link parsePlatformType}.
+ * When `platformType` is explicitly `'forgejo'` or `'codeberg'`, the
+ * `/api/v1` suffix is used **regardless of hostname**. This lets callers
+ * that resolve the platform via an explicit input (CLI `--platform` flag)
+ * override the hostname-based heuristic, which cannot distinguish a
+ * self-hosted Forgejo instance (e.g. `forge.l3x.in`) from self-hosted GHE.
+ * When `platformType` is omitted or `'github'`, the hostname matching below
+ * is used as before.
+ *
+ * @param serverUrl - The platform web server URL.
+ * @param platformType - Optional resolved platform type. When forgejo/
+ *   codeberg, forces `/api/v1` suffix regardless of hostname.
  */
-export function apiBaseUrlFromServerUrl(serverUrl: string): string | undefined {
+export function apiBaseUrlFromServerUrl(
+  serverUrl: string,
+  platformType?: PlatformType
+): string | undefined {
   if (!serverUrl) {
     throw new Error('apiBaseUrlFromServerUrl requires a server URL, got an empty string.');
   }
   const url = serverUrl.replace(/\/$/, '');
+
+  // Explicit platform input overrides hostname matching. This is the
+  // reliable path for self-hosted Forgejo whose hostname has no
+  // forgejo/codeberg/gitea indicator (e.g. forge.l3x.in).
+  if (platformType === 'forgejo' || platformType === 'codeberg') {
+    return `${url}/api/v1`;
+  }
 
   // Exact github.com → Octokit's default.
   if (url === 'https://github.com') {
