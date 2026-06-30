@@ -101,7 +101,7 @@ inputs:
     default: ''
 
   share_gist_token:
-    description: 'Token used to create the shared gist. For opengist, an Opengist access token (og_…) with the gist:write scope. Falls back to github_token when unset, so the github provider keeps working with a single token.'
+    description: 'Token used to create the shared gist. For opengist, an Opengist access token (og_…) with the gist:write scope — this is required (there is no github_token fallback, since a GitHub token cannot authenticate against a self-hosted Opengist instance). For the github provider, falls back to github_token when unset, so it keeps working with a single token.'
     required: false
     default: ''
 

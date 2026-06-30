@@ -42,13 +42,19 @@ export function resolveGistProvider(config: ShareProviderConfig): GistProvider {
 
 /**
  * Resolve the token used to create the shared gist, picking the credential
- * that matches the selected provider and only crossing over when the
- * preferred token is absent.
+ * that matches the selected provider.
  *
- * - **opengist** prefers `shareGistToken` (an `og_…` token), falling back to
- *   `githubToken`.
+ * - **opengist** uses `shareGistToken` (an `og_…` access token) only. There is
+ *   **no** crossover to `githubToken`: a GitHub token can never authenticate
+ *   against a self-hosted Opengist instance (it expects its own `og_` tokens),
+ *   so crossing over would silently send `Bearer ghp_…` and produce a
+ *   confusing `401 Bad credentials` that masks the real misconfiguration (a
+ *   missing/unpropagated opengist token). When `shareGistToken` is absent,
+ *   `undefined` is returned so the orchestrator logs the clear "no share token
+ *   configured" notice instead.
  * - **github** (default) prefers `githubToken`, falling back to
- *   `shareGistToken`.
+ *   `shareGistToken` (which may legitimately hold a GitHub PAT for gist
+ *   creation when `github_token` isn't set).
  *
  * This provider-aware selection prevents mismatched combos — e.g. an `og_`
  * Opengist token being sent to `api.github.com`, or a `ghp_` GitHub token
@@ -56,9 +62,13 @@ export function resolveGistProvider(config: ShareProviderConfig): GistProvider {
  * failures, while keeping the single-`github_token` GitHub workflow intact.
  */
 export function resolveShareToken(config: ShareProviderConfig): string | undefined {
-  const isOpengist = config.shareGistProvider === 'opengist';
-  const primary = isOpengist ? config.shareGistToken : config.githubToken;
-  const fallback = isOpengist ? config.githubToken : config.shareGistToken;
+  if (config.shareGistProvider === 'opengist') {
+    /* eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- intentional ||: an empty-string token must collapse to undefined (it would fail auth) */
+    return config.shareGistToken || undefined;
+  }
+  // GitHub provider: prefer githubToken, fall back to shareGistToken.
+  const primary = config.githubToken;
+  const fallback = config.shareGistToken;
   /* eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- intentional ||: an empty-string token must fall through to the fallback (a "" token would fail auth) */
   return primary || fallback;
 }

@@ -14,6 +14,12 @@ on:
         required: true
       gh_token:
         required: true
+      opengist_token:
+        # Opengist access token (og_…) used by the opengist share provider.
+        # Must be declared here so callers can pass it through — reusable
+        # workflows only see secrets listed under `workflow_call.secrets`, so
+        # an undeclared `secrets.OPENGIST_TOKEN` silently resolves to empty.
+        required: false
 
 permissions:
   contents: write
@@ -52,7 +58,7 @@ jobs:
           share_session: true
           share_gist_provider: opengist
           share_gist_api_url: https://gist.l3x.in/api/gists
-          share_gist_token: ${{ secrets.OPENGIST_TOKEN }}
+          share_gist_token: ${{ secrets.opengist_token }}
           github_token: ${{ secrets.gh_token }}
           provider: ${{ vars.PROVIDER }}
           model: ${{ vars.MODEL }}

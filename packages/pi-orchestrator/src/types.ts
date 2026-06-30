@@ -260,8 +260,9 @@ export interface PiConfig extends DiffConfig {
   shareGistApiUrl?: string;
   /**
    * Token used to create the shared gist. For Opengist, an access token
-   * (`og_…`) with the `gist:write` scope. Falls back to {@link githubToken}
-   * when unset, so the GitHub path keeps working with a single token.
+   * (`og_…`) with the `gist:write` scope — required for the opengist provider
+   * (there is no {@link githubToken} fallback). For the GitHub provider,
+   * falls back to {@link githubToken} when unset, so a single token suffices.
    */
   shareGistToken?: string;
   /** Override the default system prompt. */

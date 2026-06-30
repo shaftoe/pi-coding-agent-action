@@ -662,7 +662,7 @@ The pi.dev viewer **cannot** read non-GitHub gists (it hardcodes `api.github.com
 Notes:
 - The Opengist REST API create endpoint is `POST <instance>/api/gists`. Create an access token in **Settings → Access Tokens** (it starts with `og_`) and grant it the `gist:write` scope. See the [Opengist API docs](https://opengist.io/docs).
 - Gists are created as `unlisted` (not listed publicly, but readable via the unguessable URL) — the closest analogue of a GitHub "secret" gist.
-- `share_gist_token` is optional: when unset, the action falls back to `github_token`, so you can reuse a single token if your Opengist setup accepts it.
+- `share_gist_token` is required for the opengist provider (an `og_…` access token with `gist:write` scope). Unlike the `github` provider, there is **no fallback to `github_token`** — a GitHub token can never authenticate against a self-hosted Opengist instance, so without `share_gist_token` the share is skipped with a clear notice.
 - The `share_url` uses the gist's **raw route** (`<gist page>/raw/HEAD/session.html`), which Opengist serves as `text/html` so the self-contained session renders directly in a browser. The `HEAD` revision resolves to the latest commit (see the [Opengist docs](https://opengist.io/docs)). Because this raw-route behaviour is instance-specific, **verify it after upgrading Opengist** by creating a shared session and opening the link in a fresh browser — if your version doesn't accept `HEAD` on the raw route, share links will 404.
 - Set `PI_SHARE_VIEWER_URL` to a custom (non-pi.dev) viewer to instead build a `<viewer>#<gistPageUrl>` link that a self-hosted viewer can render (see [Custom viewer](#custom-viewer)).
 
@@ -734,7 +734,7 @@ For complex, multi-step tasks that generate a lot of context (e.g. large code re
 | `share_session` | Share the session like pi's `/share` command: upload the exported HTML to a gist and surface a viewer link. Uses GitHub Gists by default (`share_gist_provider: github`) or a self-hosted Opengist instance. Auto-enables `export_session_html` | No | `false` |
 | `share_gist_provider` | Storage backend for `share_session`: `github` (GitHub Gists + pi.dev viewer) or `opengist` (self-hosted instance; requires `share_gist_api_url`) | No | `github` |
 | `share_gist_api_url` | API URL for the share gist provider. Required for `opengist` (e.g. `https://gist.l3x.in/api/gists`); optional override for `github` | No | - |
-| `share_gist_token` | Token used to create the shared gist. Opengist access token (`og_…`, `gist:write` scope) for `opengist`; falls back to `github_token` | No | - |
+| `share_gist_token` | Token used to create the shared gist. Opengist access token (`og_…`, `gist:write` scope) for `opengist` (required — no `github_token` fallback); optional GitHub PAT for the `github` provider (falls back to `github_token`) | No | - |
 | `server_url` | Override the forge server URL (e.g. `https://git.example.com`) when the runner-advertised `GITHUB_SERVER_URL` points at an internally-reachable host (e.g. `http://localhost:3000` on a Forgejo runner behind Docker). Affects user-facing links (commits, PRs, action runs) only — the API client keeps using the runner's `GITHUB_API_URL`, and platform selection is controlled by the `platform` input. | No | - |
 | `thinking_level` | Model thinking level | No | off |
 | `token` | Provider API token. Required for most providers, but can be omitted when using providers that support alternative auth mechanisms (e.g., `google-vertex` with Application Default Credentials) | No | - |

@@ -39,10 +39,14 @@ describe('resolveShareToken', () => {
     ).toBe('og_123');
   });
 
-  test('falls back to githubToken for opengist when shareGistToken is unset', () => {
-    expect(resolveShareToken({ shareGistProvider: 'opengist', githubToken: 'ghp_456' })).toBe(
-      'ghp_456'
-    );
+  test('returns undefined for opengist when shareGistToken is unset (no github crossover)', () => {
+    // A GitHub token can never authenticate against a self-hosted Opengist
+    // instance, so falling back to githubToken would only produce a confusing
+    // `401 Bad credentials`. Returning undefined yields the clear "no share
+    // token configured" notice instead.
+    expect(
+      resolveShareToken({ shareGistProvider: 'opengist', githubToken: 'ghp_456' })
+    ).toBeUndefined();
   });
 
   test('prefers githubToken over shareGistToken for the github provider', () => {
@@ -69,8 +73,14 @@ describe('resolveShareToken', () => {
     expect(resolveShareToken({})).toBeUndefined();
   });
 
-  test('ignores an empty shareGistToken and falls back', () => {
-    expect(resolveShareToken({ shareGistToken: '', githubToken: 'ghp_456' })).toBe('ghp_456');
+  test('ignores an empty shareGistToken for opengist and returns undefined', () => {
+    expect(
+      resolveShareToken({
+        shareGistProvider: 'opengist',
+        shareGistToken: '',
+        githubToken: 'ghp_456',
+      })
+    ).toBeUndefined();
   });
 
   test('ignores an empty githubToken and crosses over to shareGistToken for github', () => {
