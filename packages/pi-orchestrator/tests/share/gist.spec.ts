@@ -14,6 +14,7 @@ import {
   GIST_CREATE_TIMEOUT_MS,
   PI_DEV_VIEWER_URL,
   resolveShareViewerUrl,
+  githubGistProvider,
 } from '../../src/share/gist';
 
 describe('createSessionGist', () => {
@@ -190,5 +191,46 @@ describe('resolveShareViewerUrl', () => {
   test('honours a custom viewer URL from the env var at call time', () => {
     process.env.PI_SHARE_VIEWER_URL = 'https://gistviewer.l3x.in/';
     expect(resolveShareViewerUrl()).toBe('https://gistviewer.l3x.in/');
+  });
+});
+
+describe('githubGistProvider', () => {
+  const originalViewer = process.env.PI_SHARE_VIEWER_URL;
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = mock(async () => ({
+      ok: true,
+      status: 201,
+      json: async () => ({
+        id: 'abc123def456',
+        html_url: 'https://gist.github.com/bot/abc123def456',
+        files: { 'session.html': { raw_url: 'r' } },
+      }),
+      text: async () => '',
+    })) as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    if (originalViewer === undefined) {
+      delete process.env.PI_SHARE_VIEWER_URL;
+    } else {
+      process.env.PI_SHARE_VIEWER_URL = originalViewer;
+    }
+  });
+
+  test('resolves the viewer URL at call time (parity with opengist)', async () => {
+    // The provider routes through resolveShareViewerUrl() rather than the
+    // module-load-cached constant, so a runtime env-var change is picked up.
+    process.env.PI_SHARE_VIEWER_URL = 'https://gistviewer.l3x.in/';
+    const gist = await githubGistProvider.create({ token: 't', content: 'x' });
+    expect(gist.shareUrl).toBe('https://gistviewer.l3x.in/#abc123def456');
+  });
+
+  test('falls back to the pi.dev default when the env var is unset', async () => {
+    delete process.env.PI_SHARE_VIEWER_URL;
+    const gist = await githubGistProvider.create({ token: 't', content: 'x' });
+    expect(gist.shareUrl).toBe(`${PI_DEV_VIEWER_URL}#abc123def456`);
   });
 });

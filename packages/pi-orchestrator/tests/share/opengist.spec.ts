@@ -136,6 +136,16 @@ describe('createOpengistGist', () => {
       expect(gist.shareUrl).toBe('https://gist.l3x.in/bot/my-session/raw/HEAD/session.html');
     });
 
+    test('recognises pi.dev by hostname even without a trailing slash', async () => {
+      // The pi.dev viewer is detected by hostname, not exact-string match, so
+      // a natural value like `https://pi.dev/session` (no trailing slash) still
+      // falls back to the raw link instead of producing a broken viewer URL.
+      process.env.PI_SHARE_VIEWER_URL = 'https://pi.dev/session';
+      const gist = await createOpengistGist({ token: 'og_token', content: 'x', apiUrl });
+      expect(gist.shareUrl).toBe(gist.rawUrl);
+      expect(gist.shareUrl).not.toContain('#');
+    });
+
     test('uses the self-rendering raw link when the env var is unset', async () => {
       delete process.env.PI_SHARE_VIEWER_URL;
       const gist = await createOpengistGist({ token: 'og_token', content: 'x', apiUrl });

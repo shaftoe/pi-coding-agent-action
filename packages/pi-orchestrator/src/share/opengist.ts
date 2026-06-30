@@ -142,7 +142,18 @@ export async function createOpengistGist(input: CreateGistInput): Promise<Create
   // self-hosted viewer (e.g. gistviewer.l3x.in) that fetches the gist by URL
   // can render Opengist sessions just like pi.dev renders GitHub ones.
   const viewerUrl = resolveShareViewerUrl();
-  const shareUrl = viewerUrl === PI_DEV_VIEWER_URL ? rawUrl : `${viewerUrl}#${base}`;
+  // Compare hostname (not exact string) so variants like `https://pi.dev/session`
+  // (no trailing slash) or `https://PI.DEV/session/` are still recognised as
+  // the pi.dev viewer, which can't read an Opengist gist and would otherwise
+  // produce a silently broken link. An unparseable viewer URL is treated as a
+  // custom viewer (falls through to the viewer link).
+  let isPiDevViewer = false;
+  try {
+    isPiDevViewer = new URL(viewerUrl).hostname === new URL(PI_DEV_VIEWER_URL).hostname;
+  } catch {
+    // Invalid viewer URL → treat as a custom viewer.
+  }
+  const shareUrl = isPiDevViewer ? rawUrl : `${viewerUrl}#${base}`;
 
   return {
     id: json.id,
