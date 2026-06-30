@@ -23,6 +23,7 @@ Inspired by OpenCode's [GitHub action](https://opencode.ai/docs/github/).
 - **Minimal batteries included**: Tries to follow Pi minimalistic phylosophy while providing a comfortable UX out of the box, e.g. pretty print of logs, auto replies to comments, and tools to interact efficiently with git and GitHub-compatible APIs.
 - **Composable**: Provides useful inputs and outputs for chaining together multiple Pi sessions and/or other GitHub actions/workflows.
 - **Integrates with GitHub workflows**: Natively integrates with usual GitHub issue/PR workflows, invoke Pi both interactively (e.g. prefixing `/pi ` in an issue/PR comment) and programmatically (e.g. as a step in a workflow).
+- **Session sharing**: Replicate pi's interactive `/share` command in CI — export and share agent sessions as a shareable viewer link, using GitHub Gists (default) or a self-hosted [Opengist](https://github.com/thomiceli/opengist) instance.
 - **Up-to-date**: Pi SDK and dependencies updated regularly.
 
 ## Use cases
@@ -597,7 +598,12 @@ Both are disabled by default. When enabled, their file paths are exposed via the
 
 ### Session Sharing (`/share` equivalent)
 
-`share_session` replicates pi's interactive `/share` command: it uploads the exported session HTML to a **secret GitHub Gist** and surfaces a `pi.dev/session` viewer link (`https://pi.dev/session/#<gistId>`). No `gh` CLI is required — the action calls the GitHub Gist REST API directly, so it also works from Forgejo/Gitea runners. Set the `PI_SHARE_VIEWER_URL` environment variable to point at a self-hosted viewer such as [`gistviewer.l3x.in`](https://gistviewer.l3x.in/) (same env var the interactive `/share` command reads) — see [Custom viewer](#custom-viewer).
+`share_session` replicates pi's interactive `/share` command: it uploads the exported session HTML to a gist and surfaces a shareable viewer link. Two storage backends are supported:
+
+- **GitHub Gists** *(default)* — uploads to a **secret gist** and links to the `pi.dev/session` viewer (`https://pi.dev/session/#<gistId>`). Requires a token with `gist` scope (see below).
+- **[Opengist](https://github.com/thomiceli/opengist)** — uploads to a self-hosted instance (e.g. `gist.l3x.in`). Because the pi.dev viewer can't read non-GitHub gists, the link renders the session directly from the gist's raw HTML. See [Opengist backend](#opengist-backend).
+
+No `gh` CLI is required — the action calls the gist REST API directly, so it also works from Forgejo/Gitea runners. Both backends honour the `PI_SHARE_VIEWER_URL` environment variable to point at a self-hosted viewer such as [`gistviewer.l3x.in`](https://gistviewer.l3x.in/) — see [Custom viewer](#custom-viewer).
 
 The link is surfaced in two places: the job log footer and the **job summary** (`$GITHUB_STEP_SUMMARY`). It is also exposed as the `share_url`, `gist_url`, and `gist_id` outputs for downstream steps.
 
@@ -605,8 +611,6 @@ Enabling `share_session` **auto-enables `export_session_html`** (the gist carrie
 
 > [!IMPORTANT]
 > **A GitHub token with `gist` scope is required** for the default (`github`) provider. The default `secrets.GITHUB_TOKEN` **cannot** create gists. Set the `github_token` input to a classic PAT (with the `gist` scope), a fine-grained PAT (Account → **Gists: read/write**), or a GitHub App installation token — the same token is used for all GitHub API operations.
->
-> Using a self-hosted [Opengist](https://github.com/thomiceli/opengist) instance instead? See [Opengist backend](#opengist-backend) below.
 
 > [!WARNING]
 > Secret gists are **URL-obscured, not access-controlled** — anyone with the link can read the rendered session, which may include code, file contents, or secrets the agent touched. Only enable `share_session` for runs where that exposure is acceptable, and prefer a dedicated bot account so shared gists are easy to audit and delete.
@@ -635,9 +639,9 @@ Enabling `share_session` **auto-enables `export_session_html`** (the gist carrie
 
 #### Opengist backend
 
-By default `share_session` uploads to **GitHub Gists** and links to the `pi.dev/session` viewer. You can instead upload to a self-hosted [Opengist](https://github.com/thomiceli/opengist) instance (e.g. `gist.l3x.in`) by setting `share_gist_provider: opengist`.
+To upload shared sessions to a self-hosted [Opengist](https://github.com/thomiceli/opengist) instance (e.g. `gist.l3x.in`) instead of GitHub Gists, set `share_gist_provider: opengist` (plus `share_gist_api_url` and `share_gist_token`).
 
-The pi.dev viewer **cannot** read non-GitHub gists (it hardcodes `api.github.com`), so for the Opengist backend the `share_url` points directly at the gist's **raw HTML** route. The exported session HTML is self-contained (session data is embedded inline), and Opengist serves `.html` files with `Content-Type: text/html` and an inline disposition, so the raw link renders the full session in any browser with no viewer dependency.
+Because the pi.dev viewer **cannot** read non-GitHub gists (it hardcodes `api.github.com`), the `share_url` points directly at the gist's **raw HTML** route. The exported session HTML is self-contained (session data is embedded inline), and Opengist serves `.html` files with `Content-Type: text/html` and an inline disposition, so the raw link renders the full session in any browser with no viewer dependency.
 
 > [!WARNING]
 > **Same-origin XSS surface (Opengist only).** With the default (`github`) provider the rendered session is served from `pi.dev` — an isolated origin separate from where gists are stored. The Opengist `share_url`, by contrast, renders the session's HTML on the **same origin** as your Opengist instance (e.g. `gist.l3x.in`), which the viewer is typically logged into. The exported HTML carries the viewer JavaScript plus any rendered tool output and file contents; if any of that is not escaped by the session exporter, it executes with the Opengist origin's privileges (session cookies, authenticated `/api/...` calls) — a stored-XSS vector that does **not** exist for the GitHub backend. Mitigations: prefer a dedicated or isolated Opengist instance (or a separate viewer account) for shared sessions, and only enable `share_session` when you trust the session contents.
