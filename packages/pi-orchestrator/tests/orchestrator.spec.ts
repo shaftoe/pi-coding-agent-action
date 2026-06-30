@@ -1794,9 +1794,14 @@ describe('ActionOrchestrator', () => {
 
       expect(globalThis.fetch).not.toHaveBeenCalled();
       expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('share_url', expect.anything());
+      // The notice must lead with the opengist-specific hint (share_gist_token)
+      // and must NOT mention github_token — a GitHub token can never
+      // authenticate against a self-hosted Opengist instance.
       expect(mockCore.notice).toHaveBeenCalledWith(
         expect.stringContaining('no share token configured')
       );
+      expect(mockCore.notice).toHaveBeenCalledWith(expect.stringContaining('via share_gist_token'));
+      expect(mockCore.notice).not.toHaveBeenCalledWith(expect.stringContaining('via github_token'));
     });
   });
 });

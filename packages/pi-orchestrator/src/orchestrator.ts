@@ -329,11 +329,17 @@ export class ActionOrchestrator {
     const tag = 'session-share';
     const token = resolveShareToken(this.config);
     if (!token) {
-      this.logger.notice(
-        `[${tag}] skipped: no share token configured ` +
-          '(provide a PAT/App token with gist scope via github_token, ' +
-          'or an Opengist access token via share_gist_token)'
-      );
+      // Branch the hint on the provider so the notice only mentions the
+      // credential that can actually authenticate against it. The opengist
+      // provider has no github_token fallback (a GitHub token can never
+      // authenticate against a self-hosted Opengist instance), so leading
+      // with "via github_token" there would be the very crossover this code
+      // path is meant to avoid.
+      const hint =
+        this.config.shareGistProvider === 'opengist'
+          ? 'provide an Opengist access token (og_…) via share_gist_token'
+          : 'provide a PAT/App token with gist scope via github_token (or share_gist_token)';
+      this.logger.notice(`[${tag}] skipped: no share token configured (${hint})`);
       return;
     }
 
