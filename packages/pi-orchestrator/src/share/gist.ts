@@ -26,16 +26,37 @@
  *   self-host the viewer.
  */
 
+/** The upstream pi.dev session viewer URL (the built-in default). */
+export const PI_DEV_VIEWER_URL = 'https://pi.dev/session/';
+
 /**
- * Default session viewer base URL (trailing slash).
+ * Default session viewer base URL (trailing slash), resolved once at module
+ * load.
  *
  * Respects the `PI_SHARE_VIEWER_URL` environment variable so users who
  * self-host the viewer can point the CI action at the same URL they use
- * for pi's interactive `/share` command. Falls back to pi.dev.
+ * for pi's interactive `/share` command. Falls back to pi.dev. Prefer
+ * {@link resolveShareViewerUrl} when you need the value read at call time
+ * (e.g. so tests can flip the env var per-case without reloading the module).
  */
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing -- intentional ||: empty-string env var must fall through to the default (a "" viewer URL would produce broken share links) */
-export const DEFAULT_SHARE_VIEWER_URL =
-  process.env.PI_SHARE_VIEWER_URL || 'https://pi.dev/session/';
+export const DEFAULT_SHARE_VIEWER_URL = process.env.PI_SHARE_VIEWER_URL || PI_DEV_VIEWER_URL;
+/* eslint-enable @typescript-eslint/prefer-nullish-coalescing */
+
+/**
+ * Resolve the session-viewer base URL **at call time**, honouring the
+ * `PI_SHARE_VIEWER_URL` environment variable (the same var pi's interactive
+ * `/share` command reads). Falls back to {@link PI_DEV_VIEWER_URL}.
+ *
+ * Reading the env var on each call (rather than caching it in a module-level
+ * constant) lets the Opengist provider and its tests toggle the viewer per
+ * invocation. The GitHub provider still uses the {@link DEFAULT_SHARE_VIEWER_URL}
+ * constant as its `createSessionGist` default param.
+ */
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing -- intentional ||: empty-string env var must fall through to the default (a "" viewer URL would produce broken share links) */
+export function resolveShareViewerUrl(): string {
+  return process.env.PI_SHARE_VIEWER_URL || PI_DEV_VIEWER_URL;
+}
 /* eslint-enable @typescript-eslint/prefer-nullish-coalescing */
 
 /** Default GitHub Gist REST API endpoint. */
@@ -173,15 +194,6 @@ export interface CreateGistInput {
    * Defaults to {@link DEFAULT_GITHUB_GIST_API}.
    */
   apiUrl?: string;
-  /**
-   * Override the **viewer** base URL used to build the `shareUrl` for the
-   * github provider (e.g. `https://gistviewer.l3x.in/`). When set, the
-   * share link is `${viewerUrl}#${gistId}` instead of the pi.dev default.
-   * Ignored by the opengist provider (its `shareUrl` is a self-rendering
-   * raw-HTML link). Falls back to {@link DEFAULT_SHARE_VIEWER_URL}
-   * (which honours the `PI_SHARE_VIEWER_URL` env var) when unset.
-   */
-  viewerUrl?: string;
 }
 
 /** Result of a successful gist creation. */
@@ -219,11 +231,6 @@ export async function createSessionGist(
     public: isPublic = false,
     apiUrl = DEFAULT_GITHUB_GIST_API,
   } = input;
-  // Prefer the per-call `viewerUrl` field (set from the `share_viewer_url`
-  // input) over the function-param fallback, which itself defaults to
-  // {@link DEFAULT_SHARE_VIEWER_URL}. This keeps precedence explicit:
-  //   input.viewerUrl  →  function param (env var)  →  pi.dev
-  const effectiveViewerUrl = input.viewerUrl ?? viewerUrl;
 
   // Abort the request if it stalls so a hung connection can't block the
   // entire action. The surrounding runSessionShare catch logs the timeout
@@ -264,7 +271,7 @@ export async function createSessionGist(
     id: json.id,
     gistUrl: json.html_url,
     rawUrl: file?.raw_url ?? '',
-    shareUrl: `${effectiveViewerUrl}#${json.id}`,
+    shareUrl: `${viewerUrl}#${json.id}`,
   };
 }
 

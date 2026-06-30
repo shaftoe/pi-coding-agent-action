@@ -192,7 +192,6 @@ export function gatherActionsConfig(): PiConfig {
   if (shareGistToken) {
     core.setSecret(shareGistToken);
   }
-  const shareViewerUrl = core.getInput('share_viewer_url').trim() || undefined;
 
   // --- Optional positive-integer inputs ----------------------------------
   const diffMaxLines = parsePositiveIntInput(core.getInput('diff_max_lines'));
@@ -225,7 +224,6 @@ export function gatherActionsConfig(): PiConfig {
     ...(shareGistProvider ? { shareGistProvider } : {}),
     ...(shareGistApiUrl ? { shareGistApiUrl } : {}),
     ...(shareGistToken ? { shareGistToken } : {}),
-    ...(shareViewerUrl ? { shareViewerUrl } : {}),
     ...(githubToken ? { githubToken } : {}),
     ...(diffMaxLines ? { diffMaxLines } : {}),
     ...(diffMaxBytes ? { diffMaxBytes } : {}),

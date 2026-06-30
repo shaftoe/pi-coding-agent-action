@@ -16,12 +16,16 @@
  * - **Auth:** an Opengist access token (`og_…`) with the `gist:write` scope,
  *   sent as `Authorization: Bearer og_…` — not a GitHub PAT.
  * - **Viewer:** the pi.dev viewer hardcodes `api.github.com`, so it can't read
- *   an Opengist gist. Instead we point `shareUrl` at the gist's **raw** web
- *   route: the exported HTML is self-contained (session data inline), and
- *   Opengist serves `.html` files with `Content-Type: text/html` and an
- *   `inline` disposition (no restrictive CSP for HTML — only SVG/PDF get one),
- *   so the raw URL renders the full session in any browser with no viewer
- *   dependency. See https://opengist.io/docs for the API reference.
+ *   an Opengist gist. By default we therefore point `shareUrl` at the gist's
+ *   **raw** web route: the exported HTML is self-contained (session data
+ *   inline), and Opengist serves `.html` files with `Content-Type: text/html`
+ *   and an `inline` disposition (no restrictive CSP for HTML — only SVG/PDF
+ *   get one), so the raw URL renders the full session in any browser with no
+ *   viewer dependency. When `PI_SHARE_VIEWER_URL` points at a **non-pi.dev**
+ *   viewer (e.g. `gistviewer.l3x.in`), the `shareUrl` is instead built as
+ *   `<viewer>#<gistPageUrl>` — a self-hosted viewer that fetches the gist by
+ *   URL can render Opengist sessions the same way pi.dev renders GitHub ones.
+ *   See https://opengist.io/docs for the API reference.
  */
 
 import {
@@ -29,9 +33,11 @@ import {
   type CreatedGist,
   type GistProvider,
   GIST_CREATE_TIMEOUT_MS,
+  PI_DEV_VIEWER_URL,
   fetchWithTimeout,
   assertGistResponseOk,
   assertGistHasIdAndUrl,
+  resolveShareViewerUrl,
 } from './gist';
 
 /**
@@ -128,13 +134,21 @@ export async function createOpengistGist(input: CreateGistInput): Promise<Create
   const base = json.html_url.replace(/\/$/, '');
   const rawUrl = `${base}/raw/HEAD/${encodeURIComponent(filename)}`;
 
+  // By default the raw URL is the share link: it renders the self-contained
+  // session standalone in any browser (the gist page only shows the source).
+  // When a custom (non-pi.dev) viewer is configured via PI_SHARE_VIEWER_URL,
+  // build a viewer link instead: `<viewer>#<gistPageUrl>`. The pi.dev viewer
+  // hardcodes api.github.com so it can't read an Opengist gist, but a
+  // self-hosted viewer (e.g. gistviewer.l3x.in) that fetches the gist by URL
+  // can render Opengist sessions just like pi.dev renders GitHub ones.
+  const viewerUrl = resolveShareViewerUrl();
+  const shareUrl = viewerUrl === PI_DEV_VIEWER_URL ? rawUrl : `${viewerUrl}#${base}`;
+
   return {
     id: json.id,
     gistUrl: json.html_url,
     rawUrl,
-    // The raw URL is the primary share link because it renders the session
-    // standalone; the gist page (gistUrl) only shows the HTML source.
-    shareUrl: rawUrl,
+    shareUrl,
   };
 }
 

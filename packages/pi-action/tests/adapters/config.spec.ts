@@ -294,19 +294,5 @@ describe('gatherActionsConfig', () => {
       expect(config.shareGistToken).toBe('og_secret');
       expect(coreMock.setSecret).toHaveBeenCalledWith('og_secret');
     });
-
-    test('share_viewer_url defaults to undefined', () => {
-      expect(gatherActionsConfig().shareViewerUrl).toBeUndefined();
-    });
-
-    test('parses share_viewer_url when provided', () => {
-      mockCore({ share_viewer_url: 'https://gistviewer.l3x.in/' });
-      expect(gatherActionsConfig().shareViewerUrl).toBe('https://gistviewer.l3x.in/');
-    });
-
-    test('omits share_viewer_url when empty/whitespace', () => {
-      mockCore({ share_viewer_url: '   ' });
-      expect(gatherActionsConfig().shareViewerUrl).toBeUndefined();
-    });
   });
 });

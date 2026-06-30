@@ -12,6 +12,8 @@ import {
   DEFAULT_SHARE_VIEWER_URL,
   DEFAULT_GITHUB_GIST_API,
   GIST_CREATE_TIMEOUT_MS,
+  PI_DEV_VIEWER_URL,
+  resolveShareViewerUrl,
 } from '../../src/share/gist';
 
 describe('createSessionGist', () => {
@@ -64,23 +66,6 @@ describe('createSessionGist', () => {
   test('honours a custom viewer URL', async () => {
     const gist = await createSessionGist({ token: 't', content: 'x' }, 'https://example.com/v/');
     expect(gist.shareUrl).toBe('https://example.com/v/#abc123def456');
-  });
-
-  test('honours a custom viewer URL passed via input.viewerUrl', async () => {
-    const gist = await createSessionGist({
-      token: 't',
-      content: 'x',
-      viewerUrl: 'https://gistviewer.l3x.in/',
-    });
-    expect(gist.shareUrl).toBe('https://gistviewer.l3x.in/#abc123def456');
-  });
-
-  test('input.viewerUrl takes precedence over the function-param viewer URL', async () => {
-    const gist = await createSessionGist(
-      { token: 't', content: 'x', viewerUrl: 'https://gistviewer.l3x.in/' },
-      'https://param-viewer.example.com/'
-    );
-    expect(gist.shareUrl).toBe('https://gistviewer.l3x.in/#abc123def456');
   });
 
   test('honours a custom filename, description, public flag, and API URL', async () => {
@@ -176,5 +161,34 @@ describe('createSessionGist', () => {
     await expect(createSessionGist({ token: 't', content: 'x' })).rejects.toThrow(
       /unexpected response.*no id\/html_url/
     );
+  });
+});
+
+describe('resolveShareViewerUrl', () => {
+  const original = process.env.PI_SHARE_VIEWER_URL;
+
+  afterEach(() => {
+    if (original === undefined) {
+      delete process.env.PI_SHARE_VIEWER_URL;
+    } else {
+      process.env.PI_SHARE_VIEWER_URL = original;
+    }
+  });
+
+  test('returns the pi.dev default when the env var is unset', () => {
+    delete process.env.PI_SHARE_VIEWER_URL;
+    expect(resolveShareViewerUrl()).toBe(PI_DEV_VIEWER_URL);
+  });
+
+  test('returns the pi.dev default when the env var is empty', () => {
+    // An empty-string env var must fall through (a "" viewer URL would
+    // produce broken share links) — same intent as DEFAULT_SHARE_VIEWER_URL.
+    process.env.PI_SHARE_VIEWER_URL = '';
+    expect(resolveShareViewerUrl()).toBe(PI_DEV_VIEWER_URL);
+  });
+
+  test('honours a custom viewer URL from the env var at call time', () => {
+    process.env.PI_SHARE_VIEWER_URL = 'https://gistviewer.l3x.in/';
+    expect(resolveShareViewerUrl()).toBe('https://gistviewer.l3x.in/');
   });
 });

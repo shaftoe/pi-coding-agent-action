@@ -105,11 +105,6 @@ inputs:
     required: false
     default: ''
 
-  share_viewer_url:
-    description: 'Override the viewer base URL used for the github share provider''s share_url, so it points at a custom viewer (e.g. https://gistviewer.l3x.in/) instead of the pi.dev default (https://pi.dev/session/). The resulting link is <share_viewer_url>#<gistId>. Has no effect on the opengist provider (whose share_url is a self-rendering raw-HTML URL). When unset, falls back to the PI_SHARE_VIEWER_URL env var, then pi.dev.'
-    required: false
-    default: ''
-
   auto_compaction:
     description: 'Enable automatic context compaction when the conversation grows too large for the model context window. When enabled, Pi will summarize older messages to free up context space, allowing longer sessions without hitting context limits.'
     required: false

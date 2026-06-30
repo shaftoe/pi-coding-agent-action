@@ -264,16 +264,6 @@ export interface PiConfig extends DiffConfig {
    * when unset, so the GitHub path keeps working with a single token.
    */
   shareGistToken?: string;
-  /**
-   * Override the **viewer** base URL for the github share provider, so the
-   * `share_url` points at a custom viewer (e.g.
-   * `https://gistviewer.l3x.in/`) instead of the pi.dev default
-   * (`https://pi.dev/session/`). The resulting link is
-   * `${shareViewerUrl}#${gistId}`. Has no effect on the opengist provider
-   * (its share link is a self-rendering raw-HTML URL). When unset, falls
-   * back to the `PI_SHARE_VIEWER_URL` env var, then pi.dev.
-   */
-  shareViewerUrl?: string;
   /** Override the default system prompt. */
   systemPrompt?: string;
   /** Working directory. Defaults to `process.cwd()`. */

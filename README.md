@@ -597,7 +597,7 @@ Both are disabled by default. When enabled, their file paths are exposed via the
 
 ### Session Sharing (`/share` equivalent)
 
-`share_session` replicates pi's interactive `/share` command: it uploads the exported session HTML to a **secret GitHub Gist** and surfaces a `pi.dev/session` viewer link (`https://pi.dev/session/#<gistId>`). No `gh` CLI is required — the action calls the GitHub Gist REST API directly, so it also works from Forgejo/Gitea runners. Point at a custom viewer (e.g. `https://gistviewer.l3x.in/`) via the `share_viewer_url` input, or the `PI_SHARE_VIEWER_URL` environment variable (same env var the interactive `/share` command reads).
+`share_session` replicates pi's interactive `/share` command: it uploads the exported session HTML to a **secret GitHub Gist** and surfaces a `pi.dev/session` viewer link (`https://pi.dev/session/#<gistId>`). No `gh` CLI is required — the action calls the GitHub Gist REST API directly, so it also works from Forgejo/Gitea runners. Set the `PI_SHARE_VIEWER_URL` environment variable to point at a self-hosted viewer such as [`gistviewer.l3x.in`](https://gistviewer.l3x.in/) (same env var the interactive `/share` command reads) — see [Custom viewer](#custom-viewer).
 
 The link is surfaced in two places: the job log footer and the **job summary** (`$GITHUB_STEP_SUMMARY`). It is also exposed as the `share_url`, `gist_url`, and `gist_id` outputs for downstream steps.
 
@@ -664,20 +664,25 @@ Notes:
 - Gists are created as `unlisted` (not listed publicly, but readable via the unguessable URL) — the closest analogue of a GitHub "secret" gist.
 - `share_gist_token` is optional: when unset, the action falls back to `github_token`, so you can reuse a single token if your Opengist setup accepts it.
 - The `share_url` uses the gist's **raw route** (`<gist page>/raw/HEAD/session.html`), which Opengist serves as `text/html` so the self-contained session renders directly in a browser. The `HEAD` revision resolves to the latest commit (see the [Opengist docs](https://opengist.io/docs)). Because this raw-route behaviour is instance-specific, **verify it after upgrading Opengist** by creating a shared session and opening the link in a fresh browser — if your version doesn't accept `HEAD` on the raw route, share links will 404.
+- Set `PI_SHARE_VIEWER_URL` to a custom (non-pi.dev) viewer to instead build a `<viewer>#<gistPageUrl>` link that a self-hosted viewer can render (see [Custom viewer](#custom-viewer)).
 
 #### Custom viewer
 
-The default `github` provider builds the `share_url` from the **pi.dev viewer** (`https://pi.dev/session/#<gistId>`). You can point it at a custom viewer such as [`gistviewer.l3x.in`](https://gistviewer.l3x.in/) by setting the `share_viewer_url` input — the resulting link is `<share_viewer_url>#<gistId>` (the viewer reads the gist ID from the URL fragment, just like pi.dev).
+The default (`github`) provider builds the `share_url` from the **pi.dev viewer** (`https://pi.dev/session/#<gistId>`). Point it at a custom viewer such as [`gistviewer.l3x.in`](https://gistviewer.l3x.in/) by setting the **`PI_SHARE_VIEWER_URL` environment variable** — no extra input is needed, and it's the same env var pi's interactive `/share` command reads. The resulting link is `<viewer>#<gistId>` (the viewer reads the gist ID from the URL fragment, just like pi.dev).
 
-This applies to the `github` provider only: the `opengist` provider's `share_url` is a self-rendering raw-HTML link that doesn't use a separate viewer. The `PI_SHARE_VIEWER_URL` environment variable remains supported as a fallback (it's the same env var pi's interactive `/share` command reads).
+This env var is honoured by **both** providers, but in different ways:
+
+- **`github`** provider — the link is `<viewer>#<gistId>` (always, even for the default pi.dev value).
+- **`opengist`** provider — by default the `share_url` is a self-rendering raw-HTML link (the pi.dev viewer can't read non-GitHub gists). But when `PI_SHARE_VIEWER_URL` points at a **non-pi.dev** viewer, the link becomes `<viewer>#<gistPageUrl>` instead, so a self-hosted viewer that fetches a gist by URL can render Opengist sessions just like pi.dev renders GitHub ones. With the pi.dev default (or no env var) the raw self-rendering link is kept.
 
 ```yaml
 - uses: shaftoe/pi-coding-agent-action@v2
   id: pi
+  env:
+    PI_SHARE_VIEWER_URL: https://gistviewer.l3x.in/   # custom viewer instead of pi.dev
   with:
     share_session: true
-    github_token: ${{ secrets.GH_PAT }}            # PAT w/ gist scope — NOT secrets.GITHUB_TOKEN
-    share_viewer_url: https://gistviewer.l3x.in/   # custom viewer instead of pi.dev
+    github_token: ${{ secrets.GH_PAT }}               # PAT w/ gist scope — NOT secrets.GITHUB_TOKEN
     provider: openai
     model: gpt-5.4
     token: ${{ secrets.OPENAI_API_KEY }}
@@ -726,7 +731,6 @@ For complex, multi-step tasks that generate a lot of context (e.g. large code re
 | `share_gist_provider` | Storage backend for `share_session`: `github` (GitHub Gists + pi.dev viewer) or `opengist` (self-hosted instance; requires `share_gist_api_url`) | No | `github` |
 | `share_gist_api_url` | API URL for the share gist provider. Required for `opengist` (e.g. `https://gist.l3x.in/api/gists`); optional override for `github` | No | - |
 | `share_gist_token` | Token used to create the shared gist. Opengist access token (`og_…`, `gist:write` scope) for `opengist`; falls back to `github_token` | No | - |
-| `share_viewer_url` | Override the viewer base URL for the `github` share provider's `share_url` (e.g. `https://gistviewer.l3x.in/`) instead of the pi.dev default. The resulting link is `<share_viewer_url>#<gistId>`. No effect on the `opengist` provider. Falls back to the `PI_SHARE_VIEWER_URL` env var, then pi.dev | No | - |
 | `server_url` | Override the forge server URL (e.g. `https://git.example.com`) when the runner-advertised `GITHUB_SERVER_URL` points at an internally-reachable host (e.g. `http://localhost:3000` on a Forgejo runner behind Docker). Affects user-facing links (commits, PRs, action runs) only — the API client keeps using the runner's `GITHUB_API_URL`, and platform selection is controlled by the `platform` input. | No | - |
 | `thinking_level` | Model thinking level | No | off |
 | `token` | Provider API token. Required for most providers, but can be omitted when using providers that support alternative auth mechanisms (e.g., `google-vertex` with Application Default Credentials) | No | - |
@@ -749,7 +753,7 @@ The action exposes the following outputs, which can be consumed by downstream st
 | `response` | The main agent response text (or error message on failure) | `Here is the fix for the bug...` |
 | `session_html_path` | Path to the exported session HTML file (when `export_session_html` is enabled, or when `share_session` is enabled) | `/tmp/pi-session-html/session.html` |
 | `session_jsonl_path` | Path to the exported session JSONL file (when `export_session_jsonl` is enabled) | `/tmp/pi-session-jsonl/session.jsonl` |
-| `share_url` | Shareable session link. GitHub provider: a viewer link (`https://pi.dev/session/#<gistId>`, or `<share_viewer_url>#<gistId>` when `share_viewer_url` is set). Opengist provider: a self-rendering raw-HTML URL on the instance (when `share_session` succeeds) | `https://pi.dev/session/#abc123def456` |
+| `share_url` | Shareable session link. GitHub provider: a viewer link (`https://pi.dev/session/#<gistId>`, or `<PI_SHARE_VIEWER_URL>#<gistId>` when the env var is set). Opengist provider: a self-rendering raw-HTML URL on the instance (or `<viewer>#<gistPageUrl>` when `PI_SHARE_VIEWER_URL` points at a custom viewer). When `share_session` succeeds | `https://pi.dev/session/#abc123def456` |
 | `success` | Whether the agent completed successfully (`true` / `false`) | `true` |
 
 > [!WARNING]

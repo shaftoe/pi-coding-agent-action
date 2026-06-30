@@ -18,7 +18,7 @@ import {
   opengistGistProvider,
   DEFAULT_OPENGIST_API_PATH,
 } from '../../src/share/opengist';
-import { GIST_CREATE_TIMEOUT_MS } from '../../src/share/gist';
+import { GIST_CREATE_TIMEOUT_MS, PI_DEV_VIEWER_URL } from '../../src/share/gist';
 
 describe('createOpengistGist', () => {
   const originalFetch = globalThis.fetch;
@@ -98,6 +98,55 @@ describe('createOpengistGist', () => {
     expect(gist.shareUrl).toBe(gist.rawUrl);
     // Must NOT be a pi.dev link (the viewer hardcodes api.github.com).
     expect(gist.shareUrl).not.toContain('pi.dev');
+  });
+
+  describe('custom viewer URL (PI_SHARE_VIEWER_URL)', () => {
+    const originalViewer = process.env.PI_SHARE_VIEWER_URL;
+
+    afterEach(() => {
+      if (originalViewer === undefined) {
+        delete process.env.PI_SHARE_VIEWER_URL;
+      } else {
+        process.env.PI_SHARE_VIEWER_URL = originalViewer;
+      }
+    });
+
+    test('builds a viewer link when the env var is a custom (non-pi.dev) value', async () => {
+      process.env.PI_SHARE_VIEWER_URL = 'https://gistviewer.l3x.in/';
+      const gist = await createOpengistGist({
+        token: 'og_token',
+        content: 'x',
+        apiUrl,
+      });
+
+      // The viewer reads the gist page URL from the fragment, the same way
+      // pi.dev reads a GitHub gist id. Format: <viewer>#<gistPageUrl>.
+      expect(gist.shareUrl).toBe('https://gistviewer.l3x.in/#https://gist.l3x.in/bot/my-session');
+      // The raw URL is still exposed for clients that fetch the content.
+      expect(gist.rawUrl).toBe('https://gist.l3x.in/bot/my-session/raw/HEAD/session.html');
+      expect(gist.gistUrl).toBe('https://gist.l3x.in/bot/my-session');
+    });
+
+    test('uses the self-rendering raw link when the env var is the pi.dev default', async () => {
+      // pi.dev hardcodes api.github.com, so it can't read an Opengist gist —
+      // even when explicitly set, the pi.dev value must fall back to the raw link.
+      process.env.PI_SHARE_VIEWER_URL = PI_DEV_VIEWER_URL;
+      const gist = await createOpengistGist({ token: 'og_token', content: 'x', apiUrl });
+      expect(gist.shareUrl).toBe(gist.rawUrl);
+      expect(gist.shareUrl).toBe('https://gist.l3x.in/bot/my-session/raw/HEAD/session.html');
+    });
+
+    test('uses the self-rendering raw link when the env var is unset', async () => {
+      delete process.env.PI_SHARE_VIEWER_URL;
+      const gist = await createOpengistGist({ token: 'og_token', content: 'x', apiUrl });
+      expect(gist.shareUrl).toBe(gist.rawUrl);
+    });
+
+    test('uses the self-rendering raw link when the env var is empty', async () => {
+      process.env.PI_SHARE_VIEWER_URL = '';
+      const gist = await createOpengistGist({ token: 'og_token', content: 'x', apiUrl });
+      expect(gist.shareUrl).toBe(gist.rawUrl);
+    });
   });
 
   test('URL-encodes the filename in the raw link', async () => {
