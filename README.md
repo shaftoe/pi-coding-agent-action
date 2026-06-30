@@ -682,7 +682,9 @@ This env var is honoured by **both** providers, but in different ways:
     PI_SHARE_VIEWER_URL: https://gistviewer.l3x.in/   # custom viewer instead of pi.dev
   with:
     share_session: true
-    github_token: ${{ secrets.GH_PAT }}               # PAT w/ gist scope — NOT secrets.GITHUB_TOKEN
+    share_gist_provider: opengist
+    share_gist_api_url: https://gist.l3x.in/api/gists  # Opengist REST API lives under /api/, not /api/v1/
+    share_gist_token: ${{ secrets.OPENGIST_TOKEN }}     # Opengist access token (og_…) with gist:write scope
     provider: openai
     model: gpt-5.4
     token: ${{ secrets.OPENAI_API_KEY }}
@@ -691,6 +693,8 @@ This env var is honoured by **both** providers, but in different ways:
   if: ${{ steps.pi.outputs.share_url }}
   run: echo "Session: ${{ steps.pi.outputs.share_url }}"
 ```
+
+The resulting `share_url` is `https://gistviewer.l3x.in/#https://gist.l3x.in/bot/<gistId>` (the viewer reads the gist page URL from the fragment).
 
 ### Auto-Compaction
 
