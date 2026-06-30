@@ -66,6 +66,23 @@ describe('createSessionGist', () => {
     expect(gist.shareUrl).toBe('https://example.com/v/#abc123def456');
   });
 
+  test('honours a custom viewer URL passed via input.viewerUrl', async () => {
+    const gist = await createSessionGist({
+      token: 't',
+      content: 'x',
+      viewerUrl: 'https://gistviewer.l3x.in/',
+    });
+    expect(gist.shareUrl).toBe('https://gistviewer.l3x.in/#abc123def456');
+  });
+
+  test('input.viewerUrl takes precedence over the function-param viewer URL', async () => {
+    const gist = await createSessionGist(
+      { token: 't', content: 'x', viewerUrl: 'https://gistviewer.l3x.in/' },
+      'https://param-viewer.example.com/'
+    );
+    expect(gist.shareUrl).toBe('https://gistviewer.l3x.in/#abc123def456');
+  });
+
   test('honours a custom filename, description, public flag, and API URL', async () => {
     await createSessionGist({
       token: 't',

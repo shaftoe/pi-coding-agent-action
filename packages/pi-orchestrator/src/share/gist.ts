@@ -173,6 +173,15 @@ export interface CreateGistInput {
    * Defaults to {@link DEFAULT_GITHUB_GIST_API}.
    */
   apiUrl?: string;
+  /**
+   * Override the **viewer** base URL used to build the `shareUrl` for the
+   * github provider (e.g. `https://gistviewer.l3x.in/`). When set, the
+   * share link is `${viewerUrl}#${gistId}` instead of the pi.dev default.
+   * Ignored by the opengist provider (its `shareUrl` is a self-rendering
+   * raw-HTML link). Falls back to {@link DEFAULT_SHARE_VIEWER_URL}
+   * (which honours the `PI_SHARE_VIEWER_URL` env var) when unset.
+   */
+  viewerUrl?: string;
 }
 
 /** Result of a successful gist creation. */
@@ -210,6 +219,11 @@ export async function createSessionGist(
     public: isPublic = false,
     apiUrl = DEFAULT_GITHUB_GIST_API,
   } = input;
+  // Prefer the per-call `viewerUrl` field (set from the `share_viewer_url`
+  // input) over the function-param fallback, which itself defaults to
+  // {@link DEFAULT_SHARE_VIEWER_URL}. This keeps precedence explicit:
+  //   input.viewerUrl  →  function param (env var)  →  pi.dev
+  const effectiveViewerUrl = input.viewerUrl ?? viewerUrl;
 
   // Abort the request if it stalls so a hung connection can't block the
   // entire action. The surrounding runSessionShare catch logs the timeout
@@ -250,7 +264,7 @@ export async function createSessionGist(
     id: json.id,
     gistUrl: json.html_url,
     rawUrl: file?.raw_url ?? '',
-    shareUrl: `${viewerUrl}#${json.id}`,
+    shareUrl: `${effectiveViewerUrl}#${json.id}`,
   };
 }
 

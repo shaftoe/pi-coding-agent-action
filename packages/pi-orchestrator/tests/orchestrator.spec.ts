@@ -1553,6 +1553,24 @@ describe('ActionOrchestrator', () => {
       );
     });
 
+    test('builds the share_url from a custom share_viewer_url (github provider)', async () => {
+      const orchestrator = createOrchestrator({
+        shareSession: true,
+        githubToken: 'ghp_token',
+        shareViewerUrl: 'https://gistviewer.l3x.in/',
+      });
+      await orchestrator.execute();
+
+      // The viewer link uses the custom viewer base + the gist id.
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith(
+        'share_url',
+        'https://gistviewer.l3x.in/#abc123def456'
+      );
+      expect(mockCore.info).toHaveBeenCalledWith(
+        '🔗 Session shared: https://gistviewer.l3x.in/#abc123def456'
+      );
+    });
+
     test('enriches the gist description with repo/issue/run context', async () => {
       const orchestrator = createOrchestrator({
         shareSession: true,

@@ -424,6 +424,7 @@ export class ActionOrchestrator {
         content,
         description,
         ...(this.config.shareGistApiUrl ? { apiUrl: this.config.shareGistApiUrl } : {}),
+        ...(this.config.shareViewerUrl ? { viewerUrl: this.config.shareViewerUrl } : {}),
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
