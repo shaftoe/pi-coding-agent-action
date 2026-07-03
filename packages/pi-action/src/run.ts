@@ -88,7 +88,7 @@ export async function run() {
       : undefined;
   const octokit = github.getOctokit(
     coreAdapter.getInput('github_token'),
-    ...(apiBaseUrl ? [{ baseUrl: apiBaseUrl }] : [])
+    apiBaseUrl ? { baseUrl: apiBaseUrl } : {}
   );
 
   // Build PlatformContext from the @actions/github singleton
