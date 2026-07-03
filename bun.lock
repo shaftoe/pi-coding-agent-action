@@ -12,7 +12,7 @@
         "@earendil-works/pi-coding-agent": "^0.80.3",
       },
       "devDependencies": {
-        "@alexanderfortin/semantic-release-keep-a-changelog": "^0.4.4",
+        "@alexanderfortin/semantic-release-keep-a-changelog": "^0.4.5",
         "@semantic-release/commit-analyzer": "^13.0.1",
         "@semantic-release/exec": "^7.1.0",
         "@semantic-release/git": "^10.0.1",
@@ -128,7 +128,7 @@
 
     "@alexanderfortin/pi-platform-github": ["@alexanderfortin/pi-platform-github@workspace:packages/pi-platform-github"],
 
-    "@alexanderfortin/semantic-release-keep-a-changelog": ["@alexanderfortin/semantic-release-keep-a-changelog@0.4.4", "", { "dependencies": { "@semantic-release/error": "^4.0.0", "conventional-changelog-writer": "9.1.0", "conventional-commits-filter": "^6.0.0", "conventional-commits-parser": "7.0.0", "get-stream": "9.0.1", "into-stream": "^9.1.0", "temporal-polyfill": "^1.0.1" }, "peerDependencies": { "semantic-release": ">=24.0.0" } }, "sha512-RCy00eioYJbUm0d9ywM+En+T1Zh86dPvHtGuoUPgu08evsj83oRB5GSYavuc+UfgIuQIimPk6iQdS7WFIl81JQ=="],
+    "@alexanderfortin/semantic-release-keep-a-changelog": ["@alexanderfortin/semantic-release-keep-a-changelog@0.4.5", "", { "dependencies": { "@semantic-release/error": "^4.0.0", "conventional-changelog-writer": "9.1.0", "conventional-commits-filter": "^6.0.0", "conventional-commits-parser": "7.0.0", "get-stream": "9.0.1", "into-stream": "^9.1.0", "temporal-polyfill": "^1.0.1" }, "peerDependencies": { "semantic-release": ">=24.0.0" } }, "sha512-nUfDxmzkn5jaCwBkqHacodveJpfJWWT5xoDbKgLGIZ5H9Dq6te0c/3vWHMQ6pBj7nj7iZEKDnOkFeluWL1JSzg=="],
 
     "@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.91.1", "", { "dependencies": { "json-schema-to-ts": "^3.1.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-LAmu761tSN9r66ixvmciswUj/ZC+1Q4iAfpedTfSVLeswRwnY3n2Nb6Tsk+cLPP28aLOPWeMgIuTuCcMC6W/iw=="],
 
