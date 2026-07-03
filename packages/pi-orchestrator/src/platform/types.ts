@@ -164,13 +164,11 @@ export interface CreatePullRequestDetails {
   dryRun: boolean;
   cancelled?: boolean;
   /**
-   * `false` when the branch was created and pushed successfully but the PR
-   * object could not be opened (e.g. token lacks `pull-requests: write`
-   * on Forgejo). When `false`, {@link compareUrl} provides a manual-open
-   * link and {@link pullRequestUrl} is empty.
-   *
-   * Absent (or `true`) on the normal success path for backward
-   * compatibility.
+   * `true` on the normal success path; `false` when the branch was created
+   * and pushed successfully but the PR object could not be opened (e.g.
+   * token lacks `pull-requests: write` on Forgejo). When `false`,
+   * {@link compareUrl} provides a manual-open link and
+   * {@link pullRequestUrl} is empty.
    */
   prCreated?: boolean;
   /**

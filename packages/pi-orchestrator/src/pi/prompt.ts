@@ -21,7 +21,7 @@ export const CREATE_PULL_REQUEST_PROMPT_GUIDELINES = [
   'The tool will automatically generate a branch name in the format: pi/issue{number}-{timestamp}.',
   'Do NOT provide the "base" parameter unless the user explicitly requests a different target branch than the repository default. The tool will automatically detect the correct default branch.',
   'Use dryRun=true first to verify the PR configuration, then dryRun=false to create it.',
-  'On some platforms (e.g. Forgejo) the PR object cannot always be opened automatically even though the branch is pushed. When this happens the tool returns a compare URL instead of an error — post that URL so the user can open the PR with one click.',
+  'On some platforms (e.g. Forgejo) the PR object cannot always be opened automatically even though the branch is pushed. When this happens the tool returns a compare URL instead of an error — post that URL so the user can open the PR manually.',
 ];
 
 export const CREATE_PULL_REQUEST_DESCRIPTION =

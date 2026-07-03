@@ -369,6 +369,7 @@ export function buildCreateSuccessResult(pr: GitHubPullRequestResult): CreatePul
       headBranch: pr.headRef,
       baseBranch: pr.baseRef,
       dryRun: false,
+      prCreated: true,
     },
   };
 }
@@ -438,7 +439,7 @@ export function buildCreateFallbackMessage(
   return (
     `Branch "${headBranch}" was created and pushed successfully, but the pull request ` +
     `could not be opened automatically: ${errorMessage}\n\n` +
-    `You can open the PR with one click:\n${compareUrl}`
+    `You can open the PR manually here:\n${compareUrl}`
   );
 }
 
@@ -493,11 +494,14 @@ interface PrepareBranchAndPRResult {
  * intentionally separated: git-data operations (refs, blobs, trees,
  * commits) can succeed with push-only tokens, while `pulls.create` requires
  * `pull-requests: write`. On Forgejo the ephemeral Actions token sometimes
- * has the former but not the latter, so we catch the PR-creation error and
- * return a structured result instead of throwing.
+ * has the former but not the latter, so we catch **only** 401/403
+ * (permission) errors from `pulls.create` and return a structured result
+ * instead of throwing. All other errors (422 already-exists, 5xx, etc.)
+ * are re-thrown so they are not silently masked as partial success.
  *
- * Throws `Error` only when branch/commit creation itself fails (e.g. no
- * changes detected, API error on git-data endpoints).
+ * Throws `Error` when branch/commit creation itself fails (e.g. no changes
+ * detected, API error on git-data endpoints) or when PR creation fails with
+ * a non-permission HTTP status.
  */
 async function prepareBranchAndCreatePR(
   deps: GitHubModuleDeps,
@@ -563,17 +567,32 @@ async function prepareBranchAndCreatePR(
 
   // Open the PR — this can fail independently of branch creation (e.g.
   // the token has push access but lacks pull-requests: write on Forgejo).
-  // Catch the error and return a structured result so the caller can
-  // provide a compare-URL fallback instead of a raw throw.
+  //
+  // We only fall back to a compare URL for token-permission failures
+  // (401/403), which is the Forgejo scenario this targets. Other errors
+  // are re-thrown so they surface to the agent/user rather than being
+  // silently masked as partial success:
+  //   - 422 "A pull request already exists" (e.g. action re-run) → the
+  //     agent should use update_pull_request instead of opening a PR
+  //     that already exists.
+  //   - 5xx / transient network errors → the agent should be able to
+  //     retry or report the real failure.
   try {
     const pr = await createPullRequestOnGitHub(deps, title, bodyText, baseBranch, head);
     return { pr };
   } catch (error) {
     const status = getErrorStatus(error);
     const message = error instanceof Error ? error.message : String(error);
+    if (status !== 401 && status !== 403) {
+      log.debug(
+        `PR creation failed with HTTP ${status ?? 'unknown'} (not a ` +
+          `permission error) — re-throwing after branch "${head}" was pushed.`
+      );
+      throw error;
+    }
     log.warning(
       `PR creation failed after branch "${head}" was pushed ` +
-        `(HTTP ${status ?? 'unknown'}): ${message}. ` +
+        `(HTTP ${status}): ${message}. ` +
         `The branch is ready — a compare URL will be provided.`
     );
     return { prError: { status, message } };

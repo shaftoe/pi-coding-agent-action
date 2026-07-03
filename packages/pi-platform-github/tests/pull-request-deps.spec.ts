@@ -249,16 +249,18 @@ describe('createPullRequest — fallback when pulls.create fails', () => {
   // succeed (token has push access), but pulls.create fails (token lacks
   // pull-requests:write). The tool should return a compare-URL fallback
   // instead of throwing.
-  function createFallbackDeps(workspace: string) {
+  function createFallbackDeps(workspace: string, pullsCreateImpl?: ReturnType<typeof mock>) {
     return {
       octokit: {
         rest: {
           pulls: {
-            create: mock(() =>
-              Promise.reject(
-                Object.assign(new Error("Forbidden: Can't read pulls"), { status: 403 })
-              )
-            ),
+            create:
+              pullsCreateImpl ??
+              mock(() =>
+                Promise.reject(
+                  Object.assign(new Error("Forbidden: Can't read pulls"), { status: 403 })
+                )
+              ),
           },
           git: {
             getRef: mock(() => Promise.resolve({ data: { object: { sha: 'base-sha' } } })),
@@ -346,5 +348,110 @@ describe('createPullRequest — fallback when pulls.create fails', () => {
     const result = await createPullRequest(deps, { title: 'Fix bug' });
     expect(result).toBeDefined();
     expect(result.details.prCreated).toBe(false);
+  });
+});
+
+describe('createPullRequest — non-permission errors are re-thrown', () => {
+  // Only 401/403 (token-permission) failures trigger the compare-URL
+  // fallback. Other statuses (422 already-exists, 5xx transient) must
+  // propagate so the agent can react appropriately instead of being
+  // silently masked as partial success.
+  function createReThrowDeps(workspace: string, pullsCreateImpl: ReturnType<typeof mock>) {
+    return {
+      octokit: {
+        rest: {
+          pulls: { create: pullsCreateImpl },
+          git: {
+            getRef: mock(() => Promise.resolve({ data: { object: { sha: 'base-sha' } } })),
+            getTree: mock(() => Promise.resolve({ data: { tree: [] } })),
+            getBlob: mock(() => Promise.resolve({ data: { content: '' } })),
+            createRef: mock(() => Promise.resolve({ data: {} })),
+            createBlob: mock(() => Promise.resolve({ data: { sha: 'blob-sha' } })),
+            createTree: mock(() => Promise.resolve({ data: { sha: 'tree-sha' } })),
+            createCommit: mock(() => Promise.resolve({ data: { sha: 'commit-sha' } })),
+            updateRef: mock(() => Promise.resolve({ data: {} })),
+          },
+          repos: {
+            get: mock(() => Promise.resolve({ data: { default_branch: 'main' } })),
+          },
+        },
+      } as any,
+      context: {
+        repo: { owner: 'alex', repo: 'ansible' },
+        issue: { number: 18 },
+        eventName: 'issue_comment',
+        payload: { repository: { default_branch: 'master' } },
+        serverUrl: 'https://forge.l3x.in',
+        runId: 1,
+        runNumber: 1,
+        workspace,
+      },
+      logger: {
+        debug: mock(() => {}),
+        info: mock(() => {}),
+        warning: mock(() => {}),
+        notice: mock(() => {}),
+        error: mock(() => {}),
+      },
+    } as unknown as GitHubModuleDeps;
+  }
+
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-pr-rethrow-'));
+    fs.writeFileSync(path.join(tempDir, 'new-file.txt'), 'hello world');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  test('422 (PR already exists) is re-thrown, not converted to fallback', async () => {
+    const deps = createReThrowDeps(
+      tempDir,
+      mock(() =>
+        Promise.reject(
+          Object.assign(new Error('Validation Failed: A pull request already exists'), {
+            status: 422,
+          })
+        )
+      )
+    );
+    await expect(createPullRequest(deps, { title: 'Fix bug' })).rejects.toThrow(
+      /Failed to create pull request/
+    );
+  });
+
+  test('500 (server error) is re-thrown, not converted to fallback', async () => {
+    const deps = createReThrowDeps(
+      tempDir,
+      mock(() => Promise.reject(Object.assign(new Error('Internal Server Error'), { status: 500 })))
+    );
+    await expect(createPullRequest(deps, { title: 'Fix bug' })).rejects.toThrow(
+      /Failed to create pull request/
+    );
+  });
+
+  test('error with no status code is re-thrown, not converted to fallback', async () => {
+    const deps = createReThrowDeps(
+      tempDir,
+      mock(() => Promise.reject(new Error('network timeout')))
+    );
+    await expect(createPullRequest(deps, { title: 'Fix bug' })).rejects.toThrow(
+      /Failed to create pull request/
+    );
+  });
+
+  test('401 (unauthorized) still triggers the compare-URL fallback', async () => {
+    const deps = createReThrowDeps(
+      tempDir,
+      mock(() =>
+        Promise.reject(Object.assign(new Error('Requires authentication'), { status: 401 }))
+      )
+    );
+    const result = await createPullRequest(deps, { title: 'Fix bug' });
+    expect(result.details.prCreated).toBe(false);
+    expect(result.details.compareUrl).toBeDefined();
   });
 });

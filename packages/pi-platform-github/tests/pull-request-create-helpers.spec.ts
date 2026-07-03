@@ -147,6 +147,7 @@ describe('buildCreateSuccessResult', () => {
         headBranch: 'feature/y',
         baseBranch: 'develop',
         dryRun: false,
+        prCreated: true,
       },
     });
   });
@@ -336,9 +337,9 @@ describe('buildCreateFallbackMessage', () => {
     expect(msg).toContain('created and pushed successfully');
   });
 
-  test('includes a one-click link instruction', () => {
+  test('includes a manual-open link instruction', () => {
     const msg = buildCreateFallbackMessage('main', 'feature', 'url', 'err');
-    expect(msg).toContain('open the PR with one click');
+    expect(msg).toContain('open the PR manually here');
   });
 
   test('preserves multi-line error messages', () => {
