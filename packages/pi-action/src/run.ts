@@ -18,6 +18,7 @@ import { ActionsOutputSink } from './adapters/output-sink';
 import {
   createGitHubPlatformProvider,
   parsePlatformType,
+  apiBaseUrlFromServerUrl,
 } from '@alexanderfortin/pi-platform-github';
 import { resolveServerUrl } from './server-url';
 
@@ -58,8 +59,37 @@ export async function run() {
   const config = gatherActionsConfig();
   const outputSink = new ActionsOutputSink();
 
-  // Create Octokit from the github_token input
-  const octokit = github.getOctokit(coreAdapter.getInput('github_token'));
+  // Resolve the platform type early — it's needed for both the Octokit API
+  // base URL derivation (below) and the platform provider.
+  const platformType = parsePlatformType(coreAdapter.getInput('platform'), raw =>
+    coreAdapter.warning(
+      `Unknown platform "${raw}"; falling back to github. ` +
+        'Valid values are github, codeberg, forgejo (or gitea).'
+    )
+  );
+
+  // Create Octokit from the github_token input.
+  //
+  // For Forgejo/Codeberg we explicitly derive the API base URL from the
+  // runner-advertised server URL (ensuring the /api/v1 prefix is present).
+  // @actions/github's getOctokit() falls back to GITHUB_API_URL, which is
+  // reliable on GitHub but may be missing or misconfigured (no /api/v1) on
+  // some Forgejo runner versions — leading to 404s on every REST call.
+  //
+  // We use the runner-advertised server URL (github.context.serverUrl), not
+  // the server_url *override*, because the API must be reachable from inside
+  // the runner — the override is for externally-visible permalinks only.
+  //
+  // For GitHub (including GHES) we let getOctokit use GITHUB_API_URL as-is.
+  const runnerServerUrl = resolveServerUrl(undefined, github.context.serverUrl);
+  const apiBaseUrl =
+    platformType === 'forgejo' || platformType === 'codeberg'
+      ? apiBaseUrlFromServerUrl(runnerServerUrl, platformType)
+      : undefined;
+  const octokit = github.getOctokit(
+    coreAdapter.getInput('github_token'),
+    ...(apiBaseUrl ? [{ baseUrl: apiBaseUrl }] : [])
+  );
 
   // Build PlatformContext from the @actions/github singleton
   const githubCtx = github.context as { actor?: string; sha?: string };
@@ -111,16 +141,6 @@ export async function run() {
   // Create the platform provider with explicit deps (no singletons)
   const triggerValue = coreAdapter.getInput('trigger');
   const branchNameTemplate = coreAdapter.getInput('branch_name_template');
-  // Platform is an explicit input (default: github). It is no longer
-  // auto-detected from the server URL — hostname-based detection could
-  // not reliably distinguish self-hosted Forgejo from self-hosted GitHub
-  // Enterprise, so users set `platform` directly (e.g. forgejo).
-  const platformType = parsePlatformType(coreAdapter.getInput('platform'), raw =>
-    coreAdapter.warning(
-      `Unknown platform "${raw}"; falling back to github. ` +
-        'Valid values are github, codeberg, forgejo (or gitea).'
-    )
-  );
   const platformProvider = createGitHubPlatformProvider({
     octokit,
     context: platformContext,

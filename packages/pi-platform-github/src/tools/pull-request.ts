@@ -383,12 +383,121 @@ export function formatCreateError(error: unknown): string {
 }
 
 /**
- * Prepare the branch, commit and PR on GitHub via the API. Wraps the
- * sequence `getRef → buildFileMap → scanForChanges → createRef →
+ * Extract the HTTP status code from an Octokit-style error object.
+ *
+ * Octokit errors carry a numeric `.status` property (e.g. 404, 403).
+ *
+ * @returns The status number, or `undefined` when not available.
+ * @internal Exported for testing purposes.
+ */
+export function getErrorStatus(error: unknown): number | undefined {
+  if (typeof error === 'object' && error !== null && 'status' in error) {
+    const status = error.status;
+    if (typeof status === 'number') {
+      return status;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Build a compare URL for manually opening a pull request.
+ *
+ * Format: `{serverUrl}/{owner}/{repo}/compare/{base}...{head}`
+ * Works across GitHub, Forgejo, Codeberg, and Gitea.
+ *
+ * @param deps - Module dependencies.
+ * @param baseBranch - Target (base) branch name.
+ * @param headBranch - Source (head) branch name.
+ * @returns The compare URL.
+ * @internal Exported for testing purposes.
+ */
+export function buildCompareUrl(
+  deps: GitHubModuleDeps,
+  baseBranch: string,
+  headBranch: string
+): string {
+  const { owner, repo } = deps.context.repo;
+  const serverUrl = (deps.context.serverUrl || 'https://github.com').replace(/\/$/, '');
+  return `${serverUrl}/${owner}/${repo}/compare/${baseBranch}...${headBranch}`;
+}
+
+/**
+ * Build the human-readable fallback message when the branch was created
+ * and pushed but the PR object could not be opened automatically. Includes
+ * a one-click compare URL so the user (or agent) can open the PR manually.
+ *
+ * Exported for unit testing.
+ */
+export function buildCreateFallbackMessage(
+  baseBranch: string,
+  headBranch: string,
+  compareUrl: string,
+  errorMessage: string
+): string {
+  return (
+    `Branch "${headBranch}" was created and pushed successfully, but the pull request ` +
+    `could not be opened automatically: ${errorMessage}\n\n` +
+    `You can open the PR with one click:\n${compareUrl}`
+  );
+}
+
+/**
+ * Build the structured result for a fallback (branch created, PR not opened).
+ * Exported for unit testing.
+ */
+export function buildCreateFallbackResult(
+  message: string,
+  headBranch: string,
+  baseBranch: string,
+  compareUrl: string
+): CreatePullRequestResult {
+  return {
+    content: [{ type: 'text', text: message }],
+    details: {
+      pullRequestNumber: 0,
+      pullRequestUrl: '',
+      headBranch,
+      baseBranch,
+      dryRun: false,
+      prCreated: false,
+      compareUrl,
+    },
+  };
+}
+
+/**
+ * Result of preparing a branch and attempting to open a PR.
+ *
+ * When `pr` is present the PR was created successfully. When `prError` is
+ * present the branch was created and pushed but the PR object could not be
+ * opened (e.g. the token has push access but lacks `pull-requests: write`
+ * on Forgejo). The caller should provide a compare-URL fallback in that case.
+ */
+interface PrepareBranchAndPRResult {
+  /** The PR object when creation succeeded. */
+  pr?: GitHubPullRequestResult;
+  /** Error details when PR creation failed (branch was still created). */
+  prError?: { status: number | undefined; message: string };
+}
+
+/**
+ * Prepare the branch and commit on GitHub via the API, then attempt to open
+ * a pull request.
+ *
+ * Wraps the sequence `getRef → buildFileMap → scanForChanges → createRef →
  * createBlobsAndTree → createCommitAndUpdateBranch → createPullRequestOnGitHub`
  * into a single step.
  *
- * Throws `Error` when no changes are detected relative to the base branch.
+ * The branch/tree/commit operations and the `pulls.create` call are
+ * intentionally separated: git-data operations (refs, blobs, trees,
+ * commits) can succeed with push-only tokens, while `pulls.create` requires
+ * `pull-requests: write`. On Forgejo the ephemeral Actions token sometimes
+ * has the former but not the latter, so we catch the PR-creation error and
+ * return a structured result instead of throwing.
+ *
+ * Throws `Error` only when branch/commit creation itself fails (e.g. no
+ * changes detected, API error on git-data endpoints).
  */
 async function prepareBranchAndCreatePR(
   deps: GitHubModuleDeps,
@@ -397,7 +506,7 @@ async function prepareBranchAndCreatePR(
   title: string,
   bodyText: string,
   log: ReturnType<typeof createLogger>
-): Promise<GitHubPullRequestResult> {
+): Promise<PrepareBranchAndPRResult> {
   const owner = deps.context.repo.owner;
   const repo = deps.context.repo.repo;
 
@@ -452,7 +561,23 @@ async function prepareBranchAndCreatePR(
     log,
   });
 
-  return createPullRequestOnGitHub(deps, title, bodyText, baseBranch, head);
+  // Open the PR — this can fail independently of branch creation (e.g.
+  // the token has push access but lacks pull-requests: write on Forgejo).
+  // Catch the error and return a structured result so the caller can
+  // provide a compare-URL fallback instead of a raw throw.
+  try {
+    const pr = await createPullRequestOnGitHub(deps, title, bodyText, baseBranch, head);
+    return { pr };
+  } catch (error) {
+    const status = getErrorStatus(error);
+    const message = error instanceof Error ? error.message : String(error);
+    log.warning(
+      `PR creation failed after branch "${head}" was pushed ` +
+        `(HTTP ${status ?? 'unknown'}): ${message}. ` +
+        `The branch is ready — a compare URL will be provided.`
+    );
+    return { prError: { status, message } };
+  }
 }
 
 async function createPullRequestOnGitHub(
@@ -534,10 +659,32 @@ export async function createPullRequest(
   log.debug(`Preparing branch and changes via GitHub API...`);
 
   try {
-    const prResult = await prepareBranchAndCreatePR(deps, baseBranch, head, title, bodyText, log);
-    const successMessage = buildCreateSuccessMessage(prResult);
-    log.info(`SUCCESS: ${successMessage}`);
-    return buildCreateSuccessResult(prResult);
+    const result = await prepareBranchAndCreatePR(deps, baseBranch, head, title, bodyText, log);
+
+    // PR was created successfully
+    if (result.pr) {
+      const successMessage = buildCreateSuccessMessage(result.pr);
+      log.info(`SUCCESS: ${successMessage}`);
+      return buildCreateSuccessResult(result.pr);
+    }
+
+    // Branch was created and pushed but the PR object could not be opened
+    // (e.g. token lacks pull-requests:write on Forgejo). Provide a compare
+    // URL so the user or agent can open the PR manually.
+    if (result.prError) {
+      const compareUrl = buildCompareUrl(deps, baseBranch, head);
+      const message = buildCreateFallbackMessage(
+        baseBranch,
+        head,
+        compareUrl,
+        result.prError.message
+      );
+      log.info(`PARTIAL SUCCESS: ${message}`);
+      return buildCreateFallbackResult(message, head, baseBranch, compareUrl);
+    }
+
+    // Defensive — should never reach here
+    throw new Error('prepareBranchAndCreatePR returned neither pr nor prError');
   } catch (error) {
     throw new Error(formatCreateError(error));
   }

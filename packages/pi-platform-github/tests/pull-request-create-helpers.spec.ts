@@ -15,7 +15,12 @@ import {
   buildCreateSuccessMessage,
   buildCreateSuccessResult,
   formatCreateError,
+  getErrorStatus,
+  buildCompareUrl,
+  buildCreateFallbackMessage,
+  buildCreateFallbackResult,
 } from '@alexanderfortin/pi-platform-github';
+import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 
 // ---------------------------------------------------------------------------
 // buildCreateDryRunMessage
@@ -212,5 +217,170 @@ describe('formatCreateError', () => {
     expect(formatCreateError(new CustomError('specific failure'))).toBe(
       '[pull-request] Failed to create pull request: specific failure'
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getErrorStatus
+// ---------------------------------------------------------------------------
+
+describe('getErrorStatus', () => {
+  test('extracts numeric status from Octokit-style error', () => {
+    const error = { status: 404, message: 'Not Found' };
+    expect(getErrorStatus(error)).toBe(404);
+  });
+
+  test('extracts 403 status', () => {
+    const error = { status: 403, message: 'Forbidden' };
+    expect(getErrorStatus(error)).toBe(403);
+  });
+
+  test('extracts 500 status', () => {
+    const error = { status: 500, message: 'Internal Server Error' };
+    expect(getErrorStatus(error)).toBe(500);
+  });
+
+  test('returns undefined when status is not present', () => {
+    expect(getErrorStatus(new Error('plain error'))).toBeUndefined();
+  });
+
+  test('returns undefined when status is a string', () => {
+    expect(getErrorStatus({ status: '404' })).toBeUndefined();
+  });
+
+  test('returns undefined for null', () => {
+    expect(getErrorStatus(null)).toBeUndefined();
+  });
+
+  test('returns undefined for undefined', () => {
+    expect(getErrorStatus(undefined)).toBeUndefined();
+  });
+
+  test('returns undefined for primitives', () => {
+    expect(getErrorStatus(42)).toBeUndefined();
+    expect(getErrorStatus('error')).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildCompareUrl
+// ---------------------------------------------------------------------------
+
+// Minimal deps shape for buildCompareUrl (only context.repo + serverUrl needed)
+function makeCompareDeps(serverUrl: string): GitHubModuleDeps {
+  return {
+    context: {
+      repo: { owner: 'alex', repo: 'ansible' },
+      issue: { number: 18 },
+      eventName: 'issues',
+      payload: {},
+      serverUrl,
+      runId: 1,
+      runNumber: 1,
+      workspace: '/tmp',
+    },
+  } as unknown as GitHubModuleDeps;
+}
+
+describe('buildCompareUrl', () => {
+  test('builds correct URL for Forgejo instance', () => {
+    const deps = makeCompareDeps('https://forge.l3x.in');
+    const url = buildCompareUrl(deps, 'master', 'pi/issue18-1234567890');
+    expect(url).toBe('https://forge.l3x.in/alex/ansible/compare/master...pi/issue18-1234567890');
+  });
+
+  test('builds correct URL for GitHub', () => {
+    const deps = makeCompareDeps('https://github.com');
+    const url = buildCompareUrl(deps, 'main', 'feature/branch');
+    expect(url).toBe('https://github.com/alex/ansible/compare/main...feature/branch');
+  });
+
+  test('strips trailing slash from server URL', () => {
+    const deps = makeCompareDeps('https://forge.l3x.in/');
+    const url = buildCompareUrl(deps, 'master', 'feature');
+    expect(url).toBe('https://forge.l3x.in/alex/ansible/compare/master...feature');
+  });
+
+  test('falls back to github.com when serverUrl is missing', () => {
+    const deps = makeCompareDeps('');
+    const url = buildCompareUrl(deps, 'main', 'feature');
+    expect(url).toBe('https://github.com/alex/ansible/compare/main...feature');
+  });
+
+  test('handles Codeberg URL', () => {
+    const deps = makeCompareDeps('https://codeberg.org');
+    const url = buildCompareUrl(deps, 'main', 'fix/bug');
+    expect(url).toBe('https://codeberg.org/alex/ansible/compare/main...fix/bug');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildCreateFallbackMessage
+// ---------------------------------------------------------------------------
+
+describe('buildCreateFallbackMessage', () => {
+  test('includes branch name, error message, and compare URL', () => {
+    const msg = buildCreateFallbackMessage(
+      'master',
+      'pi/issue18-123',
+      'https://forge.l3x.in/alex/ansible/compare/master...pi/issue18-123',
+      'Forbidden'
+    );
+    expect(msg).toContain('pi/issue18-123');
+    expect(msg).toContain('Forbidden');
+    expect(msg).toContain('https://forge.l3x.in/alex/ansible/compare/master...pi/issue18-123');
+  });
+
+  test('states the branch was created and pushed', () => {
+    const msg = buildCreateFallbackMessage('main', 'feature', 'url', 'err');
+    expect(msg).toContain('created and pushed successfully');
+  });
+
+  test('includes a one-click link instruction', () => {
+    const msg = buildCreateFallbackMessage('main', 'feature', 'url', 'err');
+    expect(msg).toContain('open the PR with one click');
+  });
+
+  test('preserves multi-line error messages', () => {
+    const msg = buildCreateFallbackMessage('main', 'feature', 'url', 'line1\nline2');
+    expect(msg).toContain('line1\nline2');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildCreateFallbackResult
+// ---------------------------------------------------------------------------
+
+describe('buildCreateFallbackResult', () => {
+  test('returns result with prCreated=false and compareUrl set', () => {
+    const result = buildCreateFallbackResult(
+      'message',
+      'pi/issue18-123',
+      'master',
+      'https://forge.l3x.in/alex/ansible/compare/master...pi/issue18-123'
+    );
+    expect(result.details.prCreated).toBe(false);
+    expect(result.details.compareUrl).toBe(
+      'https://forge.l3x.in/alex/ansible/compare/master...pi/issue18-123'
+    );
+    expect(result.details.pullRequestNumber).toBe(0);
+    expect(result.details.pullRequestUrl).toBe('');
+    expect(result.details.dryRun).toBe(false);
+  });
+
+  test('content text matches the message argument', () => {
+    const result = buildCreateFallbackResult('hello world', 'h', 'b', 'url');
+    expect(result.content[0]!.text).toBe('hello world');
+  });
+
+  test('preserves headBranch and baseBranch', () => {
+    const result = buildCreateFallbackResult('msg', 'feature/x', 'main', 'url');
+    expect(result.details.headBranch).toBe('feature/x');
+    expect(result.details.baseBranch).toBe('main');
+  });
+
+  test('content array has exactly one entry', () => {
+    const result = buildCreateFallbackResult('msg', 'h', 'b', 'url');
+    expect(result.content).toHaveLength(1);
   });
 });

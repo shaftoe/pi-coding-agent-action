@@ -65,6 +65,10 @@ export {
   buildCreateDryRunResult,
   buildCreateSuccessMessage,
   buildCreateSuccessResult,
+  buildCreateFallbackMessage,
+  buildCreateFallbackResult,
+  buildCompareUrl,
+  getErrorStatus,
   formatCreateError,
 } from './tools/pull-request';
 

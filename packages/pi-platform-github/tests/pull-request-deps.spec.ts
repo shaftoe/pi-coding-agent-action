@@ -4,7 +4,10 @@
  * Covers the end-to-end flow of creating a pull request via the GitHub API.
  */
 
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import {
   createPullRequest,
   generateBranchName,
@@ -238,5 +241,110 @@ describe('generateBranchName with deps', () => {
     (deps.context as any).issue = undefined;
     const result = generateBranchName(deps, 'Fix bug');
     expect(result).toMatch(/^pi\/issueunknown-\d+$/);
+  });
+});
+
+describe('createPullRequest — fallback when pulls.create fails', () => {
+  // This simulates the Forgejo scenario: the branch/tree/commit operations
+  // succeed (token has push access), but pulls.create fails (token lacks
+  // pull-requests:write). The tool should return a compare-URL fallback
+  // instead of throwing.
+  function createFallbackDeps(workspace: string) {
+    return {
+      octokit: {
+        rest: {
+          pulls: {
+            create: mock(() =>
+              Promise.reject(
+                Object.assign(new Error("Forbidden: Can't read pulls"), { status: 403 })
+              )
+            ),
+          },
+          git: {
+            getRef: mock(() => Promise.resolve({ data: { object: { sha: 'base-sha' } } })),
+            getTree: mock(() => Promise.resolve({ data: { tree: [] } })),
+            getBlob: mock(() => Promise.resolve({ data: { content: '' } })),
+            createRef: mock(() => Promise.resolve({ data: {} })),
+            createBlob: mock(() => Promise.resolve({ data: { sha: 'blob-sha' } })),
+            createTree: mock(() => Promise.resolve({ data: { sha: 'tree-sha' } })),
+            createCommit: mock(() => Promise.resolve({ data: { sha: 'commit-sha' } })),
+            updateRef: mock(() => Promise.resolve({ data: {} })),
+          },
+          repos: {
+            get: mock(() => Promise.resolve({ data: { default_branch: 'main' } })),
+          },
+        },
+      } as any,
+      context: {
+        repo: { owner: 'alex', repo: 'ansible' },
+        issue: { number: 18 },
+        eventName: 'issue_comment',
+        payload: { repository: { default_branch: 'master' } },
+        serverUrl: 'https://forge.l3x.in',
+        runId: 1,
+        runNumber: 1,
+        workspace,
+      },
+      logger: {
+        debug: mock(() => {}),
+        info: mock(() => {}),
+        warning: mock(() => {}),
+        notice: mock(() => {}),
+        error: mock(() => {}),
+      },
+    } as unknown as GitHubModuleDeps;
+  }
+
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-pr-fallback-'));
+    // Create a file so scanForChanges detects a change
+    fs.writeFileSync(path.join(tempDir, 'new-file.txt'), 'hello world');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  test('returns fallback result with compare URL when pulls.create fails', async () => {
+    const deps = createFallbackDeps(tempDir);
+    const result = await createPullRequest(deps, { title: 'Fix podman prune' });
+
+    // PR was not created
+    expect(result.details.prCreated).toBe(false);
+    expect(result.details.pullRequestNumber).toBe(0);
+    expect(result.details.pullRequestUrl).toBe('');
+
+    // Compare URL is provided
+    expect(result.details.compareUrl).toContain(
+      'https://forge.l3x.in/alex/ansible/compare/master...'
+    );
+    expect(result.details.compareUrl).toContain('pi/issue18-');
+
+    // The message mentions the branch and includes the compare URL
+    expect(result.content[0]!.text).toContain('created and pushed successfully');
+    expect(result.content[0]!.text).toContain("Can't read pulls");
+    expect(result.content[0]!.text).toContain(result.details.compareUrl!);
+  });
+
+  test('branch ref was created (git data operations succeeded)', async () => {
+    const deps = createFallbackDeps(tempDir);
+    await createPullRequest(deps, { title: 'Fix bug' });
+
+    // Verify git.createRef was called (branch was created)
+    expect(deps.octokit.rest.git.createRef).toHaveBeenCalled();
+    // Verify pulls.create was attempted
+    expect(deps.octokit.rest.pulls.create).toHaveBeenCalled();
+    // Verify createCommit was called (commit was pushed)
+    expect(deps.octokit.rest.git.createCommit).toHaveBeenCalled();
+  });
+
+  test('does not throw — returns a result instead', async () => {
+    const deps = createFallbackDeps(tempDir);
+    // This should NOT throw — the whole point of the fallback
+    const result = await createPullRequest(deps, { title: 'Fix bug' });
+    expect(result).toBeDefined();
+    expect(result.details.prCreated).toBe(false);
   });
 });
