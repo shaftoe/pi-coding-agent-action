@@ -29,7 +29,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run Fallow analysis
-        uses: fallow-rs/fallow@v2
+        uses: fallow-rs/fallow@v3
         with:
           format: sarif
           auto-changed-since: true
