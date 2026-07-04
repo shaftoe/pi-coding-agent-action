@@ -9,7 +9,7 @@ import { Type, Static } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import {
   GET_CI_STATUS_PROMPT_SNIPPET,
-  GET_CI_STATUS_PROMPT_GUIDELINES,
+  getCiStatusPromptGuidelines,
   GET_CI_STATUS_DESCRIPTION,
   GET_CI_STATUS_PARAM_OWNER_DESCRIPTION,
   GET_CI_STATUS_PARAM_REPO_DESCRIPTION,
@@ -72,7 +72,7 @@ export function getCIStatusToolFactory(provider: PlatformProvider) {
     label: 'Get CI Status',
     description: GET_CI_STATUS_DESCRIPTION,
     promptSnippet: GET_CI_STATUS_PROMPT_SNIPPET,
-    promptGuidelines: GET_CI_STATUS_PROMPT_GUIDELINES,
+    promptGuidelines: getCiStatusPromptGuidelines(provider.type),
     parameters: getCIStatusSchema,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_GET_CI_STATUS,

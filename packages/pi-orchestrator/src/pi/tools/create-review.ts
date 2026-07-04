@@ -10,7 +10,7 @@ import { defineTool } from '@earendil-works/pi-coding-agent';
 import {
   CREATE_REVIEW_PROMPT_SNIPPET,
   CREATE_REVIEW_PROMPT_GUIDELINES,
-  CREATE_REVIEW_DESCRIPTION,
+  getCreateReviewDescription,
   CREATE_REVIEW_PARAM_PULL_NUMBER_DESCRIPTION,
   CREATE_REVIEW_PARAM_BODY_DESCRIPTION,
   CREATE_REVIEW_PARAM_EVENT_DESCRIPTION,
@@ -95,7 +95,7 @@ export function createReviewToolFactory(provider: PlatformProvider) {
   return defineTool({
     name: 'create_pull_request_review',
     label: 'Create Pull Request Review',
-    description: CREATE_REVIEW_DESCRIPTION,
+    description: getCreateReviewDescription(provider.type),
     promptSnippet: CREATE_REVIEW_PROMPT_SNIPPET,
     promptGuidelines: CREATE_REVIEW_PROMPT_GUIDELINES,
     parameters: createReviewSchema,

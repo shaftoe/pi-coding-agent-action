@@ -16,8 +16,8 @@ import { Type, Static } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import {
   GET_PR_DIFF_PROMPT_SNIPPET,
-  GET_PR_DIFF_PROMPT_GUIDELINES,
-  GET_PR_DIFF_DESCRIPTION,
+  getPRDiffPromptGuidelines,
+  getPRDiffDescription,
   GET_PR_DIFF_PARAM_OWNER_DESCRIPTION,
   GET_PR_DIFF_PARAM_REPO_DESCRIPTION,
   GET_PR_DIFF_PARAM_PULL_NUMBER_DESCRIPTION,
@@ -303,9 +303,9 @@ export function getPRDiffToolFactory(provider: PlatformProvider, config?: DiffCo
   return defineTool({
     name: 'get_pr_diff',
     label: 'Get PR Diff',
-    description: GET_PR_DIFF_DESCRIPTION,
+    description: getPRDiffDescription(provider.type),
     promptSnippet: GET_PR_DIFF_PROMPT_SNIPPET,
-    promptGuidelines: GET_PR_DIFF_PROMPT_GUIDELINES,
+    promptGuidelines: getPRDiffPromptGuidelines(provider.type),
     parameters: getPRDiffSchema,
     execute: withCancellation<GetPRDiffToolParams, GetPRDiffDetails, GetPRDiffToolParams>({
       cancellationMessage: CANCELLATION_MESSAGE_GET_PR_DIFF,

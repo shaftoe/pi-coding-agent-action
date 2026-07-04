@@ -6,7 +6,7 @@ import { Type, Static } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import {
   UPDATE_PULL_REQUEST_PROMPT_SNIPPET,
-  UPDATE_PULL_REQUEST_PROMPT_GUIDELINES,
+  getUpdatePullRequestPromptGuidelines,
   UPDATE_PULL_REQUEST_DESCRIPTION,
   UPDATE_PULL_REQUEST_PARAM_PULL_NUMBER_DESCRIPTION,
   UPDATE_PULL_REQUEST_PARAM_TITLE_DESCRIPTION,
@@ -67,7 +67,7 @@ export function updatePullRequestToolFactory(provider: PlatformProvider) {
     label: 'Update Pull Request',
     description: UPDATE_PULL_REQUEST_DESCRIPTION,
     promptSnippet: UPDATE_PULL_REQUEST_PROMPT_SNIPPET,
-    promptGuidelines: UPDATE_PULL_REQUEST_PROMPT_GUIDELINES,
+    promptGuidelines: getUpdatePullRequestPromptGuidelines(provider.type),
     parameters: updatePullRequestSchema,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_UPDATE_PR,
