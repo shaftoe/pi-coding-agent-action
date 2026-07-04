@@ -5,9 +5,9 @@
 import { Type, Static } from 'typebox';
 import { defineTool } from '@earendil-works/pi-coding-agent';
 import {
-  getIssueOrPRThreadPromptSnippet,
-  getIssueOrPRThreadPromptGuidelines,
-  getIssueOrPRThreadDescription,
+  GET_ISSUE_PR_THREAD_PROMPT_SNIPPET,
+  GET_ISSUE_PR_THREAD_PROMPT_GUIDELINES,
+  GET_ISSUE_PR_THREAD_DESCRIPTION,
   GET_ISSUE_PR_THREAD_PARAM_OWNER_DESCRIPTION,
   GET_ISSUE_PR_THREAD_PARAM_REPO_DESCRIPTION,
   GET_ISSUE_PR_THREAD_PARAM_ISSUE_NUMBER_DESCRIPTION,
@@ -85,9 +85,9 @@ export function getIssueOrPRThreadToolFactory(provider: PlatformProvider) {
   return defineTool({
     name: 'get_issue_or_pr_thread',
     label: 'Get Issue/PR Thread',
-    description: getIssueOrPRThreadDescription(provider.type),
-    promptSnippet: getIssueOrPRThreadPromptSnippet(provider.type),
-    promptGuidelines: getIssueOrPRThreadPromptGuidelines(provider.type),
+    description: GET_ISSUE_PR_THREAD_DESCRIPTION(provider.type),
+    promptSnippet: GET_ISSUE_PR_THREAD_PROMPT_SNIPPET(provider.type),
+    promptGuidelines: GET_ISSUE_PR_THREAD_PROMPT_GUIDELINES(provider.type),
     parameters: getIssueOrPRThreadSchema,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_GET_THREAD,

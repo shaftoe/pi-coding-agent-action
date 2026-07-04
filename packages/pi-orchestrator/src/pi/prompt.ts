@@ -58,18 +58,25 @@ export function getSystemPrompt(platform: PlatformType = 'github'): string {
 export const SYSTEM_PROMPT = getSystemPrompt('github');
 
 /**
- * All supported platforms.
+ * All platforms with configured prompt fragments.
  *
- * Derived from {@link PLATFORM_PROMPT_INFO}, which is a
- * `Record<PlatformType, ...>`, so the list is exhaustive by construction:
- * adding a new value to {@link PlatformType} forces a matching key in
- * `PLATFORM_PROMPT_INFO` (and therefore here) at compile time. Consumers
- * (notably tests) should iterate over this instead of hardcoding a list
- * so coverage auto-tracks newly added platforms.
+ * Single runtime source of truth for the supported platforms. Tests and
+ * other consumers iterate over this instead of hardcoding the platform
+ * list, so coverage auto-tracks when a new platform is added.
  */
-export const SUPPORTED_PLATFORMS: PlatformType[] = Object.keys(
-  PLATFORM_PROMPT_INFO
-) as PlatformType[];
+export function getSupportedPlatforms(): PlatformType[] {
+  return Object.keys(PLATFORM_PROMPT_INFO) as PlatformType[];
+}
+
+/**
+ * Internal accessor for a platform's short product name (e.g. "GitHub").
+ *
+ * Used to thread the running platform into tool descriptions and
+ * guidelines so the model is not told everything is GitHub.
+ */
+function productNameOf(platform: PlatformType): string {
+  return PLATFORM_PROMPT_INFO[platform].productName;
+}
 
 //
 // Create Pull Request
@@ -87,11 +94,14 @@ export const CREATE_PULL_REQUEST_PROMPT_GUIDELINES = [
 ];
 
 /**
- * `create_pull_request` tool description, parametrised by platform so the
- * product name matches where the agent is actually running.
+ * Build the create_pull_request tool description for the given platform.
+ *
+ * @param platform - The platform the agent is running on. Defaults to 'github'.
  */
-export const getCreatePullRequestDescription = (platform: PlatformType = 'github'): string =>
-  `Create a new pull request on ${PLATFORM_PROMPT_INFO[platform].productName}. This tool handles everything: automatically determines the default base branch, creates a new branch, pushes changes, and creates the PR. The branch name is auto-generated following the pi/issue{number}-{timestamp} pattern.`;
+export function CREATE_PULL_REQUEST_DESCRIPTION(platform: PlatformType = 'github'): string {
+  const product = productNameOf(platform);
+  return `Create a new pull request on ${product}. This tool handles everything: automatically determines the default base branch, creates a new branch, pushes changes, and creates the PR. The branch name is auto-generated following the pi/issue{number}-{timestamp} pattern.`;
+}
 
 export const CREATE_PULL_REQUEST_PARAM_TITLE_DESCRIPTION =
   'Pull request title (should be descriptive and follow conventional commit format)';
@@ -108,21 +118,40 @@ export const CREATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION =
 //
 // Get Issue/PR Thread
 //
-export const getIssueOrPRThreadPromptSnippet = (platform: PlatformType = 'github'): string =>
-  `Get the full comment thread for a ${PLATFORM_PROMPT_INFO[platform].productName} issue or pull request, including title, description, labels, and all comments. For PRs, also includes inline review comments.`;
+/**
+ * Build the get_issue_or_pr_thread prompt snippet for the given platform.
+ *
+ * @param platform - The platform the agent is running on. Defaults to 'github'.
+ */
+export function GET_ISSUE_PR_THREAD_PROMPT_SNIPPET(platform: PlatformType = 'github'): string {
+  const product = productNameOf(platform);
+  return `Get the full comment thread for a ${product} issue or pull request, including title, description, labels, and all comments. For PRs, also includes inline review comments.`;
+}
 
-export const getIssueOrPRThreadPromptGuidelines = (platform: PlatformType = 'github'): string[] => {
-  const name = PLATFORM_PROMPT_INFO[platform].productName;
+/**
+ * Build the get_issue_or_pr_thread prompt guidelines for the given platform.
+ *
+ * @param platform - The platform the agent is running on. Defaults to 'github'.
+ */
+export function GET_ISSUE_PR_THREAD_PROMPT_GUIDELINES(platform: PlatformType = 'github'): string[] {
+  const product = productNameOf(platform);
   return [
     'Use get_issue_or_pr_thread to understand the context of an issue or PR before taking action.',
-    `By default, the tool fetches the current issue/PR from the ${name} context. Only provide owner/repo/issue_number when you need to fetch a different one.`,
+    `By default, the tool fetches the current issue/PR from the ${product} context. Only provide owner/repo/issue_number when you need to fetch a different one.`,
     'Use max_comments to limit results for very long threads; defaults to 100 comments.',
     'For pull requests, the tool also returns inline review comments (comments on specific lines of the diff).',
   ];
-};
+}
 
-export const getIssueOrPRThreadDescription = (platform: PlatformType = 'github'): string =>
-  `Retrieve the complete comment thread for a ${PLATFORM_PROMPT_INFO[platform].productName} issue or pull request. Returns the title, description, labels, state, author, timestamps, and all comments. For pull requests, also includes inline review comments with file path and line information, plus branch names and merge status. Does NOT fetch code changes — use the get_pr_diff tool for that.`;
+/**
+ * Build the get_issue_or_pr_thread tool description for the given platform.
+ *
+ * @param platform - The platform the agent is running on. Defaults to 'github'.
+ */
+export function GET_ISSUE_PR_THREAD_DESCRIPTION(platform: PlatformType = 'github'): string {
+  const product = productNameOf(platform);
+  return `Retrieve the complete comment thread for a ${product} issue or pull request. Returns the title, description, labels, state, author, timestamps, and all comments. For pull requests, also includes inline review comments with file path and line information, plus branch names and merge status. Does NOT fetch code changes — use the get_pr_diff tool for that.`;
+}
 
 export const GET_ISSUE_PR_THREAD_PARAM_OWNER_DESCRIPTION =
   'Repository owner (e.g., "octocat"). If not provided, uses the current repository from context.';
@@ -142,19 +171,22 @@ export const GET_ISSUE_PR_THREAD_PARAM_MAX_COMMENTS_DESCRIPTION =
 export const UPDATE_PULL_REQUEST_PROMPT_SNIPPET =
   'Update an existing pull request by pushing new commits to the PR branch and optionally updating the title and/or body.';
 
-export const getUpdatePullRequestPromptGuidelines = (
-  platform: PlatformType = 'github'
-): string[] => {
-  const name = PLATFORM_PROMPT_INFO[platform].productName;
+/**
+ * Build the update_pull_request prompt guidelines for the given platform.
+ *
+ * @param platform - The platform the agent is running on. Defaults to 'github'.
+ */
+export function UPDATE_PULL_REQUEST_PROMPT_GUIDELINES(platform: PlatformType = 'github'): string[] {
+  const product = productNameOf(platform);
   return [
     'Use update_pull_request when working within an existing PR flow to push new commits and/or update PR metadata.',
     'Make sure your changes are made (modified files exist) before calling this tool. The tool will detect changes and create a new commit on the PR branch.',
-    `By default, the tool works with the current PR from the ${name} context. Only provide pull_number when you need to update a different PR.`,
+    `By default, the tool works with the current PR from the ${product} context. Only provide pull_number when you need to update a different PR.`,
     'The tool commits changes with the provided message (or generates a default message) and pushes them to the existing PR branch.',
     'You can update the PR title and/or body using the title and body parameters.',
     'Use dryRun=true first to verify the update configuration, then dryRun=false to apply the changes.',
   ];
-};
+}
 
 export const UPDATE_PULL_REQUEST_DESCRIPTION =
   'Update an existing pull request by pushing new commits to the PR branch. Optionally updates the PR title and/or description. The tool detects changes in the working tree, creates a new commit on the PR branch, and updates the PR metadata if provided.';
@@ -180,18 +212,30 @@ export const UPDATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION =
 export const GET_PR_DIFF_PROMPT_SNIPPET =
   'Get the diff of a pull request. Use this to understand what code changes a PR introduces.';
 
-export const getPRDiffPromptGuidelines = (platform: PlatformType = 'github'): string[] => {
-  const name = PLATFORM_PROMPT_INFO[platform].productName;
+/**
+ * Build the get_pr_diff prompt guidelines for the given platform.
+ *
+ * @param platform - The platform the agent is running on. Defaults to 'github'.
+ */
+export function GET_PR_DIFF_PROMPT_GUIDELINES(platform: PlatformType = 'github'): string[] {
+  const product = productNameOf(platform);
   return [
     'Use get_pr_diff to fetch the diff of a pull request when you need to understand what changed.',
-    `By default, the tool fetches the diff for the current PR from the ${name} context. Only provide owner/repo/pull_number when you need to fetch a different PR.`,
+    `By default, the tool fetches the diff for the current PR from the ${product} context. Only provide owner/repo/pull_number when you need to fetch a different PR.`,
     'The diff is truncated at 1000 lines and 100KB by default. Use max_lines to increase or decrease the line limit.',
     'Use ignore_files to exclude common noisy paths (dist/, package-lock.json, etc.) from the diff.',
   ];
-};
+}
 
-export const getPRDiffDescription = (platform: PlatformType = 'github'): string =>
-  `Fetch the diff of a ${PLATFORM_PROMPT_INFO[platform].productName} pull request. Returns the diff as a string, truncated if too large. Useful for understanding what code changes a PR introduces before reviewing or modifying them.`;
+/**
+ * Build the get_pr_diff tool description for the given platform.
+ *
+ * @param platform - The platform the agent is running on. Defaults to 'github'.
+ */
+export function GET_PR_DIFF_DESCRIPTION(platform: PlatformType = 'github'): string {
+  const product = productNameOf(platform);
+  return `Fetch the diff of a ${product} pull request. Returns the diff as a string, truncated if too large. Useful for understanding what code changes a PR introduces before reviewing or modifying them.`;
+}
 
 export const GET_PR_DIFF_PARAM_OWNER_DESCRIPTION =
   'Repository owner (e.g., "octocat"). If not provided, uses the current repository from context.';
@@ -225,8 +269,19 @@ export const CREATE_REVIEW_PROMPT_GUIDELINES = [
   'Make sure line numbers reference the correct version of the file. Use the `get_pr_diff` tool first to understand the diff and verify line numbers.',
 ];
 
-export const getCreateReviewDescription = (platform: PlatformType = 'github'): string =>
-  `Create a pull request review with inline comments anchored to specific lines of the diff. Posts a ${PLATFORM_PROMPT_INFO[platform].productName} Pull Request Review using the \`pulls.createReview\` API with comments positioned on specific lines. Each comment is anchored to a file path and line number in the diff.`;
+/**
+ * Build the create_pull_request_review tool description for the given platform.
+ *
+ * The `pulls.createReview` API name is intentionally kept verbatim — all
+ * supported platforms (GitHub, Codeberg, Forgejo) expose a
+ * GitHub-compatible REST API.
+ *
+ * @param platform - The platform the agent is running on. Defaults to 'github'.
+ */
+export function CREATE_REVIEW_DESCRIPTION(platform: PlatformType = 'github'): string {
+  const product = productNameOf(platform);
+  return `Create a pull request review with inline comments anchored to specific lines of the diff. Posts a ${product} Pull Request Review using the \`pulls.createReview\` API with comments positioned on specific lines. Each comment is anchored to a file path and line number in the diff.`;
+}
 
 export const CREATE_REVIEW_PARAM_PULL_NUMBER_DESCRIPTION =
   'Pull request number. If not provided, uses the current PR from context.';
@@ -264,16 +319,21 @@ export const CREATE_REVIEW_PARAM_COMMENT_BODY_DESCRIPTION =
 export const GET_CI_STATUS_PROMPT_SNIPPET =
   'Check the CI/CD status for a pull request or commit ref. Returns check runs and workflow runs with their statuses, conclusions, and URLs.';
 
-export const getCiStatusPromptGuidelines = (platform: PlatformType = 'github'): string[] => {
-  const name = PLATFORM_PROMPT_INFO[platform].productName;
+/**
+ * Build the get_ci_status prompt guidelines for the given platform.
+ *
+ * @param platform - The platform the agent is running on. Defaults to 'github'.
+ */
+export function GET_CI_STATUS_PROMPT_GUIDELINES(platform: PlatformType = 'github'): string[] {
+  const product = productNameOf(platform);
   return [
     'Use get_ci_status to inspect the CI/CD status of a pull request or commit before or after making changes.',
-    `By default, the tool fetches status for the current PR from the ${name} context. Only provide owner/repo/pull_number when you need to check a different PR.`,
+    `By default, the tool fetches status for the current PR from the ${product} context. Only provide owner/repo/pull_number when you need to check a different PR.`,
     'You can also provide a `ref` (commit SHA or branch name) directly instead of a pull_number.',
     'Filter by `status` (queued, in_progress, completed) or `conclusion` (success, failure, cancelled, timed_out) to narrow results.',
     'For failed workflow runs, use the returned run_id with the `get_workflow_run_logs` tool to fetch detailed job logs and diagnose failures.',
   ];
-};
+}
 
 export const GET_CI_STATUS_DESCRIPTION =
   'Get the CI/CD status for a pull request or commit ref. Returns a list of check runs and workflow runs with their statuses, conclusions, and URLs. Use this to check if CI is passing or failing before or after making changes.';
@@ -309,8 +369,19 @@ export const GET_WORKFLOW_RUN_LOGS_PROMPT_GUIDELINES = [
   'The tool returns logs for all jobs in the run, with each job clearly labeled. Logs are truncated from the head, preserving the tail where error messages typically appear.',
 ];
 
-export const getWorkflowRunLogsDescription = (platform: PlatformType = 'github'): string =>
-  `Fetch the job logs for a specific ${PLATFORM_PROMPT_INFO[platform].productName} workflow run. Returns the log output for each job, truncated if too large. Use this to diagnose CI failures by inspecting the actual error messages and stack traces.`;
+/**
+ * Build the get_workflow_run_logs tool description for the given platform.
+ *
+ * Uses "{product} Actions" because all supported platforms run this action
+ * through an Actions-compatible runner (GitHub Actions, Forgejo Actions,
+ * Codeberg's Actions runner).
+ *
+ * @param platform - The platform the agent is running on. Defaults to 'github'.
+ */
+export function GET_WORKFLOW_RUN_LOGS_DESCRIPTION(platform: PlatformType = 'github'): string {
+  const product = productNameOf(platform);
+  return `Fetch the job logs for a specific ${product} Actions workflow run. Returns the log output for each job, truncated if too large. Use this to diagnose CI failures by inspecting the actual error messages and stack traces.`;
+}
 
 export const GET_WORKFLOW_RUN_LOGS_PARAM_RUN_ID_DESCRIPTION =
   'The workflow run ID to fetch logs for. Get this from the get_ci_status tool output.';

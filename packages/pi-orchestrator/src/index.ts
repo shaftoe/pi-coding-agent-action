@@ -42,7 +42,7 @@ export type {
   CompactionSectionInput,
 } from './pi/logging';
 export { resolveExtensions, getResourceLoader } from './pi/resource-loader';
-export { getSystemPrompt, SYSTEM_PROMPT, SUPPORTED_PLATFORMS } from './pi/prompt';
+export { getSystemPrompt, getSupportedPlatforms, SYSTEM_PROMPT } from './pi/prompt';
 export { createPRToolFactory } from './pi/tools/create-pr';
 export { createReviewToolFactory } from './pi/tools/create-review';
 export { getCIStatusToolFactory } from './pi/tools/get-ci-status';

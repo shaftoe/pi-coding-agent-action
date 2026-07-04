@@ -7,7 +7,7 @@ import { defineTool } from '@earendil-works/pi-coding-agent';
 import {
   CREATE_PULL_REQUEST_PROMPT_SNIPPET,
   CREATE_PULL_REQUEST_PROMPT_GUIDELINES,
-  getCreatePullRequestDescription,
+  CREATE_PULL_REQUEST_DESCRIPTION,
   CREATE_PULL_REQUEST_PARAM_TITLE_DESCRIPTION,
   CREATE_PULL_REQUEST_PARAM_BODY_DESCRIPTION,
   CREATE_PULL_REQUEST_PARAM_BASE_DESCRIPTION,
@@ -57,7 +57,7 @@ export function createPRToolFactory(provider: PlatformProvider) {
   return defineTool({
     name: 'create_pull_request',
     label: 'Create Pull Request',
-    description: getCreatePullRequestDescription(provider.type),
+    description: CREATE_PULL_REQUEST_DESCRIPTION(provider.type),
     promptSnippet: CREATE_PULL_REQUEST_PROMPT_SNIPPET,
     promptGuidelines: CREATE_PULL_REQUEST_PROMPT_GUIDELINES,
     parameters: createPullRequestSchema,

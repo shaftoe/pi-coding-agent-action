@@ -12,7 +12,7 @@ import {
   GET_CI_STATUS_PARAM_REPO_DESCRIPTION,
   GET_WORKFLOW_RUN_LOGS_PROMPT_SNIPPET,
   GET_WORKFLOW_RUN_LOGS_PROMPT_GUIDELINES,
-  getWorkflowRunLogsDescription,
+  GET_WORKFLOW_RUN_LOGS_DESCRIPTION,
   GET_WORKFLOW_RUN_LOGS_PARAM_RUN_ID_DESCRIPTION,
   GET_WORKFLOW_RUN_LOGS_PARAM_MAX_BYTES_DESCRIPTION,
 } from '../prompt';
@@ -60,7 +60,7 @@ export function getWorkflowRunLogsToolFactory(provider: PlatformProvider) {
   return defineTool({
     name: 'get_workflow_run_logs',
     label: 'Get Workflow Run Logs',
-    description: getWorkflowRunLogsDescription(provider.type),
+    description: GET_WORKFLOW_RUN_LOGS_DESCRIPTION(provider.type),
     promptSnippet: GET_WORKFLOW_RUN_LOGS_PROMPT_SNIPPET,
     promptGuidelines: GET_WORKFLOW_RUN_LOGS_PROMPT_GUIDELINES,
     parameters: getWorkflowRunLogsSchema,
