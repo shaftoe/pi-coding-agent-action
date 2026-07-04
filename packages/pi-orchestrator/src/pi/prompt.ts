@@ -6,8 +6,56 @@
  * definitions in {@link ./tools.ts}.
  */
 
-export const SYSTEM_PROMPT =
-  'You are a non-interactive assistant running in GitHub Actions CI/CD environment. You are usually tasked with code reviews and generating code changes. You will not interact with the user directly. The output (or error) you generate will be sent back as comment to the user. Avoid if possible long preambles about what you are going to do to achieve the goal, focus on the final result instead, remember that the user is reading the output as comment in a GitHub PR or issue. IMPORTANT: Do NOT add any footer, signature, metadata, "View action run" text, or similar closing to your response. A footer will be appended automatically - only output your actual response content.';
+import type { PlatformType } from '../platform';
+
+/**
+ * Platform-specific fragments used to build the system prompt.
+ */
+interface PlatformPromptInfo {
+  /** Full CI/CD environment label (e.g. "GitHub Actions CI/CD"). */
+  readonly ciEnvironment: string;
+  /** Short product name for referencing PRs/issues (e.g. "GitHub"). */
+  readonly productName: string;
+}
+
+/**
+ * Per-platform prompt fragments.
+ *
+ * Each supported platform gets its own CI/CD environment label and product
+ * name so the system prompt accurately reflects where the agent is running
+ * instead of always saying "GitHub Actions".
+ */
+const PLATFORM_PROMPT_INFO: Record<PlatformType, PlatformPromptInfo> = {
+  github: { ciEnvironment: 'GitHub Actions CI/CD', productName: 'GitHub' },
+  codeberg: { ciEnvironment: 'Codeberg CI/CD', productName: 'Codeberg' },
+  forgejo: { ciEnvironment: 'Forgejo Actions CI/CD', productName: 'Forgejo' },
+};
+
+/**
+ * Build the system prompt for the given platform.
+ *
+ * The prompt dynamically references the platform the agent is running on
+ * (e.g. "GitHub Actions CI/CD environment" vs "Forgejo Actions CI/CD
+ * environment" and "a GitHub PR or issue" vs "a Forgejo PR or issue") so
+ * that the model is not told it is running on GitHub when it is actually
+ * on Codeberg or Forgejo.
+ *
+ * @param platform - The platform the agent is running on. Defaults to
+ *                   `'github'` for backward compatibility.
+ * @returns The platform-aware system prompt string.
+ */
+export function getSystemPrompt(platform: PlatformType = 'github'): string {
+  const { ciEnvironment, productName } = PLATFORM_PROMPT_INFO[platform];
+  return `You are a non-interactive assistant running in ${ciEnvironment} environment. You are usually tasked with code reviews and generating code changes. You will not interact with the user directly. The output (or error) you generate will be sent back as comment to the user. Avoid if possible long preambles about what you are going to do to achieve the goal, focus on the final result instead, remember that the user is reading the output as comment in a ${productName} PR or issue. IMPORTANT: Do NOT add any footer, signature, metadata, "View action run" text, or similar closing to your response. A footer will be appended automatically - only output your actual response content.`;
+}
+
+/**
+ * The default (GitHub) system prompt.
+ *
+ * Kept for backward compatibility; equivalent to {@link getSystemPrompt}('github').
+ * Prefer {@link getSystemPrompt} when the platform is known.
+ */
+export const SYSTEM_PROMPT = getSystemPrompt('github');
 
 //
 // Create Pull Request

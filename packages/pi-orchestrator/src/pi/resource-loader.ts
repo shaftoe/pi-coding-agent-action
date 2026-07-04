@@ -15,7 +15,7 @@ import {
   getAgentDir,
   SettingsManager,
 } from '@earendil-works/pi-coding-agent';
-import { SYSTEM_PROMPT } from './prompt';
+import { getSystemPrompt } from './prompt';
 import { createLoggingFactory } from './logging';
 import type { ExtensionLoadingInfo } from './logging';
 import { createToolsFactory } from './tools/index';
@@ -118,7 +118,7 @@ export async function buildResourceLoaderOptions(
   return {
     extensionFactories,
     additionalExtensionPaths,
-    systemPromptOverride: () => config?.systemPrompt ?? SYSTEM_PROMPT,
+    systemPromptOverride: () => config?.systemPrompt ?? getSystemPrompt(provider.type),
     appendSystemPromptOverride: (agentsFiles: string[]) => {
       if (agentsFiles.length === 0) {
         return [];
