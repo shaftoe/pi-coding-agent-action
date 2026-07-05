@@ -453,6 +453,7 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
     const result = await createPullRequest(deps, { title: 'Fix bug' });
     expect(result.details.prCreated).toBe(false);
     expect(result.details.compareUrl).toBeDefined();
+    expect(result.content[0]!.text).toContain('Requires authentication');
   });
 
   test('404 (Forgejo "Can\'t read pulls") triggers the compare-URL fallback', async () => {

@@ -494,10 +494,14 @@ interface PrepareBranchAndPRResult {
  * intentionally separated: git-data operations (refs, blobs, trees,
  * commits) can succeed with push-only tokens, while `pulls.create` requires
  * `pull-requests: write`. On Forgejo the ephemeral Actions token sometimes
- * has the former but not the latter, so we catch **only** 401/403
+ * has the former but not the latter, so we catch **only** 401/403/404
  * (permission) errors from `pulls.create` and return a structured result
- * instead of throwing. All other errors (422 already-exists, 5xx, etc.)
- * are re-thrown so they are not silently masked as partial success.
+ * instead of throwing. (Forgejo returns 404 — "Can't read pulls or
+ * can't read UnitTypeCode" — instead of 403 when the internal actions
+ * bot user lacks the unit-level permission to create PRs; see the
+ * inline comment below for details.) All other errors (422
+ * already-exists, 5xx, etc.) are re-thrown so they are not silently
+ * masked as partial success.
  *
  * Throws `Error` when branch/commit creation itself fails (e.g. no changes
  * detected, API error on git-data endpoints) or when PR creation fails with
