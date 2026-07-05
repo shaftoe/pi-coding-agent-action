@@ -352,7 +352,7 @@ describe('createPullRequest — fallback when pulls.create fails', () => {
 });
 
 describe('createPullRequest — non-permission errors are re-thrown', () => {
-  // Only 401/403 (token-permission) failures trigger the compare-URL
+  // Only 401/403/404 (token-permission) failures trigger the compare-URL
   // fallback. Other statuses (422 already-exists, 5xx transient) must
   // propagate so the agent can react appropriately instead of being
   // silently masked as partial success.
@@ -453,5 +453,26 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
     const result = await createPullRequest(deps, { title: 'Fix bug' });
     expect(result.details.prCreated).toBe(false);
     expect(result.details.compareUrl).toBeDefined();
+  });
+
+  test('404 (Forgejo "Can\'t read pulls") triggers the compare-URL fallback', async () => {
+    // Forgejo returns 404 instead of 403 when the internal actions bot
+    // user lacks the unit-level permission to create PRs, even though git
+    // push succeeded. This must be treated as a permission error and fall
+    // back to the compare URL rather than being re-thrown.
+    const deps = createReThrowDeps(
+      tempDir,
+      mock(() =>
+        Promise.reject(
+          Object.assign(new Error("Can't read pulls or can't read UnitTypeCode"), {
+            status: 404,
+          })
+        )
+      )
+    );
+    const result = await createPullRequest(deps, { title: 'Fix bug' });
+    expect(result.details.prCreated).toBe(false);
+    expect(result.details.compareUrl).toBeDefined();
+    expect(result.content[0]!.text).toContain("Can't read pulls");
   });
 });

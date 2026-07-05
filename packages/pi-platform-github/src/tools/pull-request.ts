@@ -568,10 +568,17 @@ async function prepareBranchAndCreatePR(
   // Open the PR — this can fail independently of branch creation (e.g.
   // the token has push access but lacks pull-requests: write on Forgejo).
   //
-  // We only fall back to a compare URL for token-permission failures
-  // (401/403), which is the Forgejo scenario this targets. Other errors
-  // are re-thrown so they surface to the agent/user rather than being
-  // silently masked as partial success:
+  // We only fall back to a compare URL for token-permission failures,
+  // which is the Forgejo scenario this targets:
+  //   - 401/403 — classic permission-denied responses.
+  //   - 404 — Forgejo returns this ("Can't read pulls or can't read
+  //     UnitTypeCode") when the internal actions bot user lacks the
+  //     unit-level permission to create PRs, even though git push
+  //     succeeded. The 404 is semantically a permission error here,
+  //     not a "branch not found" error (the branch was just pushed).
+  //
+  // Other errors are re-thrown so they surface to the agent/user rather
+  // than being silently masked as partial success:
   //   - 422 "A pull request already exists" (e.g. action re-run) → the
   //     agent should use update_pull_request instead of opening a PR
   //     that already exists.
@@ -583,7 +590,7 @@ async function prepareBranchAndCreatePR(
   } catch (error) {
     const status = getErrorStatus(error);
     const message = error instanceof Error ? error.message : String(error);
-    if (status !== 401 && status !== 403) {
+    if (status !== 401 && status !== 403 && status !== 404) {
       log.debug(
         `PR creation failed with HTTP ${status ?? 'unknown'} (not a ` +
           `permission error) — re-throwing after branch "${head}" was pushed.`
