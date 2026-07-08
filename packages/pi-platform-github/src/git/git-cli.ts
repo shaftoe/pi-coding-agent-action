@@ -21,8 +21,8 @@ import { GITHUB_IGNORE_PATTERNS } from '../constants';
  * Default git identity used when the CI environment doesn't pre-configure
  * `user.name`/`user.email` (common on Forgejo/Gitea runners).
  */
-const DEFAULT_GIT_NAME = 'pi-coding-agent';
-const DEFAULT_GIT_EMAIL = 'pi-coding-agent@users.noreply.github.com';
+const DEFAULT_GIT_NAME = 'Pi';
+const DEFAULT_GIT_EMAIL = 'pi@users.noreply.github.com';
 
 /**
  * Append a `Co-authored-by` trailer to the commit message.
