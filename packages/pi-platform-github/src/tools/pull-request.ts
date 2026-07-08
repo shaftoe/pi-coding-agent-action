@@ -486,7 +486,7 @@ interface PrepareBranchAndPRResult {
  * Prepare the branch and commit on GitHub via the API, then attempt to open
  * a pull request.
  *
- * Wraps the sequence `getRef → buildFileMap → scanForChanges → createRef →
+ * Wraps the sequence `repos.getBranch → buildFileMap → scanForChanges → createRef →
  * createBlobsAndTree → createCommitAndUpdateBranch → createPullRequestOnGitHub`
  * into a single step.
  *
@@ -518,14 +518,21 @@ async function prepareBranchAndCreatePR(
   const owner = deps.context.repo.owner;
   const repo = deps.context.repo.repo;
 
-  // Get base branch reference
+  // Get base branch commit SHA.
+  //
+  // We deliberately use `repos.getBranch` (`GET /repos/{owner}/{repo}/branches/{branch}`)
+  // rather than `git.getRef` (`GET /repos/{owner}/{repo}/git/ref/{ref}`, singular) to
+  // resolve the base branch SHA. Gitea/Forgejo only implements the *plural* form
+  // (`/git/refs/{ref}`); the singular `/git/ref/{ref}` returns 404, which would break
+  // PR creation on those platforms. `repos.getBranch` works on both GitHub and
+  // Forgejo/Gitea and returns the commit SHA via `.data.commit.sha`.
   log.debug(`Getting base branch "${baseBranch}" reference...`);
-  const baseRef = await deps.octokit.rest.git.getRef({
+  const baseBranchData = await deps.octokit.rest.repos.getBranch({
     owner,
     repo,
-    ref: `heads/${baseBranch}`,
+    branch: baseBranch,
   });
-  const baseSha = baseRef.data.object.sha;
+  const baseSha = baseBranchData.data.commit.sha;
   log.debug(`Base branch SHA: ${baseSha}`);
 
   // Get files that exist in the base branch tree (for comparison)

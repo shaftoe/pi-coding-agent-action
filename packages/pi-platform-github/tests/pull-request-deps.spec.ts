@@ -23,7 +23,6 @@ function createPRDeps(): GitHubModuleDeps & {
         create: ReturnType<typeof mock>;
       };
       git: {
-        getRef: ReturnType<typeof mock>;
         getTree: ReturnType<typeof mock>;
         getBlob: ReturnType<typeof mock>;
         createRef: ReturnType<typeof mock>;
@@ -34,6 +33,7 @@ function createPRDeps(): GitHubModuleDeps & {
       };
       repos: {
         get: ReturnType<typeof mock>;
+        getBranch: ReturnType<typeof mock>;
       };
     };
   };
@@ -54,7 +54,6 @@ function createPRDeps(): GitHubModuleDeps & {
           ),
         },
         git: {
-          getRef: mock(() => Promise.resolve({ data: { object: { sha: 'base-sha-123' } } })),
           getTree: mock(() => Promise.resolve({ data: { tree: [] } })),
           getBlob: mock(() =>
             Promise.resolve({
@@ -69,6 +68,7 @@ function createPRDeps(): GitHubModuleDeps & {
         },
         repos: {
           get: mock(() => Promise.resolve({ data: { default_branch: 'develop' } })),
+          getBranch: mock(() => Promise.resolve({ data: { commit: { sha: 'base-sha-123' } } })),
         },
       },
     } as any,
@@ -263,7 +263,6 @@ describe('createPullRequest — fallback when pulls.create fails', () => {
               ),
           },
           git: {
-            getRef: mock(() => Promise.resolve({ data: { object: { sha: 'base-sha' } } })),
             getTree: mock(() => Promise.resolve({ data: { tree: [] } })),
             getBlob: mock(() => Promise.resolve({ data: { content: '' } })),
             createRef: mock(() => Promise.resolve({ data: {} })),
@@ -274,6 +273,7 @@ describe('createPullRequest — fallback when pulls.create fails', () => {
           },
           repos: {
             get: mock(() => Promise.resolve({ data: { default_branch: 'main' } })),
+            getBranch: mock(() => Promise.resolve({ data: { commit: { sha: 'base-sha' } } })),
           },
         },
       } as any,
@@ -362,7 +362,6 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
         rest: {
           pulls: { create: pullsCreateImpl },
           git: {
-            getRef: mock(() => Promise.resolve({ data: { object: { sha: 'base-sha' } } })),
             getTree: mock(() => Promise.resolve({ data: { tree: [] } })),
             getBlob: mock(() => Promise.resolve({ data: { content: '' } })),
             createRef: mock(() => Promise.resolve({ data: {} })),
@@ -373,6 +372,7 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
           },
           repos: {
             get: mock(() => Promise.resolve({ data: { default_branch: 'main' } })),
+            getBranch: mock(() => Promise.resolve({ data: { commit: { sha: 'base-sha' } } })),
           },
         },
       } as any,
