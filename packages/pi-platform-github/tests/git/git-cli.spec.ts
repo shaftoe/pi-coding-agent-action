@@ -16,6 +16,7 @@ import {
   hasLocalChanges,
   workspaceHasChanges,
   getWorkspaceChangePaths,
+  checkoutExistingBranch,
   commitAndPushBranch,
 } from '@alexanderfortin/pi-platform-github';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
@@ -121,12 +122,36 @@ describe('ensureGitIdentity', () => {
     expect(name.value).toBe('existing');
   });
 
-  test('uses default when actor is undefined', async () => {
+  test('uses default name and email when actor is undefined', async () => {
     const { log } = captureLogger();
     await ensureGitIdentity(git, undefined, log);
 
     const name = await git.getConfig('user.name', 'local');
-    expect(name.value).toBe('pi-coding-agent');
+    const email = await git.getConfig('user.email', 'local');
+    expect(name.value).toBe('Pi');
+    expect(email.value).toBe('pi@users.noreply.github.com');
+  });
+
+  test('fills in only the missing config field (email absent)', async () => {
+    // name is configured but email is not
+    await git.addConfig('user.name', 'partial-name', false, 'local');
+
+    const { log } = captureLogger();
+    await ensureGitIdentity(git, undefined, log);
+
+    const name = await git.getConfig('user.name', 'local');
+    const email = await git.getConfig('user.email', 'local');
+    // name should be untouched
+    expect(name.value).toBe('partial-name');
+    // email should have been set to the default
+    expect(email.value).toBe('pi@users.noreply.github.com');
+  });
+
+  test('logs debug message when configuring email', async () => {
+    const { log, messages } = captureLogger();
+    await ensureGitIdentity(git, 'myactor', log);
+
+    expect(messages.some(m => m.includes('user.email'))).toBe(true);
   });
 });
 
@@ -248,6 +273,182 @@ describe('getWorkspaceChangePaths', () => {
     expect(result.changed).not.toContain('.github/workflows/pi.yml');
     // but feature.ts should be included
     expect(result.changed).toContain('feature.ts');
+  });
+
+  test('expands untracked directories into individual files (-uall)', async () => {
+    // Create an entirely new directory with multiple files. Without -uall,
+    // git status collapses this to a single "?? newdir/" entry.
+    fs.mkdirSync(path.join(tmpDir, 'newdir'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'newdir', 'a.ts'), 'export {};');
+    fs.writeFileSync(path.join(tmpDir, 'newdir', 'b.ts'), 'export {};');
+    const result = await getWorkspaceChangePaths(tmpDir);
+    expect(result.changed).toContain('newdir/a.ts');
+    expect(result.changed).toContain('newdir/b.ts');
+  });
+
+  test('handles renamed files (reports the new path)', async () => {
+    // `git mv` produces a rename in porcelain: "R  old -> new"
+    fs.renameSync(path.join(tmpDir, 'README.md'), path.join(tmpDir, 'RENAMED.md'));
+    execSync('git add -A', { cwd: tmpDir, stdio: 'pipe' });
+    const result = await getWorkspaceChangePaths(tmpDir);
+    // The new path should appear in changed[]
+    expect(result.changed.some(p => p.endsWith('RENAMED.md'))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkoutExistingBranch
+// ---------------------------------------------------------------------------
+
+describe('checkoutExistingBranch', () => {
+  let repo: ReturnType<typeof setupGitRepo>;
+
+  beforeEach(() => {
+    repo = setupGitRepo();
+  });
+
+  afterEach(() => {
+    if (repo) {
+      cleanupGitRepo(repo.workspace);
+    }
+  });
+
+  test('checks out a remote branch with a clean working tree', async () => {
+    if (!repo) {
+      return;
+    }
+    const { workspace } = repo;
+
+    // Create a remote branch first
+    fs.writeFileSync(path.join(workspace, 'remote-file.txt'), 'content');
+    await commitAndPushBranch({
+      cwd: workspace,
+      branchName: 'remote-branch',
+      message: 'Initial',
+      isNewBranch: true,
+      paths: ['remote-file.txt'],
+      log: captureLogger().log,
+    });
+
+    // Switch back to main so the branch is not checked out locally
+    await simpleGit(workspace).checkout('main');
+
+    // Now checkout the existing remote branch
+    const git = simpleGit(workspace);
+    const { log } = captureLogger();
+    await checkoutExistingBranch(git, 'remote-branch', log);
+
+    // The file from the remote branch should be present
+    expect(fs.existsSync(path.join(workspace, 'remote-file.txt'))).toBe(true);
+  });
+
+  test('preserves uncommitted changes by stashing and restoring', async () => {
+    if (!repo) {
+      return;
+    }
+    const { workspace } = repo;
+
+    // Create a remote branch
+    fs.writeFileSync(path.join(workspace, 'branch-file.txt'), 'branch');
+    await commitAndPushBranch({
+      cwd: workspace,
+      branchName: 'stash-target',
+      message: 'Branch commit',
+      isNewBranch: true,
+      paths: ['branch-file.txt'],
+      log: captureLogger().log,
+    });
+
+    const git = simpleGit(workspace);
+    await git.checkout('main');
+
+    // Create an uncommitted change on main that is NOT in either branch
+    fs.writeFileSync(path.join(workspace, 'uncommitted.txt'), 'my work');
+
+    const { log, messages } = captureLogger();
+    await checkoutExistingBranch(git, 'stash-target', log);
+
+    // Stash + restore should have happened
+    expect(messages.some(m => m.includes('Stashing'))).toBe(true);
+    expect(messages.some(m => m.includes('Restoring'))).toBe(true);
+
+    // The uncommitted change should survive the checkout
+    expect(fs.existsSync(path.join(workspace, 'uncommitted.txt'))).toBe(true);
+    expect(fs.readFileSync(path.join(workspace, 'uncommitted.txt'), 'utf-8')).toBe('my work');
+    // And the branch-specific file should be present
+    expect(fs.existsSync(path.join(workspace, 'branch-file.txt'))).toBe(true);
+  });
+
+  test('resets an existing local branch to the remote tip', async () => {
+    if (!repo) {
+      return;
+    }
+    const { workspace } = repo;
+
+    // Create and push a remote branch (workspace is now on reset-test locally)
+    fs.writeFileSync(path.join(workspace, 'v1.txt'), 'v1');
+    await commitAndPushBranch({
+      cwd: workspace,
+      branchName: 'reset-test',
+      message: 'Remote commit',
+      isNewBranch: true,
+      paths: ['v1.txt'],
+      log: captureLogger().log,
+    });
+
+    const git = simpleGit(workspace);
+
+    // Add a local-only commit that should be discarded by reset --hard.
+    // We're currently on reset-test, so this adds to it ahead of origin.
+    fs.writeFileSync(path.join(workspace, 'local-only.txt'), 'local');
+    await git.add(['local-only.txt']);
+    await git.commit('local-only commit');
+
+    // Go back to main with a clean tree
+    await git.checkout('main');
+
+    const { log } = captureLogger();
+    // reset-test already exists locally, so checkoutBranch throws and the
+    // reset --hard fallback is exercised.
+    await checkoutExistingBranch(git, 'reset-test', log);
+
+    // The local-only file must be gone (reset to remote tip)
+    expect(fs.existsSync(path.join(workspace, 'local-only.txt'))).toBe(false);
+    // And the remote file present
+    expect(fs.existsSync(path.join(workspace, 'v1.txt'))).toBe(true);
+  });
+
+  test('throws when stashed changes cannot be applied', async () => {
+    if (!repo) {
+      return;
+    }
+    const { workspace } = repo;
+
+    // Create a remote branch containing a committed change to a file
+    fs.writeFileSync(path.join(workspace, 'conflict.txt'), 'branch');
+    await commitAndPushBranch({
+      cwd: workspace,
+      branchName: 'conflict-branch',
+      message: 'Branch',
+      isNewBranch: true,
+      paths: ['conflict.txt'],
+      log: captureLogger().log,
+    });
+
+    const git = simpleGit(workspace);
+    await git.checkout('main');
+
+    // On main, create an uncommitted change to the SAME file with
+    // different content. The stash pop will conflict.
+    fs.writeFileSync(path.join(workspace, 'conflict.txt'), 'working-tree');
+
+    const { log } = captureLogger();
+    await expect(checkoutExistingBranch(git, 'conflict-branch', log)).rejects.toThrow(
+      /Could not cleanly apply working-tree changes/
+    );
+
+    // A warning should have been logged
+    expect(log.warning).toBeDefined();
   });
 });
 
