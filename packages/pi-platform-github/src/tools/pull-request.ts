@@ -526,7 +526,7 @@ async function prepareBranchAndCreatePR(
   // (`/git/refs/{ref}`); the singular `/git/ref/{ref}` returns 404, which would break
   // PR creation on those platforms. `repos.getBranch` works on both GitHub and
   // Forgejo/Gitea and returns the commit SHA via `.data.commit.sha`.
-  log.debug(`Getting base branch "${baseBranch}" reference...`);
+  log.debug(`Getting base branch "${baseBranch}" commit SHA...`);
   const baseBranchData = await deps.octokit.rest.repos.getBranch({
     owner,
     repo,

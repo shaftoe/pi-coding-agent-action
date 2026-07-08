@@ -73,7 +73,6 @@ describe('applyCommit', () => {
             createCommit,
             updateRef,
             getTree,
-            getRef: mock(() => Promise.resolve({ data: { object: { sha: 'abc' } } })),
             getBlob: mock(() => Promise.resolve({ data: { content: '' } })),
           },
         },

@@ -19,7 +19,6 @@ function createUpdateDeps(): GitHubModuleDeps & {
         update: ReturnType<typeof mock>;
       };
       git: {
-        getRef: ReturnType<typeof mock>;
         getTree: ReturnType<typeof mock>;
         getBlob: ReturnType<typeof mock>;
         createBlob: ReturnType<typeof mock>;
@@ -53,7 +52,6 @@ function createUpdateDeps(): GitHubModuleDeps & {
           ),
         },
         git: {
-          getRef: mock(() => Promise.resolve({ data: { object: { sha: 'abc123' } } })),
           getTree: mock(() => Promise.resolve({ data: { tree: [] } })),
           getBlob: mock(() =>
             Promise.resolve({
