@@ -108,10 +108,8 @@ describe('createPullRequest with deps', () => {
 
   test('throws when no changes detected in dry workspace', async () => {
     const deps = createPRDeps();
-    // Mock tree to match workspace exactly - provide full tree with all files
-    // so that scanForChanges finds no differences
-    // Since we can't easily control the workspace, test that the error path exists
-    // by verifying dry run works (which is the same code path minus the throw)
+    // The workspace is a clean git repo (no changes), so
+    // getWorkspaceChangePaths finds nothing and the tool throws.
     const result = await createPullRequest(deps, {
       title: 'Fix bug',
       dryRun: true,

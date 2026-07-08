@@ -61,7 +61,8 @@ function createUpdateDeps(): GitHubModuleDeps {
 
 /**
  * Create a clean git repo workspace so `git status --porcelain` works.
- * The repo starts clean (no pending changes) so scanForChanges finds nothing.
+ * The repo starts clean (no pending changes) so getWorkspaceChangePaths
+ * finds nothing.
  */
 let emptyWorkspace: string;
 

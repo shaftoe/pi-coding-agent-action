@@ -1,15 +1,14 @@
 /**
  * @file Shared types and utilities for GitHub Git operations.
  *
- * Re-exports platform-agnostic types from the shared git module and
- * provides the GitHub-specific logger factory.
+ * Provides the GitHub-specific logger factory.
  */
 
-import type { FileMode, TreeEntry, Logger } from '@alexanderfortin/pi-orchestrator';
+import type { Logger } from '@alexanderfortin/pi-orchestrator';
 
-// Re-export shared types so consumers within the GitHub module can import
-// them from a single location.
-export type { FileMode, TreeEntry, Logger };
+// Re-export the Logger type so consumers within the GitHub module can import
+// it from a single location.
+export type { Logger };
 
 /**
  * Create a logger with a custom emoji prefix.

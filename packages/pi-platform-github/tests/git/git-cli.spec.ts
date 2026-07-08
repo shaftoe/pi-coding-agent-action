@@ -21,6 +21,7 @@ import {
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 import type { SimpleGit } from 'simple-git';
 import { simpleGit } from 'simple-git';
+import { setupGitRepo, cleanupGitRepo } from '../helpers/git-repo';
 
 /** Create a logger that captures messages for assertions. */
 function captureLogger() {
@@ -55,47 +56,6 @@ function createDeps(actor?: string): { deps: GitHubModuleDeps; messages: string[
     } as unknown as GitHubModuleDeps,
     messages,
   };
-}
-
-/**
- * Initialise a bare "remote" repo and a working clone.
- * Returns the paths and the SimpleGit instance for the clone.
- */
-function setupRepoPair():
-  | {
-      remoteDir: string;
-      workDir: string;
-      git: SimpleGit;
-    }
-  | undefined {
-  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-git-cli-'));
-  const remoteDir = path.join(tmpRoot, 'remote.git');
-  const workDir = path.join(tmpRoot, 'workspace');
-
-  fs.mkdirSync(remoteDir, { recursive: true });
-  fs.mkdirSync(workDir, { recursive: true });
-
-  try {
-    // Initialise bare remote
-    execSync('git init --bare', { cwd: remoteDir });
-    // Initialise working repo
-    execSync('git init', { cwd: workDir });
-    execSync('git remote add origin ' + remoteDir, { cwd: workDir });
-    // Make an initial commit so HEAD exists
-    fs.writeFileSync(path.join(workDir, 'README.md'), '# test');
-    execSync('git add -A', { cwd: workDir });
-    execSync('git -c user.name=test -c user.email=test@test commit -m "init"', {
-      cwd: workDir,
-    });
-    execSync('git branch -M main', { cwd: workDir });
-    execSync('git push -u origin main', { cwd: workDir });
-
-    return { remoteDir, workDir, git: simpleGit(workDir) };
-  } catch (_e) {
-    fs.rmSync(tmpRoot, { recursive: true, force: true });
-    // Skip these tests if git is not available
-    return undefined;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -296,38 +256,34 @@ describe('getWorkspaceChangePaths', () => {
 // ---------------------------------------------------------------------------
 
 describe('commitAndPushBranch', () => {
-  let setup: ReturnType<typeof setupRepoPair>;
-  let tmpRoot: string;
+  let repo: ReturnType<typeof setupGitRepo>;
 
   beforeEach(() => {
-    setup = setupRepoPair();
-    if (setup) {
-      tmpRoot = path.dirname(setup.remoteDir);
-    }
+    repo = setupGitRepo();
   });
 
   afterEach(() => {
-    if (tmpRoot) {
-      // tmpRoot is the parent of remoteDir
-      fs.rmSync(path.dirname(setup!.remoteDir), { recursive: true, force: true });
+    if (repo) {
+      cleanupGitRepo(repo.workspace);
     }
   });
 
   test('creates new branch, commits, and pushes', async () => {
-    if (!setup) {
+    if (!repo) {
       return; // skip if git not available
     }
-    const { workDir } = setup;
+    const { workspace } = repo;
 
     // Make a change
-    fs.writeFileSync(path.join(workDir, 'feature.txt'), 'new feature');
+    fs.writeFileSync(path.join(workspace, 'feature.txt'), 'new feature');
 
     const { log, messages } = captureLogger();
     const sha = await commitAndPushBranch({
-      cwd: workDir,
+      cwd: workspace,
       branchName: 'feature-branch',
       message: 'Add feature',
       isNewBranch: true,
+      paths: ['feature.txt'],
       log,
     });
 
@@ -338,31 +294,51 @@ describe('commitAndPushBranch', () => {
 
     // Verify the branch exists on the remote
     const remoteBranches = execSync('git branch', {
-      cwd: setup.remoteDir,
+      cwd: repo.remoteDir,
       encoding: 'utf-8',
     });
     expect(remoteBranches).toContain('feature-branch');
   });
 
-  test('configures git identity when none is set', async () => {
-    if (!setup) {
+  test('throws when paths is empty', async () => {
+    if (!repo) {
       return;
     }
-    const { workDir } = setup;
+    const { workspace } = repo;
+
+    const { log } = captureLogger();
+    await expect(
+      commitAndPushBranch({
+        cwd: workspace,
+        branchName: 'empty-paths',
+        message: 'No paths',
+        isNewBranch: true,
+        paths: [],
+        log,
+      })
+    ).rejects.toThrow(/requires at least one path/);
+  });
+
+  test('configures git identity when none is set', async () => {
+    if (!repo) {
+      return;
+    }
+    const { workspace } = repo;
 
     // Remove any identity config
-    const git = simpleGit(workDir);
+    const git = simpleGit(workspace);
     await git.raw(['config', '--unset', 'user.name']);
     await git.raw(['config', '--unset', 'user.email']);
 
-    fs.writeFileSync(path.join(workDir, 'file.txt'), 'content');
+    fs.writeFileSync(path.join(workspace, 'file.txt'), 'content');
 
     const { log } = captureLogger();
     await commitAndPushBranch({
-      cwd: workDir,
+      cwd: workspace,
       branchName: 'auto-identity',
       message: 'Test',
       isNewBranch: true,
+      paths: ['file.txt'],
       actor: 'ci-bot',
       log,
     });
@@ -373,35 +349,37 @@ describe('commitAndPushBranch', () => {
   });
 
   test('pushes to existing branch for updates', async () => {
-    if (!setup) {
+    if (!repo) {
       return;
     }
-    const { workDir, remoteDir } = setup;
+    const { workspace, remoteDir } = repo;
 
     // First, create a branch with a commit and push
-    fs.writeFileSync(path.join(workDir, 'v1.txt'), 'v1');
+    fs.writeFileSync(path.join(workspace, 'v1.txt'), 'v1');
     await commitAndPushBranch({
-      cwd: workDir,
+      cwd: workspace,
       branchName: 'update-branch',
       message: 'Initial',
       isNewBranch: true,
+      paths: ['v1.txt'],
       log: captureLogger().log,
     });
 
     // Now go back to main and make another change
-    const git = simpleGit(workDir);
+    const git = simpleGit(workspace);
     await git.checkout('main');
 
     // Make a new change
-    fs.writeFileSync(path.join(workDir, 'v2.txt'), 'v2');
+    fs.writeFileSync(path.join(workspace, 'v2.txt'), 'v2');
 
     // Push update to existing branch
     const { log } = captureLogger();
     const sha = await commitAndPushBranch({
-      cwd: workDir,
+      cwd: workspace,
       branchName: 'update-branch',
       message: 'Update',
       isNewBranch: false,
+      paths: ['v2.txt'],
       log,
     });
 
@@ -416,19 +394,19 @@ describe('commitAndPushBranch', () => {
     expect(lines.length).toBeGreaterThanOrEqual(2);
   });
 
-  test('stages only the specified paths when paths option is provided', async () => {
-    if (!setup) {
+  test('stages only the specified paths', async () => {
+    if (!repo) {
       return;
     }
-    const { workDir } = setup;
+    const { workspace } = repo;
 
     // Make two changes
-    fs.writeFileSync(path.join(workDir, 'included.ts'), 'export {};');
-    fs.writeFileSync(path.join(workDir, 'excluded.ts'), 'export {};');
+    fs.writeFileSync(path.join(workspace, 'included.ts'), 'export {};');
+    fs.writeFileSync(path.join(workspace, 'excluded.ts'), 'export {};');
 
     const { log } = captureLogger();
     await commitAndPushBranch({
-      cwd: workDir,
+      cwd: workspace,
       branchName: 'paths-test',
       message: 'Selective staging',
       isNewBranch: true,
@@ -438,7 +416,7 @@ describe('commitAndPushBranch', () => {
 
     // Verify the committed tree only contains included.ts (plus README.md from init)
     const treeOutput = execSync('git ls-tree -r --name-only paths-test', {
-      cwd: setup.remoteDir,
+      cwd: repo.remoteDir,
       encoding: 'utf-8',
     });
     expect(treeOutput).toContain('included.ts');

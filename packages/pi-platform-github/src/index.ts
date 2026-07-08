@@ -118,20 +118,10 @@ export {
   ensureGitIdentity,
   getWorkspaceChangePaths,
   checkoutExistingBranch,
-  buildFileMap,
-  scanForChanges,
-  scanDirectory,
   createLogger,
 } from './git';
 
-export type {
-  CommitAndPushOptions,
-  WorkspaceChangePaths,
-  FileMode,
-  TreeEntry,
-  ChangeScanResult,
-  ScanDirectoryParams,
-} from './git';
+export type { CommitAndPushOptions, WorkspaceChangePaths } from './git';
 
 // GitHub API token resolution (used by pi-cli + pi-action-bridge)
 export { resolveGitHubToken } from './auth';
