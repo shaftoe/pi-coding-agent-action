@@ -26,6 +26,7 @@
     "semantic-release": "semantic-release",
     "update-readme": "bun run scripts/update-readme-deps.ts",
     "sync-versions": "bun run scripts/sync-versions.ts",
+    "sync-lockfile": "bun run scripts/sync-lockfile.ts",
     "fallow": "bunx fallow",
     "fallow:dead-code": "bunx fallow dead-code",
     "fallow:dupes": "bunx fallow dupes",
