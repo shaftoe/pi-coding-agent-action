@@ -22,7 +22,10 @@ export const BRANCH_PREFIX = 'pi/issue' as const;
 
 // GitHub-specific ignore patterns (appended to the universal defaults)
 export const GITHUB_IGNORE_PATTERNS = [
-  '.github/workflows/*/pi.yml', // Don't include the workflow that runs this action
+  // Don't include the workflow that runs this action. Note: gitignore `*`
+  // does NOT cross `/`, so `*/pi.yml` wouldn't match `.github/workflows/pi.yml`
+  // directly — we need the exact path.
+  '.github/workflows/pi.yml',
 ] as const;
 
 // Default trigger string

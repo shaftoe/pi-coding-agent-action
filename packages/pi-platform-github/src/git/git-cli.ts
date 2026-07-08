@@ -117,8 +117,13 @@ export interface WorkspaceChangePaths {
 }
 
 /**
- * Get changed file paths from `git status --porcelain`, filtered by the
+ * Get changed file paths from `git status --porcelain -uall`, filtered by the
  * platform ignore patterns (e.g. the pi workflow YAML file).
+ *
+ * The `-uall` (`--untracked-files=all`) flag ensures that entirely-new
+ * directories are expanded to their individual files instead of collapsing
+ * to a single `?? dir/` entry. This keeps the reported file count accurate
+ * and applies ignore patterns on a per-file basis.
  *
  * This replaces the old `buildFileMap` + `scanForChanges` round-trip over
  * the Git Data API (which returns 404/405 on Forgejo/Gitea). `.gitignore`
@@ -130,7 +135,7 @@ export interface WorkspaceChangePaths {
  */
 export async function getWorkspaceChangePaths(cwd: string): Promise<WorkspaceChangePaths> {
   const git = simpleGit(cwd);
-  const output = await git.raw(['status', '--porcelain']);
+  const output = await git.raw(['status', '--porcelain', '-uall']);
 
   const ig = ignore().add([...GITHUB_IGNORE_PATTERNS]);
   const changed: string[] = [];
