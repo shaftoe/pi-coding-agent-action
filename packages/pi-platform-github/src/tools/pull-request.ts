@@ -2,9 +2,11 @@
  * @file GitHub pull request creation tool implementation.
  *
  * Implements the server-side logic for the `create_pull_request` custom tool:
- * detecting changed files in the working tree, creating blobs/trees/commits
- * via the Git Data API, creating a new branch, and opening a pull request.
- * Supports dry-run mode for testing without side effects.
+ * detecting changed files in the working tree, creating a branch and commit
+ * via the `git` CLI, and opening a pull request. Uses `git` CLI for all
+ * write operations (branch/commit/push) instead of the Git Data API, which
+ * is broken on Forgejo/Gitea. Supports dry-run mode for testing without
+ * side effects.
  */
 
 import { Temporal } from '@js-temporal/polyfill';
@@ -12,10 +14,9 @@ import { BRANCH_PREFIX, MAX_TITLE_LENGTH } from '../constants';
 import { getContextType } from '../context-utils';
 import {
   createLogger,
-  scanForChanges,
-  createBlobsAndTree,
-  createCommitAndUpdateBranch,
-  buildFileMap,
+  workspaceHasChanges,
+  commitAndPushBranch,
+  appendCoAuthoredBy,
 } from '../git/index';
 import type { GitHubModuleDeps, CreatePullRequestParams, CreatePullRequestDetails } from '../types';
 
@@ -483,18 +484,16 @@ interface PrepareBranchAndPRResult {
 }
 
 /**
- * Prepare the branch and commit on GitHub via the API, then attempt to open
+ * Prepare the branch and commit via the `git` CLI, then attempt to open
  * a pull request.
  *
- * Wraps the sequence `repos.getBranch → buildFileMap → scanForChanges → createRef →
- * createBlobsAndTree → createCommitAndUpdateBranch → createPullRequestOnGitHub`
- * into a single step.
+ * Wraps the sequence `hasLocalChanges → commitAndPushBranch (checkout -b, add,
+ * commit, push) → createPullRequestOnGitHub` into a single step.
  *
- * The branch/tree/commit operations and the `pulls.create` call are
- * intentionally separated: git-data operations (refs, blobs, trees,
- * commits) can succeed with push-only tokens, while `pulls.create` requires
- * `pull-requests: write`. On Forgejo the ephemeral Actions token sometimes
- * has the former but not the latter, so we catch **only** 401/403/404
+ * The git CLI operations and the `pulls.create` call are intentionally
+ * separated: git push can succeed with push-only tokens, while `pulls.create`
+ * requires `pull-requests: write`. On Forgejo the ephemeral Actions token
+ * sometimes has the former but not the latter, so we catch **only** 401/403/404
  * (permission) errors from `pulls.create` and return a structured result
  * instead of throwing. (Forgejo returns 404 — "Can't read pulls or
  * can't read UnitTypeCode" — instead of 403 when the internal actions
@@ -504,8 +503,8 @@ interface PrepareBranchAndPRResult {
  * masked as partial success.
  *
  * Throws `Error` when branch/commit creation itself fails (e.g. no changes
- * detected, API error on git-data endpoints) or when PR creation fails with
- * a non-permission HTTP status.
+ * detected, git push error) or when PR creation fails with a non-permission
+ * HTTP status.
  */
 async function prepareBranchAndCreatePR(
   deps: GitHubModuleDeps,
@@ -515,66 +514,39 @@ async function prepareBranchAndCreatePR(
   bodyText: string,
   log: ReturnType<typeof createLogger>
 ): Promise<PrepareBranchAndPRResult> {
-  const owner = deps.context.repo.owner;
-  const repo = deps.context.repo.repo;
+  const workspace = deps.context.workspace;
 
-  // Get base branch commit SHA.
+  // Check for changes in the working tree using the git CLI.
   //
-  // We deliberately use `repos.getBranch` (`GET /repos/{owner}/{repo}/branches/{branch}`)
-  // rather than `git.getRef` (`GET /repos/{owner}/{repo}/git/ref/{ref}`, singular) to
-  // resolve the base branch SHA. Gitea/Forgejo only implements the *plural* form
-  // (`/git/refs/{ref}`); the singular `/git/ref/{ref}` returns 404, which would break
-  // PR creation on those platforms. `repos.getBranch` works on both GitHub and
-  // Forgejo/Gitea and returns the commit SHA via `.data.commit.sha`.
-  log.debug(`Getting base branch "${baseBranch}" commit SHA...`);
-  const baseBranchData = await deps.octokit.rest.repos.getBranch({
-    owner,
-    repo,
-    branch: baseBranch,
-  });
-  const baseSha = baseBranchData.data.commit.sha;
-  log.debug(`Base branch SHA: ${baseSha}`);
+  // We use `git status` (via `workspaceHasChanges`) instead of the Git Data
+  // API because the API write endpoints (`createRef`, `createBlob`,
+  // `createTree`, `createCommit`, `updateRef`) return 404/405 on Forgejo/Gitea.
+  // The `git` CLI works uniformly across GitHub, Forgejo, Gitea, and Codeberg.
+  log.debug(`Checking for changes in workspace "${workspace}"...`);
+  const hasChanges = await workspaceHasChanges(workspace);
 
-  // Get files that exist in the base branch tree (for comparison)
-  log.debug(`Getting base branch tree...`);
-  const baseFiles = await buildFileMap(deps, baseSha);
-  log.debug(`Found ${baseFiles.size} files in base branch`);
-
-  // Scan for changes
-  const { changedFiles, deletedFiles } = await scanForChanges(deps, baseFiles, log);
-
-  if (changedFiles.length === 0 && deletedFiles.length === 0) {
+  if (!hasChanges) {
     throw new Error(
       'No changes detected. Please add new files and/or make your changes before creating a pull request.'
     );
   }
 
-  // Create new branch reference from base branch
-  log.debug(`Creating new branch "${head}"...`);
-  await deps.octokit.rest.git.createRef({
-    owner,
-    repo,
-    ref: `refs/heads/${head}`,
-    sha: baseSha,
-  });
-  log.debug(`Branch created successfully`);
-
-  // Create blobs and tree
-  const treeSha = await createBlobsAndTree(deps, {
-    changedFiles,
-    deletedFiles,
-    parentSha: baseSha,
-    log,
-  });
-
-  // Create commit and update branch
-  await createCommitAndUpdateBranch(deps, {
-    treeSha,
-    parentSha: baseSha,
+  // Create a new branch from the current HEAD, commit all changes, and push.
+  //
+  // The commit message includes a Co-authored-by trailer when an actor is
+  // available. The branch name includes a timestamp so collisions are
+  // effectively impossible.
+  const commitMessage = appendCoAuthoredBy(deps, title);
+  log.debug(`Creating branch "${head}", committing, and pushing via git CLI...`);
+  await commitAndPushBranch({
+    cwd: workspace,
     branchName: head,
-    message: title,
+    message: commitMessage,
+    isNewBranch: true,
+    actor: deps.context.actor,
     log,
   });
+  log.debug(`Branch "${head}" created and pushed successfully`);
 
   // Open the PR — this can fail independently of branch creation (e.g.
   // the token has push access but lacks pull-requests: write on Forgejo).
@@ -650,9 +622,9 @@ async function createPullRequestOnGitHub(
 /**
  * Create a pull request end-to-end.
  *
- * Orchestrates the full flow: determines the base branch, scans for changed
- * files, creates a branch, commits, and opens the PR. When `dryRun` is `true`
- * the operation is simulated and no GitHub resources are created.
+ * Orchestrates the full flow: determines the base branch, checks for working-tree
+ * changes, creates a branch + commit + push via the `git` CLI, and opens the PR.
+ * When `dryRun` is `true` the operation is simulated and no resources are created.
  *
  * @param deps - Module dependencies.
  * @param params - Parameters controlling title, body, base branch, and dry-run.
@@ -692,8 +664,8 @@ export async function createPullRequest(
     return buildCreateDryRunResult(message, head, baseBranch);
   }
 
-  // Create and push the new branch via GitHub API
-  log.debug(`Preparing branch and changes via GitHub API...`);
+  // Create and push the new branch via git CLI
+  log.debug(`Preparing branch and changes via git CLI...`);
 
   try {
     const result = await prepareBranchAndCreatePR(deps, baseBranch, head, title, bodyText, log);

@@ -2,8 +2,8 @@
  * @file Git utilities barrel export for the GitHub platform.
  *
  * Re-exports all public APIs including the platform-agnostic scanner
- * (via the GitHub-aware wrapper) and GitHub-specific blob/tree/commit
- * operations.
+ * (via the GitHub-aware wrapper), git-CLI helpers for branch/commit/push,
+ * and read-only tree operations.
  */
 
 // Types and utilities
@@ -14,10 +14,13 @@ export { createLogger } from './types';
 export type { ChangeScanResult, ScanDirectoryParams } from './file-scanner';
 export { buildFileMap, scanForChanges, scanDirectory } from './file-scanner';
 
-// Tree builder
-export type { CreateBlobsAndTreeParams } from './tree-builder';
-export { createBlobsAndTree } from './tree-builder';
-
-// Commit creator
-export type { CreateCommitAndUpdateBranchParams } from './commit-creator';
-export { createCommitAndUpdateBranch, appendCoAuthoredBy } from './commit-creator';
+// Git CLI helpers (branch creation, commit, push — replaces Git Data API writes)
+export type { CommitAndPushOptions } from './git-cli';
+export {
+  appendCoAuthoredBy,
+  ensureGitIdentity,
+  hasLocalChanges,
+  workspaceHasChanges,
+  checkoutExistingBranch,
+  commitAndPushBranch,
+} from './git-cli';

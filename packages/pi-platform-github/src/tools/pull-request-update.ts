@@ -2,8 +2,8 @@
  * @file GitHub pull request update tool implementation.
  *
  * Implements the server-side logic for the `update_pull_request` custom tool:
- * detecting changed files in the working tree, creating blobs/trees/commits
- * via the Git Data API, and pushing the new commit to an existing PR branch.
+ * detecting changed files in the working tree, creating a commit via the
+ * `git` CLI, and pushing the new commit to an existing PR branch.
  * Supports updating the PR title and body as well. Supports dry-run mode for
  * testing without side effects.
  */
@@ -14,11 +14,10 @@ import { MAX_TITLE_LENGTH } from '../constants';
 import {
   createLogger,
   scanForChanges,
-  createBlobsAndTree,
-  createCommitAndUpdateBranch,
+  commitAndPushBranch,
+  appendCoAuthoredBy,
   buildFileMap,
 } from '../git/index';
-import type { CreateBlobsAndTreeParams } from '../git/index';
 
 export interface UpdatePullRequestResult {
   content: { type: 'text'; text: string }[];
@@ -352,11 +351,10 @@ export function buildSuccessDetails(input: {
 }
 
 /**
- * Create blobs/tree/commit and update the PR branch.
+ * Commit working-tree changes and push to the PR branch via the `git` CLI.
  *
- * Wrapper around {@link createBlobsAndTree} + {@link generateCommitMessage} +
- * {@link createCommitAndUpdateBranch}. Returns `undefined` when there are no
- * file changes to apply.
+ * Wrapper around {@link generateCommitMessage} + {@link commitAndPushBranch}.
+ * Returns `undefined` when there are no file changes to apply.
  *
  * @returns The new commit SHA, or `undefined` when no changes were applied.
  * @internal Exported for testing purposes.
@@ -364,36 +362,32 @@ export function buildSuccessDetails(input: {
 export async function applyCommit(
   deps: GitHubModuleDeps,
   args: {
-    changedFiles: CreateBlobsAndTreeParams['changedFiles'];
+    changedFiles: { path: string }[];
     deletedFiles: string[];
-    headSha: string;
     headBranch: string;
     message: string | undefined;
     pullNumber: number;
     log: Logger;
   }
 ): Promise<string | undefined> {
-  const { changedFiles, deletedFiles, headSha, headBranch, message, pullNumber, log } = args;
+  const { changedFiles, deletedFiles, headBranch, message, pullNumber, log } = args;
 
   if (changedFiles.length === 0 && deletedFiles.length === 0) {
     log.info(`No code changes detected, only updating PR metadata if provided`);
     return undefined;
   }
 
-  const treeSha = await createBlobsAndTree(deps, {
-    changedFiles,
-    deletedFiles,
-    parentSha: headSha,
-    log,
-  });
+  const commitMessage = appendCoAuthoredBy(
+    deps,
+    generateCommitMessage(message, changedFiles, deletedFiles, pullNumber)
+  );
 
-  const commitMessage = generateCommitMessage(message, changedFiles, deletedFiles, pullNumber);
-
-  const commitSha = await createCommitAndUpdateBranch(deps, {
-    treeSha,
-    parentSha: headSha,
+  const commitSha = await commitAndPushBranch({
+    cwd: deps.context.workspace,
     branchName: headBranch,
     message: commitMessage,
+    isNewBranch: false,
+    actor: deps.context.actor,
     log,
   });
   log.info(`Created new commit ${commitSha} on branch ${headBranch}`);
@@ -533,7 +527,6 @@ export async function updatePullRequest(
   const commitSha = await applyCommit(deps, {
     changedFiles,
     deletedFiles,
-    headSha,
     headBranch,
     message,
     pullNumber: resolvedPullNumber,

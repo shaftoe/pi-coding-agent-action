@@ -6,7 +6,6 @@
 
 import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import {
   createPullRequest,
@@ -15,29 +14,9 @@ import {
   generatePullRequestBody,
 } from '@alexanderfortin/pi-platform-github';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
+import { setupGitRepo, cleanupGitRepo } from './helpers/git-repo';
 
-function createPRDeps(): GitHubModuleDeps & {
-  octokit: {
-    rest: {
-      pulls: {
-        create: ReturnType<typeof mock>;
-      };
-      git: {
-        getTree: ReturnType<typeof mock>;
-        getBlob: ReturnType<typeof mock>;
-        createRef: ReturnType<typeof mock>;
-        createBlob: ReturnType<typeof mock>;
-        createTree: ReturnType<typeof mock>;
-        createCommit: ReturnType<typeof mock>;
-        updateRef: ReturnType<typeof mock>;
-      };
-      repos: {
-        get: ReturnType<typeof mock>;
-        getBranch: ReturnType<typeof mock>;
-      };
-    };
-  };
-} {
+function createPRDeps(): GitHubModuleDeps {
   return {
     octokit: {
       rest: {
@@ -52,19 +31,6 @@ function createPRDeps(): GitHubModuleDeps & {
               },
             })
           ),
-        },
-        git: {
-          getTree: mock(() => Promise.resolve({ data: { tree: [] } })),
-          getBlob: mock(() =>
-            Promise.resolve({
-              data: { content: '' },
-            })
-          ),
-          createRef: mock(() => Promise.resolve({ data: {} })),
-          createBlob: mock(() => Promise.resolve({ data: { sha: 'blob-sha' } })),
-          createTree: mock(() => Promise.resolve({ data: { sha: 'new-tree-sha' } })),
-          createCommit: mock(() => Promise.resolve({ data: { sha: 'new-commit-sha' } })),
-          updateRef: mock(() => Promise.resolve({ data: {} })),
         },
         repos: {
           get: mock(() => Promise.resolve({ data: { default_branch: 'develop' } })),
@@ -245,8 +211,8 @@ describe('generateBranchName with deps', () => {
 });
 
 describe('createPullRequest — fallback when pulls.create fails', () => {
-  // This simulates the Forgejo scenario: the branch/tree/commit operations
-  // succeed (token has push access), but pulls.create fails (token lacks
+  // This simulates the Forgejo scenario: the git CLI push succeeds (token
+  // has push access), but pulls.create fails (token lacks
   // pull-requests:write). The tool should return a compare-URL fallback
   // instead of throwing.
   function createFallbackDeps(workspace: string, pullsCreateImpl?: ReturnType<typeof mock>) {
@@ -261,19 +227,6 @@ describe('createPullRequest — fallback when pulls.create fails', () => {
                   Object.assign(new Error("Forbidden: Can't read pulls"), { status: 403 })
                 )
               ),
-          },
-          git: {
-            getTree: mock(() => Promise.resolve({ data: { tree: [] } })),
-            getBlob: mock(() => Promise.resolve({ data: { content: '' } })),
-            createRef: mock(() => Promise.resolve({ data: {} })),
-            createBlob: mock(() => Promise.resolve({ data: { sha: 'blob-sha' } })),
-            createTree: mock(() => Promise.resolve({ data: { sha: 'tree-sha' } })),
-            createCommit: mock(() => Promise.resolve({ data: { sha: 'commit-sha' } })),
-            updateRef: mock(() => Promise.resolve({ data: {} })),
-          },
-          repos: {
-            get: mock(() => Promise.resolve({ data: { default_branch: 'main' } })),
-            getBranch: mock(() => Promise.resolve({ data: { commit: { sha: 'base-sha' } } })),
           },
         },
       } as any,
@@ -297,20 +250,27 @@ describe('createPullRequest — fallback when pulls.create fails', () => {
     } as unknown as GitHubModuleDeps;
   }
 
-  let tempDir: string;
+  let repo: ReturnType<typeof setupGitRepo>;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-pr-fallback-'));
-    // Create a file so scanForChanges detects a change
-    fs.writeFileSync(path.join(tempDir, 'new-file.txt'), 'hello world');
+    repo = setupGitRepo();
+    if (repo) {
+      // Create a file so git status detects a change
+      fs.writeFileSync(path.join(repo.workspace, 'new-file.txt'), 'hello world');
+    }
   });
 
   afterEach(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    if (repo) {
+      cleanupGitRepo(repo.workspace);
+    }
   });
 
   test('returns fallback result with compare URL when pulls.create fails', async () => {
-    const deps = createFallbackDeps(tempDir);
+    if (!repo) {
+      return;
+    } // skip if git not available
+    const deps = createFallbackDeps(repo.workspace);
     const result = await createPullRequest(deps, { title: 'Fix podman prune' });
 
     // PR was not created
@@ -330,20 +290,29 @@ describe('createPullRequest — fallback when pulls.create fails', () => {
     expect(result.content[0]!.text).toContain(result.details.compareUrl!);
   });
 
-  test('branch ref was created (git data operations succeeded)', async () => {
-    const deps = createFallbackDeps(tempDir);
+  test('branch was created and pushed via git CLI', async () => {
+    if (!repo) {
+      return;
+    } // skip if git not available
+    const deps = createFallbackDeps(repo.workspace);
     await createPullRequest(deps, { title: 'Fix bug' });
 
-    // Verify git.createRef was called (branch was created)
-    expect(deps.octokit.rest.git.createRef).toHaveBeenCalled();
     // Verify pulls.create was attempted
     expect(deps.octokit.rest.pulls.create).toHaveBeenCalled();
-    // Verify createCommit was called (commit was pushed)
-    expect(deps.octokit.rest.git.createCommit).toHaveBeenCalled();
+    // Verify the branch was pushed to the remote
+    const { execSync } = await import('node:child_process');
+    const branches = execSync('git branch', {
+      cwd: repo.remoteDir,
+      encoding: 'utf-8',
+    });
+    expect(branches).toContain('pi/issue18-');
   });
 
   test('does not throw — returns a result instead', async () => {
-    const deps = createFallbackDeps(tempDir);
+    if (!repo) {
+      return;
+    } // skip if git not available
+    const deps = createFallbackDeps(repo.workspace);
     // This should NOT throw — the whole point of the fallback
     const result = await createPullRequest(deps, { title: 'Fix bug' });
     expect(result).toBeDefined();
@@ -361,19 +330,6 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
       octokit: {
         rest: {
           pulls: { create: pullsCreateImpl },
-          git: {
-            getTree: mock(() => Promise.resolve({ data: { tree: [] } })),
-            getBlob: mock(() => Promise.resolve({ data: { content: '' } })),
-            createRef: mock(() => Promise.resolve({ data: {} })),
-            createBlob: mock(() => Promise.resolve({ data: { sha: 'blob-sha' } })),
-            createTree: mock(() => Promise.resolve({ data: { sha: 'tree-sha' } })),
-            createCommit: mock(() => Promise.resolve({ data: { sha: 'commit-sha' } })),
-            updateRef: mock(() => Promise.resolve({ data: {} })),
-          },
-          repos: {
-            get: mock(() => Promise.resolve({ data: { default_branch: 'main' } })),
-            getBranch: mock(() => Promise.resolve({ data: { commit: { sha: 'base-sha' } } })),
-          },
         },
       } as any,
       context: {
@@ -396,20 +352,27 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
     } as unknown as GitHubModuleDeps;
   }
 
-  let tempDir: string;
+  let repo: ReturnType<typeof setupGitRepo>;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-pr-rethrow-'));
-    fs.writeFileSync(path.join(tempDir, 'new-file.txt'), 'hello world');
+    repo = setupGitRepo();
+    if (repo) {
+      fs.writeFileSync(path.join(repo.workspace, 'new-file.txt'), 'hello world');
+    }
   });
 
   afterEach(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    if (repo) {
+      cleanupGitRepo(repo.workspace);
+    }
   });
 
   test('422 (PR already exists) is re-thrown, not converted to fallback', async () => {
+    if (!repo) {
+      return;
+    }
     const deps = createReThrowDeps(
-      tempDir,
+      repo.workspace,
       mock(() =>
         Promise.reject(
           Object.assign(new Error('Validation Failed: A pull request already exists'), {
@@ -424,8 +387,11 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
   });
 
   test('500 (server error) is re-thrown, not converted to fallback', async () => {
+    if (!repo) {
+      return;
+    }
     const deps = createReThrowDeps(
-      tempDir,
+      repo.workspace,
       mock(() => Promise.reject(Object.assign(new Error('Internal Server Error'), { status: 500 })))
     );
     await expect(createPullRequest(deps, { title: 'Fix bug' })).rejects.toThrow(
@@ -434,8 +400,11 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
   });
 
   test('error with no status code is re-thrown, not converted to fallback', async () => {
+    if (!repo) {
+      return;
+    }
     const deps = createReThrowDeps(
-      tempDir,
+      repo.workspace,
       mock(() => Promise.reject(new Error('network timeout')))
     );
     await expect(createPullRequest(deps, { title: 'Fix bug' })).rejects.toThrow(
@@ -444,8 +413,11 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
   });
 
   test('401 (unauthorized) still triggers the compare-URL fallback', async () => {
+    if (!repo) {
+      return;
+    }
     const deps = createReThrowDeps(
-      tempDir,
+      repo.workspace,
       mock(() =>
         Promise.reject(Object.assign(new Error('Requires authentication'), { status: 401 }))
       )
@@ -457,12 +429,15 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
   });
 
   test('404 (Forgejo "Can\'t read pulls") triggers the compare-URL fallback', async () => {
+    if (!repo) {
+      return;
+    }
     // Forgejo returns 404 instead of 403 when the internal actions bot
     // user lacks the unit-level permission to create PRs, even though git
     // push succeeded. This must be treated as a permission error and fall
     // back to the compare URL rather than being re-thrown.
     const deps = createReThrowDeps(
-      tempDir,
+      repo.workspace,
       mock(() =>
         Promise.reject(
           Object.assign(new Error("Can't read pulls or can't read UnitTypeCode"), {

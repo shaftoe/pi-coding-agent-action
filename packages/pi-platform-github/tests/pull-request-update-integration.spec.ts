@@ -1,4 +1,7 @@
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 import { setupGitHubTestEnv } from './helpers/github-test-env';
 setupGitHubTestEnv({ envPathPrefix: 'gh-event-pr-update' });
@@ -39,24 +42,9 @@ const mockGetTree = mock(() =>
     },
   })
 );
-const mockCreateBlob = mock(() =>
+const mockGetBlob = mock(() =>
   Promise.resolve({
-    data: { sha: 'blob-sha-123' },
-  })
-);
-const mockCreateTree = mock(() =>
-  Promise.resolve({
-    data: { sha: 'new-tree-sha' },
-  })
-);
-const mockCreateCommit = mock(() =>
-  Promise.resolve({
-    data: { sha: 'commit-sha-123' },
-  })
-);
-const mockUpdateRef = mock(() =>
-  Promise.resolve({
-    data: { ref: 'refs/heads/feature-branch' },
+    data: { content: '' },
   })
 );
 const mockOctokit = {
@@ -67,10 +55,7 @@ const mockOctokit = {
     },
     git: {
       getTree: mockGetTree,
-      createBlob: mockCreateBlob,
-      createTree: mockCreateTree,
-      createCommit: mockCreateCommit,
-      updateRef: mockUpdateRef,
+      getBlob: mockGetBlob,
     },
   },
 };
@@ -123,11 +108,22 @@ function createTestDeps(): GitHubModuleDeps {
       payload: mockContext.payload,
       serverUrl: mockContext.serverUrl,
       runId: mockContext.runId,
-      workspace: process.cwd(),
+      workspace: emptyWorkspace,
     },
     logger: testCoreAdapter,
   };
 }
+
+/** Create an empty temp workspace so scanForChanges finds no files. */
+let emptyWorkspace: string;
+
+beforeEach(() => {
+  emptyWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-pr-update-int-'));
+});
+
+afterEach(() => {
+  fs.rmSync(emptyWorkspace, { recursive: true, force: true });
+});
 
 // Cache the module after first import
 let pullRequestUpdateModule: any | null = null;
@@ -142,10 +138,6 @@ describe('updatePullRequest - integration tests', () => {
     mockPullsUpdate.mockClear();
     mockPullsGet.mockClear();
     mockGetTree.mockClear();
-    mockCreateBlob.mockClear();
-    mockCreateTree.mockClear();
-    mockCreateCommit.mockClear();
-    mockUpdateRef.mockClear();
     // Reset to default context
     mockContext.issue = { number: 42 };
     mockContext.eventName = 'pull_request';

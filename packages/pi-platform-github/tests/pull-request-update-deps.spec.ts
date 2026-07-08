@@ -4,31 +4,17 @@
  * Covers the end-to-end flow of updating a pull request via the GitHub API.
  */
 
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import {
   updatePullRequest,
   validateUpdatePullRequestParams,
 } from '@alexanderfortin/pi-platform-github';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 
-function createUpdateDeps(): GitHubModuleDeps & {
-  octokit: {
-    rest: {
-      pulls: {
-        get: ReturnType<typeof mock>;
-        update: ReturnType<typeof mock>;
-      };
-      git: {
-        getTree: ReturnType<typeof mock>;
-        getBlob: ReturnType<typeof mock>;
-        createBlob: ReturnType<typeof mock>;
-        createTree: ReturnType<typeof mock>;
-        createCommit: ReturnType<typeof mock>;
-        updateRef: ReturnType<typeof mock>;
-      };
-    };
-  };
-} {
+function createUpdateDeps(): GitHubModuleDeps {
   return {
     octokit: {
       rest: {
@@ -58,10 +44,6 @@ function createUpdateDeps(): GitHubModuleDeps & {
               data: { content: '' },
             })
           ),
-          createBlob: mock(() => Promise.resolve({ data: { sha: 'blob-sha' } })),
-          createTree: mock(() => Promise.resolve({ data: { sha: 'tree-sha' } })),
-          createCommit: mock(() => Promise.resolve({ data: { sha: 'commit-sha' } })),
-          updateRef: mock(() => Promise.resolve({ data: {} })),
         },
       },
     } as any,
@@ -72,7 +54,7 @@ function createUpdateDeps(): GitHubModuleDeps & {
       payload: {},
       serverUrl: 'https://github.com',
       runId: 123456789,
-      workspace: process.cwd(),
+      workspace: emptyWorkspace,
     },
     logger: {
       debug: mock(() => {}),
@@ -83,6 +65,17 @@ function createUpdateDeps(): GitHubModuleDeps & {
     },
   };
 }
+
+/** Create an empty temp workspace so scanForChanges finds no files (→ no code changes). */
+let emptyWorkspace: string;
+
+beforeEach(() => {
+  emptyWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-pr-update-empty-'));
+});
+
+afterEach(() => {
+  fs.rmSync(emptyWorkspace, { recursive: true, force: true });
+});
 
 describe('updatePullRequest', () => {
   test('throws when pull number cannot be resolved', async () => {

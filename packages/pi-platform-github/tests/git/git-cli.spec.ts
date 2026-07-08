@@ -1,0 +1,361 @@
+/**
+ * @file Tests for the git-CLI helpers in `git-cli.ts`.
+ *
+ * These tests use real git operations in temporary directories to verify
+ * the `simple-git` based helpers behave correctly end-to-end.
+ */
+
+import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
+import { execSync } from 'node:child_process';
+import {
+  appendCoAuthoredBy,
+  ensureGitIdentity,
+  hasLocalChanges,
+  workspaceHasChanges,
+  commitAndPushBranch,
+} from '@alexanderfortin/pi-platform-github';
+import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
+import type { SimpleGit } from 'simple-git';
+import { simpleGit } from 'simple-git';
+
+/** Create a logger that captures messages for assertions. */
+function captureLogger() {
+  const messages: string[] = [];
+  return {
+    log: {
+      debug: (msg: string) => messages.push(`debug: ${msg}`),
+      info: (msg: string) => messages.push(`info: ${msg}`),
+      warning: (msg: string) => messages.push(`warning: ${msg}`),
+      notice: (msg: string) => messages.push(`notice: ${msg}`),
+      error: (msg: string) => messages.push(`error: ${msg}`),
+    },
+    messages,
+  };
+}
+
+/** Create a minimal GitHubModuleDeps with a captured logger. */
+function createDeps(actor?: string): { deps: GitHubModuleDeps; messages: string[] } {
+  const { log, messages } = captureLogger();
+  return {
+    deps: {
+      context: {
+        repo: { owner: 'test-owner', repo: 'test-repo' },
+        issue: { number: 42 },
+        eventName: 'issue_comment',
+        payload: {},
+        serverUrl: 'https://github.com',
+        workspace: '/tmp',
+        ...(actor !== undefined ? { actor } : {}),
+      },
+      logger: log,
+    } as unknown as GitHubModuleDeps,
+    messages,
+  };
+}
+
+/**
+ * Initialise a bare "remote" repo and a working clone.
+ * Returns the paths and the SimpleGit instance for the clone.
+ */
+function setupRepoPair():
+  | {
+      remoteDir: string;
+      workDir: string;
+      git: SimpleGit;
+    }
+  | undefined {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-git-cli-'));
+  const remoteDir = path.join(tmpRoot, 'remote.git');
+  const workDir = path.join(tmpRoot, 'workspace');
+
+  fs.mkdirSync(remoteDir, { recursive: true });
+  fs.mkdirSync(workDir, { recursive: true });
+
+  try {
+    // Initialise bare remote
+    execSync('git init --bare', { cwd: remoteDir });
+    // Initialise working repo
+    execSync('git init', { cwd: workDir });
+    execSync('git remote add origin ' + remoteDir, { cwd: workDir });
+    // Make an initial commit so HEAD exists
+    fs.writeFileSync(path.join(workDir, 'README.md'), '# test');
+    execSync('git add -A', { cwd: workDir });
+    execSync('git -c user.name=test -c user.email=test@test commit -m "init"', {
+      cwd: workDir,
+    });
+    execSync('git branch -M main', { cwd: workDir });
+    execSync('git push -u origin main', { cwd: workDir });
+
+    return { remoteDir, workDir, git: simpleGit(workDir) };
+  } catch (_e) {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+    // Skip these tests if git is not available
+    return undefined;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// appendCoAuthoredBy
+// ---------------------------------------------------------------------------
+
+describe('appendCoAuthoredBy', () => {
+  test('appends trailer when actor is present', () => {
+    const { deps } = createDeps('octocat');
+    expect(appendCoAuthoredBy(deps, 'Fix bug')).toBe(
+      'Fix bug\n\nCo-authored-by: octocat <octocat@users.noreply.github.com>'
+    );
+  });
+
+  test('returns message unchanged when actor is empty', () => {
+    const { deps } = createDeps('');
+    expect(appendCoAuthoredBy(deps, 'Fix bug')).toBe('Fix bug');
+  });
+
+  test('returns message unchanged when actor is undefined', () => {
+    const { deps } = createDeps(undefined);
+    expect(appendCoAuthoredBy(deps, 'Fix bug')).toBe('Fix bug');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ensureGitIdentity
+// ---------------------------------------------------------------------------
+
+describe('ensureGitIdentity', () => {
+  let tmpDir: string;
+  let git: SimpleGit;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-git-identity-'));
+    execSync('git init', { cwd: tmpDir });
+    git = simpleGit(tmpDir);
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('sets local identity when none is configured', async () => {
+    const { log, messages } = captureLogger();
+    await ensureGitIdentity(git, 'myactor', log);
+
+    const name = await git.getConfig('user.name', 'local');
+    const email = await git.getConfig('user.email', 'local');
+    expect(name.value).toBe('myactor');
+    expect(email.value).toBe('myactor@users.noreply.github.com');
+    expect(messages.some(m => m.includes('user.name'))).toBe(true);
+  });
+
+  test('does not override existing identity', async () => {
+    await git.addConfig('user.name', 'existing', false, 'local');
+    await git.addConfig('user.email', 'existing@test', false, 'local');
+
+    const { log } = captureLogger();
+    await ensureGitIdentity(git, 'myactor', log);
+
+    const name = await git.getConfig('user.name', 'local');
+    expect(name.value).toBe('existing');
+  });
+
+  test('uses default when actor is undefined', async () => {
+    const { log } = captureLogger();
+    await ensureGitIdentity(git, undefined, log);
+
+    const name = await git.getConfig('user.name', 'local');
+    expect(name.value).toBe('pi-coding-agent');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasLocalChanges / workspaceHasChanges
+// ---------------------------------------------------------------------------
+
+describe('hasLocalChanges', () => {
+  let tmpDir: string;
+  let git: SimpleGit;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-git-status-'));
+    execSync('git init', { cwd: tmpDir });
+    execSync('git -c user.name=t -c user.email=t@t commit --allow-empty -m init', {
+      cwd: tmpDir,
+    });
+    git = simpleGit(tmpDir);
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('returns false for clean working tree', async () => {
+    expect(await hasLocalChanges(git)).toBe(false);
+  });
+
+  test('returns true when there are untracked files', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'new.txt'), 'content');
+    expect(await hasLocalChanges(git)).toBe(true);
+  });
+
+  test('returns true when there are modified files', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'tracked.txt'), 'v1');
+    execSync('git add -A && git -c user.name=t -c user.email=t@t commit -m add', {
+      cwd: tmpDir,
+    });
+    fs.writeFileSync(path.join(tmpDir, 'tracked.txt'), 'v2');
+    expect(await hasLocalChanges(git)).toBe(true);
+  });
+});
+
+describe('workspaceHasChanges', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-git-ws-status-'));
+    execSync('git init', { cwd: tmpDir });
+    execSync('git -c user.name=t -c user.email=t@t commit --allow-empty -m init', {
+      cwd: tmpDir,
+    });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('returns false for clean working tree', async () => {
+    expect(await workspaceHasChanges(tmpDir)).toBe(false);
+  });
+
+  test('returns true when there are untracked files', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'new.txt'), 'content');
+    expect(await workspaceHasChanges(tmpDir)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// commitAndPushBranch (integration with real git)
+// ---------------------------------------------------------------------------
+
+describe('commitAndPushBranch', () => {
+  let setup: ReturnType<typeof setupRepoPair>;
+  let tmpRoot: string;
+
+  beforeEach(() => {
+    setup = setupRepoPair();
+    if (setup) {
+      tmpRoot = path.dirname(setup.remoteDir);
+    }
+  });
+
+  afterEach(() => {
+    if (tmpRoot) {
+      // tmpRoot is the parent of remoteDir
+      fs.rmSync(path.dirname(setup!.remoteDir), { recursive: true, force: true });
+    }
+  });
+
+  test('creates new branch, commits, and pushes', async () => {
+    if (!setup) {
+      return; // skip if git not available
+    }
+    const { workDir } = setup;
+
+    // Make a change
+    fs.writeFileSync(path.join(workDir, 'feature.txt'), 'new feature');
+
+    const { log, messages } = captureLogger();
+    const sha = await commitAndPushBranch({
+      cwd: workDir,
+      branchName: 'feature-branch',
+      message: 'Add feature',
+      isNewBranch: true,
+      log,
+    });
+
+    // Should return a commit SHA
+    expect(sha).toMatch(/^[0-9a-f]{7,40}$/);
+    // Should have pushed
+    expect(messages.some(m => m.includes('Pushing'))).toBe(true);
+
+    // Verify the branch exists on the remote
+    const remoteBranches = execSync('git branch', {
+      cwd: setup.remoteDir,
+      encoding: 'utf-8',
+    });
+    expect(remoteBranches).toContain('feature-branch');
+  });
+
+  test('configures git identity when none is set', async () => {
+    if (!setup) {
+      return;
+    }
+    const { workDir } = setup;
+
+    // Remove any identity config
+    const git = simpleGit(workDir);
+    await git.raw(['config', '--unset', 'user.name']);
+    await git.raw(['config', '--unset', 'user.email']);
+
+    fs.writeFileSync(path.join(workDir, 'file.txt'), 'content');
+
+    const { log } = captureLogger();
+    await commitAndPushBranch({
+      cwd: workDir,
+      branchName: 'auto-identity',
+      message: 'Test',
+      isNewBranch: true,
+      actor: 'ci-bot',
+      log,
+    });
+
+    // Identity should have been set locally
+    const name = await git.getConfig('user.name', 'local');
+    expect(name.value).toBe('ci-bot');
+  });
+
+  test('pushes to existing branch for updates', async () => {
+    if (!setup) {
+      return;
+    }
+    const { workDir, remoteDir } = setup;
+
+    // First, create a branch with a commit and push
+    fs.writeFileSync(path.join(workDir, 'v1.txt'), 'v1');
+    await commitAndPushBranch({
+      cwd: workDir,
+      branchName: 'update-branch',
+      message: 'Initial',
+      isNewBranch: true,
+      log: captureLogger().log,
+    });
+
+    // Now go back to main and make another change
+    const git = simpleGit(workDir);
+    await git.checkout('main');
+
+    // Make a new change
+    fs.writeFileSync(path.join(workDir, 'v2.txt'), 'v2');
+
+    // Push update to existing branch
+    const { log } = captureLogger();
+    const sha = await commitAndPushBranch({
+      cwd: workDir,
+      branchName: 'update-branch',
+      message: 'Update',
+      isNewBranch: false,
+      log,
+    });
+
+    expect(sha).toMatch(/^[0-9a-f]{7,40}$/);
+
+    // Verify the remote branch now has 2 commits
+    const logOutput = execSync(`git log --oneline update-branch`, {
+      cwd: remoteDir,
+      encoding: 'utf-8',
+    });
+    const lines = logOutput.trim().split('\n');
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+  });
+});

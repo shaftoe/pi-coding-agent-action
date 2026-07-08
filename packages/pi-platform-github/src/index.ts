@@ -111,9 +111,12 @@ export { getWorkflowRunLogs } from './tools/get-workflow-run-logs';
 
 // Git operations (used by tools internally)
 export {
-  createBlobsAndTree,
-  createCommitAndUpdateBranch,
+  commitAndPushBranch,
   appendCoAuthoredBy,
+  hasLocalChanges,
+  workspaceHasChanges,
+  ensureGitIdentity,
+  checkoutExistingBranch,
   buildFileMap,
   scanForChanges,
   scanDirectory,
@@ -121,8 +124,7 @@ export {
 } from './git';
 
 export type {
-  CreateBlobsAndTreeParams,
-  CreateCommitAndUpdateBranchParams,
+  CommitAndPushOptions,
   FileMode,
   TreeEntry,
   ChangeScanResult,
