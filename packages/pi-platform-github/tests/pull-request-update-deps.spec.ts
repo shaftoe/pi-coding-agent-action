@@ -8,6 +8,7 @@ import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { execSync } from 'node:child_process';
 import {
   updatePullRequest,
   validateUpdatePullRequestParams,
@@ -37,14 +38,6 @@ function createUpdateDeps(): GitHubModuleDeps {
             })
           ),
         },
-        git: {
-          getTree: mock(() => Promise.resolve({ data: { tree: [] } })),
-          getBlob: mock(() =>
-            Promise.resolve({
-              data: { content: '' },
-            })
-          ),
-        },
       },
     } as any,
     context: {
@@ -66,11 +59,19 @@ function createUpdateDeps(): GitHubModuleDeps {
   };
 }
 
-/** Create an empty temp workspace so scanForChanges finds no files (→ no code changes). */
+/**
+ * Create a clean git repo workspace so `git status --porcelain` works.
+ * The repo starts clean (no pending changes) so scanForChanges finds nothing.
+ */
 let emptyWorkspace: string;
 
 beforeEach(() => {
   emptyWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-pr-update-empty-'));
+  // Initialise as a git repo with one commit so it has a clean working tree
+  execSync('git init', { cwd: emptyWorkspace, stdio: 'pipe' });
+  execSync('git config user.name test', { cwd: emptyWorkspace, stdio: 'pipe' });
+  execSync('git config user.email test@test', { cwd: emptyWorkspace, stdio: 'pipe' });
+  execSync('git commit --allow-empty -m init', { cwd: emptyWorkspace, stdio: 'pipe' });
 });
 
 afterEach(() => {
@@ -115,19 +116,19 @@ describe('updatePullRequest', () => {
 
   test('dry run with code changes reports them', async () => {
     const deps = createUpdateDeps();
-    // Mock empty tree so no files to compare
-    (deps.octokit.rest.git.getTree as any).mockImplementation(() =>
-      Promise.resolve({ data: { tree: [] } })
-    );
+    // Create a file so git status detects a change
+    fs.writeFileSync(path.join(emptyWorkspace, 'new-file.ts'), 'export {};');
+
     const result = await updatePullRequest(deps, {
       pull_number: 42,
       message: 'Update code',
       dryRun: true,
     });
 
-    // With no files in the tree and workspace files existing, there may or may not be changes
+    // Should report the file change
     expect(result.details.dryRun).toBe(true);
     expect(result.content[0]!.text).toContain('[DRY RUN]');
+    expect(result.content[0]!.text).toContain('1 modified/new file(s)');
   });
 
   test('updates only metadata when no file changes', async () => {

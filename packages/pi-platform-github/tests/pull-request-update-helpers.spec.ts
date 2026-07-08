@@ -47,7 +47,7 @@ describe('formatChangeSummary', () => {
   });
 
   test('renders only the modified count when only changedFiles > 0', () => {
-    expect(formatChangeSummary([{ path: 'a' }, { path: 'b' }], [])).toEqual([
+    expect(formatChangeSummary(['a', 'b'], [])).toEqual([
       '- Code changes:',
       '  - 2 modified/new file(s)',
     ]);
@@ -61,7 +61,7 @@ describe('formatChangeSummary', () => {
   });
 
   test('renders both counts when both lists are non-empty', () => {
-    expect(formatChangeSummary([{ path: 'a' }], ['x.ts'])).toEqual([
+    expect(formatChangeSummary(['a'], ['x.ts'])).toEqual([
       '- Code changes:',
       '  - 1 modified/new file(s)',
       '  - 1 deleted file(s)',

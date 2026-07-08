@@ -2,6 +2,7 @@ import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { execSync } from 'node:child_process';
 
 import { setupGitHubTestEnv } from './helpers/github-test-env';
 setupGitHubTestEnv({ envPathPrefix: 'gh-event-pr-update' });
@@ -34,31 +35,6 @@ const mockPullsGet = mock(() =>
     },
   })
 );
-const mockGetTree = mock(() =>
-  Promise.resolve({
-    data: {
-      sha: 'tree-sha-123',
-      tree: [],
-    },
-  })
-);
-const mockGetBlob = mock(() =>
-  Promise.resolve({
-    data: { content: '' },
-  })
-);
-const mockOctokit = {
-  rest: {
-    pulls: {
-      get: mockPullsGet,
-      update: mockPullsUpdate,
-    },
-    git: {
-      getTree: mockGetTree,
-      getBlob: mockGetBlob,
-    },
-  },
-};
 // octokit mock no longer needed - deps pattern
 
 // Setup default GitHub context
@@ -80,6 +56,15 @@ const mockContext = {
 mock.module('@actions/github', () => ({
   context: mockContext,
 }));
+
+const mockOctokit = {
+  rest: {
+    pulls: {
+      get: mockPullsGet,
+      update: mockPullsUpdate,
+    },
+  },
+};
 
 // Create a test CoreAdapter
 const testCoreAdapter = {
@@ -114,11 +99,19 @@ function createTestDeps(): GitHubModuleDeps {
   };
 }
 
-/** Create an empty temp workspace so scanForChanges finds no files. */
+/**
+ * Create a clean git repo workspace so `git status --porcelain` works.
+ * The repo starts clean (no pending changes).
+ */
 let emptyWorkspace: string;
 
 beforeEach(() => {
   emptyWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-pr-update-int-'));
+  // Initialise as a git repo with one commit so it has a clean working tree
+  execSync('git init', { cwd: emptyWorkspace, stdio: 'pipe' });
+  execSync('git config user.name test', { cwd: emptyWorkspace, stdio: 'pipe' });
+  execSync('git config user.email test@test', { cwd: emptyWorkspace, stdio: 'pipe' });
+  execSync('git commit --allow-empty -m init', { cwd: emptyWorkspace, stdio: 'pipe' });
 });
 
 afterEach(() => {
@@ -137,7 +130,6 @@ describe('updatePullRequest - integration tests', () => {
   beforeEach(async () => {
     mockPullsUpdate.mockClear();
     mockPullsGet.mockClear();
-    mockGetTree.mockClear();
     // Reset to default context
     mockContext.issue = { number: 42 };
     mockContext.eventName = 'pull_request';

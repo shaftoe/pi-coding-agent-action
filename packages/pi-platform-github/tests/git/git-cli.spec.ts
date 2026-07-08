@@ -15,6 +15,7 @@ import {
   ensureGitIdentity,
   hasLocalChanges,
   workspaceHasChanges,
+  getWorkspaceChangePaths,
   commitAndPushBranch,
 } from '@alexanderfortin/pi-platform-github';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
@@ -235,6 +236,62 @@ describe('workspaceHasChanges', () => {
 });
 
 // ---------------------------------------------------------------------------
+// getWorkspaceChangePaths
+// ---------------------------------------------------------------------------
+
+describe('getWorkspaceChangePaths', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-git-ws-paths-'));
+    execSync('git init', { cwd: tmpDir, stdio: 'pipe' });
+    execSync('git config user.name t', { cwd: tmpDir, stdio: 'pipe' });
+    execSync('git config user.email t@t', { cwd: tmpDir, stdio: 'pipe' });
+    // Initial commit with a tracked file
+    fs.writeFileSync(path.join(tmpDir, 'README.md'), '# test');
+    execSync('git add -A', { cwd: tmpDir, stdio: 'pipe' });
+    execSync('git commit -m init', { cwd: tmpDir, stdio: 'pipe' });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('returns empty arrays for a clean working tree', async () => {
+    const result = await getWorkspaceChangePaths(tmpDir);
+    expect(result.changed).toEqual([]);
+    expect(result.deleted).toEqual([]);
+  });
+
+  test('detects new and modified files in changed[]', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'new.ts'), 'export {};');
+    fs.writeFileSync(path.join(tmpDir, 'README.md'), '# modified');
+    const result = await getWorkspaceChangePaths(tmpDir);
+    expect(result.changed).toContain('new.ts');
+    expect(result.changed).toContain('README.md');
+    expect(result.deleted).toEqual([]);
+  });
+
+  test('detects deleted files in deleted[]', async () => {
+    fs.rmSync(path.join(tmpDir, 'README.md'));
+    const result = await getWorkspaceChangePaths(tmpDir);
+    expect(result.deleted).toContain('README.md');
+    expect(result.changed).toEqual([]);
+  });
+
+  test('filters out GITHUB_IGNORE_PATTERNS (pi workflow file)', async () => {
+    fs.mkdirSync(path.join(tmpDir, '.github', 'workflows'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.github', 'workflows', 'pi.yml'), 'changed');
+    fs.writeFileSync(path.join(tmpDir, 'feature.ts'), 'export {};');
+    const result = await getWorkspaceChangePaths(tmpDir);
+    // pi.yml must be excluded
+    expect(result.changed).not.toContain('.github/workflows/pi.yml');
+    // but feature.ts should be included
+    expect(result.changed).toContain('feature.ts');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // commitAndPushBranch (integration with real git)
 // ---------------------------------------------------------------------------
 
@@ -357,5 +414,34 @@ describe('commitAndPushBranch', () => {
     });
     const lines = logOutput.trim().split('\n');
     expect(lines.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('stages only the specified paths when paths option is provided', async () => {
+    if (!setup) {
+      return;
+    }
+    const { workDir } = setup;
+
+    // Make two changes
+    fs.writeFileSync(path.join(workDir, 'included.ts'), 'export {};');
+    fs.writeFileSync(path.join(workDir, 'excluded.ts'), 'export {};');
+
+    const { log } = captureLogger();
+    await commitAndPushBranch({
+      cwd: workDir,
+      branchName: 'paths-test',
+      message: 'Selective staging',
+      isNewBranch: true,
+      paths: ['included.ts'],
+      log,
+    });
+
+    // Verify the committed tree only contains included.ts (plus README.md from init)
+    const treeOutput = execSync('git ls-tree -r --name-only paths-test', {
+      cwd: setup.remoteDir,
+      encoding: 'utf-8',
+    });
+    expect(treeOutput).toContain('included.ts');
+    expect(treeOutput).not.toContain('excluded.ts');
   });
 });

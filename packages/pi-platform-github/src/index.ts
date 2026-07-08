@@ -116,6 +116,7 @@ export {
   hasLocalChanges,
   workspaceHasChanges,
   ensureGitIdentity,
+  getWorkspaceChangePaths,
   checkoutExistingBranch,
   buildFileMap,
   scanForChanges,
@@ -125,6 +126,7 @@ export {
 
 export type {
   CommitAndPushOptions,
+  WorkspaceChangePaths,
   FileMode,
   TreeEntry,
   ChangeScanResult,

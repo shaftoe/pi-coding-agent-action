@@ -101,10 +101,8 @@
         "@js-temporal/polyfill": "^0.5.1",
         "@octokit/core": "^7.0.6",
         "@octokit/plugin-rest-endpoint-methods": "^17.0.0",
-        "simple-git": "^3.36.0",
-      },
-      "devDependencies": {
         "ignore": "^7.0.5",
+        "simple-git": "^3.36.0",
       },
     },
   },

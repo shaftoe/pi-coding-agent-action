@@ -15,12 +15,13 @@ export type { ChangeScanResult, ScanDirectoryParams } from './file-scanner';
 export { buildFileMap, scanForChanges, scanDirectory } from './file-scanner';
 
 // Git CLI helpers (branch creation, commit, push — replaces Git Data API writes)
-export type { CommitAndPushOptions } from './git-cli';
+export type { CommitAndPushOptions, WorkspaceChangePaths } from './git-cli';
 export {
   appendCoAuthoredBy,
   ensureGitIdentity,
   hasLocalChanges,
   workspaceHasChanges,
+  getWorkspaceChangePaths,
   checkoutExistingBranch,
   commitAndPushBranch,
 } from './git-cli';

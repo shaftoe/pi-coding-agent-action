@@ -14,7 +14,7 @@ import { BRANCH_PREFIX, MAX_TITLE_LENGTH } from '../constants';
 import { getContextType } from '../context-utils';
 import {
   createLogger,
-  workspaceHasChanges,
+  getWorkspaceChangePaths,
   commitAndPushBranch,
   appendCoAuthoredBy,
 } from '../git/index';
@@ -518,14 +518,18 @@ async function prepareBranchAndCreatePR(
 
   // Check for changes in the working tree using the git CLI.
   //
-  // We use `git status` (via `workspaceHasChanges`) instead of the Git Data
-  // API because the API write endpoints (`createRef`, `createBlob`,
-  // `createTree`, `createCommit`, `updateRef`) return 404/405 on Forgejo/Gitea.
-  // The `git` CLI works uniformly across GitHub, Forgejo, Gitea, and Codeberg.
+  // We use `git status --porcelain` (via `getWorkspaceChangePaths`) instead
+  // of the Git Data API because the API write endpoints (`createRef`,
+  // `createBlob`, `createTree`, `createCommit`, `updateRef`) return 404/405 on
+  // Forgejo/Gitea. The `git` CLI works uniformly across GitHub, Forgejo, Gitea,
+  // and Codeberg.
+  //
+  // Only files returned here (filtered by `GITHUB_IGNORE_PATTERNS`) are staged
+  // for the commit — stray files or pi-workflow edits are excluded.
   log.debug(`Checking for changes in workspace "${workspace}"...`);
-  const hasChanges = await workspaceHasChanges(workspace);
+  const { changed, deleted } = await getWorkspaceChangePaths(workspace);
 
-  if (!hasChanges) {
+  if (changed.length === 0 && deleted.length === 0) {
     throw new Error(
       'No changes detected. Please add new files and/or make your changes before creating a pull request.'
     );
@@ -543,6 +547,7 @@ async function prepareBranchAndCreatePR(
     branchName: head,
     message: commitMessage,
     isNewBranch: true,
+    paths: [...changed, ...deleted],
     actor: deps.context.actor,
     log,
   });

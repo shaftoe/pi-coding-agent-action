@@ -13,7 +13,9 @@
  */
 
 import { simpleGit, type SimpleGit } from 'simple-git';
+import ignore from 'ignore';
 import type { GitHubModuleDeps } from '../types';
+import { GITHUB_IGNORE_PATTERNS } from '../constants';
 
 /**
  * Default git identity used when the CI environment doesn't pre-configure
@@ -104,6 +106,77 @@ export async function hasLocalChanges(git: SimpleGit): Promise<boolean> {
 }
 
 /**
+ * Result of {@link getWorkspaceChangePaths}: changed/deleted paths from
+ * `git status --porcelain`, filtered by platform ignore patterns.
+ */
+export interface WorkspaceChangePaths {
+  /** New or modified file paths to stage with `git add`. */
+  changed: string[];
+  /** Deleted file paths to stage for removal. */
+  deleted: string[];
+}
+
+/**
+ * Get changed file paths from `git status --porcelain`, filtered by the
+ * platform ignore patterns (e.g. the pi workflow YAML file).
+ *
+ * This replaces the old `buildFileMap` + `scanForChanges` round-trip over
+ * the Git Data API (which returns 404/405 on Forgejo/Gitea). `.gitignore`
+ * is respected automatically by `git status`; additional platform-level
+ * patterns are applied via {@link GITHUB_IGNORE_PATTERNS}.
+ *
+ * @param cwd - Working-tree directory.
+ * @returns Filtered changed and deleted paths.
+ */
+export async function getWorkspaceChangePaths(cwd: string): Promise<WorkspaceChangePaths> {
+  const git = simpleGit(cwd);
+  const output = await git.raw(['status', '--porcelain']);
+
+  const ig = ignore().add([...GITHUB_IGNORE_PATTERNS]);
+  const changed: string[] = [];
+  const deleted: string[] = [];
+
+  if (!output.trim()) {
+    return { changed, deleted };
+  }
+
+  for (const line of output.split('\n')) {
+    if (!line) {
+      continue;
+    }
+    // Porcelain format: "XY path" where X = index status, Y = working tree status
+    const x = line[0]!;
+    const y = line[1]!;
+    let filePath = line.substring(3);
+
+    // Handle renames: "R  old_path -> new_path"
+    const arrowIndex = filePath.indexOf(' -> ');
+    if (arrowIndex !== -1) {
+      filePath = filePath.substring(arrowIndex + 4);
+    }
+
+    // Remove surrounding quotes (git quotes paths with special chars)
+    if (filePath.startsWith('"') && filePath.endsWith('"')) {
+      filePath = filePath.slice(1, -1);
+    }
+
+    // Skip if ignored by platform patterns (e.g. pi workflow file)
+    if (ig.ignores(filePath)) {
+      continue;
+    }
+
+    // 'D' in either status position means deleted
+    if (x === 'D' || y === 'D') {
+      deleted.push(filePath);
+    } else {
+      changed.push(filePath);
+    }
+  }
+
+  return { changed, deleted };
+}
+
+/**
  * Checkout an existing remote branch locally, preserving working-tree changes.
  *
  * Used by `update_pull_request` when the workspace is checked out at a
@@ -132,7 +205,10 @@ export async function checkoutExistingBranch(
   try {
     await git.checkoutBranch(branchName, `origin/${branchName}`);
   } catch {
-    // Branch already exists locally — reset to remote tip
+    // Branch already exists locally — reset to remote tip.
+    // Destructive but safe: this is an ephemeral CI checkout, and we just
+    // fetched the authoritative remote tip. Any local-only commits would
+    // be from a previous, failed run and should be discarded.
     await git.checkout(branchName);
     await git.raw(['reset', '--hard', `origin/${branchName}`]);
   }
@@ -171,6 +247,13 @@ export interface CommitAndPushOptions {
   isNewBranch: boolean;
   /** CI actor, used for git identity when none is configured. */
   actor?: string | undefined;
+  /**
+   * Specific paths to stage instead of `git add -A`. When omitted, all
+   * working-tree changes are staged. Pass the output of
+   * {@link getWorkspaceChangePaths} (changed + deleted) to respect platform
+   * ignore patterns and avoid committing stray files.
+   */
+  paths?: string[];
   /** Logger for debug/warning output. */
   log: { debug: (msg: string) => void; warning: (msg: string) => void };
 }
@@ -203,9 +286,14 @@ export async function commitAndPushBranch(options: CommitAndPushOptions): Promis
     await checkoutExistingBranch(git, branchName, log);
   }
 
-  // Stage all changes (including deletions)
+  // Stage changes. When `paths` is provided, stage only those specific
+  // files (respecting platform ignore patterns). Otherwise, stage everything.
   log.debug(`Staging changes…`);
-  await git.add('-A');
+  if (options.paths && options.paths.length > 0) {
+    await git.add(options.paths);
+  } else {
+    await git.add('-A');
+  }
 
   // Commit
   log.debug(`Committing…`);

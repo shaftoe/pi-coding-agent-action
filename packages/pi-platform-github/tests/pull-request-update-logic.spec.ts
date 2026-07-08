@@ -98,8 +98,8 @@ describe('applyCommit', () => {
     const { deps, info } = createDeps(repo.workspace);
 
     const sha = await applyCommit(deps, {
-      changedFiles: [],
-      deletedFiles: [],
+      changedPaths: [],
+      deletedPaths: [],
       headBranch: 'feat',
       message: 'msg',
       pullNumber: 42,
@@ -125,11 +125,11 @@ describe('applyCommit', () => {
 
     const { deps, info } = createDeps(repo.workspace);
 
-    const changedFiles = [{ path: 'a.ts' }, { path: 'b.ts' }];
+    const changedFiles = ['a.ts', 'b.ts'];
 
     const sha = await applyCommit(deps, {
-      changedFiles,
-      deletedFiles: ['old.ts'],
+      changedPaths: changedFiles,
+      deletedPaths: [],
       headBranch: 'feat',
       message: undefined, // force auto-generated message
       pullNumber: 7,
@@ -159,8 +159,8 @@ describe('applyCommit', () => {
     const { deps } = createDeps(repo.workspace);
 
     await applyCommit(deps, {
-      changedFiles: [{ path: 'a.ts' }],
-      deletedFiles: [],
+      changedPaths: ['a.ts'],
+      deletedPaths: [],
       headBranch: 'feat',
       message: 'Custom: fix stuff',
       pullNumber: 1,
@@ -303,16 +303,14 @@ describe('generateCommitMessage', () => {
     const module = await getModule();
     const { generateCommitMessage } = module;
 
-    expect(generateCommitMessage('', [{ path: 'a.ts' }], [], 7)).toBe(
-      'Update PR #7: 1 modified/new file(s)'
-    );
+    expect(generateCommitMessage('', ['a.ts'], [], 7)).toBe('Update PR #7: 1 modified/new file(s)');
   });
 
   test('treats undefined as no message (generates default)', async () => {
     const module = await getModule();
     const { generateCommitMessage } = module;
 
-    expect(generateCommitMessage(undefined, [{ path: 'a.ts' }], [], 7)).toBe(
+    expect(generateCommitMessage(undefined, ['a.ts'], [], 7)).toBe(
       'Update PR #7: 1 modified/new file(s)'
     );
   });
@@ -321,7 +319,7 @@ describe('generateCommitMessage', () => {
     const module = await getModule();
     const { generateCommitMessage } = module;
 
-    const out = generateCommitMessage(undefined, [{ path: 'a' }, { path: 'b' }], [], 99);
+    const out = generateCommitMessage(undefined, ['a', 'b'], [], 99);
     expect(out).toBe('Update PR #99: 2 modified/new file(s)');
     expect(out).not.toContain('deleted');
   });
@@ -339,9 +337,9 @@ describe('generateCommitMessage', () => {
     const module = await getModule();
     const { generateCommitMessage } = module;
 
-    expect(
-      generateCommitMessage(undefined, [{ path: 'a' }, { path: 'b' }, { path: 'c' }], ['old'], 5)
-    ).toBe('Update PR #5: 3 modified/new file(s), 1 deleted file(s)');
+    expect(generateCommitMessage(undefined, ['a', 'b', 'c'], ['old'], 5)).toBe(
+      'Update PR #5: 3 modified/new file(s), 1 deleted file(s)'
+    );
   });
 
   test('both-empty case: produces trailing colon (preserves prior behavior)', async () => {
@@ -360,7 +358,7 @@ describe('buildDryRunReport', () => {
     headBranch: 'feat',
     baseBranch: 'main',
     prUrl: 'https://github.com/test-owner/test-repo/pull/42',
-    changedFiles: [] as { path: string }[],
+    changedFiles: [] as string[],
     deletedFiles: [] as string[],
   };
 
@@ -398,7 +396,7 @@ describe('buildDryRunReport', () => {
 
     const out = buildDryRunReport({
       ...baseInput,
-      changedFiles: [{ path: 'a.ts' }, { path: 'b.ts' }],
+      changedFiles: ['a.ts', 'b.ts'],
     });
     expect(textOf(out)).toContain('- Code changes:');
     expect(textOf(out)).toContain('  - 2 modified/new file(s)');
@@ -424,7 +422,7 @@ describe('buildDryRunReport', () => {
 
     const out = buildDryRunReport({
       ...baseInput,
-      changedFiles: [{ path: 'a.ts' }, { path: 'b.ts' }, { path: 'c.ts' }],
+      changedFiles: ['a.ts', 'b.ts', 'c.ts'],
       deletedFiles: ['old.ts', 'older.ts'],
     });
     expect(textOf(out)).toContain('  - 3 modified/new file(s)');

@@ -13,10 +13,9 @@ import type { Logger } from '@alexanderfortin/pi-orchestrator';
 import { MAX_TITLE_LENGTH } from '../constants';
 import {
   createLogger,
-  scanForChanges,
+  getWorkspaceChangePaths,
   commitAndPushBranch,
   appendCoAuthoredBy,
-  buildFileMap,
 } from '../git/index';
 
 export interface UpdatePullRequestResult {
@@ -187,7 +186,7 @@ export function buildDryRunReport(input: {
   headBranch: string;
   baseBranch: string;
   prUrl: string;
-  changedFiles: readonly { path: string }[];
+  changedFiles: readonly string[];
   deletedFiles: readonly string[];
 }): UpdatePullRequestResult {
   const { pullNumber, title, body, headBranch, baseBranch, prUrl, changedFiles, deletedFiles } =
@@ -227,7 +226,7 @@ export function buildDryRunReport(input: {
  */
 // fallow-ignore-next-line complexity
 export function formatChangeSummary(
-  changedFiles: readonly { path: string }[],
+  changedFiles: readonly string[],
   deletedFiles: readonly string[]
 ): string[] {
   if (changedFiles.length === 0 && deletedFiles.length === 0) {
@@ -256,7 +255,7 @@ export function formatChangeSummary(
  */
 export function generateCommitMessage(
   message: string | undefined,
-  changedFiles: readonly { path: string }[],
+  changedFiles: readonly string[],
   deletedFiles: readonly string[],
   pullNumber: number
 ): string {
@@ -362,24 +361,24 @@ export function buildSuccessDetails(input: {
 export async function applyCommit(
   deps: GitHubModuleDeps,
   args: {
-    changedFiles: { path: string }[];
-    deletedFiles: string[];
+    changedPaths: string[];
+    deletedPaths: string[];
     headBranch: string;
     message: string | undefined;
     pullNumber: number;
     log: Logger;
   }
 ): Promise<string | undefined> {
-  const { changedFiles, deletedFiles, headBranch, message, pullNumber, log } = args;
+  const { changedPaths, deletedPaths, headBranch, message, pullNumber, log } = args;
 
-  if (changedFiles.length === 0 && deletedFiles.length === 0) {
+  if (changedPaths.length === 0 && deletedPaths.length === 0) {
     log.info(`No code changes detected, only updating PR metadata if provided`);
     return undefined;
   }
 
   const commitMessage = appendCoAuthoredBy(
     deps,
-    generateCommitMessage(message, changedFiles, deletedFiles, pullNumber)
+    generateCommitMessage(message, changedPaths, deletedPaths, pullNumber)
   );
 
   const commitSha = await commitAndPushBranch({
@@ -387,6 +386,7 @@ export async function applyCommit(
     branchName: headBranch,
     message: commitMessage,
     isNewBranch: false,
+    paths: [...changedPaths, ...deletedPaths],
     actor: deps.context.actor,
     log,
   });
@@ -500,13 +500,12 @@ export async function updatePullRequest(
 
   logPRFoundDebug(log, { prUrl, headBranch, baseBranch, headSha });
 
-  // Get files that exist in the current PR head tree (for comparison)
-  log.debug(`Getting PR head tree...`);
-  const headFiles = await buildFileMap(deps, headSha);
-  log.debug(`Found ${headFiles.size} files in PR head`);
-
-  // Scan for changes (do this before dry run check so dry run can report them)
-  const { changedFiles, deletedFiles } = await scanForChanges(deps, headFiles, log);
+  // Detect working-tree changes via `git status --porcelain`, filtered by
+  // platform ignore patterns. This replaces the old `buildFileMap` +
+  // `scanForChanges` round-trip over the Git Data API (broken on Forgejo).
+  const { changed: changedPaths, deleted: deletedPaths } = await getWorkspaceChangePaths(
+    deps.context.workspace
+  );
 
   // Dry run mode - report what would happen without making changes
   if (dryRun) {
@@ -517,16 +516,16 @@ export async function updatePullRequest(
       headBranch,
       baseBranch,
       prUrl,
-      changedFiles,
-      deletedFiles,
+      changedFiles: changedPaths,
+      deletedFiles: deletedPaths,
     });
     log.debug(result.content[0]!.text);
     return result;
   }
 
   const commitSha = await applyCommit(deps, {
-    changedFiles,
-    deletedFiles,
+    changedPaths,
+    deletedPaths,
     headBranch,
     message,
     pullNumber: resolvedPullNumber,
