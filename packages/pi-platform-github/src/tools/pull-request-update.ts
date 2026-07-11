@@ -388,6 +388,10 @@ export async function applyCommit(
     isNewBranch: false,
     paths: [...changedPaths, ...deletedPaths],
     actor: deps.context.actor,
+    gitIdentityOptions: {
+      platformType: deps.platformType,
+      serverUrl: deps.context.serverUrl,
+    },
     log,
   });
   log.info(`Created new commit ${commitSha} on branch ${headBranch}`);

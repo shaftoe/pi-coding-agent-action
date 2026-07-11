@@ -14,15 +14,83 @@
 
 import { simpleGit, type SimpleGit } from 'simple-git';
 import ignore from 'ignore';
+import type { PlatformType } from '@alexanderfortin/pi-orchestrator';
 import type { GitHubModuleDeps } from '../types';
 import { GITHUB_IGNORE_PATTERNS } from '../constants';
 
 /**
  * Default git identity used when the CI environment doesn't pre-configure
  * `user.name`/`user.email` (common on Forgejo/Gitea runners).
+ *
+ * The default email is platform-neutral (no `.github.com` suffix) so that
+ * commits created on Forgejo/Codeberg don't reference a non-existent
+ * GitHub address.
  */
 const DEFAULT_GIT_NAME = 'Pi';
-const DEFAULT_GIT_EMAIL = 'pi@users.noreply.github.com';
+const DEFAULT_GIT_EMAIL = 'pi@noreply.pi.local';
+
+/**
+ * Platform context used to choose the correct "noreply" email domain.
+ */
+export interface GitIdentityOptions {
+  /** The detected platform type. */
+  platformType?: PlatformType | undefined;
+  /** The platform server URL (e.g. `https://forgejo.example.com`). */
+  serverUrl?: string | undefined;
+}
+
+/**
+ * Extract the hostname from a server URL.
+ *
+ * Returns a safe fallback when the URL is missing or malformed.
+ */
+function extractHost(serverUrl?: string): string {
+  if (!serverUrl) {
+    return 'noreply.local';
+  }
+  try {
+    return new URL(serverUrl).host;
+  } catch {
+    return 'noreply.local';
+  }
+}
+
+/**
+ * Build a platform-appropriate "noreply" email for the given actor.
+ *
+ * Each forge uses a different noreply scheme:
+ *
+ * - **GitHub**: `<actor>@users.noreply.github.com`
+ * - **Codeberg**: `<actor>@noreply.codeberg.org`
+ * - **Forgejo** (self-hosted): `<actor>@<hostname>` — the hostname is
+ *   derived from the instance's `serverUrl`, mirroring Forgejo's default
+ *   `NO_REPLY_ADDRESS` configuration.
+ *
+ * When no platform context is provided the GitHub scheme is used as a
+ * safe default (the action originated on GitHub and most CI runners
+ * pre-configure git identity anyway).
+ *
+ * @param actor - The CI actor username (e.g. `GITHUB_ACTOR`).
+ * @param opts - Platform context for choosing the correct noreply domain.
+ * @returns The noreply email, or `undefined` when `actor` is falsy.
+ */
+export function getNoreplyEmail(
+  actor: string | undefined,
+  opts?: GitIdentityOptions
+): string | undefined {
+  if (!actor) {
+    return undefined;
+  }
+  switch (opts?.platformType) {
+    case 'forgejo':
+      return `${actor}@${extractHost(opts?.serverUrl)}`;
+    case 'codeberg':
+      return `${actor}@noreply.codeberg.org`;
+    case 'github':
+    default:
+      return `${actor}@users.noreply.github.com`;
+  }
+}
 
 /**
  * Append a `Co-authored-by` trailer to the commit message.
@@ -41,7 +109,11 @@ export function appendCoAuthoredBy(deps: GitHubModuleDeps, message: string): str
   if (!actor) {
     return message;
   }
-  return `${message}\n\nCo-authored-by: ${actor} <${actor}@users.noreply.github.com>`;
+  const email = getNoreplyEmail(actor, {
+    platformType: deps.platformType,
+    serverUrl: deps.context.serverUrl,
+  });
+  return `${message}\n\nCo-authored-by: ${actor} <${email}>`;
 }
 
 /**
@@ -54,10 +126,11 @@ export function appendCoAuthoredBy(deps: GitHubModuleDeps, message: string): str
 export async function ensureGitIdentity(
   git: SimpleGit,
   actor?: string,
-  log?: { debug: (msg: string) => void }
+  log?: { debug: (msg: string) => void },
+  opts?: GitIdentityOptions
 ): Promise<void> {
   const name = actor ?? DEFAULT_GIT_NAME;
-  const email = actor ? `${actor}@users.noreply.github.com` : DEFAULT_GIT_EMAIL;
+  const email = getNoreplyEmail(actor, opts) ?? DEFAULT_GIT_EMAIL;
 
   // Check if identity is already configured (global or local)
   let currentName: string | undefined;
@@ -253,6 +326,12 @@ export interface CommitAndPushOptions {
   /** CI actor, used for git identity when none is configured. */
   actor?: string | undefined;
   /**
+   * Platform context used to derive the correct "noreply" email domain
+   * for the commit author identity. When omitted, defaults to the GitHub
+   * noreply scheme.
+   */
+  gitIdentityOptions?: GitIdentityOptions;
+  /**
    * Specific file paths to stage. Must be non-empty — derived from
    * {@link getWorkspaceChangePaths} (changed + deleted) so that platform
    * ignore patterns are respected and stray files can't leak into the
@@ -283,7 +362,7 @@ export async function commitAndPushBranch(options: CommitAndPushOptions): Promis
   const git = simpleGit(cwd);
 
   // Ensure git identity is configured (Forgejo runners have none)
-  await ensureGitIdentity(git, actor, log);
+  await ensureGitIdentity(git, actor, log, options.gitIdentityOptions);
 
   if (isNewBranch) {
     log.debug(`Creating new branch "${branchName}" from current HEAD…`);

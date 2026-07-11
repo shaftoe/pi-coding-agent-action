@@ -549,6 +549,10 @@ async function prepareBranchAndCreatePR(
     isNewBranch: true,
     paths: [...changed, ...deleted],
     actor: deps.context.actor,
+    gitIdentityOptions: {
+      platformType: deps.platformType,
+      serverUrl: deps.context.serverUrl,
+    },
     log,
   });
   log.debug(`Branch "${head}" created and pushed successfully`);

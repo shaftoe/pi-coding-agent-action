@@ -13,6 +13,7 @@ import { execSync } from 'node:child_process';
 import {
   appendCoAuthoredBy,
   ensureGitIdentity,
+  getNoreplyEmail,
   hasLocalChanges,
   workspaceHasChanges,
   getWorkspaceChangePaths,
@@ -60,6 +61,46 @@ function createDeps(actor?: string): { deps: GitHubModuleDeps; messages: string[
 }
 
 // ---------------------------------------------------------------------------
+// getNoreplyEmail
+// ---------------------------------------------------------------------------
+
+describe('getNoreplyEmail', () => {
+  test('returns undefined when actor is falsy', () => {
+    expect(getNoreplyEmail(undefined)).toBeUndefined();
+    expect(getNoreplyEmail('')).toBeUndefined();
+  });
+
+  test('uses GitHub scheme by default', () => {
+    expect(getNoreplyEmail('octocat')).toBe('octocat@users.noreply.github.com');
+  });
+
+  test('uses GitHub scheme explicitly', () => {
+    expect(getNoreplyEmail('octocat', { platformType: 'github' })).toBe(
+      'octocat@users.noreply.github.com'
+    );
+  });
+
+  test('uses Codeberg scheme', () => {
+    expect(getNoreplyEmail('octocat', { platformType: 'codeberg' })).toBe(
+      'octocat@noreply.codeberg.org'
+    );
+  });
+
+  test('uses Forgejo scheme derived from serverUrl', () => {
+    expect(
+      getNoreplyEmail('octocat', {
+        platformType: 'forgejo',
+        serverUrl: 'https://forgejo.example.com',
+      })
+    ).toBe('octocat@forgejo.example.com');
+  });
+
+  test('falls back to noreply.local for Forgejo when serverUrl is missing', () => {
+    expect(getNoreplyEmail('octocat', { platformType: 'forgejo' })).toBe('octocat@noreply.local');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // appendCoAuthoredBy
 // ---------------------------------------------------------------------------
 
@@ -68,6 +109,26 @@ describe('appendCoAuthoredBy', () => {
     const { deps } = createDeps('octocat');
     expect(appendCoAuthoredBy(deps, 'Fix bug')).toBe(
       'Fix bug\n\nCo-authored-by: octocat <octocat@users.noreply.github.com>'
+    );
+  });
+
+  test('appends platform-specific trailer on Forgejo', () => {
+    const { log } = captureLogger();
+    const deps = {
+      context: {
+        repo: { owner: 'test-owner', repo: 'test-repo' },
+        issue: { number: 42 },
+        eventName: 'issue_comment',
+        payload: {},
+        serverUrl: 'https://forgejo.example.com',
+        workspace: '/tmp',
+        actor: 'octocat',
+      },
+      logger: log,
+      platformType: 'forgejo' as const,
+    } as unknown as GitHubModuleDeps;
+    expect(appendCoAuthoredBy(deps, 'Fix bug')).toBe(
+      'Fix bug\n\nCo-authored-by: octocat <octocat@forgejo.example.com>'
     );
   });
 
@@ -111,6 +172,19 @@ describe('ensureGitIdentity', () => {
     expect(messages.some(m => m.includes('user.name'))).toBe(true);
   });
 
+  test('uses platform-specific email on Forgejo', async () => {
+    const { log } = captureLogger();
+    await ensureGitIdentity(git, 'myactor', log, {
+      platformType: 'forgejo',
+      serverUrl: 'https://forgejo.example.com',
+    });
+
+    const name = await git.getConfig('user.name', 'local');
+    const email = await git.getConfig('user.email', 'local');
+    expect(name.value).toBe('myactor');
+    expect(email.value).toBe('myactor@forgejo.example.com');
+  });
+
   test('does not override existing identity', async () => {
     await git.addConfig('user.name', 'existing', false, 'local');
     await git.addConfig('user.email', 'existing@test', false, 'local');
@@ -129,7 +203,7 @@ describe('ensureGitIdentity', () => {
     const name = await git.getConfig('user.name', 'local');
     const email = await git.getConfig('user.email', 'local');
     expect(name.value).toBe('Pi');
-    expect(email.value).toBe('pi@users.noreply.github.com');
+    expect(email.value).toBe('pi@noreply.pi.local');
   });
 
   test('fills in only the missing config field (email absent)', async () => {
@@ -144,7 +218,7 @@ describe('ensureGitIdentity', () => {
     // name should be untouched
     expect(name.value).toBe('partial-name');
     // email should have been set to the default
-    expect(email.value).toBe('pi@users.noreply.github.com');
+    expect(email.value).toBe('pi@noreply.pi.local');
   });
 
   test('logs debug message when configuring email', async () => {

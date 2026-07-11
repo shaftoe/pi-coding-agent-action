@@ -113,6 +113,7 @@ export { getWorkflowRunLogs } from './tools/get-workflow-run-logs';
 export {
   commitAndPushBranch,
   appendCoAuthoredBy,
+  getNoreplyEmail,
   hasLocalChanges,
   workspaceHasChanges,
   ensureGitIdentity,
@@ -121,7 +122,7 @@ export {
   createLogger,
 } from './git';
 
-export type { CommitAndPushOptions, WorkspaceChangePaths } from './git';
+export type { CommitAndPushOptions, WorkspaceChangePaths, GitIdentityOptions } from './git';
 
 // GitHub API token resolution (used by pi-cli + pi-action-bridge)
 export { resolveGitHubToken } from './auth';

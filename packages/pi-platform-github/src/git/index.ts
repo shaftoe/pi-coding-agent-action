@@ -8,10 +8,11 @@
 export { createLogger } from './types';
 
 // Git CLI helpers (branch creation, commit, push — replaces Git Data API writes)
-export type { CommitAndPushOptions, WorkspaceChangePaths } from './git-cli';
+export type { CommitAndPushOptions, WorkspaceChangePaths, GitIdentityOptions } from './git-cli';
 export {
   appendCoAuthoredBy,
   ensureGitIdentity,
+  getNoreplyEmail,
   hasLocalChanges,
   workspaceHasChanges,
   getWorkspaceChangePaths,
