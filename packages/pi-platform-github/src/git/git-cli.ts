@@ -49,7 +49,11 @@ function extractHost(serverUrl?: string): string {
     return 'noreply.local';
   }
   try {
-    return new URL(serverUrl).host;
+    // Use `.hostname` (not `.host`) so the port number is excluded —
+    // e.g. `http://forgejo.local:3000` → `forgejo.local`, not
+    // `forgejo.local:3000`. Including the colon would produce an
+    // invalid email domain.
+    return new URL(serverUrl).hostname;
   } catch {
     return 'noreply.local';
   }
@@ -113,6 +117,12 @@ export function appendCoAuthoredBy(deps: GitHubModuleDeps, message: string): str
     platformType: deps.platformType,
     serverUrl: deps.context.serverUrl,
   });
+  // Defensive guard: getNoreplyEmail() returns undefined for a falsy
+  // actor, but a future refactor could break this invariant silently
+  // (producing `<undefined>` in the trailer).
+  if (!email) {
+    return message;
+  }
   return `${message}\n\nCo-authored-by: ${actor} <${email}>`;
 }
 

@@ -98,6 +98,23 @@ describe('getNoreplyEmail', () => {
   test('falls back to noreply.local for Forgejo when serverUrl is missing', () => {
     expect(getNoreplyEmail('octocat', { platformType: 'forgejo' })).toBe('octocat@noreply.local');
   });
+
+  test('strips the port for Forgejo when serverUrl includes a non-default port', () => {
+    // Forgejo's default port is 3000; the port must NOT appear in the email
+    // domain (it would produce an invalid address like `user@host:3000`).
+    expect(
+      getNoreplyEmail('octocat', {
+        platformType: 'forgejo',
+        serverUrl: 'http://forgejo.local:3000',
+      })
+    ).toBe('octocat@forgejo.local');
+  });
+
+  test('falls back to noreply.local for Forgejo when serverUrl is malformed', () => {
+    expect(
+      getNoreplyEmail('octocat', { platformType: 'forgejo', serverUrl: 'not-a-valid-url' })
+    ).toBe('octocat@noreply.local');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -135,6 +152,26 @@ describe('appendCoAuthoredBy', () => {
   test('returns message unchanged when actor is empty', () => {
     const { deps } = createDeps('');
     expect(appendCoAuthoredBy(deps, 'Fix bug')).toBe('Fix bug');
+  });
+
+  test('appends Codeberg-specific trailer', () => {
+    const { log } = captureLogger();
+    const deps = {
+      context: {
+        repo: { owner: 'test-owner', repo: 'test-repo' },
+        issue: { number: 42 },
+        eventName: 'issue_comment',
+        payload: {},
+        serverUrl: 'https://codeberg.org',
+        workspace: '/tmp',
+        actor: 'octocat',
+      },
+      logger: log,
+      platformType: 'codeberg' as const,
+    } as unknown as GitHubModuleDeps;
+    expect(appendCoAuthoredBy(deps, 'Fix bug')).toBe(
+      'Fix bug\n\nCo-authored-by: octocat <octocat@noreply.codeberg.org>'
+    );
   });
 
   test('returns message unchanged when actor is undefined', () => {
@@ -183,6 +220,29 @@ describe('ensureGitIdentity', () => {
     const email = await git.getConfig('user.email', 'local');
     expect(name.value).toBe('myactor');
     expect(email.value).toBe('myactor@forgejo.example.com');
+  });
+
+  test('uses Codeberg-specific email', async () => {
+    const { log } = captureLogger();
+    await ensureGitIdentity(git, 'myactor', log, {
+      platformType: 'codeberg',
+    });
+
+    const name = await git.getConfig('user.name', 'local');
+    const email = await git.getConfig('user.email', 'local');
+    expect(name.value).toBe('myactor');
+    expect(email.value).toBe('myactor@noreply.codeberg.org');
+  });
+
+  test('strips the port for Forgejo email when serverUrl has a non-default port', async () => {
+    const { log } = captureLogger();
+    await ensureGitIdentity(git, 'myactor', log, {
+      platformType: 'forgejo',
+      serverUrl: 'http://forgejo.local:3000',
+    });
+
+    const email = await git.getConfig('user.email', 'local');
+    expect(email.value).toBe('myactor@forgejo.local');
   });
 
   test('does not override existing identity', async () => {
@@ -621,6 +681,39 @@ describe('commitAndPushBranch', () => {
     // Identity should have been set locally
     const name = await git.getConfig('user.name', 'local');
     expect(name.value).toBe('ci-bot');
+  });
+
+  test('uses platform-aware noreply email via gitIdentityOptions', async () => {
+    if (!repo) {
+      return;
+    }
+    const { workspace } = repo;
+
+    // Remove any identity config so ensureGitIdentity fills it in
+    const git = simpleGit(workspace);
+    await git.raw(['config', '--unset', 'user.name']);
+    await git.raw(['config', '--unset', 'user.email']);
+
+    fs.writeFileSync(path.join(workspace, 'file.txt'), 'content');
+
+    const { log } = captureLogger();
+    await commitAndPushBranch({
+      cwd: workspace,
+      branchName: 'platform-identity',
+      message: 'Test',
+      isNewBranch: true,
+      paths: ['file.txt'],
+      actor: 'ci-bot',
+      gitIdentityOptions: {
+        platformType: 'forgejo',
+        serverUrl: 'http://forgejo.local:3000',
+      },
+      log,
+    });
+
+    // The port must be stripped (regression test for the .host bug)
+    const email = await git.getConfig('user.email', 'local');
+    expect(email.value).toBe('ci-bot@forgejo.local');
   });
 
   test('pushes to existing branch for updates', async () => {
