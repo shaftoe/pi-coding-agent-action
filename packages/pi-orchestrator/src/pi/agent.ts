@@ -23,8 +23,8 @@ import { buildResourceLoaderOptions } from './resource-loader';
 import { getPiVersion } from '../version';
 
 import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-agent';
-import type { Api, Model } from '@earendil-works/pi-ai';
-import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
+import type { Api, AssistantMessageEvent, Model } from '@earendil-works/pi-ai';
+import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type {
   PiAgent,
   PromptResult,
@@ -263,51 +263,11 @@ export class Agent {
     this.sessionEventHandler = (event: AgentSessionEvent) => {
       switch (event.type) {
         case 'message_update':
-          switch (event.assistantMessageEvent.type) {
-            case 'text_delta':
-              // Sent to the user as comment as final step
-              this.outputChunks.push(event.assistantMessageEvent.delta);
-              break;
-            case 'thinking_delta':
-              // Route thinking delta through the events interface
-              this.events.onThinkingDelta?.(event.assistantMessageEvent.delta);
-              break;
-            case 'thinking_end':
-              // Ensure the output line is terminated before any ::debug::
-              // workflow command fires (e.g. from turn_end extension
-              // events). Otherwise ::debug:: lands mid-line and the Actions
-              // runner can't parse it.
-              this.events.onThinkingComplete?.();
-              break;
-            default:
-              break;
-          }
+          this.handleMessageUpdate(event.assistantMessageEvent);
           break;
-
-        case 'agent_end': {
-          // Capture error state from the agent loop's final assistant
-          // message. Each agent_end fires at the end of a loop iteration
-          // (there may be several if auto-retry/compaction triggers). The
-          // last assistant message tells us whether this iteration ended
-          // with a provider error; if a later iteration succeeds, it
-          // clears the error. Replaces the previous post-run heuristic
-          // that reverse-walked session.state.messages.
-          const messages = event.messages;
-          for (let i = messages.length - 1; i >= 0; i--) {
-            const msg = messages[i];
-            if (msg && (msg as { role?: string }).role === 'assistant') {
-              const assistant = msg as {
-                stopReason?: string;
-                errorMessage?: string;
-              };
-              this.lastAgentError =
-                assistant.stopReason === 'error' ? assistant.errorMessage : undefined;
-              break;
-            }
-          }
+        case 'agent_end':
+          this.handleAgentEnd(event.messages);
           break;
-        }
-
         case 'agent_settled':
           // The session has fully settled — no further retries, compactions,
           // or queued continuations will fire. Route the prompt-complete
@@ -315,7 +275,6 @@ export class Agent {
           // truly done, not just one iteration finished).
           this.events.onPromptComplete?.();
           break;
-
         default:
           break;
       }
@@ -396,6 +355,64 @@ export class Agent {
    */
   async exportSessionJsonl(outputPath: string): Promise<string> {
     return this.session.exportToJsonl(outputPath);
+  }
+
+  /**
+   * Handle `message_update` session events.
+   *
+   * Routes text deltas to the output buffer and thinking deltas/completion
+   * through the {@link AgentEvents} interface.
+   *
+   * @param event - The assistant message event from the `message_update` payload.
+   * @private
+   */
+  private handleMessageUpdate(event: AssistantMessageEvent): void {
+    switch (event.type) {
+      case 'text_delta':
+        // Sent to the user as comment as final step
+        this.outputChunks.push(event.delta);
+        break;
+      case 'thinking_delta':
+        // Route thinking delta through the events interface
+        this.events.onThinkingDelta?.(event.delta);
+        break;
+      case 'thinking_end':
+        // Ensure the output line is terminated before any ::debug::
+        // workflow command fires (e.g. from turn_end extension
+        // events). Otherwise ::debug:: lands mid-line and the Actions
+        // runner can't parse it.
+        this.events.onThinkingComplete?.();
+        break;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Handle `agent_end` session events.
+   *
+   * Captures error state from the agent loop's final assistant message.
+   * Each `agent_end` fires at the end of a loop iteration (there may be
+   * several if auto-retry/compaction triggers). The last assistant message
+   * tells us whether this iteration ended with a provider error; if a later
+   * iteration succeeds, it clears the error. Replaces the previous post-run
+   * heuristic that reverse-walked `session.state.messages`.
+   *
+   * @param messages - The messages from this agent loop iteration.
+   * @private
+   */
+  private handleAgentEnd(messages: AgentMessage[]): void {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg && (msg as { role?: string }).role === 'assistant') {
+        const assistant = msg as {
+          stopReason?: string;
+          errorMessage?: string;
+        };
+        this.lastAgentError = assistant.stopReason === 'error' ? assistant.errorMessage : undefined;
+        break;
+      }
+    }
   }
 
   /**
