@@ -22,7 +22,7 @@ import { clampThinkingLevel, getSupportedThinkingLevels } from '@earendil-works/
 import { buildResourceLoaderOptions } from './resource-loader';
 import { getPiVersion } from '../version';
 
-import type { AgentSession } from '@earendil-works/pi-coding-agent';
+import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type {
@@ -53,6 +53,21 @@ export class Agent {
   private platformProvider: PlatformProvider;
   private config: PiConfig;
   private events: AgentEvents;
+  /**
+   * Error captured from the most recent `agent_end` event. Set when the
+   * last assistant message in the event has `stopReason === 'error'`,
+   * cleared when a subsequent loop iteration completes normally (e.g.
+   * after a successful auto-retry). Resolved to its final value by the
+   * time `agent_settled` fires.
+   */
+  private lastAgentError: string | undefined;
+  /**
+   * The session event handler registered during {@link ready}. Stored as
+   * a field so that test helpers can wire mock sessions to dispatch events
+   * through the same handler.
+   * @internal
+   */
+  private sessionEventHandler?: (event: AgentSessionEvent) => void;
 
   /**
    * Create a new Pi agent.
@@ -245,30 +260,67 @@ export class Agent {
       }
     }
 
-    // fallow-ignore-next-line complexity
-    this.session.subscribe(event => {
-      if (event.type !== 'message_update') {
-        return;
-      }
-      switch (event.assistantMessageEvent.type) {
-        case 'text_delta':
-          // Sent to the user as comment as final step
-          this.outputChunks.push(event.assistantMessageEvent.delta);
+    this.sessionEventHandler = (event: AgentSessionEvent) => {
+      switch (event.type) {
+        case 'message_update':
+          switch (event.assistantMessageEvent.type) {
+            case 'text_delta':
+              // Sent to the user as comment as final step
+              this.outputChunks.push(event.assistantMessageEvent.delta);
+              break;
+            case 'thinking_delta':
+              // Route thinking delta through the events interface
+              this.events.onThinkingDelta?.(event.assistantMessageEvent.delta);
+              break;
+            case 'thinking_end':
+              // Ensure the output line is terminated before any ::debug::
+              // workflow command fires (e.g. from turn_end extension
+              // events). Otherwise ::debug:: lands mid-line and the Actions
+              // runner can't parse it.
+              this.events.onThinkingComplete?.();
+              break;
+            default:
+              break;
+          }
           break;
-        case 'thinking_delta':
-          // Route thinking delta through the events interface
-          this.events.onThinkingDelta?.(event.assistantMessageEvent.delta);
+
+        case 'agent_end': {
+          // Capture error state from the agent loop's final assistant
+          // message. Each agent_end fires at the end of a loop iteration
+          // (there may be several if auto-retry/compaction triggers). The
+          // last assistant message tells us whether this iteration ended
+          // with a provider error; if a later iteration succeeds, it
+          // clears the error. Replaces the previous post-run heuristic
+          // that reverse-walked session.state.messages.
+          const messages = event.messages;
+          for (let i = messages.length - 1; i >= 0; i--) {
+            const msg = messages[i];
+            if (msg && (msg as { role?: string }).role === 'assistant') {
+              const assistant = msg as {
+                stopReason?: string;
+                errorMessage?: string;
+              };
+              this.lastAgentError =
+                assistant.stopReason === 'error' ? assistant.errorMessage : undefined;
+              break;
+            }
+          }
           break;
-        case 'thinking_end':
-          // Ensure the output line is terminated before any ::debug:: workflow
-          // command fires (e.g. from turn_end extension events). Otherwise
-          // ::debug:: lands mid-line and the Actions runner can't parse it.
-          this.events.onThinkingComplete?.();
+        }
+
+        case 'agent_settled':
+          // The session has fully settled — no further retries, compactions,
+          // or queued continuations will fire. Route the prompt-complete
+          // callback here for cleaner lifecycle semantics (the agent is
+          // truly done, not just one iteration finished).
+          this.events.onPromptComplete?.();
           break;
+
         default:
           break;
       }
-    });
+    };
+    this.session.subscribe(this.sessionEventHandler);
 
     return this;
   }
@@ -286,12 +338,18 @@ export class Agent {
       throw new Error('no text, skipping prompt');
     }
 
+    // Reset error state for this run. The agent_end event handler will
+    // populate this field during the session.
+    this.lastAgentError = undefined;
+
     await this.session.prompt(text);
-    this.events.onPromptComplete?.();
+
+    // onPromptComplete is now routed through the agent_settled event
+    // handler, so it fires when the session has truly settled.
 
     const result = this.outputChunks.join('');
     const sessionStats = this.collectSessionStats();
-    const error = this.getSessionError();
+    const error = this.lastAgentError;
 
     return { result, sessionStats, error };
   }
@@ -307,48 +365,6 @@ export class Agent {
    */
   getSessionStats(): SessionStats | undefined {
     return this.collectSessionStats();
-  }
-
-  /**
-   * Check if the session ended with an unrecoverable provider error.
-   *
-   * The Pi SDK resolves `session.prompt()` normally even when the provider
-   * returns an error (e.g., 429 quota exceeded, rate limit, auth failure).
-   * The error is captured in the last assistant message's `stopReason` and
-   * `errorMessage` fields. This method inspects the session state to detect
-   * such errors so the orchestrator can report them to the user.
-   *
-   * Only the *last* assistant message is checked — if the session recovered
-   * from an earlier error (via auto-retry), the last message will have a
-   * non-error `stopReason` and this method returns `undefined`.
-   *
-   * @returns The error message if the session ended with an error, `undefined` otherwise.
-   */
-  // fallow-ignore-next-line complexity
-  private getSessionError(): string | undefined {
-    if (!this.session) {
-      return undefined;
-    }
-
-    try {
-      const messages = this.session.state.messages;
-      for (let i = messages.length - 1; i >= 0; i--) {
-        const msg = messages[i];
-        if (!msg) {
-          continue;
-        }
-        if (msg.role === 'assistant') {
-          if (msg.stopReason === 'error' && msg.errorMessage) {
-            return msg.errorMessage;
-          }
-          // Last assistant message is not an error → session completed normally.
-          return undefined;
-        }
-      }
-    } catch {
-      // Don't fail the action if we can't introspect session state.
-    }
-    return undefined;
   }
 
   /**

@@ -491,6 +491,156 @@ describe('Agent', () => {
     });
   });
 
+  describe('agent_end / agent_settled event handling', () => {
+    /**
+     * Build a mock session that dispatches a custom sequence of agent_end
+     * events (e.g. error → retry → success) before agent_settled.
+     */
+    function buildMultiEventSession(
+      agentEndPayloads: Record<string, unknown>[][]
+    ): ReturnType<typeof buildMockSession> {
+      let listener: ((event: { type: string; [key: string]: unknown }) => void) | undefined;
+      return {
+        ...buildMockSession({ messages: [] }),
+        prompt: async () => {
+          for (const messages of agentEndPayloads) {
+            listener?.({ type: 'agent_end', messages, willRetry: false });
+          }
+          listener?.({ type: 'agent_settled' });
+        },
+        subscribe: (cb: (event: { type: string; [key: string]: unknown }) => void) => {
+          listener = cb;
+        },
+      };
+    }
+
+    test('onPromptComplete is called when agent_settled fires', async () => {
+      const onComplete = mock(() => {});
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+      });
+      // Inject the events callback via the constructor's events parameter.
+      (agent as unknown as { events: { onPromptComplete: () => void } }).events = {
+        onPromptComplete: onComplete,
+      };
+      await agent.ready();
+
+      injectMockSession(agent, buildMockSession({ messages: [] }));
+
+      await agent.run('Hello');
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
+
+    test('onPromptComplete is NOT called for individual agent_end events', async () => {
+      const onComplete = mock(() => {});
+      const agent = createRealAgent();
+      (agent as unknown as { events: { onPromptComplete: () => void } }).events = {
+        onPromptComplete: onComplete,
+      };
+      await agent.ready();
+
+      injectMockSession(
+        agent,
+        buildMultiEventSession([
+          // First agent_end with an error — should NOT trigger onPromptComplete
+          [
+            userHelloMessage,
+            {
+              role: 'assistant',
+              content: [],
+              stopReason: 'error',
+              errorMessage: '503 overloaded',
+              timestamp: 1,
+            },
+          ],
+          // Second agent_end after retry succeeds
+          [
+            {
+              role: 'assistant',
+              content: [{ type: 'text', text: 'Recovered!' }],
+              stopReason: 'stop',
+              timestamp: 2,
+            },
+          ],
+        ])
+      );
+
+      await agent.run('Hello');
+      // onPromptComplete should fire exactly once (from agent_settled),
+      // not once per agent_end.
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
+
+    test('error from agent_end is cleared by a subsequent successful agent_end', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      injectMockSession(
+        agent,
+        buildMultiEventSession([
+          // First agent_end: error
+          [
+            userHelloMessage,
+            {
+              role: 'assistant',
+              content: [],
+              stopReason: 'error',
+              errorMessage: '503 overloaded',
+              timestamp: 1,
+            },
+          ],
+          // Second agent_end: success after retry
+          [
+            {
+              role: 'assistant',
+              content: [{ type: 'text', text: 'Success after retry!' }],
+              stopReason: 'stop',
+              timestamp: 2,
+            },
+          ],
+        ])
+      );
+
+      const result = await agent.run('Hello');
+      expect(result.error).toBeUndefined();
+      expect(result.result).toBe(''); // mock session doesn't push text deltas
+    });
+
+    test('error from the last agent_end is preserved', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      injectMockSession(
+        agent,
+        buildMultiEventSession([
+          // First agent_end: success
+          [
+            userHelloMessage,
+            {
+              role: 'assistant',
+              content: [{ type: 'text', text: 'First attempt' }],
+              stopReason: 'stop',
+              timestamp: 1,
+            },
+          ],
+          // Second agent_end: error
+          [
+            {
+              role: 'assistant',
+              content: [],
+              stopReason: 'error',
+              errorMessage: '429 rate limit',
+              timestamp: 2,
+            },
+          ],
+        ])
+      );
+
+      const result = await agent.run('Hello');
+      expect(result.error).toBe('429 rate limit');
+    });
+  });
+
   describe('loadedTools validation', () => {
     test('throws error when loadedTools contains unknown tool names', async () => {
       const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {

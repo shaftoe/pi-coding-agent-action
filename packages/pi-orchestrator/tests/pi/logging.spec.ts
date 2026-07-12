@@ -239,4 +239,15 @@ describe('createLoggingFactory compaction events', () => {
     expect(infos).toContain('  Reason:           threshold');
     expect(infos).toContain('  Tokens before:    120,000');
   });
+
+  test('subscribes to agent_settled and logs at debug level', async () => {
+    const { messages, handlers } = setup();
+    expect(handlers.has('agent_settled')).toBe(true);
+
+    const handler = handlers.get('agent_settled')!;
+    await handler({ type: 'agent_settled' });
+
+    const debugs = messages.filter(m => m.level === 'debug').map(m => m.text);
+    expect(debugs).toContain('✅ Agent session settled (no further automatic actions)');
+  });
 });

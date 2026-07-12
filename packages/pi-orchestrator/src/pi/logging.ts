@@ -311,6 +311,10 @@ export const loggingFactory = (
     logger.info('🚀 Starting agent session...');
     logger.info('════════════════════════════════════════════════════════════════');
   });
+
+  pi.on('agent_settled', async () => {
+    logger.debug('✅ Agent session settled (no further automatic actions)');
+  });
 };
 
 /**
