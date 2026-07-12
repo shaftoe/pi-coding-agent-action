@@ -347,6 +347,76 @@ jobs:
 > [!TIP]
 > Use `workflow_dispatch` alongside `schedule` to allow manual runs for testing or ad-hoc execution. Combine with `export_session_html` and `export_session_jsonl` to archive periodic task results as workflow artifacts.
 
+### Assignment Triggers
+
+Trigger a Pi session automatically when an issue or pull request is assigned to a specific user (e.g. a bot account). This is useful for triage queues, auto-review pipelines, or routing work to a dedicated agent.
+
+Assignment events carry the full issue/PR payload (title, description, number) but no comment body, so the `prompt` input is used instead of comment extraction. The action automatically enriches the prompt with the issue/PR context and skips the reaction lifecycle (there is no comment to react to).
+
+#### Example: trigger when assigned to a bot user
+
+```yaml
+name: Pi on Assign
+
+on:
+  issues:
+    types: [assigned]
+  pull_request:
+    types: [assigned]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  pi-agent:
+    # Only run when assigned to the bot user
+    if: github.event.assignee.login == 'my-pi-bot'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          # Check out the PR head branch when triggered from a PR
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - uses: shaftoe/pi-coding-agent-action@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          provider: ${{ vars.PROVIDER }}
+          model: ${{ vars.MODEL }}
+          token: ${{ secrets.API_KEY }}
+          prompt: |
+            You have been assigned this issue/PR. Analyze the task and take
+            appropriate action — fix bugs, implement features, or review code.
+            Use get_issue_or_pr_thread to read the full discussion history
+            before starting.
+```
+
+> [!TIP]
+> Use separate `if` conditions or separate jobs to customize behaviour per type — e.g. auto-fix issues but only review PRs:
+> ```yaml
+> jobs:
+>   fix-issue:
+>     if: github.event_name == 'issues' && github.event.assignee.login == 'my-pi-bot'
+>     steps:
+>       - uses: shaftoe/pi-coding-agent-action@v2
+>         with:
+>           prompt: 'Implement the described feature and create a PR.'
+>
+>   review-pr:
+>     if: github.event_name == 'pull_request' && github.event.assignee.login == 'my-pi-bot'
+>     steps:
+>       - uses: shaftoe/pi-coding-agent-action@v2
+>         with:
+>           prompt: 'Review this PR for bugs, security, and improvements.'
+> ```
+
 ### Custom Extensions
 
 You can load custom Pi extensions to add additional custom tools or modify agent behavior:

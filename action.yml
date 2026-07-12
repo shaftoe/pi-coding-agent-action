@@ -27,7 +27,7 @@ inputs:
     default: 'off'
 
   prompt:
-    description: 'Optional prompt to send to the agent. When provided, the trigger phrase is not required and the prompt is used as-is (useful for non-interactive workflows). Falls back to extracting the prompt from the triggering comment if not set.'
+    description: 'Optional prompt to send to the agent. When provided, the trigger phrase is not required and the prompt is used as-is (useful for non-interactive workflows such as PR reviews, assignment triggers, or scheduled tasks). Falls back to extracting the prompt from the triggering comment if not set.'
     required: false
 
   trigger:
