@@ -63,7 +63,7 @@
     "eslint": "^10.7.0",
     "fallow": "^3.3.0",
     "prettier": "^3.9.5",
-    "semantic-release": "^25.0.6",
-    "typescript": "^6.0.3"
+    "semantic-release": "^25.0.7",
+    "typescript": "^7.0.2"
   }
 }
