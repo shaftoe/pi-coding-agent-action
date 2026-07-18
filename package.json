@@ -44,9 +44,9 @@
   "dependencies": {
     "@alexanderfortin/pi-orchestrator": "workspace:*",
     "@alexanderfortin/pi-platform-github": "workspace:*",
-    "@earendil-works/pi-agent-core": "^0.80.7",
-    "@earendil-works/pi-ai": "^0.80.7",
-    "@earendil-works/pi-coding-agent": "^0.80.7"
+    "@earendil-works/pi-agent-core": "^0.80.10",
+    "@earendil-works/pi-ai": "^0.80.10",
+    "@earendil-works/pi-coding-agent": "^0.80.10"
   },
   "devDependencies": {
     "@alexanderfortin/semantic-release-keep-a-changelog": "^0.4.9",
@@ -61,7 +61,7 @@
     "@typescript-eslint/parser": "^8.64.0",
     "bun-types": "1.3.14",
     "eslint": "^10.7.0",
-    "fallow": "^3.5.1",
+    "fallow": "^3.6.0",
     "prettier": "^3.9.5",
     "semantic-release": "^25.0.7",
     "typescript": "~6.0.3"

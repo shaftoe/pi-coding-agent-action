@@ -117,7 +117,7 @@ function createRealAgent(): InstanceType<typeof Agent> {
 
 describe('Agent', () => {
   describe('constructor', () => {
-    test('stores token in auth storage when provided', () => {
+    test('constructs without error when token is provided', () => {
       const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
         model: 'claude-sonnet-4-5',
         provider: 'anthropic',
@@ -129,22 +129,23 @@ describe('Agent', () => {
       expect(agent).toBeDefined();
     });
 
-    test('does not set auth storage when token is empty', () => {
+    test('does not set runtime API key when token is empty', async () => {
       const mockDebug: string[] = [];
       const debugLogger = (msg: string): void => {
         mockDebug.push(msg);
       };
       const adapter = { ...mockCoreAdapter, debug: mock(debugLogger) };
 
-      // Constructor no longer throws for unknown models — resolution is
-      // deferred to ready() so that extension-provided providers are available.
-      new Agent(adapter as any, mockPlatformProvider, {
+      // API-key setup moved from the constructor to ready() in the
+      // ModelRuntime migration, so verify at the ready() level.
+      const agent = new Agent(adapter as any, mockPlatformProvider, {
         model: 'claude-sonnet-4-5',
         provider: 'anthropic',
         token: '',
         thinkingLevel: 'off',
         promptInput: '',
       });
+      await agent.ready();
 
       // Should not log auth debug message
       expect(mockDebug).not.toContain('[auth] Setting api_key token');

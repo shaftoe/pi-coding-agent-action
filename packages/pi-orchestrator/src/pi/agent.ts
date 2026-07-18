@@ -11,10 +11,9 @@
  */
 
 import {
-  AuthStorage,
   createAgentSessionFromServices,
   createAgentSessionServices,
-  ModelRegistry,
+  ModelRuntime,
   SessionManager,
   SettingsManager,
 } from '@earendil-works/pi-coding-agent';
@@ -44,8 +43,7 @@ import type { PlatformProvider } from '../platform';
  */
 export class Agent {
   private model!: Model<Api>;
-  private authStorage: AuthStorage = AuthStorage.create();
-  private modelRegistry: ModelRegistry;
+  private modelRuntime!: ModelRuntime;
   private session!: AgentSession;
   private thinkingLevel: ThinkingLevel;
   private outputChunks: string[] = [];
@@ -93,20 +91,6 @@ export class Agent {
     this.config = config;
     this.events = events ?? {};
     this.thinkingLevel = (config.thinkingLevel ?? 'off') as ThinkingLevel;
-    this.modelRegistry = ModelRegistry.create(this.authStorage);
-
-    if (config.token) {
-      this.logger.debug(`[auth] Setting api_key token for ${config.provider} provider`);
-      this.authStorage.set(config.provider, {
-        type: 'api_key',
-        key: config.token,
-      });
-    }
-
-    if (config.baseUrl) {
-      this.logger.debug(`[provider] Overriding base URL for ${config.provider}: ${config.baseUrl}`);
-      this.modelRegistry.registerProvider(config.provider, { baseUrl: config.baseUrl });
-    }
   }
 
   /**
@@ -138,11 +122,28 @@ export class Agent {
 
     const settingsManager = SettingsManager.create(cwd);
 
+    // Create and configure the model runtime (replaces the legacy
+    // AuthStorage + ModelRegistry pair). ModelRuntime.create() is async
+    // (it refreshes the model catalog), so initialisation happens here in
+    // ready() rather than in the constructor.
+    this.modelRuntime = await ModelRuntime.create();
+
+    if (this.config.token) {
+      this.logger.debug(`[auth] Setting api_key token for ${this.config.provider} provider`);
+      await this.modelRuntime.setRuntimeApiKey(this.config.provider, this.config.token);
+    }
+
+    if (this.config.baseUrl) {
+      this.logger.debug(
+        `[provider] Overriding base URL for ${this.config.provider}: ${this.config.baseUrl}`
+      );
+      this.modelRuntime.registerProvider(this.config.provider, { baseUrl: this.config.baseUrl });
+    }
+
     // Phase 1: Create services (loads extensions, registers providers).
     const services = await createAgentSessionServices({
       cwd,
-      authStorage: this.authStorage,
-      modelRegistry: this.modelRegistry,
+      modelRuntime: this.modelRuntime,
       settingsManager,
       resourceLoaderOptions,
     });
@@ -166,7 +167,7 @@ export class Agent {
 
     // Resolve the model AFTER extensions have loaded — extensions that call
     // pi.registerProvider() will have populated the model registry by now.
-    const foundModel = this.modelRegistry.find(this.config.provider, this.config.model);
+    const foundModel = this.modelRuntime.getModel(this.config.provider, this.config.model);
     if (foundModel) {
       this.model = foundModel;
     } else {
