@@ -11,7 +11,8 @@ packages/*/src/*.js.map
 !packages/pi-action/src/import-meta-url.js
 
 # Build artifacts (tracked via CI force-add only — do not include in PRs)
-dist/
+dist/*
+!dist/index.js
 
 # Logs and temp files
 *.log

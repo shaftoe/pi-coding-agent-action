@@ -6,11 +6,11 @@
  * extensions, etc.) are loaded in CI environments.
  *
  * Uses prototype-style patching on the real `SettingsManager.create` static
- * method — avoids `mock.module()` which is process-global and would break
+ * method — avoids `vi.mock()` which is process-global and would break
  * other test files that need the real SDK.
  */
 
-import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Set env vars before dynamic imports
@@ -47,14 +47,14 @@ let capturedSettingsManagerFromCreate: unknown = null;
 
 const noop = (): void => {};
 const mockCoreAdapter = {
-  getInput: mock(() => ''),
-  setFailed: mock(noop),
-  setOutput: mock(noop),
-  notice: mock(noop),
-  debug: mock(noop),
-  info: mock(noop),
-  warning: mock(noop),
-  error: mock(noop),
+  getInput: vi.fn(() => ''),
+  setFailed: vi.fn(noop),
+  setOutput: vi.fn(noop),
+  notice: vi.fn(noop),
+  debug: vi.fn(noop),
+  info: vi.fn(noop),
+  warning: vi.fn(noop),
+  error: vi.fn(noop),
 };
 
 const mockPlatformProvider = createMockProvider();

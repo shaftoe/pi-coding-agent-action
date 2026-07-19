@@ -6,7 +6,7 @@
  * assert against without mocking a `Logger`.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import {
   formatExtensionsSection,
   formatLLMSection,

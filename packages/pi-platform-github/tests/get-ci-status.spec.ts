@@ -5,19 +5,19 @@
  * check run fetching, workflow run fetching, filtering, and summary formatting.
  */
 
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach } from 'vitest';
 import { setupGitHubTestEnv, createTestDeps, coreMock } from './helpers/github-test-env';
 setupGitHubTestEnv({ envPathPrefix: 'gh-event-ci' });
 const mockDebug = coreMock.debug;
 
 // Mock octokit
-const mockPullsGet = mock(() =>
+const mockPullsGet = vi.fn(() =>
   Promise.resolve({
     data: { head: { sha: 'pr-head-sha-abcdef' } },
   })
 );
 
-const mockChecksListForRef = mock(() =>
+const mockChecksListForRef = vi.fn(() =>
   Promise.resolve({
     data: {
       check_runs: [] as any[],
@@ -25,7 +25,7 @@ const mockChecksListForRef = mock(() =>
   })
 );
 
-const mockListWorkflowRuns = mock(() =>
+const mockListWorkflowRuns = vi.fn(() =>
   Promise.resolve({
     data: {
       workflow_runs: [] as any[],
@@ -48,7 +48,7 @@ const mockOctokit = {
 };
 // octokit singleton mock no longer needed - deps pattern used instead
 
-// Lazy import after mocks are set up
+// Lazy import after vis are set up
 const getCIStatusModulePromise = import('@alexanderfortin/pi-platform-github');
 
 let getCIStatus: any;
@@ -552,7 +552,7 @@ describe('getCIStatus - platform implementation', () => {
   describe('summary formatting', () => {
     test('shows "No check runs" message when no results', async () => {
       const fn = await getModule();
-      // Default mocks return empty arrays
+      // Default vis return empty arrays
       const result = await fn(createTestDeps(mockOctokit), { ref: 'abc12345' });
 
       expect(result.content[0].text).toContain(

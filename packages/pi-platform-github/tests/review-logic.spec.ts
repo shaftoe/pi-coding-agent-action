@@ -5,7 +5,7 @@
  * function exported from the platform layer.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { validateCreateReviewParams, toGitHubComment } from '@alexanderfortin/pi-platform-github';
 import type { CreateReviewParams, ReviewInlineComment } from '@alexanderfortin/pi-platform-github';
 

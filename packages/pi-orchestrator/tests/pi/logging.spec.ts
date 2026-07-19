@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { truncateText, ExtensionLoadingInfo } from '@alexanderfortin/pi-orchestrator';
 import { getPiVersion } from '@alexanderfortin/pi-orchestrator';
 import { createLoggingFactory } from '@alexanderfortin/pi-orchestrator';
@@ -72,7 +72,7 @@ describe('truncateText', () => {
 describe('getPiVersion', () => {
   test('returns a valid version string', () => {
     // The version is resolved at runtime from package.json.
-    // When running tests with bun, it reads the Pi SDK's package.json.
+    // When running tests with vitest, it reads the Pi SDK's package.json.
     // Falls back to 'unknown' if not found.
     const result = getPiVersion();
     expect(typeof result).toBe('string');

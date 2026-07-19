@@ -22,11 +22,11 @@
  * and `parsePlatformType` is covered in their own spec files.
  */
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, vi, test } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// Module mocks — registered before any import of run.ts so its bindings pick
-// up the replacements. (Bun resolves mock.module against the absolute path of
+// Module vis — registered before any import of run.ts so its bindings pick
+// up the replacements. (Vitest resolves vi.mock against the absolute path of
 // the specifier, so the path here is relative to *this* test file.)
 // ---------------------------------------------------------------------------
 
@@ -59,7 +59,7 @@ function singleOctokitCall(): CapturedOctokitCall {
   return octokitCalls[0]!;
 }
 
-mock.module('../../src/octokit.js', () => ({
+vi.mock('../../src/octokit.js', () => ({
   createCliOctokit: (token: string, serverUrl: string, platformType?: string) => {
     octokitCalls.push({ token, serverUrl, platformType });
     return stubOctokit;
@@ -72,11 +72,11 @@ mock.module('../../src/octokit.js', () => ({
  */
 let lastProviderType: string | undefined;
 
-const fakeRun = mock(() =>
+const fakeRun = vi.fn(() =>
   Promise.resolve({ result: 'CLI agent finished', sessionStats: undefined, error: undefined })
 );
 
-mock.module('../../src/adapters/pi-agent.js', () => ({
+vi.mock('../../src/adapters/pi-agent.js', () => ({
   createCliPiAgent: (_config: unknown, _logger: unknown, provider: { type?: string }) => {
     lastProviderType = provider.type;
     return {
@@ -88,7 +88,7 @@ mock.module('../../src/adapters/pi-agent.js', () => ({
   },
 }));
 
-// Import after the mocks above are registered.
+// Import after the vis above are registered.
 const { runCommand } = await import('../../src/commands/run.js');
 import type { RunCommandArgs } from '../../src/commands/run.js';
 

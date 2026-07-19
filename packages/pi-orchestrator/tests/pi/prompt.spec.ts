@@ -10,7 +10,7 @@
  * so these tests automatically cover any platform added in the future.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import {
   getSystemPrompt,
   getSupportedPlatforms,

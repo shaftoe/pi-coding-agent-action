@@ -1,0 +1,13 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "schedule": ["before 6am"],
+  "labels": ["dependencies", "automated"],
+  "packageRules": [
+    {
+      "description": "Group @earendil-works Pi SDK packages — they share a version scheme and should move together",
+      "groupName": "Pi SDK",
+      "matchPackagePatterns": ["^@earendil-works/"]
+    }
+  ]
+}

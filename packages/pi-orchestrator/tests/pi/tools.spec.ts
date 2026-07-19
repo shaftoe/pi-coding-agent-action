@@ -1,10 +1,10 @@
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach } from 'vitest';
 
 // Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core
 // so they don't appear as CI annotations in test output.
 const realStdoutWrite = process.stdout.write.bind(process.stdout);
 
-const _mockedWrite = mock((...args: any[]) => {
+const _mockedWrite = vi.fn((...args: any[]) => {
   const msg = String(args[0] ?? '');
   if (msg.startsWith('::')) {
     return true; // swallow annotations
@@ -28,7 +28,7 @@ coreMock.getInput.mockImplementation(() => '/pi ');
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { createMockProvider } from '../helpers/tool-mocks';
 
-// Dynamic import to ensure env vars and mocks are set before module loads
+// Dynamic import to ensure env vars and vis are set before module loads
 const toolsModule = import('@alexanderfortin/pi-orchestrator');
 const { createToolsFactory } = await toolsModule;
 
@@ -58,7 +58,7 @@ const mockProvider = createMockProvider();
 function captureRegisteredTools() {
   const tools: unknown[] = [];
   const api = {
-    registerTool: mock((tool: unknown) => {
+    registerTool: vi.fn((tool: unknown) => {
       tools.push(tool);
     }),
   } as unknown as ExtensionAPI;
@@ -203,7 +203,7 @@ describe('extFactory', () => {
     expect(params.properties.pull_number).toBeDefined();
     // When all fields are optional, required may be undefined
     if (Array.isArray(params.required)) {
-      expect(params.required).not.toInclude('pull_number');
+      expect(params.required).not.toContain('pull_number');
     }
   });
 
@@ -212,7 +212,7 @@ describe('extFactory', () => {
     expect(params.properties.title).toBeDefined();
     // When all fields are optional, required may be undefined
     if (Array.isArray(params.required)) {
-      expect(params.required).not.toInclude('title');
+      expect(params.required).not.toContain('title');
     }
   });
 
@@ -221,7 +221,7 @@ describe('extFactory', () => {
     expect(params.properties.body).toBeDefined();
     // When all fields are optional, required may be undefined
     if (Array.isArray(params.required)) {
-      expect(params.required).not.toInclude('body');
+      expect(params.required).not.toContain('body');
     }
   });
 
@@ -230,7 +230,7 @@ describe('extFactory', () => {
     expect(params.properties.dryRun).toBeDefined();
     // When all fields are optional, required may be undefined
     if (Array.isArray(params.required)) {
-      expect(params.required).not.toInclude('dryRun');
+      expect(params.required).not.toContain('dryRun');
     }
   });
 
@@ -239,7 +239,7 @@ describe('extFactory', () => {
     expect(params.properties.owner).toBeDefined();
     // When all fields are optional, required may be undefined
     if (Array.isArray(params.required)) {
-      expect(params.required).not.toInclude('owner');
+      expect(params.required).not.toContain('owner');
     }
   });
 
@@ -248,7 +248,7 @@ describe('extFactory', () => {
     expect(params.properties.repo).toBeDefined();
     // When all fields are optional, required may be undefined
     if (Array.isArray(params.required)) {
-      expect(params.required).not.toInclude('repo');
+      expect(params.required).not.toContain('repo');
     }
   });
 
@@ -257,7 +257,7 @@ describe('extFactory', () => {
     expect(params.properties.issue_number).toBeDefined();
     // When all fields are optional, required may be undefined
     if (Array.isArray(params.required)) {
-      expect(params.required).not.toInclude('issue_number');
+      expect(params.required).not.toContain('issue_number');
     }
   });
 
@@ -266,7 +266,7 @@ describe('extFactory', () => {
     expect(params.properties.max_comments).toBeDefined();
     // When all fields are optional, required may be undefined
     if (Array.isArray(params.required)) {
-      expect(params.required).not.toInclude('max_comments');
+      expect(params.required).not.toContain('max_comments');
     }
   });
 

@@ -57,14 +57,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
-      - run: bun install --frozen-lockfile
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
 
       - name: Update dependency versions in README
-        run: bun run update-readme
+        run: pnpm run update-readme
 
       - name: Check for changes
         id: check

@@ -10,7 +10,7 @@
  * `buildDist()`, which uses the same `composeActionVersion()` call — both read
  * the same env vars, so the produced strings match byte-for-byte.
  *
- * Usage: bun run scripts/dist-version.ts
+ * Usage: pnpm run dist-version
  */
 
 import { join } from 'node:path';

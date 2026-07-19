@@ -9,7 +9,7 @@
  * fetcher is refactored.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { mapReviewComment } from '@alexanderfortin/pi-platform-github';
 import type { RestEndpointMethodTypes } from '@octokit/plugin-rest-endpoint-methods';
 

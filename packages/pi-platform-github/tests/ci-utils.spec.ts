@@ -2,7 +2,7 @@
  * @file Tests for shared CI/CD utility functions.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { getStatusIcon } from '@alexanderfortin/pi-platform-github';
 
 describe('getStatusIcon', () => {

@@ -4,7 +4,7 @@
  * Covers the end-to-end flow of updating a pull request via the GitHub API.
  */
 
-import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -20,7 +20,7 @@ function createUpdateDeps(): GitHubModuleDeps {
     octokit: {
       rest: {
         pulls: {
-          get: mock(() =>
+          get: vi.fn(() =>
             Promise.resolve({
               data: {
                 number: 42,
@@ -31,7 +31,7 @@ function createUpdateDeps(): GitHubModuleDeps {
               status: 200,
             })
           ),
-          update: mock(() =>
+          update: vi.fn(() =>
             Promise.resolve({
               data: { number: 42 },
               status: 200,
@@ -50,11 +50,11 @@ function createUpdateDeps(): GitHubModuleDeps {
       workspace: emptyWorkspace,
     },
     logger: {
-      debug: mock(() => {}),
-      info: mock(() => {}),
-      warning: mock(() => {}),
-      notice: mock(() => {}),
-      error: mock(() => {}),
+      debug: vi.fn(() => {}),
+      info: vi.fn(() => {}),
+      warning: vi.fn(() => {}),
+      notice: vi.fn(() => {}),
+      error: vi.fn(() => {}),
     },
   };
 }

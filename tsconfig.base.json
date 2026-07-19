@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "ESNext",
     "lib": ["ESNext"],
-    "types": ["bun-types", "node"],
+    "types": ["node"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,

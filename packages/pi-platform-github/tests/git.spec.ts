@@ -1,10 +1,10 @@
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, vi } from 'vitest';
 
 import { installGithubEnv } from '../../pi-orchestrator/tests/helpers/github-env';
 
 // Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core
 const realStdoutWrite = process.stdout.write.bind(process.stdout);
-const _mockedWrite = mock((...args: unknown[]) => {
+const _mockedWrite = vi.fn((...args: unknown[]) => {
   const msg = String(args[0] ?? '');
   if (msg.startsWith('::')) {
     return true;
@@ -21,7 +21,7 @@ const debugLogger = (msg: string): void => {
 // Set env vars BEFORE importing git-utils.ts
 installGithubEnv();
 
-// Dynamic import to ensure mocks are set before module loads
+// Dynamic import to ensure vis are set before module loads
 const gitUtilsModule = import('@alexanderfortin/pi-platform-github');
 
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';

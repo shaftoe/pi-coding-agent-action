@@ -299,7 +299,7 @@ jobs:
           token: ${{ secrets.OPENAI_API_KEY }}
           prompt: |
             Audit the project's dependencies for security vulnerabilities, outdated packages,
-            and deprecated APIs. Check package.json, bun.lockb, and any lock files.
+            and deprecated APIs. Check package.json, pnpm-lock.yaml, and any lock files.
             If issues are found, create a pull request with updates and a summary of changes.
             If no issues are found, post a comment on the most recent issue or PR indicating
             the audit completed successfully with no findings.
@@ -884,7 +884,7 @@ Refer to [the official Pi documentation](https://pi.dev/docs/latest) to learn ho
 
 ### Prerequisites
 
-- Bun package manager
+- pnpm package manager
 - Node.js 24+
 
 ### Validation
@@ -892,7 +892,7 @@ Refer to [the official Pi documentation](https://pi.dev/docs/latest) to learn ho
 Before committing, run the following checks:
 
 ```bash
-bun run validate
+pnpm run validate
 ```
 
 This runs:
@@ -903,20 +903,20 @@ This runs:
 
 ### Testing
 
-The project uses `bun test` for testing:
+The project uses [Vitest](https://vitest.dev/) for testing:
 
 ```bash
 # Run all tests
-bun test
+pnpm test
 
 # Run tests with coverage
-bun run test:coverage
+pnpm run test:coverage
 
 # Watch mode for development
-bun run test:watch
+pnpm run test:watch
 
 # Run end to end tests (requires LLM to be setup)
-bun run test:e2e
+pnpm run test:e2e
 ```
 
 ### Project Guidelines
@@ -924,8 +924,8 @@ bun run test:e2e
 - Follow the existing code style and conventions
 - Add tests for new functionality
 - Update documentation as needed
-- Use `bun` as the package manager (preferred over npm)
-- Run `bun run validate` before committing
+- Use `pnpm` as the package manager
+- Run `pnpm run validate` before committing
 
 ### Releasing
 

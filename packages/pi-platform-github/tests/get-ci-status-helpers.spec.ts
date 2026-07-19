@@ -9,7 +9,7 @@
  * the network/ref-resolution code.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import {
   buildCIStatusSummary,
   type CheckRunResult,

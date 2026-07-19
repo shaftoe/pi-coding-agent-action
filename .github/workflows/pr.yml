@@ -25,10 +25,6 @@ jobs:
         with:
           node-version: 24
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
       - name: Run Pi agent
         id: pi
         uses: shaftoe/pi-coding-agent-action@develop
@@ -39,7 +35,7 @@ jobs:
           model: ${{ vars.MODEL }}
           token: ${{ secrets.API_KEY }}
           thinking_level: ${{ vars.THINKING_LEVEL }}
-          diff_ignore_patterns: 'dist/ bun.lock node_modules/'
+          diff_ignore_patterns: 'dist/ pnpm-lock.yaml node_modules/'
           prompt: |
             This is a GitHub PR (#${{ github.event.pull_request.number }}) that needs code review. Focus on identifying issues, bugs, security concerns, and improvements. Don't apply any changes yourself, just review and suggest improvements.
 

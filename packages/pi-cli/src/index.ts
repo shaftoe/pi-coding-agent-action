@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env tsx
 /**
  * @file pi-cli entry point.
  *
@@ -6,13 +6,15 @@
  * M1 ships only the `run` subcommand; `review` and `thread` are planned
  * for M3.
  *
- * The shebang above targets `bun` since the package is TS-only and the
- * repo is Bun-first. When published as an npm package (M4) the binary
- * will be an esbuild bundle so the shebang will switch to `node`.
+ * The shebang targets `tsx` since the package is TS-only and is run via
+ * `pnpm run pi-cli` (or `npx tsx …`). When published as an npm package
+ * (M4) the binary will be an esbuild bundle so the shebang will switch
+ * to `node`.
  */
 
 import { Command, CommanderError } from 'commander';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { runCommand, type RunCommandArgs } from './commands/run.js';
 
 /**
@@ -98,12 +100,13 @@ async function main(): Promise<void> {
   await program.parseAsync(process.argv);
 }
 
-// Skip automatic execution when imported (e.g. in tests). `import.meta.main`
-// is a Bun-specific boolean that is `true` only when the current module is
-// the entry point of the process. It's sufficient on its own — there's no
-// need for an `process.argv[1]` fallback (which would falsely match any
-// file named `index.ts`).
-if (import.meta.main === true) {
+// Skip automatic execution when imported (e.g. in tests).
+// `import.meta.url` is the module URL; comparing its file path to
+// `process.argv[1]` (the entry script) detects direct execution.
+const __filename = fileURLToPath(import.meta.url);
+const isMainModule = process.argv[1] === __filename;
+
+if (isMainModule) {
   main().catch(err => {
     // runCommand handles orchestrator errors via the OutputSink (prints
     // its own ✖ line and sets process.exitCode). This outer catch is for

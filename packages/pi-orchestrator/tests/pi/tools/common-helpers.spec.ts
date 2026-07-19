@@ -7,7 +7,7 @@
  * function over a fake `IssueOrPRThread`.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import {
   formatPRFields,
   formatReviewComments,

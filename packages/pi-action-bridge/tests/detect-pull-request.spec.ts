@@ -6,9 +6,9 @@
  *   - `detectPullRequest` orchestration, driven by injected fakes
  *     (no `simple-git` / Octokit in the test path).
  *
- * Mirrors the repo's `*.spec.ts` + `bun:test` convention.
+ * Mirrors the repo's `*.spec.ts` + `vitest` convention.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import type { RemoteWithRefs, StatusResult } from 'simple-git';
 import { parseRemoteUrl } from '../src/remote.js';
 import { detectPullRequest, summarize } from '../src/tools/detect-pull-request.js';

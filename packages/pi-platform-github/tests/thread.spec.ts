@@ -6,7 +6,7 @@
  * buildThreadResult, and the top-level getIssueOrPRThread function.
  */
 
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, vi } from 'vitest';
 import { getIssueOrPRThread } from '@alexanderfortin/pi-platform-github';
 import type { GitHubModuleDeps, IssueOrPRThread } from '@alexanderfortin/pi-platform-github';
 
@@ -22,7 +22,7 @@ function createMockDeps(
   const repo = overrides.repo ?? 'test-repo';
   const number = overrides.issueNumber ?? 42;
 
-  const mockIssuesGet = mock(() =>
+  const mockIssuesGet = vi.fn(() =>
     Promise.resolve({
       data: {
         number,
@@ -40,13 +40,13 @@ function createMockDeps(
     })
   );
 
-  const mockIssuesListComments = mock(() =>
+  const mockIssuesListComments = vi.fn(() =>
     Promise.resolve({
       data: [],
     })
   );
 
-  const mockPullsGet = mock(() =>
+  const mockPullsGet = vi.fn(() =>
     Promise.resolve({
       data: {
         number,
@@ -59,7 +59,7 @@ function createMockDeps(
     })
   );
 
-  const mockPullsListReviewComments = mock(() =>
+  const mockPullsListReviewComments = vi.fn(() =>
     Promise.resolve({
       data: [],
     })
@@ -88,11 +88,11 @@ function createMockDeps(
       workspace: '/tmp',
     },
     logger: {
-      debug: mock(() => {}),
-      info: mock(() => {}),
-      warning: mock(() => {}),
-      notice: mock(() => {}),
-      error: mock(() => {}),
+      debug: vi.fn(() => {}),
+      info: vi.fn(() => {}),
+      warning: vi.fn(() => {}),
+      notice: vi.fn(() => {}),
+      error: vi.fn(() => {}),
     },
   };
 }

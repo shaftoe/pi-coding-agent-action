@@ -5,7 +5,7 @@
  * the `simple-git` based helpers behave correctly end-to-end.
  */
 
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';

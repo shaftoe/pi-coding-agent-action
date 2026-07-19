@@ -6,7 +6,7 @@
  * now verify the deps-based approach works correctly.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 
 function createTestDeps(overrides?: Partial<GitHubModuleDeps>): GitHubModuleDeps {

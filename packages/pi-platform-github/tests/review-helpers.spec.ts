@@ -9,7 +9,7 @@
  * is refactored.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { validateReviewComment, validateReviewEvent } from '@alexanderfortin/pi-platform-github';
 import type { ReviewInlineComment } from '@alexanderfortin/pi-platform-github';
 

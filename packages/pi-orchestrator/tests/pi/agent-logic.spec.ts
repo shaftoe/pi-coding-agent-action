@@ -4,7 +4,7 @@
  * Tests the Pi agent wrapper including session stats handling.
  */
 
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, vi } from 'vitest';
 import { resolve } from 'node:path';
 import { buildMockSession, injectMockSession, userHelloMessage } from './helpers/agent-session';
 import { createMockProvider } from '../helpers/tool-mocks';
@@ -17,7 +17,7 @@ function createCoreWithInfoCapture(): { core: any; messages: string[] } {
   const messages: string[] = [];
   const core = {
     ...mockCoreAdapter,
-    info: mock((msg: string) => {
+    info: vi.fn((msg: string) => {
       messages.push(msg);
     }),
   };
@@ -32,7 +32,7 @@ function createCoreWithErrorCapture(): { core: any; messages: string[] } {
   const messages: string[] = [];
   const core = {
     ...mockCoreAdapter,
-    error: mock((msg: string) => {
+    error: vi.fn((msg: string) => {
       messages.push(msg);
     }),
   };
@@ -47,7 +47,7 @@ function createCoreWithWarningCapture(): { core: any; messages: string[] } {
   const messages: string[] = [];
   const core = {
     ...mockCoreAdapter,
-    warning: mock((msg: string) => {
+    warning: vi.fn((msg: string) => {
       messages.push(msg);
     }),
   };
@@ -65,7 +65,7 @@ const defaultAgentConfig = {
 
 // Mock @actions/core to provide required inputs before importing Agent
 const noop = (): void => {};
-const mockGetInput = mock((name: string) => {
+const mockGetInput = vi.fn((name: string) => {
   if (name === 'github_token') {
     return 'fake-token';
   }
@@ -83,20 +83,20 @@ process.env.INPUT_TRIGGER = '/pi ';
 process.env.INPUT_GITHUB_TOKEN = 'fake-token';
 process.env.INPUT_MAX_COMMENTS = '100';
 
-// Dynamic import to ensure mocks are set up before module loads
+// Dynamic import to ensure vis are set up before module loads
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore TS1309 -- Top-level await not supported in CommonJS, but Bun test runner handles it
+// @ts-ignore TS1309 -- Top-level await not supported in CommonJS, but Vitest handles it
 const { Agent } = await import('@alexanderfortin/pi-orchestrator');
 
 // Create a mock CoreAdapter for tests
 const mockCoreAdapter = {
   getInput: mockGetInput,
-  notice: mock(noop),
-  debug: mock(noop),
-  info: mock(noop),
-  setFailed: mock(noop),
-  setOutput: mock(noop),
-  warning: mock(noop),
+  notice: vi.fn(noop),
+  debug: vi.fn(noop),
+  info: vi.fn(noop),
+  setFailed: vi.fn(noop),
+  setOutput: vi.fn(noop),
+  warning: vi.fn(noop),
 };
 
 // Create a mock PlatformProvider for tests
@@ -134,7 +134,7 @@ describe('Agent', () => {
       const debugLogger = (msg: string): void => {
         mockDebug.push(msg);
       };
-      const adapter = { ...mockCoreAdapter, debug: mock(debugLogger) };
+      const adapter = { ...mockCoreAdapter, debug: vi.fn(debugLogger) };
 
       // API-key setup moved from the constructor to ready() in the
       // ModelRuntime migration, so verify at the ready() level.
@@ -516,7 +516,7 @@ describe('Agent', () => {
     }
 
     test('onPromptComplete is called when agent_settled fires', async () => {
-      const onComplete = mock(() => {});
+      const onComplete = vi.fn(() => {});
       const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
         ...defaultAgentConfig,
       });
@@ -533,7 +533,7 @@ describe('Agent', () => {
     });
 
     test('onPromptComplete is NOT called for individual agent_end events', async () => {
-      const onComplete = mock(() => {});
+      const onComplete = vi.fn(() => {});
       const agent = createRealAgent();
       (agent as unknown as { events: { onPromptComplete: () => void } }).events = {
         onPromptComplete: onComplete,
@@ -783,7 +783,7 @@ describe('Agent', () => {
       const agent = createRealAgent();
       await agent.ready();
 
-      const mockExportToHtml = mock(async (outputPath: string) => outputPath);
+      const mockExportToHtml = vi.fn(async (outputPath: string) => outputPath);
       agent['session'] = {
         ...agent['session'],
         exportToHtml: mockExportToHtml,
@@ -800,7 +800,7 @@ describe('Agent', () => {
       const agent = createRealAgent();
       await agent.ready();
 
-      const mockExportToJsonl = mock((outputPath: string) => outputPath);
+      const mockExportToJsonl = vi.fn((outputPath: string) => outputPath);
       agent['session'] = {
         ...agent['session'],
         exportToJsonl: mockExportToJsonl,

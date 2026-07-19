@@ -1,4 +1,4 @@
-import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 
 import { setupGitHubTestEnv } from './helpers/github-test-env';
 setupGitHubTestEnv({ envPathPrefix: 'gh-event-pr-logic' });
@@ -19,11 +19,11 @@ const mockContext = {
 };
 
 // Mock @actions/github context
-mock.module('@actions/github', () => ({
+vi.mock('@actions/github', () => ({
   context: mockContext,
 }));
 
-// Dynamic import to ensure mocks are set before module loads
+// Dynamic import to ensure vis are set before module loads
 const pullRequestUpdateModulePromise = import('@alexanderfortin/pi-platform-github');
 
 // Cache the module after first import
@@ -53,14 +53,14 @@ import { execSync } from 'node:child_process';
 
 describe('applyCommit', () => {
   function createDeps(workspace: string) {
-    const info = mock(() => {});
-    const debug = mock(() => {});
+    const info = vi.fn(() => {});
+    const debug = vi.fn(() => {});
     const logger = {
       info,
       debug,
-      warning: mock(() => {}),
-      notice: mock(() => {}),
-      error: mock(() => {}),
+      warning: vi.fn(() => {}),
+      notice: vi.fn(() => {}),
+      error: vi.fn(() => {}),
     };
 
     const deps = {
@@ -458,16 +458,16 @@ describe('buildDryRunReport', () => {
 });
 
 describe('fetchPullRequestData', () => {
-  function createDeps(octokitGet: ReturnType<typeof mock>) {
+  function createDeps(octokitGet: ReturnType<typeof vi.fn>) {
     return {
       context: mockContext,
       octokit: { rest: { pulls: { get: octokitGet } } },
       logger: {
-        debug: mock(() => {}),
-        info: mock(() => {}),
-        warning: mock(() => {}),
-        notice: mock(() => {}),
-        error: mock(() => {}),
+        debug: vi.fn(() => {}),
+        info: vi.fn(() => {}),
+        warning: vi.fn(() => {}),
+        notice: vi.fn(() => {}),
+        error: vi.fn(() => {}),
       },
     } as any;
   }
@@ -476,7 +476,7 @@ describe('fetchPullRequestData', () => {
     const module = await getModule();
     const { fetchPullRequestData } = module;
 
-    const get = mock(() =>
+    const get = vi.fn(() =>
       Promise.resolve({
         status: 200,
         data: {
@@ -506,7 +506,7 @@ describe('fetchPullRequestData', () => {
     const module = await getModule();
     const { fetchPullRequestData } = module;
 
-    const get = mock(() => Promise.resolve({ status: 404, data: null }));
+    const get = vi.fn(() => Promise.resolve({ status: 404, data: null }));
     await expect(fetchPullRequestData(createDeps(get), 99)).rejects.toThrow(
       /Could not fetch pull request #99/
     );
@@ -516,7 +516,7 @@ describe('fetchPullRequestData', () => {
     const module = await getModule();
     const { fetchPullRequestData } = module;
 
-    const get = mock(() => Promise.resolve({ status: 200, data: null }));
+    const get = vi.fn(() => Promise.resolve({ status: 200, data: null }));
     await expect(fetchPullRequestData(createDeps(get), 7)).rejects.toThrow(
       /Could not fetch pull request #7/
     );
@@ -526,7 +526,7 @@ describe('fetchPullRequestData', () => {
     const module = await getModule();
     const { fetchPullRequestData } = module;
 
-    const get = mock(() => Promise.reject(new Error('network down')));
+    const get = vi.fn(() => Promise.reject(new Error('network down')));
     await expect(fetchPullRequestData(createDeps(get), 1)).rejects.toThrow('network down');
   });
 });

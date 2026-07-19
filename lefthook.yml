@@ -2,18 +2,18 @@ pre-commit:
   parallel: false
   commands:
     format:
-      run: bun run format
+      run: pnpm run format
       stage_fixed: true
     lint:
-      run: bun run lint
+      run: pnpm run lint
     type-check:
-      run: bun run type-check
+      run: pnpm run type-check
     test:
-      run: bun test
+      run: pnpm test
 
 pre-push:
   commands:
     validate:
-      run: bun run validate
+      run: pnpm run validate
     fallow:
-      run: bunx fallow dead-code --changed-since origin/develop --format compact
+      run: pnpm exec fallow dead-code --changed-since origin/develop --format compact

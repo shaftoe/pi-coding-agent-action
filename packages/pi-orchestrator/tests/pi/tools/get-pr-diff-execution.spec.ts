@@ -6,7 +6,7 @@
  * results.
  */
 
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, vi } from 'vitest';
 import type { DiffConfig } from '@alexanderfortin/pi-orchestrator';
 import {
   buildTool,
@@ -106,7 +106,7 @@ describe('get_pr_diff tool - execution', () => {
   });
 
   test('execute propagates provider errors (SDK sets isError)', async () => {
-    const getPRDiffImpl = mock(async () => {
+    const getPRDiffImpl = vi.fn(async () => {
       throw new Error('API rate limit exceeded');
     });
     const { tool } = buildTool({ getPRDiffImpl });

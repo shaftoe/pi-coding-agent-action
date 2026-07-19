@@ -5,7 +5,7 @@
  *   - gatherCliConfig: produces the expected PiConfig shape
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { gatherCliConfig } from '../src/config.js';
 
 describe('gatherCliConfig', () => {

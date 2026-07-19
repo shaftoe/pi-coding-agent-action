@@ -14,7 +14,7 @@
  * `tests/e2e/` via relative path).
  */
 
-import { expect } from 'bun:test';
+import { expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import ignore, { type Ignore } from 'ignore';

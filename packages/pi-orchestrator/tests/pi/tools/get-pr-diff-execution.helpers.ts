@@ -2,7 +2,7 @@
  * Helpers for `get-pr-diff-execution.spec.ts`.
  *
  * Wraps the three pieces of boilerplate that recur in every test:
- *   1. wiring a `mock()`-tracked `getPRDiff` into a provider + tool factory
+ *   1. wiring a `vi.fn()`-tracked `getPRDiff` into a provider + tool factory
  *   2. invoking `tool.execute(...)` with the standard (owner/repo/pull #42)
  *      args used by all tests in this file
  *   3. asserting the post-byte-truncation details shape (which several
@@ -13,7 +13,7 @@
  * this spec.
  */
 
-import { expect, mock, type Mock } from 'bun:test';
+import { expect, vi, type Mock } from 'vitest';
 import {
   getPRDiffToolFactory,
   type DiffConfig,
@@ -74,12 +74,12 @@ export interface BuildToolResult {
 }
 
 /**
- * Build a tool wired to a `mock()`-tracked `getPRDiff`. The returned
+ * Build a tool wired to a `vi.fn()`-tracked `getPRDiff`. The returned
  * `getPRDiff` reference can be inspected with `.mock.calls`.
  */
 export function buildTool(options: BuildToolOptions = {}): BuildToolResult {
   const { diff = SAMPLE_DIFF, config, getPRDiffImpl } = options;
-  const getPRDiff = getPRDiffImpl ?? mock(async () => diff);
+  const getPRDiff = getPRDiffImpl ?? vi.fn(async () => diff);
   const provider = createMockProvider({ getPRDiff }, providerOptions);
   const tool = getPRDiffToolFactory(provider, config);
   return { tool, getPRDiff, provider };

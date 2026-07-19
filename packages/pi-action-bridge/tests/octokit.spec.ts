@@ -13,7 +13,7 @@
  * wiring. No network: `findPullRequestForBranch` is driven by a structurally-
  * typed fake Octokit whose `rest.pulls.list` is stubbed.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import {
   createOctokit,
   findPullRequestForBranch,

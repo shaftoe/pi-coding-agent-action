@@ -7,7 +7,7 @@
  * since the co-location move); these tests cover only the CLI-side wiring.
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { createCliOctokit } from '../src/octokit.js';
 
 describe('createCliOctokit', () => {

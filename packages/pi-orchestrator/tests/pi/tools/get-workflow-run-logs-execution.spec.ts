@@ -5,7 +5,7 @@
  * provider and returns well-formed results.
  */
 
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, vi } from 'vitest';
 import { getWorkflowRunLogsToolFactory } from '@alexanderfortin/pi-orchestrator';
 import { mockExtensionContext as mockCtx, createMockProvider } from '../../helpers/tool-mocks';
 
@@ -41,7 +41,7 @@ describe('get_workflow_run_logs tool - execution', () => {
   });
 
   test('execute returns workflow run logs from provider', async () => {
-    const getWorkflowRunLogs = mock(async () => ({
+    const getWorkflowRunLogs = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
       details: SAMPLE_WORKFLOW_LOGS,
     }));
@@ -59,7 +59,7 @@ describe('get_workflow_run_logs tool - execution', () => {
   });
 
   test('execute forwards run_id to provider', async () => {
-    const getWorkflowRunLogs = mock(async () => ({
+    const getWorkflowRunLogs = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
       details: SAMPLE_WORKFLOW_LOGS,
     }));
@@ -73,7 +73,7 @@ describe('get_workflow_run_logs tool - execution', () => {
   });
 
   test('execute forwards max_bytes to provider', async () => {
-    const getWorkflowRunLogs = mock(async () => ({
+    const getWorkflowRunLogs = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
       details: SAMPLE_WORKFLOW_LOGS,
     }));
@@ -87,7 +87,7 @@ describe('get_workflow_run_logs tool - execution', () => {
   });
 
   test('execute does not pass max_bytes when not provided', async () => {
-    const getWorkflowRunLogs = mock(async () => ({
+    const getWorkflowRunLogs = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
       details: SAMPLE_WORKFLOW_LOGS,
     }));
@@ -101,7 +101,7 @@ describe('get_workflow_run_logs tool - execution', () => {
   });
 
   test('execute propagates provider errors', async () => {
-    const getWorkflowRunLogs = mock(async () => {
+    const getWorkflowRunLogs = vi.fn(async () => {
       throw new Error('Workflow run not found');
     });
     const provider = createMockProvider({ getWorkflowRunLogs }, providerOptions);
@@ -113,7 +113,7 @@ describe('get_workflow_run_logs tool - execution', () => {
   });
 
   test('execute returns cancellation result when signal is aborted', async () => {
-    const getWorkflowRunLogs = mock(async () => ({
+    const getWorkflowRunLogs = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
       details: SAMPLE_WORKFLOW_LOGS,
     }));

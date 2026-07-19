@@ -8,7 +8,7 @@
  * is the exception, it's tested through a stub deps object).
  */
 
-import { describe, expect, mock, test } from 'bun:test';
+import { describe, expect, vi, test } from 'vitest';
 import type { JobLog } from '@alexanderfortin/pi-platform-github';
 import {
   computeJobBudgets,
@@ -264,9 +264,9 @@ describe('renderJobLogsOutput', () => {
 /** Build a minimal `deps` with stubbed octokit + logger. */
 function buildDeps(logResponse: unknown): {
   deps: any;
-  downloadMock: ReturnType<typeof mock>;
+  downloadMock: ReturnType<typeof vi.fn>;
 } {
-  const downloadMock = mock(() => Promise.resolve({ data: logResponse }));
+  const downloadMock = vi.fn(() => Promise.resolve({ data: logResponse }));
   const deps = {
     octokit: {
       rest: {
@@ -282,7 +282,7 @@ function buildDeps(logResponse: unknown): {
 
 /** Build a `deps` whose download rejects with `err`. */
 function buildFailingDeps(err: unknown): any {
-  const downloadMock = mock(() => Promise.reject(err));
+  const downloadMock = vi.fn(() => Promise.reject(err));
   return {
     octokit: { rest: { actions: { downloadJobLogsForWorkflowRun: downloadMock } } },
     logger: { debug: () => {} },

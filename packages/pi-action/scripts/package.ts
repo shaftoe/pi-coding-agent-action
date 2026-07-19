@@ -2,6 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:
 import { createRequire } from 'node:module';
 import { build, type Plugin } from 'esbuild';
 import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // Pure version/provenance helpers live in `./version` so they can be shared
 // with the CI dist-rebuild scripts (and unit-tested) without pulling in esbuild.
@@ -126,10 +127,22 @@ export async function buildDist(cwd: string = process.cwd()): Promise<void> {
   const baseVersion = readJsonVersion(join(cwd, 'package.json'));
   const version = composeActionVersion(baseVersion);
 
-  // Resolve Pi SDK path dynamically — in Bun workspaces, deps are hoisted to root node_modules,
-  // but the prepare lifecycle may run before the full tree is materialized.
-  const require = createRequire(import.meta.url);
-  const piPkgPath = require.resolve('@earendil-works/pi-coding-agent/package.json');
+  // Resolve Pi SDK path dynamically. We can't use `require.resolve('.../package.json')`
+  // because the Pi SDK's `exports` map doesn't expose it (and pnpm enforces
+  // `exports` strictly). The package also only has an `import` export
+  // condition (no `require`), so CJS require.resolve fails entirely. We use
+  // `import.meta.resolve` (ESM) which honours the `import` condition, then
+  // walk up to the nearest package.json.
+  const piMainUrl = import.meta.resolve('@earendil-works/pi-coding-agent');
+  let piDir = dirname(fileURLToPath(piMainUrl));
+  while (!existsSync(join(piDir, 'package.json'))) {
+    const parent = dirname(piDir);
+    if (parent === piDir) {
+      throw new Error('Could not locate @earendil-works/pi-coding-agent/package.json');
+    }
+    piDir = parent;
+  }
+  const piPkgPath = join(piDir, 'package.json');
   const piVersion = readJsonVersion(piPkgPath);
 
   const branch = process.env.GITHUB_REF_NAME ?? 'unknown';
@@ -169,9 +182,8 @@ export async function buildDist(cwd: string = process.cwd()): Promise<void> {
 }
 
 // If run directly, execute the build
-// Bun sets isMain property on the module
-// @ts-expect-error - Bun runtime property
-if (import.meta.main || process.argv[1].endsWith('/package.ts')) {
+const __filename = fileURLToPath(import.meta.url);
+if (process.argv[1] === __filename) {
   buildDist().catch(error => {
     console.error('Build failed:', error);
     process.exit(1);

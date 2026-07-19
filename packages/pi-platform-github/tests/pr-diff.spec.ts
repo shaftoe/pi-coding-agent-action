@@ -2,7 +2,7 @@
  * @file Tests for PR diff filtering logic.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { filterDiffByIgnoreFiles, matchesIgnorePattern } from '@alexanderfortin/pi-platform-github';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 

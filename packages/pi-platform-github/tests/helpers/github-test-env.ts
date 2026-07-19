@@ -6,31 +6,28 @@
  * `tests/get-ci-status.spec.ts`, `tests/get-workflow-run-logs.spec.ts`,
  * and similar specs:
  *   - stdout annotation filter (swallow `::notice::` etc.)
- *   - shared `@actions/core` mock via `registerCoreMock`
+ *   - shared `@actions/core` mock (auto-registered via `core-mock.ts`)
  *   - shared `@actions/github` context mock
  *   - GITHUB_* env vars + event-path file
  *   - `createTestDeps(octokit, options?)` factory for `GitHubModuleDeps`
  *
- * Each call to `setupGitHubTestEnv()` is idempotent across files; the
- * stdout stub is installed once, env vars are overwritten deterministically,
- * and `mock.module('@actions/github', ...)` is wrapped to be first-call-wins.
+ * Importing this module automatically mocks `@actions/core` and
+ * `@actions/github` (both via top-level `vi.mock`, hoisted before any test
+ * imports resolve). The `@actions/github` mock returns a mutable
+ * `mockGithubContext` object that `setupGitHubTestEnv()` / friends update
+ * in place.
  */
 
-import { mock } from 'bun:test';
+import { vi } from 'vitest';
 
-import { coreMock, registerCoreMock } from '../../../pi-orchestrator/tests/helpers/core-mock';
+import { coreMock as importedCoreMock } from '../../../pi-orchestrator/tests/helpers/core-mock';
 import { installGithubEnv } from '../../../pi-orchestrator/tests/helpers/github-env';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 
-export { coreMock };
+export const coreMock: any = importedCoreMock;
 
 /**
  * Default mock GitHub context object — no event name / sha / payload.
- *
- * Used by git tests (`commit-creator.spec.ts`, `tree-builder.spec.ts`)
- * that don't care about which event triggered them. They pass this to
- * `setupGitHubContextMock()` and read `repo` / `issue` / `serverUrl` /
- * `runId` directly when building `GitHubModuleDeps`.
  *
  * If you need a fully-populated context (with `eventName` and `sha`),
  * use `defaultGitHubContext` below or `createTestDeps()`.
@@ -60,7 +57,7 @@ export function installStdoutAnnotationFilter(): void {
   }
   stdoutStubInstalled = true;
   const realStdoutWrite = process.stdout.write.bind(process.stdout);
-  const stub = mock((...args: Parameters<typeof process.stdout.write>) => {
+  const stub = vi.fn((...args: Parameters<typeof process.stdout.write>) => {
     const msg = String(args[0] ?? '');
     if (msg.startsWith('::')) {
       return true;
@@ -86,20 +83,34 @@ export const defaultGitHubContext = {
   payload: {},
 } as const;
 
-let githubMockRegistered = false;
+/**
+ * Mutable mock context object backing the `@actions/github` mock. Mutated
+ * in place by `registerGitHubContextMock()` / `setupGitHubTestEnv()` so the
+ * hoisted `vi.mock` factory (which runs before test code) always returns a
+ * live reference.
+ */
+const mockGithubContext: Record<string, unknown> = { ...defaultGitHubContext };
+
+// Register the @actions/github mock at module top-level (hoisted by Vitest).
+vi.mock('@actions/github', () => ({ context: mockGithubContext }));
 
 /**
- * Register the `@actions/github` mock module, exporting a `context` object
- * derived from `defaultGitHubContext` (overridable). First-call-wins so
- * multiple specs can safely call this in their top-level setup.
+ * Replace the entire `mockGithubContext` with a fresh set of keys. Used by
+ * `registerGitHubContextMock` and `setupGitHubContextMock`.
+ */
+function setMockContext(context: Record<string, unknown>): void {
+  for (const key of Object.keys(mockGithubContext)) {
+    delete mockGithubContext[key];
+  }
+  Object.assign(mockGithubContext, context);
+}
+
+/**
+ * Update the `@actions/github` mock context, derived from
+ * `defaultGitHubContext` (overridable).
  */
 export function registerGitHubContextMock(overrides: Record<string, unknown> = {}): void {
-  if (githubMockRegistered) {
-    return;
-  }
-  githubMockRegistered = true;
-  const ctx = { ...defaultGitHubContext, ...overrides };
-  mock.module('@actions/github', () => ({ context: ctx }));
+  setMockContext({ ...defaultGitHubContext, ...overrides });
 }
 
 /**
@@ -119,7 +130,7 @@ export function installGitHubEnv(envPathPrefix = 'gh-event'): string {
 export interface SetupGitHubTestEnvOptions {
   /** Prefix for the temp event-path file (default `'gh-event'`). */
   envPathPrefix?: string;
-  /** Overrides applied to `defaultGitHubContext` before `mock.module`. */
+  /** Overrides applied to `defaultGitHubContext` before mocking. */
   contextOverrides?: Record<string, unknown>;
 }
 
@@ -131,14 +142,17 @@ export interface SetupGitHubTestEnvOptions {
  */
 export function setupGitHubContextMock(context: Record<string, unknown> = {}): void {
   installStdoutAnnotationFilter();
-  registerCoreMock();
-  mock.module('@actions/github', () => ({ context }));
+  setMockContext(context);
   installGitHubEnv(`gh-event-${Date.now()}`);
 }
 
 /**
- * Convenience: run all four shared setup steps in the conventional order.
+ * Convenience: run all shared setup steps in the conventional order.
  * Returns the registered `coreMock` for direct spy access.
+ *
+ * `@actions/core` and `@actions/github` are already auto-mocked by importing
+ * this module; this function additionally installs the stdout filter, applies
+ * context overrides, and writes the GitHub event-path env file.
  *
  * ```ts
  * // top of spec file
@@ -149,7 +163,6 @@ export function setupGitHubTestEnv(options: SetupGitHubTestEnvOptions = {}): {
   coreMock: typeof coreMock;
 } {
   installStdoutAnnotationFilter();
-  registerCoreMock();
   registerGitHubContextMock(options.contextOverrides ?? {});
   installGitHubEnv(options.envPathPrefix ?? 'gh-event');
   return { coreMock };

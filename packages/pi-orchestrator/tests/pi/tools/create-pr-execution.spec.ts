@@ -1,4 +1,4 @@
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, vi } from 'vitest';
 import { createPRToolFactory } from '@alexanderfortin/pi-orchestrator';
 import { mockExtensionContext as mockCtx, createMockProvider } from '../../helpers/tool-mocks';
 import * as githubIndex from '@alexanderfortin/pi-platform-github';
@@ -43,7 +43,7 @@ describe('create_pull_request tool - execution', () => {
   });
 
   test('execute calls provider.createPullRequest with title only', async () => {
-    const createPullRequest = mock((_params: any) =>
+    const createPullRequest = vi.fn((_params: any) =>
       Promise.resolve({
         content: [{ type: 'text' as const, text: 'PR #1 created' }],
         details: {
@@ -66,7 +66,7 @@ describe('create_pull_request tool - execution', () => {
   });
 
   test('execute passes all optional params when provided', async () => {
-    const createPullRequest = mock((_params: any) =>
+    const createPullRequest = vi.fn((_params: any) =>
       Promise.resolve({
         content: [{ type: 'text' as const, text: 'PR created' }],
         details: {
@@ -100,7 +100,7 @@ describe('create_pull_request tool - execution', () => {
   });
 
   test('execute omits undefined optional params', async () => {
-    const createPullRequest = mock((_params: any) =>
+    const createPullRequest = vi.fn((_params: any) =>
       Promise.resolve({
         content: [{ type: 'text' as const, text: 'ok' }],
         details: {
@@ -125,7 +125,7 @@ describe('create_pull_request tool - execution', () => {
   });
 
   test('execute returns cancellation result when signal is aborted', async () => {
-    const createPullRequest = mock((_params: any) =>
+    const createPullRequest = vi.fn((_params: any) =>
       Promise.resolve({
         content: [{ type: 'text' as const, text: 'should not be called' }],
         details: {

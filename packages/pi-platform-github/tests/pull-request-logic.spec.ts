@@ -1,10 +1,10 @@
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach } from 'vitest';
 
 import { setupGitHubTestEnv } from './helpers/github-test-env';
 setupGitHubTestEnv({ envPathPrefix: 'gh-event-pr-logic' });
 
 const noop = (): void => {};
-const mockGetInput = mock((name: string) => {
+const mockGetInput = vi.fn((name: string) => {
   if (name === 'github_token') {
     return 'fake-token';
   }
@@ -12,7 +12,7 @@ const mockGetInput = mock((name: string) => {
 });
 
 // Mock octokit
-const mockReposGet = mock(() => Promise.resolve({ data: { default_branch: 'develop' } }));
+const mockReposGet = vi.fn(() => Promise.resolve({ data: { default_branch: 'develop' } }));
 const mockOctokit = {
   rest: {
     repos: {
@@ -20,8 +20,8 @@ const mockOctokit = {
     },
   },
 };
-mock.module('../../../src/platform/github/octokit', () => ({
-  getOctokit: mock(() => mockOctokit),
+vi.mock('../../../src/platform/github/octokit', () => ({
+  getOctokit: vi.fn(() => mockOctokit),
 }));
 
 // Setup default GitHub context
@@ -44,11 +44,11 @@ const mockContext = {
 };
 
 // Mock @actions/github context
-mock.module('@actions/github', () => ({
+vi.mock('@actions/github', () => ({
   context: mockContext,
 }));
 
-// Dynamic import to ensure mocks are set before module loads
+// Dynamic import to ensure vis are set before module loads
 const pullRequestModulePromise = import('@alexanderfortin/pi-platform-github');
 
 // Cache the module after first import

@@ -70,7 +70,7 @@ export interface ActionBuildInfo {
  * `node_modules/`. Defaults to `process.cwd()`.
  *
  * - **Bundled action**: cwd is the workspace root where `package.json` lives.
- * - **Tests**: bun test runs from the project root.
+ * - **Tests**: vitest runs from the project root.
  * - **Library**: consumers' `process.cwd()` is their project root.
  */
 const projectRoot = process.cwd();

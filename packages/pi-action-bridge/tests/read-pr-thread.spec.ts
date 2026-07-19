@@ -6,7 +6,7 @@
  * (no network) and assert the text rendering (incl. handoff-marker + body
  * truncation behaviour that `/pickup` relies on).
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { readPrThread, summarizeThread } from '../src/tools/read-pr-thread.js';
 import type { NormalizedThread, ReadPrThreadDetails, ReadThreadFn } from '../src/types.js';
 

@@ -4,7 +4,7 @@
  * logic as @semantic-release/changelog's prepare step.
  *
  * Usage:
- *   bun run changelog
+ *   pnpm run changelog
  */
 
 import { execSync } from 'node:child_process';

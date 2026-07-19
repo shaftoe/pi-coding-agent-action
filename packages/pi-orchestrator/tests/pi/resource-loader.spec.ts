@@ -4,14 +4,14 @@
  * Tests extension resolution functionality and resource loader configuration.
  */
 
-import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import { resolveExtensions, getResourceLoader } from '@alexanderfortin/pi-orchestrator';
 import { DefaultPackageManager, DefaultResourceLoader } from '@earendil-works/pi-coding-agent';
 import { createMockProvider } from '../helpers/tool-mocks';
 
 // Mock CoreAdapter for testing
 const mockCoreAdapter = {
-  getInput: mock((name: string) => {
+  getInput: vi.fn((name: string) => {
     const defaults: Record<string, string> = {
       github_token: 'fake-token',
       trigger: '/pi ',
@@ -19,13 +19,13 @@ const mockCoreAdapter = {
     };
     return defaults[name] ?? '';
   }),
-  setFailed: mock(),
-  setOutput: mock(),
-  notice: mock(),
-  debug: mock(),
-  info: mock(),
-  warning: mock(),
-  error: mock(),
+  setFailed: vi.fn(),
+  setOutput: vi.fn(),
+  notice: vi.fn(),
+  debug: vi.fn(),
+  info: vi.fn(),
+  warning: vi.fn(),
+  error: vi.fn(),
 };
 
 // Mock platform provider for getResourceLoader
@@ -42,11 +42,11 @@ process.env.INPUT_MAX_COMMENTS = '100';
  * and the cleanup function that restores the original implementation.
  */
 function installMockResolveExtensionSources(): {
-  mockFn: ReturnType<typeof mock>;
+  mockFn: ReturnType<typeof vi.fn>;
   restore: () => void;
 } {
   const original = DefaultPackageManager.prototype.resolveExtensionSources;
-  const mockFn = mock(async (sources: string[]) => ({
+  const mockFn = vi.fn(async (sources: string[]) => ({
     extensions: sources.map((source, index) => ({
       source,
       path: `/tmp/extensions/${source.replace(/[^a-z0-9]/g, '-')}-${index}`,
@@ -63,7 +63,7 @@ function installMockResolveExtensionSources(): {
 }
 
 describe('resolveExtensions', () => {
-  let mockResolveExtensionSources: ReturnType<typeof mock>;
+  let mockResolveExtensionSources: ReturnType<typeof vi.fn>;
   let restoreResolveExtensionSources: () => void;
 
   beforeEach(() => {
@@ -147,14 +147,14 @@ describe('resolveExtensions', () => {
 
   describe('when some extensions are disabled', () => {
     beforeEach(() => {
-      mockResolveExtensionSources = mock(async () => ({
+      mockResolveExtensionSources = vi.fn(async () => ({
         extensions: [
           { source: 'npm:enabled-package', path: '/tmp/extension-1', enabled: true },
           { source: 'npm:disabled-package', path: '/tmp/extension-2', enabled: false },
           { source: 'npm:another-enabled', path: '/tmp/extension-3', enabled: true },
         ],
       }));
-      DefaultPackageManager.prototype.resolveExtensionSources = mockResolveExtensionSources;
+      DefaultPackageManager.prototype.resolveExtensionSources = mockResolveExtensionSources as any;
     });
 
     test('only includes enabled extensions in paths', async () => {
@@ -172,10 +172,10 @@ describe('resolveExtensions', () => {
 
   describe('when no extensions are resolved', () => {
     beforeEach(() => {
-      mockResolveExtensionSources = mock(async () => ({
+      mockResolveExtensionSources = vi.fn(async () => ({
         extensions: [],
       }));
-      DefaultPackageManager.prototype.resolveExtensionSources = mockResolveExtensionSources;
+      DefaultPackageManager.prototype.resolveExtensionSources = mockResolveExtensionSources as any;
     });
 
     test('returns empty paths and adds warning', async () => {
@@ -199,10 +199,10 @@ describe('resolveExtensions', () => {
 
   describe('when package manager throws error', () => {
     beforeEach(() => {
-      mockResolveExtensionSources = mock(async () => {
+      mockResolveExtensionSources = vi.fn(async () => {
         throw new Error('Network error resolving extensions');
       });
-      DefaultPackageManager.prototype.resolveExtensionSources = mockResolveExtensionSources;
+      DefaultPackageManager.prototype.resolveExtensionSources = mockResolveExtensionSources as any;
     });
 
     test('propagates the error', async () => {
@@ -238,9 +238,9 @@ describe('resolveExtensions', () => {
 });
 
 describe('getResourceLoader', () => {
-  let mockResolveExtensionSources: ReturnType<typeof mock>;
+  let mockResolveExtensionSources: ReturnType<typeof vi.fn>;
   let restoreResolveExtensionSources: () => void;
-  let mockReload: ReturnType<typeof mock>;
+  let mockReload: ReturnType<typeof vi.fn>;
   let originalReload: typeof DefaultResourceLoader.prototype.reload;
 
   beforeEach(() => {
@@ -252,8 +252,8 @@ describe('getResourceLoader', () => {
     // The Pi SDK's reload() tries to access CLI extension paths that
     // don't exist in test environment, causing errors
     originalReload = DefaultResourceLoader.prototype.reload;
-    mockReload = mock(async () => undefined);
-    DefaultResourceLoader.prototype.reload = mockReload;
+    mockReload = vi.fn(async () => undefined);
+    DefaultResourceLoader.prototype.reload = mockReload as any;
   });
 
   afterEach(() => {
@@ -329,10 +329,10 @@ describe('getResourceLoader', () => {
 
   describe('error handling', () => {
     test('propagates extension resolution errors', async () => {
-      mockResolveExtensionSources = mock(async () => {
+      mockResolveExtensionSources = vi.fn(async () => {
         throw new Error('Extension resolution failed');
       });
-      DefaultPackageManager.prototype.resolveExtensionSources = mockResolveExtensionSources;
+      DefaultPackageManager.prototype.resolveExtensionSources = mockResolveExtensionSources as any;
 
       await expect(
         getResourceLoader(mockCoreAdapter, mockPlatformProvider, { extensions: ['npm:package'] })

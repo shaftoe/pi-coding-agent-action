@@ -8,7 +8,7 @@
  * extracted helpers directly so each contract is pinned down.
  */
 
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, vi } from 'vitest';
 import {
   applyMetadataUpdate,
   buildSuccessDetails,
@@ -249,7 +249,7 @@ describe('applyMetadataUpdate', () => {
   test('returns {false, false} and does NOT call updatePullRequestMetadata when both title and body are undefined', async () => {
     // We can't easily mock the deps; instead just verify the short-circuit by
     // confirming no error is thrown when both are undefined.
-    const log = { info: mock(() => {}) };
+    const log = { info: vi.fn(() => {}) };
     const result = await applyMetadataUpdate(
       // The short-circuit returns before touching deps, so we can pass a
       // minimal stand-in.

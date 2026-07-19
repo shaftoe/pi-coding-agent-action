@@ -2,7 +2,7 @@
  * Tests for the shared {@link formatCost} formatting helper.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { formatCost } from '@alexanderfortin/pi-orchestrator';
 
 describe('formatCost', () => {

@@ -8,7 +8,7 @@
  * (empty result, multi-line result, error-without-result) directly.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { buildSessionErrorBody, buildSessionSuccessBody } from '@alexanderfortin/pi-orchestrator';
 
 // ---------------------------------------------------------------------------

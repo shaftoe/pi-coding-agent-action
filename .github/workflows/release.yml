@@ -35,13 +35,17 @@ jobs:
       - name: Ensure v2 branch is active
         run: git checkout -B v2 origin/v2
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
         with:
-          bun-version: latest
+          node-version: 24
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: bun install
+        run: pnpm install
 
       - name: Semantic Release
         uses: cycjimmy/semantic-release-action@v6

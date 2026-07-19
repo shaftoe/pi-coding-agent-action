@@ -25,19 +25,24 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
-      - run: bun install --frozen-lockfile
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
 
       - name: Build dist
-        run: bun run package
+        run: pnpm run package
 
       - name: Verify version stamp
         run: |
           set -euo pipefail
-          EXPECTED="$(bun run scripts/dist-version.ts)"
+          EXPECTED="$(pnpm run dist-version)"
           echo "Expecting version stamp: ${EXPECTED}"
           if ! grep -qF "${EXPECTED}" dist/index.js; then
             echo "::error::version stamp '${EXPECTED}' not found in dist/index.js — the bundle does not carry the expected provenance"
@@ -62,6 +67,6 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          MSG="$(bun run scripts/dist-commit-msg.ts)"
+          MSG="$(pnpm run dist-commit-msg)"
           git commit --no-verify -m "${MSG}"
           git push origin "${GITHUB_REF_NAME}"

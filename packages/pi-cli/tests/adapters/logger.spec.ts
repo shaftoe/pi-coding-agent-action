@@ -8,7 +8,7 @@
  *   - Each level renders with its documented prefix (`✖` for error, etc.).
  */
 
-import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CliLogger } from '../../src/adapters/logger.js';
 
 describe('CliLogger', () => {
@@ -22,11 +22,11 @@ describe('CliLogger', () => {
     stdoutChunks = [];
     originalStderrWrite = process.stderr.write.bind(process.stderr);
     originalStdoutWrite = process.stdout.write.bind(process.stdout);
-    process.stderr.write = mock((chunk: string | Uint8Array) => {
+    process.stderr.write = vi.fn((chunk: string | Uint8Array) => {
       stderrChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString());
       return true;
     }) as typeof process.stderr.write;
-    process.stdout.write = mock((chunk: string | Uint8Array) => {
+    process.stdout.write = vi.fn((chunk: string | Uint8Array) => {
       stdoutChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString());
       return true;
     }) as typeof process.stdout.write;

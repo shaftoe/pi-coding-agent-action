@@ -13,7 +13,7 @@
  * `scripts/package.ts` need to be updated to match the new pattern.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 

@@ -7,7 +7,7 @@
  * action itself.
  */
 
-import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import { Temporal } from '@js-temporal/polyfill';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -35,12 +35,12 @@ describe('ActionOrchestrator', () => {
   let mockGit: GitAdapter;
   let mockProvider: PlatformProvider;
   let mockPiAgent: PiAgent;
-  let mockPiFactory: ReturnType<typeof mock>;
+  let mockPiFactory: ReturnType<typeof vi.fn>;
   let mockOutputSink: OutputSink;
   let defaultConfig: PiConfig;
 
   /**
-   * Helper to create an orchestrator with the default config and mocks.
+   * Helper to create an orchestrator with the default config and vis.
    * Config overrides are merged onto the default config.
    */
   function createOrchestrator(configOverrides?: Partial<PiConfig>) {
@@ -50,14 +50,14 @@ describe('ActionOrchestrator', () => {
       mockCore as unknown as Logger,
       mockOutputSink,
       mockGit,
-      mockPiFactory,
+      mockPiFactory as any,
       mockProvider
     );
   }
 
   beforeEach(() => {
     // Create mock core adapter (used as Logger)
-    const getInputMock = mock((name: string) => {
+    const getInputMock = vi.fn((name: string) => {
       const defaults: Record<string, string> = {
         provider: 'anthropic',
         model: 'claude-sonnet-4-5',
@@ -68,13 +68,13 @@ describe('ActionOrchestrator', () => {
       return defaults[name];
     });
 
-    const setFailedMock = mock();
-    const setOutputMock = mock();
-    const noticeMock = mock();
-    const infoMock = mock();
-    const debugMock = mock();
-    const warningMock = mock();
-    const errorMock = mock();
+    const setFailedMock = vi.fn();
+    const setOutputMock = vi.fn();
+    const noticeMock = vi.fn();
+    const infoMock = vi.fn();
+    const debugMock = vi.fn();
+    const warningMock = vi.fn();
+    const errorMock = vi.fn();
     mockCore = {
       getInput: getInputMock,
       setFailed: setFailedMock,
@@ -101,20 +101,20 @@ describe('ActionOrchestrator', () => {
 
     // Create mock output sink
     mockOutputSink = {
-      setOutput: mock() as any,
-      setFailed: mock() as any,
-      getExportDirectory: mock(
+      setOutput: vi.fn() as any,
+      setFailed: vi.fn() as any,
+      getExportDirectory: vi.fn(
         (format: 'html' | 'jsonl') => `/tmp/pi-session-${format}-test`
       ) as any,
-      appendSummary: mock(async () => {}) as any,
+      appendSummary: vi.fn(async () => {}) as any,
     };
 
     // Create mock git adapter
-    const addReactionMock = mock(async () => ({ data: { id: 123 } }) as CreateReactionType);
-    const deleteReactionMock = mock(async () => {});
-    const createFinalCommentMock = mock(async () => {});
-    const getPromptMock = mock(async () => 'Help me write tests');
-    const getStartTimeMock = mock(() => Temporal.Now.instant());
+    const addReactionMock = vi.fn(async () => ({ data: { id: 123 } }) as CreateReactionType);
+    const deleteReactionMock = vi.fn(async () => {});
+    const createFinalCommentMock = vi.fn(async () => {});
+    const getPromptMock = vi.fn(async () => 'Help me write tests');
+    const getStartTimeMock = vi.fn(() => Temporal.Now.instant());
 
     mockGit = {
       addReaction: addReactionMock as any,
@@ -125,14 +125,14 @@ describe('ActionOrchestrator', () => {
     };
 
     // Create mock Pi agent
-    const runMock = mock(async () => ({
+    const runMock = vi.fn(async () => ({
       result: 'Here are your tests!',
       sessionStats: undefined,
       error: undefined,
     }));
-    const exportSessionHtmlMock = mock(async (outputPath: string) => outputPath);
-    const exportSessionJsonlMock = mock(async (outputPath: string) => outputPath);
-    const getSessionStatsMock = mock(() => undefined);
+    const exportSessionHtmlMock = vi.fn(async (outputPath: string) => outputPath);
+    const exportSessionJsonlMock = vi.fn(async (outputPath: string) => outputPath);
+    const getSessionStatsMock = vi.fn(() => undefined);
     mockPiAgent = {
       run: runMock as any,
       getSessionStats: getSessionStatsMock as any,
@@ -140,12 +140,12 @@ describe('ActionOrchestrator', () => {
       exportSessionJsonl: exportSessionJsonlMock as any,
     };
 
-    mockPiFactory = mock(() => mockPiAgent);
+    mockPiFactory = vi.fn(() => mockPiAgent);
 
     // Create mock platform provider
     mockProvider = {
       type: 'github',
-      getContext: mock(() => ({
+      getContext: vi.fn(() => ({
         repo: { owner: 'test-owner', repo: 'test-repo' },
         issue: { number: 1 },
         eventName: 'issue_comment',
@@ -154,12 +154,12 @@ describe('ActionOrchestrator', () => {
         runId: 123,
         workspace: '/tmp',
       })),
-      addReaction: mock(async () => undefined),
-      deleteReaction: mock(async () => {}),
-      createFinalComment: mock(async () => {}),
-      getPrompt: mock(async () => 'test prompt'),
-      getStartTime: mock(() => undefined),
-      createPullRequest: mock(async () => ({
+      addReaction: vi.fn(async () => undefined),
+      deleteReaction: vi.fn(async () => {}),
+      createFinalComment: vi.fn(async () => {}),
+      getPrompt: vi.fn(async () => 'test prompt'),
+      getStartTime: vi.fn(() => undefined),
+      createPullRequest: vi.fn(async () => ({
         content: [{ type: 'text', text: 'PR created' }],
         details: {
           pullRequestNumber: 1,
@@ -169,7 +169,7 @@ describe('ActionOrchestrator', () => {
           dryRun: false,
         },
       })),
-      updatePullRequest: mock(async () => ({
+      updatePullRequest: vi.fn(async () => ({
         content: [{ type: 'text', text: 'PR updated' }],
         details: {
           pullRequestNumber: 1,
@@ -179,7 +179,7 @@ describe('ActionOrchestrator', () => {
           dryRun: false,
         },
       })),
-      getIssueOrPRThread: mock(async () => undefined),
+      getIssueOrPRThread: vi.fn(async () => undefined),
     } as any;
   });
 
@@ -257,7 +257,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('sends prompt to Pi agent', async () => {
-      const getPromptMock = mock(async () => 'Write unit tests for this function');
+      const getPromptMock = vi.fn(async () => 'Write unit tests for this function');
       mockGit.getPrompt = getPromptMock as any;
 
       const orchestrator = createOrchestrator();
@@ -341,7 +341,7 @@ describe('ActionOrchestrator', () => {
 
     test('includes execution duration in final comment metadata', async () => {
       const startTime = Temporal.Now.instant();
-      mockGit.getStartTime = mock(() => startTime) as any;
+      mockGit.getStartTime = vi.fn(() => startTime) as any;
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -382,7 +382,7 @@ describe('ActionOrchestrator', () => {
 
     test('uses github start time when available', async () => {
       const githubStartTime = Temporal.Instant.from('2024-01-15T10:30:00Z');
-      const getStartTimeMock = mock(() => githubStartTime);
+      const getStartTimeMock = vi.fn(() => githubStartTime);
       mockGit.getStartTime = getStartTimeMock as any;
 
       const orchestrator = createOrchestrator();
@@ -392,7 +392,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('uses current time when github start time unavailable', async () => {
-      mockGit.getStartTime = mock(() => undefined) as any;
+      mockGit.getStartTime = vi.fn(() => undefined) as any;
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -464,7 +464,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('silently ignores GitHub addReaction errors and continues execution', async () => {
-      mockGit.addReaction = mock(async () => {
+      mockGit.addReaction = vi.fn(async () => {
         throw new Error('Failed to add reaction');
       }) as any;
 
@@ -582,7 +582,7 @@ describe('ActionOrchestrator', () => {
 
   describe('config forwarding', () => {
     test('allows empty token for provider-side auth (e.g. ADC)', async () => {
-      mockGit.getPrompt = mock(async () => 'Hello');
+      mockGit.getPrompt = vi.fn(async () => 'Hello');
       const orchestrator = createOrchestrator({ token: '', promptInput: 'Hello' });
       await orchestrator.execute();
       expect(mockPiFactory).toHaveBeenCalled();
@@ -591,7 +591,7 @@ describe('ActionOrchestrator', () => {
 
   describe('error handling for missing prompt', () => {
     test('throws error when no prompt found', async () => {
-      mockGit.getPrompt = mock(async () => undefined) as any;
+      mockGit.getPrompt = vi.fn(async () => undefined) as any;
 
       const orchestrator = createOrchestrator();
 
@@ -599,7 +599,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('calls core.setFailed when no prompt found', async () => {
-      mockGit.getPrompt = mock(async () => undefined) as any;
+      mockGit.getPrompt = vi.fn(async () => undefined) as any;
 
       const orchestrator = createOrchestrator();
 
@@ -611,7 +611,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('finalizes with error message when no prompt found', async () => {
-      mockGit.getPrompt = mock(async () => undefined) as any;
+      mockGit.getPrompt = vi.fn(async () => undefined) as any;
 
       const orchestrator = createOrchestrator();
 
@@ -628,7 +628,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('does not proceed with Pi execution when no prompt found', async () => {
-      mockGit.getPrompt = mock(async () => undefined) as any;
+      mockGit.getPrompt = vi.fn(async () => undefined) as any;
 
       const orchestrator = createOrchestrator();
 
@@ -711,7 +711,7 @@ describe('ActionOrchestrator', () => {
 
   describe('edge cases', () => {
     test('handles empty prompt string as missing prompt error', async () => {
-      mockGit.getPrompt = mock(async () => '') as any;
+      mockGit.getPrompt = vi.fn(async () => '') as any;
 
       const orchestrator = createOrchestrator();
 
@@ -727,7 +727,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('handles reaction returning undefined', async () => {
-      mockGit.addReaction = mock(async () => undefined) as any;
+      mockGit.addReaction = vi.fn(async () => undefined) as any;
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -809,7 +809,7 @@ describe('ActionOrchestrator', () => {
       const error = new Error('Prompt failed');
       const finalizeError = new Error('Failed to post comment');
       setAgentRunError(mockPiAgent, error);
-      mockGit.createFinalComment = mock(async () => {
+      mockGit.createFinalComment = vi.fn(async () => {
         throw finalizeError;
       }) as any;
 
@@ -896,7 +896,7 @@ describe('ActionOrchestrator', () => {
 
     test('sets duration_seconds output', async () => {
       const startTime = Temporal.Instant.from('2024-01-15T10:30:00Z');
-      mockGit.getStartTime = mock(() => startTime) as any;
+      mockGit.getStartTime = vi.fn(() => startTime) as any;
 
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
@@ -1140,7 +1140,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('continues execution when exportSessionHtml throws', async () => {
-      mockPiAgent.exportSessionHtml = mock(async () => {
+      mockPiAgent.exportSessionHtml = vi.fn(async () => {
         throw new Error('export failed');
       }) as any;
 
@@ -1257,7 +1257,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('defaults to undefined when input is "all"', async () => {
-      const getInputMock = mock((name: string) => {
+      const getInputMock = vi.fn((name: string) => {
         const inputs: Record<string, string> = {
           provider: 'anthropic',
           model: 'claude-sonnet-4-5',
@@ -1382,7 +1382,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('continues execution when exportSessionJsonl throws', async () => {
-      mockPiAgent.exportSessionJsonl = mock(async () => {
+      mockPiAgent.exportSessionJsonl = vi.fn(async () => {
         throw new Error('jsonl export failed');
       }) as any;
 
@@ -1457,12 +1457,12 @@ describe('ActionOrchestrator', () => {
       // the HTML when exportSessionHtml was truly invoked (via share_session
       // auto-enable), guarding against the needsPersistence bug where an
       // in-memory session silently skips the export.
-      mockPiAgent.exportSessionHtml = mock(async (outputPath: string) => {
+      mockPiAgent.exportSessionHtml = vi.fn(async (outputPath: string) => {
         fs.mkdirSync(path.dirname(outputPath), { recursive: true });
         fs.writeFileSync(outputPath, '<html>session</html>');
         return outputPath;
       }) as any;
-      globalThis.fetch = mock(async () => ({
+      globalThis.fetch = vi.fn(async () => ({
         ok: true,
         status: 201,
         json: async () => ({
@@ -1611,7 +1611,7 @@ describe('ActionOrchestrator', () => {
     });
 
     test('continues execution when gist creation fails', async () => {
-      globalThis.fetch = mock(async () => ({
+      globalThis.fetch = vi.fn(async () => ({
         ok: false,
         status: 401,
         statusText: 'Unauthorized',
@@ -1636,7 +1636,7 @@ describe('ActionOrchestrator', () => {
     test('skips sharing with a notice when session HTML exceeds the size limit', async () => {
       // Override the export mock to produce an oversized file (well over
       // the 10 MB gist limit) when it's called.
-      mockPiAgent.exportSessionHtml = mock(async (outputPath: string) => {
+      mockPiAgent.exportSessionHtml = vi.fn(async (outputPath: string) => {
         fs.mkdirSync(path.dirname(outputPath), { recursive: true });
         fs.writeFileSync(outputPath, 'x'.repeat(11 * 1024 * 1024));
         return outputPath;
@@ -1655,7 +1655,7 @@ describe('ActionOrchestrator', () => {
 
     test('does not log "failed to share" when the gist succeeds but the summary write throws', async () => {
       // Summary write throws after the gist was already created.
-      (mockOutputSink.appendSummary as any) = mock(async () => {
+      (mockOutputSink.appendSummary as any) = vi.fn(async () => {
         throw new Error('summary IO error');
       });
 
@@ -1682,7 +1682,7 @@ describe('ActionOrchestrator', () => {
     test('shares to Opengist and surfaces a raw-HTML share link', async () => {
       // Opengist create response: id + html_url; the provider derives a
       // raw/HEAD link that renders the self-contained session.
-      globalThis.fetch = mock(async () => ({
+      globalThis.fetch = vi.fn(async () => ({
         ok: true,
         status: 201,
         json: async () => ({
@@ -1728,7 +1728,7 @@ describe('ActionOrchestrator', () => {
     test('Opengist share_url uses a custom viewer link when PI_SHARE_VIEWER_URL is set', async () => {
       // With a non-pi.dev viewer configured, the Opengist share_url becomes
       // <viewer>#<gistPageUrl> instead of the self-rendering raw link.
-      globalThis.fetch = mock(async () => ({
+      globalThis.fetch = vi.fn(async () => ({
         ok: true,
         status: 201,
         json: async () => ({

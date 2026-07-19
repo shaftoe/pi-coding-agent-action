@@ -1,4 +1,4 @@
-import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -8,7 +8,7 @@ import { setupGitHubTestEnv } from './helpers/github-test-env';
 setupGitHubTestEnv({ envPathPrefix: 'gh-event-pr-update' });
 
 const noop = (): void => {};
-const mockGetInput = mock((name: string) => {
+const mockGetInput = vi.fn((name: string) => {
   if (name === 'github_token') {
     return 'fake-token';
   }
@@ -16,7 +16,7 @@ const mockGetInput = mock((name: string) => {
 });
 
 // Mock octokit
-const mockPullsUpdate = mock(() =>
+const mockPullsUpdate = vi.fn(() =>
   Promise.resolve({
     data: {
       number: 42,
@@ -24,7 +24,7 @@ const mockPullsUpdate = mock(() =>
     },
   })
 );
-const mockPullsGet = mock(() =>
+const mockPullsGet = vi.fn(() =>
   Promise.resolve({
     status: 200,
     data: {
@@ -53,7 +53,7 @@ const mockContext = {
 };
 
 // Mock @actions/github context
-mock.module('@actions/github', () => ({
+vi.mock('@actions/github', () => ({
   context: mockContext,
 }));
 
@@ -69,16 +69,16 @@ const mockOctokit = {
 // Create a test CoreAdapter
 const testCoreAdapter = {
   getInput: mockGetInput,
-  setFailed: mock(noop),
-  setOutput: mock(noop),
-  notice: mock(noop),
-  info: mock(noop),
-  debug: mock(noop),
-  warning: mock(noop),
-  error: mock(noop),
+  setFailed: vi.fn(noop),
+  setOutput: vi.fn(noop),
+  notice: vi.fn(noop),
+  info: vi.fn(noop),
+  debug: vi.fn(noop),
+  warning: vi.fn(noop),
+  error: vi.fn(noop),
 };
 
-// Dynamic import to ensure mocks are set before module loads
+// Dynamic import to ensure vis are set before module loads
 const pullRequestUpdateModulePromise = import('@alexanderfortin/pi-platform-github');
 
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';

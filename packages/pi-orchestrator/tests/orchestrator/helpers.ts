@@ -10,7 +10,7 @@
  *     `objectContaining` matcher plus the `core` / `provider` args
  */
 
-import { expect, mock } from 'bun:test';
+import { expect, vi } from 'vitest';
 import type { CreateReactionType, GitAdapter, PiAgent } from '@alexanderfortin/pi-orchestrator';
 
 export interface AgentRunOverrides {
@@ -21,7 +21,7 @@ export interface AgentRunOverrides {
 
 /** Configure the agent's `run` mock to resolve with the given overrides. */
 export function setAgentRunResult(agent: PiAgent, overrides: AgentRunOverrides = {}) {
-  const fn = mock(async () => ({
+  const fn = vi.fn(async () => ({
     result: overrides.result ?? '',
     sessionStats: overrides.sessionStats ?? undefined,
     error: overrides.error ?? undefined,
@@ -32,7 +32,7 @@ export function setAgentRunResult(agent: PiAgent, overrides: AgentRunOverrides =
 
 /** Configure the agent's `run` mock to throw `error`. */
 export function setAgentRunError(agent: PiAgent, error: unknown) {
-  const fn = mock(async () => {
+  const fn = vi.fn(async () => {
     throw error;
   });
   (agent as any).run = fn;
@@ -49,7 +49,7 @@ export function setAgentGetSessionStats(
   agent: PiAgent,
   sessionStats: Record<string, unknown> | undefined
 ) {
-  const fn = mock(() => sessionStats);
+  const fn = vi.fn(() => sessionStats);
   (agent as any).getSessionStats = fn;
   return fn;
 }
@@ -60,7 +60,7 @@ export function setAgentGetSessionStats(
  */
 export function setAddReactionReturn(git: GitAdapter, id: number): CreateReactionType {
   const reaction = { data: { id } } as CreateReactionType;
-  (git as any).addReaction = mock(async () => reaction);
+  (git as any).addReaction = vi.fn(async () => reaction);
   return reaction;
 }
 

@@ -5,7 +5,7 @@
  * `pi-action-bridge` extension (both re-export / consume it rather than each
  * keeping a copy).
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { resolveGitHubToken } from '../src/auth.js';
 
 describe('resolveGitHubToken', () => {

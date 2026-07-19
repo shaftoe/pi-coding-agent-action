@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { formatThreadAsText } from '@alexanderfortin/pi-orchestrator';
 import type { IssueOrPRThread } from '@alexanderfortin/pi-orchestrator';
 

@@ -5,20 +5,20 @@
  * inputs into a PiConfig object with proper defaults and validation.
  *
  * Mock strategy: we register the shared `coreMock` object via a DIRECT
- * `mock.module()` call (Bun hoists direct calls before import resolution).
+ * `vi.mock()` call (Vitest hoists vi.mock calls before import resolution).
  * Both this direct call and `registerCoreMock()` (used by other test files)
  * point to the **same** `coreMock` object, so regardless of which
- * registration Bun processes first, `@actions/core` always resolves to
+ * registration Vitest processes first, `@actions/core` always resolves to
  * `coreMock`. Per-test overrides are then applied via
  * `coreMock.getInput.mockImplementation(...)`.
  */
 
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, vi } from 'vitest';
 import { coreMock } from '../../../pi-orchestrator/tests/helpers/core-mock';
 
-// Register the mock DIRECTLY (hoisted by Bun) pointing to the shared coreMock
+// Register the mock DIRECTLY (hoisted by Vitest) pointing to the shared coreMock
 // object — same object registerCoreMock() uses, so order doesn't matter.
-mock.module('@actions/core', () => coreMock);
+vi.mock('@actions/core', () => coreMock);
 
 import { gatherActionsConfig } from '../../src/adapters/config';
 

@@ -6,11 +6,11 @@
  * load order.
  */
 
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
+import { describe, expect, test, beforeEach, vi } from 'vitest';
 import { coreMock } from '../../../pi-orchestrator/tests/helpers/core-mock';
 
-// Register the mock DIRECTLY (hoisted by Bun) pointing to the shared coreMock.
-mock.module('@actions/core', () => coreMock);
+// Register the mock DIRECTLY (hoisted by Vitest) pointing to the shared coreMock.
+vi.mock('@actions/core', () => coreMock);
 
 import { ActionsOutputSink } from '../../src/adapters/output-sink';
 

@@ -10,7 +10,7 @@
  * the `withCancellation` wrapper or SDK `defineTool` plumbing.
  */
 
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, vi } from 'vitest';
 import {
   executeGetPRDiff,
   type DiffConfig,
@@ -22,16 +22,16 @@ const providerOptions = { issueNumber: 42, eventName: 'pull_request' as const };
 
 function buildProvider(diff: string): {
   provider: PlatformProvider;
-  getPRDiff: ReturnType<typeof mock>;
+  getPRDiff: ReturnType<typeof vi.fn>;
 } {
-  const getPRDiff = mock(async () => diff);
+  const getPRDiff = vi.fn(async () => diff);
   const provider = createMockProvider({ getPRDiff }, providerOptions);
   return { provider, getPRDiff };
 }
 
 describe('executeGetPRDiff (extracted handler)', () => {
   test('returns a resolve-failure result when owner/repo/pull_number are all absent', async () => {
-    const getPRDiff = mock(async () => 'unused');
+    const getPRDiff = vi.fn(async () => 'unused');
     // Provider whose context has no repo/issue, so resolvePRParams fails.
     const providerNoCtx = createMockProvider(
       {
@@ -104,7 +104,7 @@ describe('executeGetPRDiff (extracted handler)', () => {
   });
 
   test('propagates provider errors', async () => {
-    const getPRDiff = mock(async () => {
+    const getPRDiff = vi.fn(async () => {
       throw new Error('boom');
     });
     const provider = createMockProvider({ getPRDiff }, providerOptions);

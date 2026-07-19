@@ -15,6 +15,7 @@
   "ignoreDependencies": [
     "@alexanderfortin/semantic-release-keep-a-changelog",
     "bun-types",
+    "tsx",
     "@earendil-works/pi-coding-agent",
     "@js-temporal/polyfill",
     "ignore"

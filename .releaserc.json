@@ -20,13 +20,13 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "bun run scripts/bump-readme-version.ts ${nextRelease.version} && bun run sync-versions && bun run sync-lockfile && bun run update-readme && bun run package"
+        "prepareCmd": "tsx scripts/bump-readme-version.ts ${nextRelease.version} && pnpm run sync-versions && pnpm run sync-lockfile && pnpm run update-readme && pnpm run package"
       }
     ],
     [
       "@semantic-release/git",
       {
-        "assets": ["package.json", "packages/*/package.json", "bun.lock", "CHANGELOG.md", "README.md", "dist/index.js"],
+        "assets": ["package.json", "packages/*/package.json", "pnpm-lock.yaml", "CHANGELOG.md", "README.md", "dist/index.js"],
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
     ],

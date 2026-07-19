@@ -5,7 +5,7 @@
  * and filters them using ignore patterns.
  */
 
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, vi } from 'vitest';
 import {
   fetchPRDiff,
   filterDiffByIgnoreFiles,
@@ -36,7 +36,7 @@ function createDeps(): GitHubModuleDeps & {
   octokit: {
     rest: {
       pulls: {
-        get: ReturnType<typeof mock>;
+        get: ReturnType<typeof vi.fn>;
       };
     };
   };
@@ -45,7 +45,7 @@ function createDeps(): GitHubModuleDeps & {
     octokit: {
       rest: {
         pulls: {
-          get: mock(() =>
+          get: vi.fn(() =>
             Promise.resolve({
               data: SAMPLE_DIFF,
               status: 200,
@@ -64,11 +64,11 @@ function createDeps(): GitHubModuleDeps & {
       workspace: '/tmp',
     },
     logger: {
-      debug: mock(() => {}),
-      info: mock(() => {}),
-      warning: mock(() => {}),
-      notice: mock(() => {}),
-      error: mock(() => {}),
+      debug: vi.fn(() => {}),
+      info: vi.fn(() => {}),
+      warning: vi.fn(() => {}),
+      notice: vi.fn(() => {}),
+      error: vi.fn(() => {}),
     },
   };
 }
@@ -160,11 +160,11 @@ describe('filterDiffByIgnoreFiles additional coverage', () => {
       workspace: '/tmp',
     },
     logger: {
-      debug: mock(() => {}),
-      info: mock(() => {}),
-      warning: mock(() => {}),
-      notice: mock(() => {}),
-      error: mock(() => {}),
+      debug: vi.fn(() => {}),
+      info: vi.fn(() => {}),
+      warning: vi.fn(() => {}),
+      notice: vi.fn(() => {}),
+      error: vi.fn(() => {}),
     },
   };
 
@@ -188,7 +188,7 @@ describe('filterDiffByIgnoreFiles additional coverage', () => {
   });
 
   test('logs when diff is filtered', () => {
-    const debugMock = mock(() => {});
+    const debugMock = vi.fn(() => {});
     const deps: GitHubModuleDeps = {
       ...noopDeps,
       logger: { ...noopDeps.logger, debug: debugMock },
@@ -198,7 +198,7 @@ describe('filterDiffByIgnoreFiles additional coverage', () => {
   });
 
   test('does not log when diff is unchanged', () => {
-    const debugMock = mock(() => {});
+    const debugMock = vi.fn(() => {});
     const deps: GitHubModuleDeps = {
       ...noopDeps,
       logger: { ...noopDeps.logger, debug: debugMock },

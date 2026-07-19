@@ -8,7 +8,7 @@
  * that build messages and structured results.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import {
   buildCreateDryRunMessage,
   buildCreateDryRunResult,

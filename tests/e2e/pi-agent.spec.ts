@@ -17,7 +17,7 @@
  *   bun test tests/e2e/pi-agent.spec.ts
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import type { Agent } from '@alexanderfortin/pi-orchestrator';
 import {
   E2E_TIMEOUT,
@@ -40,9 +40,9 @@ const { coreAdapter: mockCoreAdapter, platformProvider: mockPlatformProvider } =
 function validateLocalE2EEnvVars() {
   return validateE2EEnvVars(
     {
-      token: Bun.env.E2E_TOKEN ?? '',
-      provider: Bun.env.E2E_PROVIDER ?? '',
-      model: Bun.env.E2E_MODEL ?? '',
+      token: process.env.E2E_TOKEN ?? '',
+      provider: process.env.E2E_PROVIDER ?? '',
+      model: process.env.E2E_MODEL ?? '',
     },
     {
       token: 'E2E_TOKEN',
@@ -72,9 +72,9 @@ async function createAgent(): Promise<Agent> {
 // ============================================================================
 
 const E2E_ENABLED = isE2EEnabled({
-  token: Bun.env.E2E_TOKEN,
-  provider: Bun.env.E2E_PROVIDER,
-  model: Bun.env.E2E_MODEL,
+  token: process.env.E2E_TOKEN,
+  provider: process.env.E2E_PROVIDER,
+  model: process.env.E2E_MODEL,
 });
 
 // ============================================================================

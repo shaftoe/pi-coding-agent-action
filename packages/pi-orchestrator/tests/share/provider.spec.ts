@@ -4,7 +4,7 @@
  * Verifies backend selection and token fallback without exercising the network.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { resolveGistProvider, resolveShareToken } from '../../src/share/provider';
 import { githubGistProvider } from '../../src/share/gist';
 import { opengistGistProvider } from '../../src/share/opengist';

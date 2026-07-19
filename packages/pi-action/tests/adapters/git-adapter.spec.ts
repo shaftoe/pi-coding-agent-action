@@ -5,7 +5,7 @@
  * and implements the GitAdapter interface.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { RealGitAdapter } from '../../src/adapters/git-adapter';
 import type { CoreAdapter } from '@alexanderfortin/pi-orchestrator';
 

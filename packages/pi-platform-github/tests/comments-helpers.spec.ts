@@ -7,7 +7,7 @@
  * over a fake `GitHubModuleDeps` context + `CommentMetadata` object.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { Temporal } from '@js-temporal/polyfill';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 import type { CommentMetadata } from '@alexanderfortin/pi-orchestrator';

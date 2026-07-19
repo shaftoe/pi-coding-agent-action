@@ -12,7 +12,7 @@
  * carries `id` + `html_url`. Uses a mocked global `fetch`.
  */
 
-import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import {
   createOpengistGist,
   opengistGistProvider,
@@ -25,7 +25,7 @@ describe('createOpengistGist', () => {
   const apiUrl = 'https://gist.l3x.in/api/gists';
 
   beforeEach(() => {
-    globalThis.fetch = mock(async () => ({
+    globalThis.fetch = vi.fn(async () => ({
       ok: true,
       status: 201,
       json: async () => ({
@@ -171,7 +171,7 @@ describe('createOpengistGist', () => {
   });
 
   test('strips a trailing slash from html_url before building the raw link', async () => {
-    globalThis.fetch = mock(async () => ({
+    globalThis.fetch = vi.fn(async () => ({
       ok: true,
       status: 201,
       json: async () => ({
@@ -193,7 +193,7 @@ describe('createOpengistGist', () => {
   });
 
   test('throws with status + body detail on non-2xx', async () => {
-    globalThis.fetch = mock(async () => ({
+    globalThis.fetch = vi.fn(async () => ({
       ok: false,
       status: 401,
       statusText: 'Unauthorized',
@@ -214,7 +214,7 @@ describe('createOpengistGist', () => {
   });
 
   test('throws a timeout error when the request aborts', async () => {
-    globalThis.fetch = mock(async (_url: string, init: RequestInit) => {
+    globalThis.fetch = vi.fn(async (_url: string, init: RequestInit) => {
       if (init.signal) {
         const err = new Error('The operation was aborted');
         err.name = 'AbortError';
@@ -229,7 +229,7 @@ describe('createOpengistGist', () => {
   });
 
   test('throws when the 2xx response lacks id/html_url (malformed)', async () => {
-    globalThis.fetch = mock(async () => ({
+    globalThis.fetch = vi.fn(async () => ({
       ok: true,
       status: 200,
       json: async () => ({ message: 'unexpected proxy response' }),

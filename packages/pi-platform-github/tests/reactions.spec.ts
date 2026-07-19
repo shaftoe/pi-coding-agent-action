@@ -1,4 +1,4 @@
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach } from 'vitest';
 
 // Mock @actions/core (not used by reactions.ts directly, but may be transitively loaded)
 const noop = (): void => {};
@@ -13,7 +13,7 @@ registerCoreMock();
 coreMock.debug.mockImplementation(debugLogger);
 
 // Mock @actions/github (not used directly, but may be loaded transitively)
-mock.module('@actions/github', () => ({
+vi.mock('@actions/github', () => ({
   context: {},
 }));
 
@@ -21,7 +21,7 @@ import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 
 // Create test deps helper
 function createTestDeps(payloadOverrides?: Record<string, unknown>): GitHubModuleDeps {
-  const mockCreateIssueReaction = mock(() =>
+  const mockCreateIssueReaction = vi.fn(() =>
     Promise.resolve({
       data: { id: 12345, content: 'eyes' },
       headers: {},
@@ -29,7 +29,7 @@ function createTestDeps(payloadOverrides?: Record<string, unknown>): GitHubModul
       url: '',
     } as any)
   );
-  const mockCreatePRReviewReaction = mock(() =>
+  const mockCreatePRReviewReaction = vi.fn(() =>
     Promise.resolve({
       data: { id: 12345, content: 'eyes' },
       headers: {},
@@ -37,7 +37,7 @@ function createTestDeps(payloadOverrides?: Record<string, unknown>): GitHubModul
       url: '',
     } as any)
   );
-  const mockDeleteIssueReaction = mock(() =>
+  const mockDeleteIssueReaction = vi.fn(() =>
     Promise.resolve({
       data: {},
       headers: {},
@@ -45,7 +45,7 @@ function createTestDeps(payloadOverrides?: Record<string, unknown>): GitHubModul
       url: '',
     } as any)
   );
-  const mockDeletePRReviewReaction = mock(() =>
+  const mockDeletePRReviewReaction = vi.fn(() =>
     Promise.resolve({
       data: {},
       headers: {},
@@ -93,7 +93,7 @@ function createTestDeps(payloadOverrides?: Record<string, unknown>): GitHubModul
   };
 }
 
-// Dynamic import to ensure mocks are set before module loads
+// Dynamic import to ensure vis are set before module loads
 const reactionsModule = import('@alexanderfortin/pi-platform-github');
 
 describe('addReaction', () => {

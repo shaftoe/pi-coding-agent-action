@@ -10,7 +10,7 @@
  * consumes it.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { findInvalidRefPattern } from '@alexanderfortin/pi-platform-github';
 
 describe('findInvalidRefPattern', () => {

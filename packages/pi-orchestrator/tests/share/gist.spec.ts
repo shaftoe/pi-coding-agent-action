@@ -6,7 +6,7 @@
  * reads from `location.hash`). Uses a mocked global `fetch`.
  */
 
-import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import {
   createSessionGist,
   DEFAULT_SHARE_VIEWER_URL,
@@ -21,7 +21,7 @@ describe('createSessionGist', () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
-    globalThis.fetch = mock(async () => ({
+    globalThis.fetch = vi.fn(async () => ({
       ok: true,
       status: 201,
       json: async () => ({
@@ -90,7 +90,7 @@ describe('createSessionGist', () => {
   });
 
   test('throws with status + body detail on non-2xx', async () => {
-    globalThis.fetch = mock(async () => ({
+    globalThis.fetch = vi.fn(async () => ({
       ok: false,
       status: 422,
       statusText: 'Unprocessable Entity',
@@ -113,7 +113,7 @@ describe('createSessionGist', () => {
 
   test('throws a timeout error when the request aborts', async () => {
     // Simulate an aborted request (the timeout fires).
-    globalThis.fetch = mock(async (_url: string, init: RequestInit) => {
+    globalThis.fetch = vi.fn(async (_url: string, init: RequestInit) => {
       // Simulate the AbortController firing: reject with an AbortError.
       if (init.signal) {
         const err = new Error('The operation was aborted');
@@ -152,7 +152,7 @@ describe('createSessionGist', () => {
   });
 
   test('throws when the 2xx response lacks id/html_url (malformed)', async () => {
-    globalThis.fetch = mock(async () => ({
+    globalThis.fetch = vi.fn(async () => ({
       ok: true,
       status: 200,
       json: async () => ({ message: 'unexpected proxy response' }),
@@ -199,7 +199,7 @@ describe('githubGistProvider', () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
-    globalThis.fetch = mock(async () => ({
+    globalThis.fetch = vi.fn(async () => ({
       ok: true,
       status: 201,
       json: async () => ({

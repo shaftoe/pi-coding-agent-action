@@ -1,29 +1,29 @@
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach } from 'vitest';
 
 import { setupGitHubTestEnv } from './helpers/github-test-env';
 setupGitHubTestEnv({ envPathPrefix: 'gh-event-comments' });
 
 const noop = (): void => {};
 
-mock.module('@actions/github', () => ({
+vi.mock('@actions/github', () => ({
   context: {},
 }));
 
 import { Temporal } from '@js-temporal/polyfill';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 
-// Dynamic import to ensure mocks are set up before module loads
+// Dynamic import to ensure vis are set up before module loads
 const commentsModule = import('@alexanderfortin/pi-platform-github');
 
 function createTestDeps(payload: Record<string, unknown> = {}): GitHubModuleDeps & {
   octokit: {
     rest: {
-      issues: { createComment: ReturnType<typeof mock> };
-      pulls: { createReplyForReviewComment: ReturnType<typeof mock> };
+      issues: { createComment: ReturnType<typeof vi.fn> };
+      pulls: { createReplyForReviewComment: ReturnType<typeof vi.fn> };
     };
   };
 } {
-  const mockCreateIssueComment = mock(() =>
+  const mockCreateIssueComment = vi.fn(() =>
     Promise.resolve({
       data: { id: 123 },
       headers: {},
@@ -31,7 +31,7 @@ function createTestDeps(payload: Record<string, unknown> = {}): GitHubModuleDeps
       url: '',
     })
   );
-  const mockCreateReviewCommentReply = mock(() =>
+  const mockCreateReviewCommentReply = vi.fn(() =>
     Promise.resolve({
       data: { id: 456 },
       headers: {},

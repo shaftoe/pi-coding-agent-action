@@ -1,4 +1,4 @@
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, vi } from 'vitest';
 import { getCIStatusToolFactory } from '@alexanderfortin/pi-orchestrator';
 import { mockExtensionContext as mockCtx, createMockProvider } from '../../helpers/tool-mocks';
 
@@ -55,7 +55,7 @@ describe('get_ci_status tool - execution', () => {
   });
 
   test('execute returns CI status from provider', async () => {
-    const getCIStatus = mock(async () => ({
+    const getCIStatus = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'CI status fetched' }],
       details: SAMPLE_CI_STATUS,
     }));
@@ -79,7 +79,7 @@ describe('get_ci_status tool - execution', () => {
   });
 
   test('execute forwards status filter to provider', async () => {
-    const getCIStatus = mock(async () => ({
+    const getCIStatus = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'CI status fetched' }],
       details: SAMPLE_CI_STATUS,
     }));
@@ -99,7 +99,7 @@ describe('get_ci_status tool - execution', () => {
   });
 
   test('execute forwards conclusion filter to provider', async () => {
-    const getCIStatus = mock(async () => ({
+    const getCIStatus = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'CI status fetched' }],
       details: SAMPLE_CI_STATUS,
     }));
@@ -119,7 +119,7 @@ describe('get_ci_status tool - execution', () => {
   });
 
   test('execute forwards ref to provider', async () => {
-    const getCIStatus = mock(async () => ({
+    const getCIStatus = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'CI status fetched' }],
       details: SAMPLE_CI_STATUS,
     }));
@@ -133,7 +133,7 @@ describe('get_ci_status tool - execution', () => {
   });
 
   test('execute uses context defaults when no params provided', async () => {
-    const getCIStatus = mock(async () => ({
+    const getCIStatus = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'CI status fetched' }],
       details: SAMPLE_CI_STATUS,
     }));
@@ -150,7 +150,7 @@ describe('get_ci_status tool - execution', () => {
   });
 
   test('execute propagates provider errors', async () => {
-    const getCIStatus = mock(async () => {
+    const getCIStatus = vi.fn(async () => {
       throw new Error('API rate limit exceeded');
     });
     const provider = createMockProvider({ getCIStatus }, providerOptions);
@@ -162,7 +162,7 @@ describe('get_ci_status tool - execution', () => {
   });
 
   test('execute returns cancellation result when signal is aborted', async () => {
-    const getCIStatus = mock(async () => ({
+    const getCIStatus = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'CI status fetched' }],
       details: SAMPLE_CI_STATUS,
     }));

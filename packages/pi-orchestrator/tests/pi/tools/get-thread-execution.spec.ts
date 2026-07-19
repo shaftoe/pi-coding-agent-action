@@ -1,4 +1,4 @@
-import { describe, expect, test, mock } from 'bun:test';
+import { describe, expect, test, vi } from 'vitest';
 import {
   getIssueOrPRThreadToolFactory,
   type IssueOrPRThread,
@@ -74,7 +74,7 @@ describe('get_issue_or_pr_thread tool - execution', () => {
   });
 
   test('execute returns formatted thread when found', async () => {
-    const getIssueOrPRThread = mock((_params: any) => Promise.resolve(fakeThread));
+    const getIssueOrPRThread = vi.fn((_params: any) => Promise.resolve(fakeThread));
     const provider = createMockProvider({ getIssueOrPRThread });
     const tool = getIssueOrPRThreadToolFactory(provider);
 
@@ -104,7 +104,7 @@ describe('get_issue_or_pr_thread tool - execution', () => {
   });
 
   test('execute returns not-found result when provider returns undefined', async () => {
-    const getIssueOrPRThread = mock((_params: any) => Promise.resolve(undefined));
+    const getIssueOrPRThread = vi.fn((_params: any) => Promise.resolve(undefined));
     const provider = createMockProvider({ getIssueOrPRThread });
     const tool = getIssueOrPRThreadToolFactory(provider);
 
@@ -141,7 +141,7 @@ describe('get_issue_or_pr_thread tool - execution', () => {
   });
 
   test('execute passes params through to provider', async () => {
-    const getIssueOrPRThread = mock((_params: any) => Promise.resolve(undefined));
+    const getIssueOrPRThread = vi.fn((_params: any) => Promise.resolve(undefined));
     const provider = createMockProvider({ getIssueOrPRThread });
     const tool = getIssueOrPRThreadToolFactory(provider);
 
@@ -162,7 +162,7 @@ describe('get_issue_or_pr_thread tool - execution', () => {
   });
 
   test('execute returns cancellation result when signal is aborted', async () => {
-    const getIssueOrPRThread = mock((_params: any) => Promise.resolve(fakeThread));
+    const getIssueOrPRThread = vi.fn((_params: any) => Promise.resolve(fakeThread));
     const provider = createMockProvider({ getIssueOrPRThread });
     const tool = getIssueOrPRThreadToolFactory(provider);
 
@@ -192,7 +192,7 @@ describe('get_issue_or_pr_thread tool - execution', () => {
       base_branch: 'main',
       head_sha: 'abc123',
     };
-    const getIssueOrPRThread = mock((_params: any) => Promise.resolve(prThread));
+    const getIssueOrPRThread = vi.fn((_params: any) => Promise.resolve(prThread));
     const provider = createMockProvider({ getIssueOrPRThread });
     const tool = getIssueOrPRThreadToolFactory(provider);
 

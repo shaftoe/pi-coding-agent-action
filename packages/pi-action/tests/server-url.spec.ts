@@ -6,7 +6,7 @@
  * tests exercise it directly without `@actions/core` / `@actions/github`.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { resolveServerUrl, DEFAULT_SERVER_URL } from '../src/server-url';
 
 describe('resolveServerUrl', () => {

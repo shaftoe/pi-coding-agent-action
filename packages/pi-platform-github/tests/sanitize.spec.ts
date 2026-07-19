@@ -2,7 +2,7 @@
  * @file Tests for content sanitization utility.
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { sanitizeContent } from '../src/sanitize';
 
 describe('sanitizeContent', () => {

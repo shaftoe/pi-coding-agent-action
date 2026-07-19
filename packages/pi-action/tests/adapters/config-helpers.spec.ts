@@ -8,7 +8,7 @@
  * here directly without any mocking.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import {
   MISSING_MODEL_MESSAGE,
   MISSING_PROVIDER_MESSAGE,

@@ -7,7 +7,7 @@
  * into measured coverage.
  */
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { CommanderError } from 'commander';
 import { handleCommanderExit } from '../src/index';
 
@@ -19,7 +19,7 @@ function makeCommanderError(code: string, exitCode = 1): CommanderError {
 describe('handleCommanderExit', () => {
   // handleCommanderExit mutates the process-global `process.exitCode`.
   // Snapshot it before each test and restore it afterwards so a leftover
-  // non-zero value never leaks out and makes `bun test` (or a co-running
+  // non-zero value never leaks out and makes `vitest run` (or a co-running
   // test file) exit non-zero despite 0 failures.
   let exitCodeBefore: typeof process.exitCode;
 

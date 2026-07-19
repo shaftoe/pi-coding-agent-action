@@ -13,7 +13,7 @@
  * at module top level and then either skips or runs its `describe` block.
  */
 
-import { mock, describe, test } from 'bun:test';
+import { vi, describe, test } from 'vitest';
 import type { CoreAdapter } from '@alexanderfortin/pi-orchestrator';
 import { initTheme } from '@earendil-works/pi-coding-agent';
 // Re-export `createMockProvider` so e2e specs that want a richer provider
@@ -37,13 +37,16 @@ export const mockGitHubContext = {
   },
 };
 
+// Register the @actions/github mock at module top-level (hoisted by Vitest)
+// so it applies before any E2E spec imports resolve.
+vi.mock('@actions/github', () => ({ context: mockGitHubContext }));
+
 /**
- * Mock `@actions/github` + install the standard `INPUT_*` env vars expected
- * by `@alexanderfortin/pi-action`'s config loader. Safe to call from multiple
- * specs (Bun's `mock.module` is first-call-wins).
+ * Install the standard `INPUT_*` env vars expected by
+ * `@alexanderfortin/pi-action`'s config loader. The `@actions/github` mock
+ * is auto-registered above (top-level `vi.mock`).
  */
 export function setupE2EGitHubMocks(): void {
-  mock.module('@actions/github', () => ({ context: mockGitHubContext }));
   process.env.INPUT_TRIGGER = '/pi ';
   process.env.INPUT_GITHUB_TOKEN = 'fake-token';
   process.env.INPUT_MAX_COMMENTS = '100';
@@ -63,10 +66,10 @@ export function setupE2ETheme(): void {
 
 /**
  * Mock `CoreAdapter` with the standard input defaults used by E2E specs.
- * Each adapter method is a fresh `mock()` so individual specs can spy on it.
+ * Each adapter method is a fresh `vi.fn()` so individual specs can spy on it.
  */
 export function createE2ECoreAdapter(): CoreAdapter {
-  const mockGetInput = mock((name: string): string => {
+  const mockGetInput = vi.fn((name: string): string => {
     const defaults: Record<string, string> = {
       github_token: 'fake-token',
       trigger: '/pi ',
@@ -82,13 +85,13 @@ export function createE2ECoreAdapter(): CoreAdapter {
 
   return {
     getInput: mockGetInput,
-    setFailed: mock(),
-    setOutput: mock(),
-    notice: mock(),
-    debug: mock(),
-    info: mock(),
-    warning: mock(),
-    error: mock(),
+    setFailed: vi.fn(),
+    setOutput: vi.fn(),
+    notice: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+    error: vi.fn(),
   };
 }
 
@@ -102,8 +105,8 @@ export function createE2EPlatformProvider(): PlatformProvider {
 }
 
 /**
- * Bundle: do GitHub mocks, env vars, theme init. Returns the canonical
- * E2E mocks. Call at module top-level of each E2E spec.
+ * Bundle: do GitHub vis, env vars, theme init. Returns the canonical
+ * E2E vis. Call at module top-level of each E2E spec.
  */
 export function setupE2E(): {
   coreAdapter: CoreAdapter;
@@ -158,7 +161,7 @@ export function readE2EEnvVars(env: { token: string; provider: string; model: st
  * Returns `true` if the suite should run, `false` if it should be skipped.
  */
 export function isE2EEnabled(requiredEnvVars: Record<string, string | undefined>): boolean {
-  if (Bun.env.RUN_E2E_TESTS !== '1') {
+  if (process.env.RUN_E2E_TESTS !== '1') {
     return false;
   }
   return Object.values(requiredEnvVars).every(v => Boolean(v));

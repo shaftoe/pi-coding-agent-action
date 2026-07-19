@@ -5,8 +5,8 @@
  * handling and parameter building.
  */
 
-import { describe, expect, test } from 'bun:test';
-// Import directly from source file using namespace import to work around bun test module resolution
+import { describe, expect, test } from 'vitest';
+// Import directly from source file using namespace import to work around vitest module resolution
 import * as ToolExecution from '@alexanderfortin/pi-orchestrator';
 import { mockExtensionContext as mockCtx } from '../../helpers/tool-mocks';
 

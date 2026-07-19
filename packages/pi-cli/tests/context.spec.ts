@@ -8,7 +8,7 @@
  *     that make M1 work without library changes.
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { buildPlatformContext, parseRepoFlag, CLI_EVENT_NAME } from '../src/context.js';
 
 describe('parseRepoFlag', () => {

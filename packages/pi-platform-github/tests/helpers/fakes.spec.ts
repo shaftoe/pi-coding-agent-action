@@ -5,7 +5,7 @@
  * with default or custom values.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import {
   createFakeIssue,
   createFakePullRequest,

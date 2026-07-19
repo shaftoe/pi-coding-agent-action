@@ -5,7 +5,7 @@
  * wiring is tested via smoke tests in the Makefile / CI).
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { resolveLogLevel } from '../../src/commands/run.js';
 
 describe('resolveLogLevel', () => {

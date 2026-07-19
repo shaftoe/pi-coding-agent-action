@@ -9,7 +9,7 @@
  *   - getExportDirectory: creates the temp directory
  */
 
-import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { CliOutputSink } from '../../src/adapters/output-sink.js';
 
@@ -24,8 +24,8 @@ describe('CliOutputSink', () => {
     exitCodeBefore = process.exitCode;
     process.exitCode = 0 as any;
 
-    process.stderr.write = mock(() => true) as unknown as typeof process.stderr.write;
-    process.stdout.write = mock(() => true) as unknown as typeof process.stdout.write;
+    process.stderr.write = vi.fn(() => true) as unknown as typeof process.stderr.write;
+    process.stdout.write = vi.fn(() => true) as unknown as typeof process.stdout.write;
   });
 
   afterEach(() => {
@@ -45,7 +45,7 @@ describe('CliOutputSink', () => {
     const sink = new CliOutputSink();
     sink.setOutput('response', 'no newline');
     sink.flush('stdout');
-    const writes = (process.stdout.write as ReturnType<typeof mock>).mock.calls;
+    const writes = (process.stdout.write as ReturnType<typeof vi.fn>).mock.calls;
     expect(writes[writes.length - 1]?.[0]).toBe('\n');
   });
 
@@ -53,7 +53,7 @@ describe('CliOutputSink', () => {
     const sink = new CliOutputSink();
     sink.setOutput('response', 'hello\n');
     sink.flush('stdout');
-    const all = (process.stdout.write as ReturnType<typeof mock>).mock.calls
+    const all = (process.stdout.write as ReturnType<typeof vi.fn>).mock.calls
       .map(c => c[0] as string)
       .join('');
     expect(all).toBe('hello\n');
@@ -95,7 +95,7 @@ describe('CliOutputSink', () => {
     sink.setFailed(new Error('Boom'));
     sink.flush('stdout');
     // stdout should NOT get the response
-    const stdoutCalls = (process.stdout.write as ReturnType<typeof mock>).mock.calls;
+    const stdoutCalls = (process.stdout.write as ReturnType<typeof vi.fn>).mock.calls;
     expect(stdoutCalls).toHaveLength(0);
   });
 

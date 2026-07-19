@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { createReviewToolFactory } from '@alexanderfortin/pi-orchestrator';
 import { mockExtensionContext as mockCtx, createMockProvider } from '../../helpers/tool-mocks';
 

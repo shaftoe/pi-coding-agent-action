@@ -83,7 +83,7 @@ Two env vars are required, no flags, no `gh auth token` fallback:
 export GITHUB_TOKEN=ghp_...
 export ANTHROPIC_API_KEY=sk-ant-...
 
-bun pi-cli run "explain what packages/pi-orchestrator does" \
+pnpm run pi-cli run "explain what packages/pi-orchestrator does" \
   --repo shaftoe/pi-coding-agent-action \
   --provider anthropic \
   --model claude-sonnet-4-5
@@ -92,5 +92,5 @@ bun pi-cli run "explain what packages/pi-orchestrator does" \
 ## Tests
 
 ```bash
-bun test packages/pi-cli/
+vitest run packages/pi-cli/
 ```

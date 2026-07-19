@@ -7,7 +7,7 @@
  * helper here is a pure function over raw diff strings.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import {
   mergeIgnoreFiles,
   truncateDiff,

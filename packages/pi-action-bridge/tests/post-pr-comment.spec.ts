@@ -5,7 +5,7 @@
  * orchestration `postPrComment` with an injected fake {@link PostCommentFn}
  * (no network) and assert the text rendering.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { postPrComment, summarizePostComment } from '../src/tools/post-pr-comment.js';
 import type { PostCommentFn, PostPrCommentDetails } from '../src/types.js';
 

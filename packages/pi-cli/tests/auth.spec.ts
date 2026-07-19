@@ -7,7 +7,7 @@
  *   - Error messages for missing tokens (must name the exact env var to set).
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { PROVIDER_ENV_VARS, resolveProviderToken } from '../src/auth.js';
 import { resolveGitHubToken } from '@alexanderfortin/pi-platform-github';
 
