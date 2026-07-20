@@ -23,7 +23,7 @@ vi.mock('@actions/github', () => ({
   context: mockContext,
 }));
 
-// Dynamic import to ensure vis are set before module loads
+// Dynamic import to ensure mocks are set before module loads
 const pullRequestUpdateModulePromise = import('@alexanderfortin/pi-platform-github');
 
 // Cache the module after first import

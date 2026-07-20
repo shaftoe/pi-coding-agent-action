@@ -93,7 +93,7 @@ function createTestDeps(payloadOverrides?: Record<string, unknown>): GitHubModul
   };
 }
 
-// Dynamic import to ensure vis are set before module loads
+// Dynamic import to ensure mocks are set before module loads
 const reactionsModule = import('@alexanderfortin/pi-platform-github');
 
 describe('addReaction', () => {

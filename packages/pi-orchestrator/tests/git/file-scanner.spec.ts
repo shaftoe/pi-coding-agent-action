@@ -1,7 +1,7 @@
 /**
  * @file Tests for the platform-agnostic file scanner.
  *
- * Tests the shared scanning logic directly without any GitHub vis,
+ * Tests the shared scanning logic directly without any GitHub mocks,
  * demonstrating that the module is truly platform-independent.
  */
 

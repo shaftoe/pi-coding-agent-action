@@ -40,7 +40,7 @@ describe('ActionOrchestrator', () => {
   let defaultConfig: PiConfig;
 
   /**
-   * Helper to create an orchestrator with the default config and vis.
+   * Helper to create an orchestrator with the default config and mocks.
    * Config overrides are merged onto the default config.
    */
   function createOrchestrator(configOverrides?: Partial<PiConfig>) {

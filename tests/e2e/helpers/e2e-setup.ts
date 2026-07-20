@@ -105,8 +105,8 @@ export function createE2EPlatformProvider(): PlatformProvider {
 }
 
 /**
- * Bundle: do GitHub vis, env vars, theme init. Returns the canonical
- * E2E vis. Call at module top-level of each E2E spec.
+ * Bundle: do GitHub mocks, env vars, theme init. Returns the canonical
+ * E2E mocks. Call at module top-level of each E2E spec.
  */
 export function setupE2E(): {
   coreAdapter: CoreAdapter;

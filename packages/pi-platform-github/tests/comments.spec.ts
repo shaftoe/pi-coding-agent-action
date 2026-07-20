@@ -12,7 +12,7 @@ vi.mock('@actions/github', () => ({
 import { Temporal } from '@js-temporal/polyfill';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 
-// Dynamic import to ensure vis are set up before module loads
+// Dynamic import to ensure mocks are set up before module loads
 const commentsModule = import('@alexanderfortin/pi-platform-github');
 
 function createTestDeps(payload: Record<string, unknown> = {}): GitHubModuleDeps & {

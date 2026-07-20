@@ -78,7 +78,7 @@ const testCoreAdapter = {
   error: vi.fn(noop),
 };
 
-// Dynamic import to ensure vis are set before module loads
+// Dynamic import to ensure mocks are set before module loads
 const pullRequestUpdateModulePromise = import('@alexanderfortin/pi-platform-github');
 
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';

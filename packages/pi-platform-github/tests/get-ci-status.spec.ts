@@ -48,7 +48,7 @@ const mockOctokit = {
 };
 // octokit singleton mock no longer needed - deps pattern used instead
 
-// Lazy import after vis are set up
+// Lazy import after mocks are set up
 const getCIStatusModulePromise = import('@alexanderfortin/pi-platform-github');
 
 let getCIStatus: any;
@@ -552,7 +552,7 @@ describe('getCIStatus - platform implementation', () => {
   describe('summary formatting', () => {
     test('shows "No check runs" message when no results', async () => {
       const fn = await getModule();
-      // Default vis return empty arrays
+      // Default mocks return empty arrays
       const result = await fn(createTestDeps(mockOctokit), { ref: 'abc12345' });
 
       expect(result.content[0].text).toContain(

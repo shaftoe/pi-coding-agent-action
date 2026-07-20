@@ -83,7 +83,7 @@ process.env.INPUT_TRIGGER = '/pi ';
 process.env.INPUT_GITHUB_TOKEN = 'fake-token';
 process.env.INPUT_MAX_COMMENTS = '100';
 
-// Dynamic import to ensure vis are set up before module loads
+// Dynamic import to ensure mocks are set up before module loads
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore TS1309 -- Top-level await not supported in CommonJS, but Vitest handles it
 const { Agent } = await import('@alexanderfortin/pi-orchestrator');

@@ -21,7 +21,7 @@ const debugLogger = (msg: string): void => {
 // Set env vars BEFORE importing git-utils.ts
 installGithubEnv();
 
-// Dynamic import to ensure vis are set before module loads
+// Dynamic import to ensure mocks are set before module loads
 const gitUtilsModule = import('@alexanderfortin/pi-platform-github');
 
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';

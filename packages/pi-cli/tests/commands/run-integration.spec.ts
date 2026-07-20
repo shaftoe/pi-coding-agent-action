@@ -25,7 +25,7 @@
 import { afterEach, beforeEach, describe, expect, vi, test } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// Module vis — registered before any import of run.ts so its bindings pick
+// Module mocks — registered before any import of run.ts so its bindings pick
 // up the replacements. (Vitest resolves vi.mock against the absolute path of
 // the specifier, so the path here is relative to *this* test file.)
 // ---------------------------------------------------------------------------
@@ -88,7 +88,7 @@ vi.mock('../../src/adapters/pi-agent.js', () => ({
   },
 }));
 
-// Import after the vis above are registered.
+// Import after the mocks above are registered.
 const { runCommand } = await import('../../src/commands/run.js');
 import type { RunCommandArgs } from '../../src/commands/run.js';
 

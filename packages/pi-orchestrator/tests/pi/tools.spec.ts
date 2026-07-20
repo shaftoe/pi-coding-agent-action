@@ -28,7 +28,7 @@ coreMock.getInput.mockImplementation(() => '/pi ');
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { createMockProvider } from '../helpers/tool-mocks';
 
-// Dynamic import to ensure env vars and vis are set before module loads
+// Dynamic import to ensure env vars and mocks are set before module loads
 const toolsModule = import('@alexanderfortin/pi-orchestrator');
 const { createToolsFactory } = await toolsModule;
 

@@ -58,5 +58,3 @@ vi.mock('@actions/core', () => coreMock);
 export function registerCoreMock(): void {
   /* auto-registered via top-level vi.mock */
 }
-
-// DEBUG

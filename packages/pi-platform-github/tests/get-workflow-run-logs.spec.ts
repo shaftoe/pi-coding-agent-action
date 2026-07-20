@@ -40,7 +40,7 @@ const mockOctokit = {
 const makeDeps = (octokit = mockOctokit, opts?: CreateTestDepsOptions) =>
   createTestDeps(octokit, { eventName: 'push', ...opts });
 
-// Lazy import after vis are set up
+// Lazy import after mocks are set up
 const logsModulePromise = import('@alexanderfortin/pi-platform-github');
 
 let getWorkflowRunLogs: any;

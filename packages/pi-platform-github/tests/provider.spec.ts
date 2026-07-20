@@ -10,7 +10,7 @@ import { describe, expect, test } from 'vitest';
 import { setupGitHubTestEnv } from './helpers/github-test-env';
 setupGitHubTestEnv({ envPathPrefix: 'gh-event-platform' });
 
-// Import after vis are set up
+// Import after mocks are set up
 import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
 import {
   parsePlatformType,
