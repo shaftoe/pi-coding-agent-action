@@ -14,7 +14,7 @@
  *   export RUN_E2E_TESTS=1        # Enable E2E tests
  *
  * Running the tests:
- *   bun test tests/e2e/pi-agent.spec.ts
+ *   pnpm test tests/e2e/pi-agent.spec.ts
  */
 
 import { describe, expect, test } from 'vitest';

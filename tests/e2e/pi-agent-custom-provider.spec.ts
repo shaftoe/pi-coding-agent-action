@@ -27,7 +27,7 @@
  *     E2E_TOKEN_CUSTOM=sk-or-... \
  *     E2E_PROVIDER_CUSTOM=openrouter \
  *     E2E_MODEL_CUSTOM=liquid/lfm-2.5-1.2b-instruct:free \
- *     bun test tests/e2e/pi-agent-custom-provider.spec.ts
+ *     pnpm test tests/e2e/pi-agent-custom-provider.spec.ts
  *
  * When RUN_E2E_TESTS is not set or env vars are missing, every test is
  * reported as **skip** (not pass).

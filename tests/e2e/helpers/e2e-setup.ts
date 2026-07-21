@@ -3,7 +3,7 @@
  *
  * The two E2E specs (`pi-agent.spec.ts` and `pi-agent-custom-provider.spec.ts`)
  * both:
- *   1. Build a mock `@actions/github` context + register it via `mock.module`
+ *   1. Build a mock `@actions/github` context + register it via `vi.mock`
  *   2. Install the standard `INPUT_*` env vars
  *   3. Build a mock `PlatformProvider` and (for the main spec) a `CoreAdapter`
  *   4. Initialize the Pi SDK theme for telemetry

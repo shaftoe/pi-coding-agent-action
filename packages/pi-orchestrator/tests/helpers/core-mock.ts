@@ -44,6 +44,10 @@ const hoisted = vi.hoisted(() => ({
   },
 }));
 
+// `any` is required (not laziness): the inferred Mock<…> type references
+// `Procedure` from `@vitest/spy` (a transitive vitest dep), which triggers
+// TS2883 ("inferred type cannot be named without a reference to …") under
+// this repo's `declaration: true` tsconfig. A bare re-export is not portable.
 export const coreMock: any = hoisted.coreMock;
 
 // Register the mock at module top-level so it is hoisted before any test-file

@@ -23,5 +23,7 @@
     "ignore": "^7.0.6",
     "simple-git": "^3.36.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@actions/github": "^9.1.1"
+  }
 }

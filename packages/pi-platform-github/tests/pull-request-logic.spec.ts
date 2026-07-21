@@ -11,7 +11,8 @@ const mockGetInput = vi.fn((name: string) => {
   return '';
 });
 
-// Mock octokit
+// Mock octokit — injected directly via createTestDeps() (dependency injection),
+// so no vi.mock() is needed for an octokit factory.
 const mockReposGet = vi.fn(() => Promise.resolve({ data: { default_branch: 'develop' } }));
 const mockOctokit = {
   rest: {
@@ -20,9 +21,6 @@ const mockOctokit = {
     },
   },
 };
-vi.mock('../../../src/platform/github/octokit', () => ({
-  getOctokit: vi.fn(() => mockOctokit),
-}));
 
 // Setup default GitHub context
 const mockContext = {

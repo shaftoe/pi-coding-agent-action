@@ -2,7 +2,7 @@
  * @file Shared helper for creating real git repos in test temp directories.
  *
  * Used by pull-request test suites that exercise the `git` CLI code paths.
- * Avoids the need for `mock.module('simple-git')` which is global and
+ * Avoids the need for `vi.mock('simple-git')` which is global and
  * would leak into other test files.
  */
 
