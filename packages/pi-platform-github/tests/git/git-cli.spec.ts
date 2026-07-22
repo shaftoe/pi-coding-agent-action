@@ -23,7 +23,7 @@ import {
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 import type { SimpleGit } from 'simple-git';
 import { simpleGit } from 'simple-git';
-import { setupGitRepo, cleanupGitRepo } from '../helpers/git-repo';
+import { setupGitRepo, cleanupGitRepo, isolateGitConfig } from '../helpers/git-repo';
 
 /** Create a logger that captures messages for assertions. */
 function captureLogger() {
@@ -59,6 +59,10 @@ function createDeps(actor?: string): { deps: GitHubModuleDeps; messages: string[
     messages,
   };
 }
+
+// Isolate every git operation in this file from the host's global/system git
+// config (see `isolateGitConfig` in helpers/git-repo.ts for rationale).
+isolateGitConfig();
 
 // ---------------------------------------------------------------------------
 // getNoreplyEmail

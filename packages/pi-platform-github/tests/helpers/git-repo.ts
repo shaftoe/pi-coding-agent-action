@@ -10,6 +10,47 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { execSync } from 'node:child_process';
+import { beforeAll, afterAll } from 'vitest';
+
+/**
+ * Hermetically isolate git operations in the calling test file from the
+ * host's global/system git config.
+ *
+ * Test suites that spawn real `git` (via `execSync` or `simple-git`, both of
+ * which inherit `process.env`) must not be influenced by the developer's
+ * global `user.name`/`user.email` (or by a CI image that pre-seeds git
+ * identity). Otherwise `ensureGitIdentity` legitimately sees that existing
+ * identity, skips the local write, and the suite's local-scope assertions
+ * fail — differently on every machine. Pointing git at an empty global
+ * config file and disabling the system config makes the suite deterministic.
+ *
+ * This also sidesteps sandboxed environments that *block* access to the
+ * real global gitconfig (e.g. `~/.gitconfig`: Operation not permitted): with
+ * `GIT_CONFIG_GLOBAL=/dev/null` git never tries to open it.
+ *
+ * Vitest runs each test file in its own worker process (default `forks`
+ * pool), so this never leaks between files. Call once at the top of any test
+ * file that spawns git. Originals are restored in `afterAll` for hygiene.
+ */
+export function isolateGitConfig(): void {
+  const snapshot: readonly (readonly [string, string | undefined])[] = [
+    ['GIT_CONFIG_GLOBAL', process.env.GIT_CONFIG_GLOBAL],
+    ['GIT_CONFIG_NOSYSTEM', process.env.GIT_CONFIG_NOSYSTEM],
+  ];
+  beforeAll(() => {
+    process.env.GIT_CONFIG_GLOBAL = '/dev/null';
+    process.env.GIT_CONFIG_NOSYSTEM = '1';
+  });
+  afterAll(() => {
+    for (const [key, value] of snapshot) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  });
+}
 
 /** Identity used for test commits. */
 const TEST_GIT_NAME = 'test-bot';

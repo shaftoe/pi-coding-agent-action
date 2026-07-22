@@ -202,7 +202,7 @@ describe('Agent', () => {
       const agent = createRealAgent();
       await agent.ready();
 
-      expect(agent.run('')).rejects.toThrow('no text, skipping prompt');
+      await expect(agent.run('')).rejects.toThrow('no text, skipping prompt');
     });
 
     test('throws error for undefined text', async () => {

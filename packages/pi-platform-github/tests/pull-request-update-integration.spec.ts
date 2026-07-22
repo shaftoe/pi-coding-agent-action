@@ -3,9 +3,13 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execSync } from 'node:child_process';
+import { isolateGitConfig } from './helpers/git-repo';
 
 import { setupGitHubTestEnv } from './helpers/github-test-env';
 setupGitHubTestEnv({ envPathPrefix: 'gh-event-pr-update' });
+
+// Isolate git ops from the host's global/system config (see isolateGitConfig).
+isolateGitConfig();
 
 const noop = (): void => {};
 const mockGetInput = vi.fn((name: string) => {

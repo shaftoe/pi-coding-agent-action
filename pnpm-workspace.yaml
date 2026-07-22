@@ -13,8 +13,18 @@ allowBuilds:
   '@google/genai': true
   protobufjs: true
 
+# pnpm v11 enables a 24h supply-chain "minimum release age" cooldown by default
+# (minimumReleaseAge: 1440), refusing to install packages published less than
+# 24h ago — including on `--frozen-lockfile`, which is what CI runs. The
+# first-party Pi SDK packages under `@earendil-works/` are bumped frequently
+# (often within hours of release, via renovate) and are trusted (this
+# project's own org), so we exempt the whole scope.
+#
+# IMPORTANT: the glob `@earendil-works/*` is used deliberately. pnpm v11's
+# lockfile policy verification honours glob patterns but NOT the bare
+# `@scope/` trailing-slash form (which only matches at resolution time, not
+# during frozen-lockfile verification). Pinning `@pkg@x.y.z` works too but
+# would silently re-break CI on the next Pi version bump — the glob survives
+# version churn with no maintenance. Third-party packages keep the cooldown.
 minimumReleaseAgeExclude:
-  - '@earendil-works/pi-agent-core@0.81.1'
-  - '@earendil-works/pi-ai@0.81.1'
-  - '@earendil-works/pi-coding-agent@0.81.1'
-  - '@earendil-works/pi-tui@0.81.1'
+  - '@earendil-works/*'

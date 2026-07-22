@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execSync } from 'node:child_process';
+import { isolateGitConfig } from './helpers/git-repo';
 import {
   updatePullRequest,
   validateUpdatePullRequestParams,
@@ -58,6 +59,9 @@ function createUpdateDeps(): GitHubModuleDeps {
     },
   };
 }
+
+// Isolate git ops from the host's global/system config (see isolateGitConfig).
+isolateGitConfig();
 
 /**
  * Create a clean git repo workspace so `git status --porcelain` works.

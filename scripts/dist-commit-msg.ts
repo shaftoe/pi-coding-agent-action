@@ -9,7 +9,7 @@
  * In CI, also exports the message as the `message` workflow output (via
  * `$GITHUB_OUTPUT`) so it can be consumed across jobs if needed.
  *
- * Usage: bun run scripts/dist-commit-msg.ts
+ * Usage: tsx scripts/dist-commit-msg.ts
  */
 
 import { appendFileSync } from 'node:fs';

@@ -15,7 +15,7 @@
  *    bridge `devDependency` is left behind, causing duplicate resolutions and
  *    peer-dependency mismatches in the lockfile.
  *
- * Run via: bun run sync-versions
+ * Run via: pnpm run sync-versions
  * Called by semantic-release post-version hook to keep all packages aligned.
  */
 
