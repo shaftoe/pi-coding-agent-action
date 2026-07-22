@@ -14,7 +14,10 @@ import {
   generatePullRequestBody,
 } from '@alexanderfortin/pi-platform-github';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
-import { setupGitRepo, cleanupGitRepo } from './helpers/git-repo';
+import { setupGitRepo, cleanupGitRepo, isolateGitConfig } from './helpers/git-repo';
+
+// Isolate git ops from the host's global/system config (see isolateGitConfig).
+isolateGitConfig();
 
 function createPRDeps(): GitHubModuleDeps {
   return {

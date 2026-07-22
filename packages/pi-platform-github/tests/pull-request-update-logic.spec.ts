@@ -46,10 +46,13 @@ interface _UpdatePullRequestParams {
   dryRun?: boolean;
 }
 
-import { setupGitRepo, cleanupGitRepo } from './helpers/git-repo';
+import { setupGitRepo, cleanupGitRepo, isolateGitConfig } from './helpers/git-repo';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execSync } from 'node:child_process';
+
+// Isolate git ops from the host's global/system config (see isolateGitConfig).
+isolateGitConfig();
 
 describe('applyCommit', () => {
   function createDeps(workspace: string) {
