@@ -40,9 +40,11 @@ interface TestTool {
   promptGuidelines: string[];
   promptSnippet: string;
   parameters: {
-    properties: Record<string, { type: string }>;
+    properties: Record<string, { type?: string; anyOf?: { type?: string }[] }>;
     required?: string[];
+    additionalProperties?: boolean;
   };
+  constrainedSampling?: { type: string; strict: string };
   execute: (
     _toolCallId: string,
     params: Record<string, unknown>,
@@ -70,6 +72,34 @@ function captureRegisteredTools() {
 
 function getToolByName(tools: TestTool[], name: string): TestTool | undefined {
   return tools.find(t => t.name === name);
+}
+
+/**
+ * Assert a tool field is required-but-nullable — the strict-compatible form
+ * for what used to be an optional property. Strict JSON-schema sampling
+ * (OpenAI/Anthropic) forbids optionals, so absent values are modelled as a
+ * required union with null (`anyOf: [<type>, { type: 'null' }]`).
+ */
+function expectRequiredNullable(tool: TestTool, field: string): void {
+  const prop = tool.parameters.properties[field];
+  expect(prop).toBeDefined();
+  expect(tool.parameters.required).toContain(field);
+  expect(prop?.anyOf?.some(member => member.type === 'null')).toBe(true);
+}
+
+/**
+ * Assert a tool's schema is strict-compatible and opts into strict sampling:
+ * `additionalProperties: false`, every property listed in `required`, and the
+ * `constrainedSampling` config set to `prefer`.
+ */
+function expectStrictTool(tool: TestTool): void {
+  expect(tool.parameters.additionalProperties).toBe(false);
+  const keys = Object.keys(tool.parameters.properties);
+  expect(keys.length).toBeGreaterThan(0);
+  for (const key of keys) {
+    expect(tool.parameters.required).toContain(key);
+  }
+  expect(tool.constrainedSampling).toEqual({ type: 'json_schema', strict: 'prefer' });
 }
 
 describe('extFactory', () => {
@@ -175,22 +205,20 @@ describe('extFactory', () => {
     expect(params.properties.title?.type).toBe('string');
   });
 
-  test('create_pull_request parameters body is optional', () => {
-    const params = createPRTool.parameters;
-    expect(params.properties.body).toBeDefined();
-    expect(params.required).not.toContain('body');
+  test('create_pull_request parameters body is required-but-nullable', () => {
+    expectRequiredNullable(createPRTool, 'body');
   });
 
-  test('create_pull_request parameters base is optional', () => {
-    const params = createPRTool.parameters;
-    expect(params.properties.base).toBeDefined();
-    expect(params.required).not.toContain('base');
+  test('create_pull_request parameters base is required-but-nullable', () => {
+    expectRequiredNullable(createPRTool, 'base');
   });
 
-  test('create_pull_request parameters dryRun is optional', () => {
-    const params = createPRTool.parameters;
-    expect(params.properties.dryRun).toBeDefined();
-    expect(params.required).not.toContain('dryRun');
+  test('create_pull_request parameters dryRun is required-but-nullable', () => {
+    expectRequiredNullable(createPRTool, 'dryRun');
+  });
+
+  test('create_pull_request schema is strict-compatible (additionalProperties:false, strict sampling)', () => {
+    expectStrictTool(createPRTool);
   });
 
   test('create_pull_request title is required', () => {
@@ -198,76 +226,44 @@ describe('extFactory', () => {
     expect(params.required).toContain('title');
   });
 
-  test('update_pull_request parameters pull_number is optional', () => {
-    const params = updatePRTool.parameters;
-    expect(params.properties.pull_number).toBeDefined();
-    // When all fields are optional, required may be undefined
-    if (Array.isArray(params.required)) {
-      expect(params.required).not.toContain('pull_number');
-    }
+  test('update_pull_request parameters pull_number is required-but-nullable', () => {
+    expectRequiredNullable(updatePRTool, 'pull_number');
   });
 
-  test('update_pull_request parameters title is optional', () => {
-    const params = updatePRTool.parameters;
-    expect(params.properties.title).toBeDefined();
-    // When all fields are optional, required may be undefined
-    if (Array.isArray(params.required)) {
-      expect(params.required).not.toContain('title');
-    }
+  test('update_pull_request parameters title is required-but-nullable', () => {
+    expectRequiredNullable(updatePRTool, 'title');
   });
 
-  test('update_pull_request parameters body is optional', () => {
-    const params = updatePRTool.parameters;
-    expect(params.properties.body).toBeDefined();
-    // When all fields are optional, required may be undefined
-    if (Array.isArray(params.required)) {
-      expect(params.required).not.toContain('body');
-    }
+  test('update_pull_request parameters body is required-but-nullable', () => {
+    expectRequiredNullable(updatePRTool, 'body');
   });
 
-  test('update_pull_request parameters dryRun is optional', () => {
-    const params = updatePRTool.parameters;
-    expect(params.properties.dryRun).toBeDefined();
-    // When all fields are optional, required may be undefined
-    if (Array.isArray(params.required)) {
-      expect(params.required).not.toContain('dryRun');
-    }
+  test('update_pull_request parameters dryRun is required-but-nullable', () => {
+    expectRequiredNullable(updatePRTool, 'dryRun');
   });
 
-  test('get_issue_or_pr_thread parameters owner is optional', () => {
-    const params = getIssuePRThreadTool.parameters;
-    expect(params.properties.owner).toBeDefined();
-    // When all fields are optional, required may be undefined
-    if (Array.isArray(params.required)) {
-      expect(params.required).not.toContain('owner');
-    }
+  test('update_pull_request schema is strict-compatible (additionalProperties:false, strict sampling)', () => {
+    expectStrictTool(updatePRTool);
   });
 
-  test('get_issue_or_pr_thread parameters repo is optional', () => {
-    const params = getIssuePRThreadTool.parameters;
-    expect(params.properties.repo).toBeDefined();
-    // When all fields are optional, required may be undefined
-    if (Array.isArray(params.required)) {
-      expect(params.required).not.toContain('repo');
-    }
+  test('get_issue_or_pr_thread parameters owner is required-but-nullable', () => {
+    expectRequiredNullable(getIssuePRThreadTool, 'owner');
   });
 
-  test('get_issue_or_pr_thread parameters issue_number is optional', () => {
-    const params = getIssuePRThreadTool.parameters;
-    expect(params.properties.issue_number).toBeDefined();
-    // When all fields are optional, required may be undefined
-    if (Array.isArray(params.required)) {
-      expect(params.required).not.toContain('issue_number');
-    }
+  test('get_issue_or_pr_thread parameters repo is required-but-nullable', () => {
+    expectRequiredNullable(getIssuePRThreadTool, 'repo');
   });
 
-  test('get_issue_or_pr_thread parameters max_comments is optional', () => {
-    const params = getIssuePRThreadTool.parameters;
-    expect(params.properties.max_comments).toBeDefined();
-    // When all fields are optional, required may be undefined
-    if (Array.isArray(params.required)) {
-      expect(params.required).not.toContain('max_comments');
-    }
+  test('get_issue_or_pr_thread parameters issue_number is required-but-nullable', () => {
+    expectRequiredNullable(getIssuePRThreadTool, 'issue_number');
+  });
+
+  test('get_issue_or_pr_thread parameters max_comments is required-but-nullable', () => {
+    expectRequiredNullable(getIssuePRThreadTool, 'max_comments');
+  });
+
+  test('get_issue_or_pr_thread schema is strict-compatible (additionalProperties:false, strict sampling)', () => {
+    expectStrictTool(getIssuePRThreadTool);
   });
 
   describe('create_pull_request execute', () => {
@@ -354,16 +350,15 @@ describe('extFactory', () => {
       expect(getPRDiffTool.promptSnippet.length).toBeGreaterThan(0);
     });
 
-    test('parameters - all fields are optional', () => {
+    test('parameters - all fields are present and the schema is strict-compatible', () => {
       const params = getPRDiffTool.parameters;
       expect(params.properties.owner).toBeDefined();
       expect(params.properties.repo).toBeDefined();
       expect(params.properties.pull_number).toBeDefined();
       expect(params.properties.max_lines).toBeDefined();
       expect(params.properties.ignore_files).toBeDefined();
-      if (Array.isArray(params.required)) {
-        expect(params.required.length).toBe(0);
-      }
+      // All fields are required-but-nullable under strict sampling.
+      expectStrictTool(getPRDiffTool);
     });
 
     test('returns cancellation message when signal is aborted', async () => {
@@ -415,28 +410,31 @@ describe('extFactory', () => {
       expect(params.required).toContain('comments');
     });
 
-    test('parameters - pull_number is optional', () => {
-      const params = createReviewTool.parameters;
-      expect(params.properties.pull_number).toBeDefined();
-      if (Array.isArray(params.required)) {
-        expect(params.required).not.toContain('pull_number');
-      }
+    test('parameters - pull_number is required-but-nullable', () => {
+      expectRequiredNullable(createReviewTool, 'pull_number');
     });
 
-    test('parameters - body is optional', () => {
-      const params = createReviewTool.parameters;
-      expect(params.properties.body).toBeDefined();
-      if (Array.isArray(params.required)) {
-        expect(params.required).not.toContain('body');
-      }
+    test('parameters - body is required-but-nullable', () => {
+      expectRequiredNullable(createReviewTool, 'body');
     });
 
-    test('parameters - event is optional', () => {
-      const params = createReviewTool.parameters;
-      expect(params.properties.event).toBeDefined();
-      if (Array.isArray(params.required)) {
-        expect(params.required).not.toContain('event');
-      }
+    test('parameters - event is required-but-nullable', () => {
+      expectRequiredNullable(createReviewTool, 'event');
+    });
+
+    test('schema is strict-compatible (additionalProperties:false, strict sampling, nullable comment fields)', () => {
+      expectStrictTool(createReviewTool);
+      // Nested review-comment schema is strict-compatible too: side / start_line /
+      // start_side are nullable, and additionalProperties is false.
+      const commentSchema = (
+        createReviewTool.parameters.properties.comments as unknown as {
+          items?: { additionalProperties?: boolean; required?: string[] };
+        }
+      ).items;
+      expect(commentSchema?.additionalProperties).toBe(false);
+      expect(commentSchema?.required).toEqual(
+        expect.arrayContaining(['path', 'line', 'side', 'start_line', 'start_side', 'body'])
+      );
     });
 
     test('returns cancellation message when signal is aborted', async () => {
@@ -482,7 +480,7 @@ describe('extFactory', () => {
       expect(getCIStatusTool.promptSnippet.length).toBeGreaterThan(0);
     });
 
-    test('parameters - all fields are optional', () => {
+    test('parameters - all fields are present and the schema is strict-compatible', () => {
       const params = getCIStatusTool.parameters;
       expect(params.properties.owner).toBeDefined();
       expect(params.properties.repo).toBeDefined();
@@ -490,9 +488,7 @@ describe('extFactory', () => {
       expect(params.properties.ref).toBeDefined();
       expect(params.properties.status).toBeDefined();
       expect(params.properties.conclusion).toBeDefined();
-      if (Array.isArray(params.required)) {
-        expect(params.required.length).toBe(0);
-      }
+      expectStrictTool(getCIStatusTool);
     });
 
     test('returns cancellation message when signal is aborted', async () => {
@@ -544,16 +540,14 @@ describe('extFactory', () => {
       expect(params.required).toContain('run_id');
     });
 
-    test('parameters - owner, repo, max_bytes are optional', () => {
-      const params = getWorkflowRunLogsTool.parameters;
-      expect(params.properties.owner).toBeDefined();
-      expect(params.properties.repo).toBeDefined();
-      expect(params.properties.max_bytes).toBeDefined();
-      if (Array.isArray(params.required)) {
-        expect(params.required).not.toContain('owner');
-        expect(params.required).not.toContain('repo');
-        expect(params.required).not.toContain('max_bytes');
-      }
+    test('parameters - owner, repo, max_bytes are required-but-nullable', () => {
+      expectRequiredNullable(getWorkflowRunLogsTool, 'owner');
+      expectRequiredNullable(getWorkflowRunLogsTool, 'repo');
+      expectRequiredNullable(getWorkflowRunLogsTool, 'max_bytes');
+    });
+
+    test('schema is strict-compatible (additionalProperties:false, strict sampling)', () => {
+      expectStrictTool(getWorkflowRunLogsTool);
     });
 
     test('returns cancellation message when signal is aborted', async () => {

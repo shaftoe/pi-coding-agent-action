@@ -25,6 +25,7 @@ import {
   GET_PR_DIFF_PARAM_IGNORE_FILES_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_GET_PR_DIFF } from './constants';
+import { nullable, STRICT_JSON_SCHEMA } from './schema';
 import { withCancellation } from './tool-execution';
 import type { PlatformProvider } from '../../platform';
 import type { DiffConfig } from '../../types';
@@ -32,38 +33,41 @@ import type { DiffConfig } from '../../types';
 /**
  * Schema for the get_pr_diff tool.
  */
-const getPRDiffSchema = Type.Object({
-  owner: Type.Optional(
-    Type.String({
-      description: GET_PR_DIFF_PARAM_OWNER_DESCRIPTION,
-    })
-  ),
-  repo: Type.Optional(
-    Type.String({
-      description: GET_PR_DIFF_PARAM_REPO_DESCRIPTION,
-    })
-  ),
-  pull_number: Type.Optional(
-    Type.Integer({
-      description: GET_PR_DIFF_PARAM_PULL_NUMBER_DESCRIPTION,
-    })
-  ),
-  max_lines: Type.Optional(
-    Type.Integer({
-      description: GET_PR_DIFF_PARAM_MAX_LINES_DESCRIPTION,
-    })
-  ),
-  ignore_files: Type.Optional(
-    Type.Array(
+const getPRDiffSchema = Type.Object(
+  {
+    owner: nullable(
       Type.String({
-        description: GET_PR_DIFF_PARAM_IGNORE_FILES_DESCRIPTION,
-      }),
-      {
-        description: GET_PR_DIFF_PARAM_IGNORE_FILES_DESCRIPTION,
-      }
-    )
-  ),
-});
+        description: GET_PR_DIFF_PARAM_OWNER_DESCRIPTION,
+      })
+    ),
+    repo: nullable(
+      Type.String({
+        description: GET_PR_DIFF_PARAM_REPO_DESCRIPTION,
+      })
+    ),
+    pull_number: nullable(
+      Type.Integer({
+        description: GET_PR_DIFF_PARAM_PULL_NUMBER_DESCRIPTION,
+      })
+    ),
+    max_lines: nullable(
+      Type.Integer({
+        description: GET_PR_DIFF_PARAM_MAX_LINES_DESCRIPTION,
+      })
+    ),
+    ignore_files: nullable(
+      Type.Array(
+        Type.String({
+          description: GET_PR_DIFF_PARAM_IGNORE_FILES_DESCRIPTION,
+        }),
+        {
+          description: GET_PR_DIFF_PARAM_IGNORE_FILES_DESCRIPTION,
+        }
+      )
+    ),
+  },
+  { additionalProperties: false }
+);
 
 type GetPRDiffToolParams = Static<typeof getPRDiffSchema>;
 
@@ -307,6 +311,7 @@ export function getPRDiffToolFactory(provider: PlatformProvider, config?: DiffCo
     promptSnippet: GET_PR_DIFF_PROMPT_SNIPPET,
     promptGuidelines: GET_PR_DIFF_PROMPT_GUIDELINES(provider.type),
     parameters: getPRDiffSchema,
+    constrainedSampling: STRICT_JSON_SCHEMA,
     execute: withCancellation<GetPRDiffToolParams, GetPRDiffDetails, GetPRDiffToolParams>({
       cancellationMessage: CANCELLATION_MESSAGE_GET_PR_DIFF,
       cancellationDetails: {

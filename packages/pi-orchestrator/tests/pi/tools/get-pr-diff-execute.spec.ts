@@ -29,6 +29,27 @@ function buildProvider(diff: string): {
   return { provider, getPRDiff };
 }
 
+/**
+ * Build tool params for {@link executeGetPRDiff}.
+ *
+ * The tool's schema is strict-compatible (all properties required-but-nullable),
+ * so its parameter type requires every key. Tests only set a subset, so default
+ * the rest to `null` — the handler treats `null` and `undefined` identically
+ * via nullish-coalescing, mirroring how strict-capable providers emit absent
+ * fields.
+ */
+const diffParams = (
+  overrides: Partial<Parameters<typeof executeGetPRDiff>[0]> = {}
+): Parameters<typeof executeGetPRDiff>[0] =>
+  ({
+    owner: null,
+    repo: null,
+    pull_number: null,
+    max_lines: null,
+    ignore_files: null,
+    ...overrides,
+  }) as Parameters<typeof executeGetPRDiff>[0];
+
 describe('executeGetPRDiff (extracted handler)', () => {
   test('returns a resolve-failure result when owner/repo/pull_number are all absent', async () => {
     const getPRDiff = vi.fn(async () => 'unused');
@@ -50,7 +71,7 @@ describe('executeGetPRDiff (extracted handler)', () => {
       { issueNumber: 0 }
     );
 
-    const result = await executeGetPRDiff({}, providerNoCtx);
+    const result = await executeGetPRDiff(diffParams(), providerNoCtx);
 
     expect(result.content).toHaveLength(1);
     expect(result.content[0]!.text).toContain('Could not resolve PR');
@@ -60,7 +81,10 @@ describe('executeGetPRDiff (extracted handler)', () => {
 
   test('returns a no-diff result when the provider resolves an empty diff', async () => {
     const { provider, getPRDiff } = buildProvider('');
-    const result = await executeGetPRDiff({ owner: 'o', repo: 'r', pull_number: 7 }, provider);
+    const result = await executeGetPRDiff(
+      diffParams({ owner: 'o', repo: 'r', pull_number: 7 }),
+      provider
+    );
 
     expect(result.content[0]!.text).toContain('No diff available for PR #7');
     expect(result.details).toMatchObject({ pull_number: 7, lines: 0, truncated: false });
@@ -70,7 +94,10 @@ describe('executeGetPRDiff (extracted handler)', () => {
   test('renders the diff fenced in a ```diff block and reports line count', async () => {
     const diff = 'diff --git a/f b/f\n+hello\n';
     const { provider } = buildProvider(diff);
-    const result = await executeGetPRDiff({ owner: 'o', repo: 'r', pull_number: 9 }, provider);
+    const result = await executeGetPRDiff(
+      diffParams({ owner: 'o', repo: 'r', pull_number: 9 }),
+      provider
+    );
 
     expect(result.content[0]!.text).toBe('PR #9 Diff:\n```diff\n' + diff + '\n```');
     expect(result.details).toMatchObject({ pull_number: 9, truncated: false });
@@ -80,7 +107,7 @@ describe('executeGetPRDiff (extracted handler)', () => {
   test('forwards merged ignore_files to the provider and echoes them in details', async () => {
     const { provider, getPRDiff } = buildProvider('diff body');
     await executeGetPRDiff(
-      { owner: 'o', repo: 'r', pull_number: 1, ignore_files: ['dist/', 'lock'] },
+      diffParams({ owner: 'o', repo: 'r', pull_number: 1, ignore_files: ['dist/', 'lock'] }),
       provider,
       { diffIgnorePatterns: ['dist/', 'node_modules/'] } as DiffConfig
     );
@@ -94,7 +121,7 @@ describe('executeGetPRDiff (extracted handler)', () => {
     const longDiff = Array.from({ length: 50 }, (_, i) => `line ${i}`).join('\n');
     const { provider } = buildProvider(longDiff);
     const result = await executeGetPRDiff(
-      { owner: 'o', repo: 'r', pull_number: 3, max_lines: 10 },
+      diffParams({ owner: 'o', repo: 'r', pull_number: 3, max_lines: 10 }),
       provider
     );
 
@@ -109,7 +136,7 @@ describe('executeGetPRDiff (extracted handler)', () => {
     });
     const provider = createMockProvider({ getPRDiff }, providerOptions);
     await expect(
-      executeGetPRDiff({ owner: 'o', repo: 'r', pull_number: 1 }, provider)
+      executeGetPRDiff(diffParams({ owner: 'o', repo: 'r', pull_number: 1 }), provider)
     ).rejects.toThrow('boom');
   });
 });

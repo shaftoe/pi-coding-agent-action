@@ -22,66 +22,73 @@ import {
   CREATE_REVIEW_PARAM_COMMENT_BODY_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_CREATE_REVIEW } from './constants';
+import { nullable, STRICT_JSON_SCHEMA } from './schema';
 import type { CreateReviewParams, CreateReviewDetails, PlatformProvider } from '../../platform';
-import { withCancellation } from './tool-execution';
+import { withCancellation, isPresent } from './tool-execution';
 
 /**
  * Schema for a single inline review comment.
  */
-const reviewCommentSchema = Type.Object({
-  path: Type.String({
-    description: CREATE_REVIEW_PARAM_COMMENT_PATH_DESCRIPTION,
-  }),
-  line: Type.Integer({
-    description: CREATE_REVIEW_PARAM_COMMENT_LINE_DESCRIPTION,
-  }),
-  side: Type.Optional(
-    Type.Union([Type.Literal('LEFT'), Type.Literal('RIGHT')], {
-      description: CREATE_REVIEW_PARAM_COMMENT_SIDE_DESCRIPTION,
-    })
-  ),
-  start_line: Type.Optional(
-    Type.Integer({
-      description: CREATE_REVIEW_PARAM_COMMENT_START_LINE_DESCRIPTION,
-    })
-  ),
-  start_side: Type.Optional(
-    Type.Union([Type.Literal('LEFT'), Type.Literal('RIGHT')], {
-      description: CREATE_REVIEW_PARAM_COMMENT_START_SIDE_DESCRIPTION,
-    })
-  ),
-  body: Type.String({
-    description: CREATE_REVIEW_PARAM_COMMENT_BODY_DESCRIPTION,
-  }),
-});
+const reviewCommentSchema = Type.Object(
+  {
+    path: Type.String({
+      description: CREATE_REVIEW_PARAM_COMMENT_PATH_DESCRIPTION,
+    }),
+    line: Type.Integer({
+      description: CREATE_REVIEW_PARAM_COMMENT_LINE_DESCRIPTION,
+    }),
+    side: nullable(
+      Type.Union([Type.Literal('LEFT'), Type.Literal('RIGHT')], {
+        description: CREATE_REVIEW_PARAM_COMMENT_SIDE_DESCRIPTION,
+      })
+    ),
+    start_line: nullable(
+      Type.Integer({
+        description: CREATE_REVIEW_PARAM_COMMENT_START_LINE_DESCRIPTION,
+      })
+    ),
+    start_side: nullable(
+      Type.Union([Type.Literal('LEFT'), Type.Literal('RIGHT')], {
+        description: CREATE_REVIEW_PARAM_COMMENT_START_SIDE_DESCRIPTION,
+      })
+    ),
+    body: Type.String({
+      description: CREATE_REVIEW_PARAM_COMMENT_BODY_DESCRIPTION,
+    }),
+  },
+  { additionalProperties: false }
+);
 
 /**
  * Schema for the create_pull_request_review tool.
  */
-const createReviewSchema = Type.Object({
-  pull_number: Type.Optional(
-    Type.Integer({
-      description: CREATE_REVIEW_PARAM_PULL_NUMBER_DESCRIPTION,
-    })
-  ),
-  body: Type.Optional(
-    Type.String({
-      description: CREATE_REVIEW_PARAM_BODY_DESCRIPTION,
-    })
-  ),
-  event: Type.Optional(
-    Type.Union(
-      [Type.Literal('COMMENT'), Type.Literal('APPROVE'), Type.Literal('REQUEST_CHANGES')],
-      {
-        description: CREATE_REVIEW_PARAM_EVENT_DESCRIPTION,
-      }
-    )
-  ),
-  comments: Type.Array(reviewCommentSchema, {
-    description:
-      'Array of inline comments anchored to diff lines. Each requires path, line, and body.',
-  }),
-});
+const createReviewSchema = Type.Object(
+  {
+    pull_number: nullable(
+      Type.Integer({
+        description: CREATE_REVIEW_PARAM_PULL_NUMBER_DESCRIPTION,
+      })
+    ),
+    body: nullable(
+      Type.String({
+        description: CREATE_REVIEW_PARAM_BODY_DESCRIPTION,
+      })
+    ),
+    event: nullable(
+      Type.Union(
+        [Type.Literal('COMMENT'), Type.Literal('APPROVE'), Type.Literal('REQUEST_CHANGES')],
+        {
+          description: CREATE_REVIEW_PARAM_EVENT_DESCRIPTION,
+        }
+      )
+    ),
+    comments: Type.Array(reviewCommentSchema, {
+      description:
+        'Array of inline comments anchored to diff lines. Each requires path, line, and body.',
+    }),
+  },
+  { additionalProperties: false }
+);
 
 type CreateReviewToolParams = Static<typeof createReviewSchema>;
 
@@ -99,6 +106,7 @@ export function createReviewToolFactory(provider: PlatformProvider) {
     promptSnippet: CREATE_REVIEW_PROMPT_SNIPPET,
     promptGuidelines: CREATE_REVIEW_PROMPT_GUIDELINES,
     parameters: createReviewSchema,
+    constrainedSampling: STRICT_JSON_SCHEMA,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_CREATE_REVIEW,
       cancellationDetails: {
@@ -114,18 +122,18 @@ export function createReviewToolFactory(provider: PlatformProvider) {
             path: c.path,
             line: c.line,
             body: c.body,
-            ...(c.side !== undefined ? { side: c.side } : {}),
-            ...(c.start_line !== undefined ? { start_line: c.start_line } : {}),
-            ...(c.start_side !== undefined ? { start_side: c.start_side } : {}),
+            ...(isPresent(c.side) ? { side: c.side } : {}),
+            ...(isPresent(c.start_line) ? { start_line: c.start_line } : {}),
+            ...(isPresent(c.start_side) ? { start_side: c.start_side } : {}),
           })),
         };
-        if (params.pull_number !== undefined) {
+        if (isPresent(params.pull_number)) {
           reviewParams.pull_number = params.pull_number;
         }
-        if (params.body !== undefined) {
+        if (isPresent(params.body)) {
           reviewParams.body = params.body;
         }
-        if (params.event !== undefined) {
+        if (isPresent(params.event)) {
           reviewParams.event = params.event;
         }
         return reviewParams;

@@ -14,36 +14,40 @@ import {
   GET_ISSUE_PR_THREAD_PARAM_MAX_COMMENTS_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_GET_THREAD } from './constants';
+import { nullable, STRICT_JSON_SCHEMA } from './schema';
 import { formatThreadAsText } from './common';
 import type { IssueOrPRThread, GetIssueOrPRThreadParams, PlatformProvider } from '../../platform';
 import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
-import { withCancellation } from './tool-execution';
+import { withCancellation, isPresent } from './tool-execution';
 
 /**
  * Schema for the get_issue_or_pr_thread tool.
  */
-const getIssueOrPRThreadSchema = Type.Object({
-  owner: Type.Optional(
-    Type.String({
-      description: GET_ISSUE_PR_THREAD_PARAM_OWNER_DESCRIPTION,
-    })
-  ),
-  repo: Type.Optional(
-    Type.String({
-      description: GET_ISSUE_PR_THREAD_PARAM_REPO_DESCRIPTION,
-    })
-  ),
-  issue_number: Type.Optional(
-    Type.Integer({
-      description: GET_ISSUE_PR_THREAD_PARAM_ISSUE_NUMBER_DESCRIPTION,
-    })
-  ),
-  max_comments: Type.Optional(
-    Type.Integer({
-      description: GET_ISSUE_PR_THREAD_PARAM_MAX_COMMENTS_DESCRIPTION,
-    })
-  ),
-});
+const getIssueOrPRThreadSchema = Type.Object(
+  {
+    owner: nullable(
+      Type.String({
+        description: GET_ISSUE_PR_THREAD_PARAM_OWNER_DESCRIPTION,
+      })
+    ),
+    repo: nullable(
+      Type.String({
+        description: GET_ISSUE_PR_THREAD_PARAM_REPO_DESCRIPTION,
+      })
+    ),
+    issue_number: nullable(
+      Type.Integer({
+        description: GET_ISSUE_PR_THREAD_PARAM_ISSUE_NUMBER_DESCRIPTION,
+      })
+    ),
+    max_comments: nullable(
+      Type.Integer({
+        description: GET_ISSUE_PR_THREAD_PARAM_MAX_COMMENTS_DESCRIPTION,
+      })
+    ),
+  },
+  { additionalProperties: false }
+);
 
 type GetIssueOrPRThreadToolParams = Static<typeof getIssueOrPRThreadSchema>;
 
@@ -89,6 +93,7 @@ export function getIssueOrPRThreadToolFactory(provider: PlatformProvider) {
     promptSnippet: GET_ISSUE_PR_THREAD_PROMPT_SNIPPET(provider.type),
     promptGuidelines: GET_ISSUE_PR_THREAD_PROMPT_GUIDELINES(provider.type),
     parameters: getIssueOrPRThreadSchema,
+    constrainedSampling: STRICT_JSON_SCHEMA,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_GET_THREAD,
       cancellationDetails: {
@@ -110,7 +115,12 @@ export function getIssueOrPRThreadToolFactory(provider: PlatformProvider) {
         comments: [],
         review_comments: [],
       },
-      prepareParams: (params: GetIssueOrPRThreadToolParams) => params,
+      prepareParams: (params: GetIssueOrPRThreadToolParams): GetIssueOrPRThreadParams => ({
+        ...(isPresent(params.owner) ? { owner: params.owner } : {}),
+        ...(isPresent(params.repo) ? { repo: params.repo } : {}),
+        ...(isPresent(params.issue_number) ? { issue_number: params.issue_number } : {}),
+        ...(isPresent(params.max_comments) ? { max_comments: params.max_comments } : {}),
+      }),
       execute: async (params: GetIssueOrPRThreadParams) => {
         const result = await provider.getIssueOrPRThread(params);
 

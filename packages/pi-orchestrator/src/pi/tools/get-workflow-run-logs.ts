@@ -17,7 +17,8 @@ import {
   GET_WORKFLOW_RUN_LOGS_PARAM_MAX_BYTES_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_GET_WORKFLOW_RUN_LOGS } from './constants';
-import { withCancellation } from './tool-execution';
+import { nullable, STRICT_JSON_SCHEMA } from './schema';
+import { withCancellation, isPresent } from './tool-execution';
 import type {
   PlatformProvider,
   GetWorkflowRunLogsParams,
@@ -27,26 +28,29 @@ import type {
 /**
  * Schema for the get_workflow_run_logs tool.
  */
-const getWorkflowRunLogsSchema = Type.Object({
-  owner: Type.Optional(
-    Type.String({
-      description: GET_CI_STATUS_PARAM_OWNER_DESCRIPTION,
-    })
-  ),
-  repo: Type.Optional(
-    Type.String({
-      description: GET_CI_STATUS_PARAM_REPO_DESCRIPTION,
-    })
-  ),
-  run_id: Type.Integer({
-    description: GET_WORKFLOW_RUN_LOGS_PARAM_RUN_ID_DESCRIPTION,
-  }),
-  max_bytes: Type.Optional(
-    Type.Integer({
-      description: GET_WORKFLOW_RUN_LOGS_PARAM_MAX_BYTES_DESCRIPTION,
-    })
-  ),
-});
+const getWorkflowRunLogsSchema = Type.Object(
+  {
+    owner: nullable(
+      Type.String({
+        description: GET_CI_STATUS_PARAM_OWNER_DESCRIPTION,
+      })
+    ),
+    repo: nullable(
+      Type.String({
+        description: GET_CI_STATUS_PARAM_REPO_DESCRIPTION,
+      })
+    ),
+    run_id: Type.Integer({
+      description: GET_WORKFLOW_RUN_LOGS_PARAM_RUN_ID_DESCRIPTION,
+    }),
+    max_bytes: nullable(
+      Type.Integer({
+        description: GET_WORKFLOW_RUN_LOGS_PARAM_MAX_BYTES_DESCRIPTION,
+      })
+    ),
+  },
+  { additionalProperties: false }
+);
 
 type GetWorkflowRunLogsToolParams = Static<typeof getWorkflowRunLogsSchema>;
 
@@ -64,6 +68,7 @@ export function getWorkflowRunLogsToolFactory(provider: PlatformProvider) {
     promptSnippet: GET_WORKFLOW_RUN_LOGS_PROMPT_SNIPPET,
     promptGuidelines: GET_WORKFLOW_RUN_LOGS_PROMPT_GUIDELINES,
     parameters: getWorkflowRunLogsSchema,
+    constrainedSampling: STRICT_JSON_SCHEMA,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_GET_WORKFLOW_RUN_LOGS,
       cancellationDetails: {
@@ -73,10 +78,10 @@ export function getWorkflowRunLogsToolFactory(provider: PlatformProvider) {
         truncated: false,
       },
       prepareParams: (params: GetWorkflowRunLogsToolParams): GetWorkflowRunLogsParams => ({
-        ...(params.owner !== undefined ? { owner: params.owner } : {}),
-        ...(params.repo !== undefined ? { repo: params.repo } : {}),
+        ...(isPresent(params.owner) ? { owner: params.owner } : {}),
+        ...(isPresent(params.repo) ? { repo: params.repo } : {}),
         run_id: params.run_id,
-        ...(params.max_bytes !== undefined ? { max_bytes: params.max_bytes } : {}),
+        ...(isPresent(params.max_bytes) ? { max_bytes: params.max_bytes } : {}),
       }),
       execute: async (params: GetWorkflowRunLogsParams) =>
         provider.getWorkflowRunLogs(params) as Promise<{

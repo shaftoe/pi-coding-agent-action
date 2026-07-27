@@ -7,6 +7,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { resolve } from 'node:path';
 import { buildMockSession, injectMockSession, userHelloMessage } from './helpers/agent-session';
+import type { MockSession, MockSessionEvent } from './helpers/agent-session';
 import { createMockProvider } from '../helpers/tool-mocks';
 
 /**
@@ -639,6 +640,119 @@ describe('Agent', () => {
 
       const result = await agent.run('Hello');
       expect(result.error).toBe('429 rate limit');
+    });
+  });
+
+  /**
+   * Build a mock session that dispatches an arbitrary sequence of raw
+   * `AgentSessionEvent`s through the agent's registered handler when
+   * `prompt()` is called. Used to exercise events (e.g. `auto_retry_*`)
+   * that arrive on the session stream rather than the ExtensionAPI.
+   */
+  function buildRawEventSession(events: MockSessionEvent[]): MockSession {
+    let listener: ((event: MockSessionEvent) => void) | undefined;
+    return {
+      getSessionStats: () => ({ tokens: { input: 0, output: 0, total: 0 }, cost: 0 }),
+      prompt: async () => {
+        for (const event of events) {
+          listener?.(event);
+        }
+      },
+      subscribe: (cb: (event: MockSessionEvent) => void) => {
+        listener = cb;
+      },
+      state: { messages: [] },
+    };
+  }
+
+  describe('auto_retry event handling', () => {
+    test('auto_retry_start logs an info line with attempt/maxAttempts/delay/error', async () => {
+      const { core: testCore, messages: infoMessages } = createCoreWithInfoCapture();
+      const agent = new Agent(testCore as any, mockPlatformProvider, defaultAgentConfig);
+      await agent.ready();
+
+      injectMockSession(
+        agent,
+        buildRawEventSession([
+          {
+            type: 'auto_retry_start',
+            attempt: 1,
+            maxAttempts: 3,
+            delayMs: 1500,
+            errorMessage: '503 overloaded',
+          },
+          { type: 'auto_retry_end', success: true, attempt: 1 },
+          { type: 'agent_settled' },
+        ])
+      );
+
+      await agent.run('Hello');
+
+      const retryLine = infoMessages.find(m => m.startsWith('[auto-retry] 🔄'));
+      expect(retryLine).toBeDefined();
+      expect(retryLine).toContain('attempt 1/3');
+      expect(retryLine).toContain('1500ms');
+      expect(retryLine).toContain('503 overloaded');
+    });
+
+    test('auto_retry_end success logs an info recovery line', async () => {
+      const { core: testCore, messages: infoMessages } = createCoreWithInfoCapture();
+      const agent = new Agent(testCore as any, mockPlatformProvider, defaultAgentConfig);
+      await agent.ready();
+
+      injectMockSession(
+        agent,
+        buildRawEventSession([
+          {
+            type: 'auto_retry_start',
+            attempt: 2,
+            maxAttempts: 3,
+            delayMs: 0,
+            errorMessage: 'transient',
+          },
+          { type: 'auto_retry_end', success: true, attempt: 2 },
+          { type: 'agent_settled' },
+        ])
+      );
+
+      await agent.run('Hello');
+
+      const recoveredLine = infoMessages.find(m => m.startsWith('[auto-retry] ✅'));
+      expect(recoveredLine).toBeDefined();
+      expect(recoveredLine).toContain('attempt 2');
+    });
+
+    test('auto_retry_end failure logs a warning with the final error', async () => {
+      const { core: testCore, messages: warnings } = createCoreWithWarningCapture();
+      const agent = new Agent(testCore as any, mockPlatformProvider, defaultAgentConfig);
+      await agent.ready();
+
+      injectMockSession(
+        agent,
+        buildRawEventSession([
+          {
+            type: 'auto_retry_start',
+            attempt: 3,
+            maxAttempts: 3,
+            delayMs: 0,
+            errorMessage: 'still failing',
+          },
+          {
+            type: 'auto_retry_end',
+            success: false,
+            attempt: 3,
+            finalError: 'connection reset',
+          },
+          { type: 'agent_settled' },
+        ])
+      );
+
+      await agent.run('Hello');
+
+      const exhaustedLine = warnings.find(m => m.startsWith('[auto-retry] ❌'));
+      expect(exhaustedLine).toBeDefined();
+      expect(exhaustedLine).toContain('attempt 3');
+      expect(exhaustedLine).toContain('connection reset');
     });
   });
 

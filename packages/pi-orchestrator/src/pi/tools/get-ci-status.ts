@@ -19,44 +19,48 @@ import {
   GET_CI_STATUS_PARAM_CONCLUSION_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_GET_CI_STATUS } from './constants';
-import { withCancellation } from './tool-execution';
+import { nullable, STRICT_JSON_SCHEMA } from './schema';
+import { withCancellation, isPresent } from './tool-execution';
 import type { PlatformProvider, GetCIStatusParams, GetCIStatusDetails } from '../../platform';
 
 /**
  * Schema for the get_ci_status tool.
  */
-const getCIStatusSchema = Type.Object({
-  owner: Type.Optional(
-    Type.String({
-      description: GET_CI_STATUS_PARAM_OWNER_DESCRIPTION,
-    })
-  ),
-  repo: Type.Optional(
-    Type.String({
-      description: GET_CI_STATUS_PARAM_REPO_DESCRIPTION,
-    })
-  ),
-  pull_number: Type.Optional(
-    Type.Integer({
-      description: GET_CI_STATUS_PARAM_PULL_NUMBER_DESCRIPTION,
-    })
-  ),
-  ref: Type.Optional(
-    Type.String({
-      description: GET_CI_STATUS_PARAM_REF_DESCRIPTION,
-    })
-  ),
-  status: Type.Optional(
-    Type.String({
-      description: GET_CI_STATUS_PARAM_STATUS_DESCRIPTION,
-    })
-  ),
-  conclusion: Type.Optional(
-    Type.String({
-      description: GET_CI_STATUS_PARAM_CONCLUSION_DESCRIPTION,
-    })
-  ),
-});
+const getCIStatusSchema = Type.Object(
+  {
+    owner: nullable(
+      Type.String({
+        description: GET_CI_STATUS_PARAM_OWNER_DESCRIPTION,
+      })
+    ),
+    repo: nullable(
+      Type.String({
+        description: GET_CI_STATUS_PARAM_REPO_DESCRIPTION,
+      })
+    ),
+    pull_number: nullable(
+      Type.Integer({
+        description: GET_CI_STATUS_PARAM_PULL_NUMBER_DESCRIPTION,
+      })
+    ),
+    ref: nullable(
+      Type.String({
+        description: GET_CI_STATUS_PARAM_REF_DESCRIPTION,
+      })
+    ),
+    status: nullable(
+      Type.String({
+        description: GET_CI_STATUS_PARAM_STATUS_DESCRIPTION,
+      })
+    ),
+    conclusion: nullable(
+      Type.String({
+        description: GET_CI_STATUS_PARAM_CONCLUSION_DESCRIPTION,
+      })
+    ),
+  },
+  { additionalProperties: false }
+);
 
 type GetCIStatusToolParams = Static<typeof getCIStatusSchema>;
 
@@ -74,6 +78,7 @@ export function getCIStatusToolFactory(provider: PlatformProvider) {
     promptSnippet: GET_CI_STATUS_PROMPT_SNIPPET,
     promptGuidelines: GET_CI_STATUS_PROMPT_GUIDELINES(provider.type),
     parameters: getCIStatusSchema,
+    constrainedSampling: STRICT_JSON_SCHEMA,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_GET_CI_STATUS,
       cancellationDetails: {
@@ -83,12 +88,12 @@ export function getCIStatusToolFactory(provider: PlatformProvider) {
       },
       // fallow-ignore-next-line complexity
       prepareParams: (params: GetCIStatusToolParams): GetCIStatusParams => ({
-        ...(params.owner !== undefined ? { owner: params.owner } : {}),
-        ...(params.repo !== undefined ? { repo: params.repo } : {}),
-        ...(params.pull_number !== undefined ? { pull_number: params.pull_number } : {}),
-        ...(params.ref !== undefined ? { ref: params.ref } : {}),
-        ...(params.status !== undefined ? { status: params.status } : {}),
-        ...(params.conclusion !== undefined ? { conclusion: params.conclusion } : {}),
+        ...(isPresent(params.owner) ? { owner: params.owner } : {}),
+        ...(isPresent(params.repo) ? { repo: params.repo } : {}),
+        ...(isPresent(params.pull_number) ? { pull_number: params.pull_number } : {}),
+        ...(isPresent(params.ref) ? { ref: params.ref } : {}),
+        ...(isPresent(params.status) ? { status: params.status } : {}),
+        ...(isPresent(params.conclusion) ? { conclusion: params.conclusion } : {}),
       }),
       execute: async (params: GetCIStatusParams) =>
         provider.getCIStatus(params) as Promise<{

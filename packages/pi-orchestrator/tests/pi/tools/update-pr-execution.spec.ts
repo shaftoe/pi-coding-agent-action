@@ -35,11 +35,16 @@ describe('update_pull_request tool - execution', () => {
     expect(typeof githubIndex.updatePullRequest).toBe('function');
   });
 
-  test('parameters schema - all fields are optional', () => {
+  test('parameters schema is strict-compatible (all fields required-but-nullable)', () => {
     const schema = updatePullRequestTool.parameters as any;
-    if (Array.isArray(schema.required)) {
-      expect(schema.required.length).toBe(0);
-    }
+    expect(schema.additionalProperties).toBe(false);
+    expect(updatePullRequestTool.constrainedSampling).toEqual({
+      type: 'json_schema',
+      strict: 'prefer',
+    });
+    expect(schema.required).toEqual(
+      expect.arrayContaining(['pull_number', 'title', 'body', 'message', 'dryRun'])
+    );
   });
 
   test('execute calls provider.updatePullRequest with empty params when nothing provided', async () => {

@@ -66,11 +66,16 @@ describe('get_issue_or_pr_thread tool - execution', () => {
     expect(typeof githubIndex.getIssueOrPRThread).toBe('function');
   });
 
-  test('parameters schema - all fields are optional', () => {
+  test('parameters schema is strict-compatible (all fields required-but-nullable)', () => {
     const schema = getIssueOrPRThreadTool.parameters as any;
-    if (Array.isArray(schema.required)) {
-      expect(schema.required.length).toBe(0);
-    }
+    expect(schema.additionalProperties).toBe(false);
+    expect(getIssueOrPRThreadTool.constrainedSampling).toEqual({
+      type: 'json_schema',
+      strict: 'prefer',
+    });
+    expect(schema.required).toEqual(
+      expect.arrayContaining(['owner', 'repo', 'issue_number', 'max_comments'])
+    );
   });
 
   test('execute returns formatted thread when found', async () => {

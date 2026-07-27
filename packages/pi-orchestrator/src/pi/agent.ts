@@ -269,6 +269,12 @@ export class Agent {
         case 'agent_end':
           this.handleAgentEnd(event.messages);
           break;
+        case 'auto_retry_start':
+          this.handleAutoRetryStart(event);
+          break;
+        case 'auto_retry_end':
+          this.handleAutoRetryEnd(event);
+          break;
         case 'agent_settled':
           // The session has fully settled — no further retries, compactions,
           // or queued continuations will fire. Route the prompt-complete
@@ -413,6 +419,54 @@ export class Agent {
         this.lastAgentError = assistant.stopReason === 'error' ? assistant.errorMessage : undefined;
         break;
       }
+    }
+  }
+
+  /**
+   * Handle `auto_retry_start` session events.
+   *
+   * Pi auto-retries transient provider failures (network/DNS errors, 5xx,
+   * rate limits, early stream endings) per the configured retry policy. Each
+   * retry adds latency and token cost, so surface the start so operators can
+   * correlate slow/expensive runs. This event arrives on the raw session
+   * stream (not the `ExtensionAPI` `pi.on()` surface).
+   *
+   * @param event - The auto-retry-start payload.
+   * @private
+   */
+  private handleAutoRetryStart(event: {
+    attempt: number;
+    maxAttempts: number;
+    delayMs: number;
+    errorMessage: string;
+  }): void {
+    this.logger.info(
+      `[auto-retry] 🔄 provider call retrying — attempt ${event.attempt}/${event.maxAttempts} ` +
+        `after ${event.delayMs}ms (last error: ${event.errorMessage})`
+    );
+  }
+
+  /**
+   * Handle `auto_retry_end` session events.
+   *
+   * Fires when the auto-retry loop settles. Log recovery at info and
+   * exhaustion at warning — a failed retry loop usually precedes a
+   * session-level error that {@link handleAgentEnd} captures, but the
+   * warning makes the exhaustion visible in isolation too.
+   *
+   * @param event - The auto-retry-end payload.
+   * @private
+   */
+  private handleAutoRetryEnd(event: {
+    success: boolean;
+    attempt: number;
+    finalError?: string;
+  }): void {
+    if (event.success) {
+      this.logger.info(`[auto-retry] ✅ recovered on attempt ${event.attempt}`);
+    } else {
+      const detail = event.finalError ? `: ${event.finalError}` : '';
+      this.logger.warning(`[auto-retry] ❌ exhausted after attempt ${event.attempt}${detail}`);
     }
   }
 

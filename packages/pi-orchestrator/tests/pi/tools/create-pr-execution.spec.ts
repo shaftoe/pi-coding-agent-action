@@ -34,12 +34,15 @@ describe('create_pull_request tool - execution', () => {
     expect(typeof githubIndex.createPullRequest).toBe('function');
   });
 
-  test('parameters schema validates title as required', () => {
+  test('parameters schema is strict-compatible (title required, others required-but-nullable)', () => {
     const schema = createPRTool.parameters as any;
-    expect(schema.required).toContain('title');
-    expect(schema.required).not.toContain('body');
-    expect(schema.required).not.toContain('base');
-    expect(schema.required).not.toContain('dryRun');
+    // Under strict sampling every property is required; optionals become nullable.
+    expect(schema.required).toEqual(expect.arrayContaining(['title', 'body', 'base', 'dryRun']));
+    expect(schema.additionalProperties).toBe(false);
+    expect(createPRTool.constrainedSampling).toEqual({ type: 'json_schema', strict: 'prefer' });
+    // title stays a plain string (not nullable); body/base/dryRun are nullable.
+    expect(schema.properties.title.type).toBe('string');
+    expect(schema.properties.body.anyOf?.some((m: any) => m.type === 'null')).toBe(true);
   });
 
   test('execute calls provider.createPullRequest with title only', async () => {

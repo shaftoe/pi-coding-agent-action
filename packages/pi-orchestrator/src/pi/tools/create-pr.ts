@@ -14,36 +14,40 @@ import {
   CREATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_CREATE_PR } from './constants';
+import { nullable, STRICT_JSON_SCHEMA } from './schema';
 import type {
   CreatePullRequestParams,
   CreatePullRequestDetails,
   PlatformProvider,
 } from '../../platform';
-import { withCancellation } from './tool-execution';
+import { withCancellation, isPresent } from './tool-execution';
 
 /**
  * Schema for the create_pull_request tool.
  */
-const createPullRequestSchema = Type.Object({
-  title: Type.String({
-    description: CREATE_PULL_REQUEST_PARAM_TITLE_DESCRIPTION,
-  }),
-  body: Type.Optional(
-    Type.String({
-      description: CREATE_PULL_REQUEST_PARAM_BODY_DESCRIPTION,
-    })
-  ),
-  base: Type.Optional(
-    Type.String({
-      description: CREATE_PULL_REQUEST_PARAM_BASE_DESCRIPTION,
-    })
-  ),
-  dryRun: Type.Optional(
-    Type.Boolean({
-      description: CREATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
-    })
-  ),
-});
+const createPullRequestSchema = Type.Object(
+  {
+    title: Type.String({
+      description: CREATE_PULL_REQUEST_PARAM_TITLE_DESCRIPTION,
+    }),
+    body: nullable(
+      Type.String({
+        description: CREATE_PULL_REQUEST_PARAM_BODY_DESCRIPTION,
+      })
+    ),
+    base: nullable(
+      Type.String({
+        description: CREATE_PULL_REQUEST_PARAM_BASE_DESCRIPTION,
+      })
+    ),
+    dryRun: nullable(
+      Type.Boolean({
+        description: CREATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
+      })
+    ),
+  },
+  { additionalProperties: false }
+);
 
 type CreatePullRequestToolParams = Static<typeof createPullRequestSchema>;
 
@@ -61,6 +65,7 @@ export function createPRToolFactory(provider: PlatformProvider) {
     promptSnippet: CREATE_PULL_REQUEST_PROMPT_SNIPPET,
     promptGuidelines: CREATE_PULL_REQUEST_PROMPT_GUIDELINES,
     parameters: createPullRequestSchema,
+    constrainedSampling: STRICT_JSON_SCHEMA,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_CREATE_PR,
       cancellationDetails: {
@@ -73,13 +78,13 @@ export function createPRToolFactory(provider: PlatformProvider) {
       prepareParams: (params: CreatePullRequestToolParams) => {
         const { title, body, base, dryRun } = params;
         const prParams: CreatePullRequestParams = { title };
-        if (body !== undefined) {
+        if (isPresent(body)) {
           prParams.body = body;
         }
-        if (base !== undefined) {
+        if (isPresent(base)) {
           prParams.base = base;
         }
-        if (dryRun !== undefined) {
+        if (isPresent(dryRun)) {
           prParams.dryRun = dryRun;
         }
         return prParams;

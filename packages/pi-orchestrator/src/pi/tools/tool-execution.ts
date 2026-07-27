@@ -12,6 +12,22 @@ import type {
 } from '@earendil-works/pi-coding-agent';
 
 /**
+ * Type guard: true when `value` is neither `null` nor `undefined`.
+ *
+ * Strict-capable providers (OpenAI/Anthropic strict tool sampling) emit `null`
+ * for absent optional tool fields — our schemas model optionals as required-
+ * but-nullable via `nullable()`. Models without strict support may omit the key
+ * entirely (`undefined`). This guard normalises both so `prepareParams` can
+ * drop absent fields uniformly regardless of the provider.
+ *
+ * Uses strict `!==` checks (no loose `!=`) to satisfy the `eqeqeq` lint rule
+ * while still covering both nullish cases.
+ */
+export function isPresent<T>(value: T | null | undefined): value is T {
+  return value !== null && value !== undefined;
+}
+
+/**
  * Result of a cancelled tool execution.
  */
 export interface CancellationResult<TDetails> {
