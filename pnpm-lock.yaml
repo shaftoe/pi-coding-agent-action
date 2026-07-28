@@ -115,6 +115,9 @@ importers:
 
   packages/pi-action-bridge:
     dependencies:
+      '@alexanderfortin/pi-orchestrator':
+        specifier: workspace:*
+        version: link:../pi-orchestrator
       '@alexanderfortin/pi-platform-github':
         specifier: workspace:*
         version: link:../pi-platform-github

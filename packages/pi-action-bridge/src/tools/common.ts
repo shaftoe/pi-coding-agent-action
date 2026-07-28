@@ -11,6 +11,7 @@
  * Kept framework-agnostic: only `typebox` field schemas + a pure resolver.
  */
 import { Type } from 'typebox';
+import { nullable } from '@alexanderfortin/pi-orchestrator/pi/tools/schema';
 
 /** Canonical web URL used when no `server_url` is supplied (github.com). */
 export const DEFAULT_SERVER_URL = 'https://github.com';
@@ -20,9 +21,10 @@ export const DEFAULT_SERVER_URL = 'https://github.com';
  *
  * Blank / whitespace-only values fall back to {@link DEFAULT_SERVER_URL} so a
  * stray empty string never reaches `apiBaseUrlFromServerUrl` (which throws on
- * empty input).
+ * empty input). Accepts `null` because strict-capable providers emit `null` for
+ * absent optional (nullable) tool fields.
  */
-export function resolveServerUrl(value: string | undefined): string {
+export function resolveServerUrl(value: string | null | undefined): string {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : DEFAULT_SERVER_URL;
 }
@@ -37,8 +39,11 @@ export const ownerField = Type.String({ minLength: 1, description: 'Repository o
 /** `repo` field — repository name. */
 export const repoField = Type.String({ minLength: 1, description: 'Repository name.' });
 
-/** `server_url` field — optional forge web URL (defaults to github.com). */
-export const serverUrlField = Type.Optional(
+/** `server_url` field — optional forge web URL (defaults to github.com).
+ *
+ * Modelled as required-but-nullable (`string | null`) for strict JSON-schema
+ * compatibility; a `null` value is treated as "absent" by {@link resolveServerUrl}. */
+export const serverUrlField = nullable(
   Type.String({
     description:
       'Forge web URL (e.g. https://github.com, https://codeberg.org). Defaults to https://github.com.',

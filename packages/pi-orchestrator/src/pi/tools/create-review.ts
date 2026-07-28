@@ -22,7 +22,7 @@ import {
   CREATE_REVIEW_PARAM_COMMENT_BODY_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_CREATE_REVIEW } from './constants';
-import { nullable, STRICT_JSON_SCHEMA } from './schema';
+import { nullable, PREFER_STRICT_JSON_SCHEMA } from './schema';
 import type { CreateReviewParams, CreateReviewDetails, PlatformProvider } from '../../platform';
 import { withCancellation, isPresent } from './tool-execution';
 
@@ -106,7 +106,7 @@ export function createReviewToolFactory(provider: PlatformProvider) {
     promptSnippet: CREATE_REVIEW_PROMPT_SNIPPET,
     promptGuidelines: CREATE_REVIEW_PROMPT_GUIDELINES,
     parameters: createReviewSchema,
-    constrainedSampling: STRICT_JSON_SCHEMA,
+    constrainedSampling: PREFER_STRICT_JSON_SCHEMA,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_CREATE_REVIEW,
       cancellationDetails: {

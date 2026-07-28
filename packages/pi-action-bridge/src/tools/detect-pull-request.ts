@@ -14,6 +14,7 @@ import type {
   ExtensionContext,
   ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
+import { PREFER_STRICT_JSON_SCHEMA } from '@alexanderfortin/pi-orchestrator/pi/tools/schema';
 import { createGitInspector, pickRemote } from '../git';
 import { createOctokitFindPr } from '../octokit';
 import { parseRemoteUrl } from '../remote';
@@ -248,7 +249,8 @@ export const detectPullRequestTool: ToolDefinition<
   promptGuidelines: [
     'Use detect_pull_request before /handoff or /pickup, or whenever you need to know which PR the local branch belongs to. Do not ask the user for a PR number if this tool already resolves one.',
   ],
-  parameters: Type.Object({}),
+  parameters: Type.Object({}, { additionalProperties: false }),
+  constrainedSampling: PREFER_STRICT_JSON_SCHEMA,
   async execute(
     _toolCallId: string,
     _params: Record<string, never>,

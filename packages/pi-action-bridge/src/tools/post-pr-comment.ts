@@ -20,6 +20,7 @@ import type {
 import { createOctokitPostComment } from '../octokit';
 import type { PostCommentFn, PostPrCommentDetails } from '../types';
 import { ownerField, prNumberField, repoField, resolveServerUrl, serverUrlField } from './common';
+import { PREFER_STRICT_JSON_SCHEMA } from '@alexanderfortin/pi-orchestrator/pi/tools/schema';
 
 /**
  * Post a comment, returning structured details (or an aborted sentinel).
@@ -65,13 +66,16 @@ export function summarizePostComment(details: PostPrCommentDetails): string {
   return `Posted comment ${details.id} on ${details.owner}/${details.repo}#${details.number}: ${details.html_url}`;
 }
 
-const paramsSchema = Type.Object({
-  owner: ownerField,
-  repo: repoField,
-  number: prNumberField('Pull request (or issue) number to comment on.'),
-  body: Type.String({ minLength: 1, description: 'Markdown body of the comment.' }),
-  server_url: serverUrlField,
-});
+const paramsSchema = Type.Object(
+  {
+    owner: ownerField,
+    repo: repoField,
+    number: prNumberField('Pull request (or issue) number to comment on.'),
+    body: Type.String({ minLength: 1, description: 'Markdown body of the comment.' }),
+    server_url: serverUrlField,
+  },
+  { additionalProperties: false }
+);
 
 /**
  * The `post_pr_comment` tool definition.
@@ -91,6 +95,7 @@ export const postPrCommentTool: ToolDefinition<typeof paramsSchema, PostPrCommen
     'Resolve owner/repo/number via detect_pull_request when the user does not pass an explicit PR number.',
   ],
   parameters: paramsSchema,
+  constrainedSampling: PREFER_STRICT_JSON_SCHEMA,
   async execute(
     _toolCallId: string,
     params: {
@@ -98,7 +103,7 @@ export const postPrCommentTool: ToolDefinition<typeof paramsSchema, PostPrCommen
       repo: string;
       number: number;
       body: string;
-      server_url?: string;
+      server_url: string | null;
     },
     signal: AbortSignal | undefined,
     _onUpdate: AgentToolUpdateCallback<PostPrCommentDetails> | undefined,

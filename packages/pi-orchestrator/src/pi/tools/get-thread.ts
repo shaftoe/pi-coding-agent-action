@@ -14,7 +14,7 @@ import {
   GET_ISSUE_PR_THREAD_PARAM_MAX_COMMENTS_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_GET_THREAD } from './constants';
-import { nullable, STRICT_JSON_SCHEMA } from './schema';
+import { nullable, PREFER_STRICT_JSON_SCHEMA } from './schema';
 import { formatThreadAsText } from './common';
 import type { IssueOrPRThread, GetIssueOrPRThreadParams, PlatformProvider } from '../../platform';
 import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
@@ -93,7 +93,7 @@ export function getIssueOrPRThreadToolFactory(provider: PlatformProvider) {
     promptSnippet: GET_ISSUE_PR_THREAD_PROMPT_SNIPPET(provider.type),
     promptGuidelines: GET_ISSUE_PR_THREAD_PROMPT_GUIDELINES(provider.type),
     parameters: getIssueOrPRThreadSchema,
-    constrainedSampling: STRICT_JSON_SCHEMA,
+    constrainedSampling: PREFER_STRICT_JSON_SCHEMA,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_GET_THREAD,
       cancellationDetails: {

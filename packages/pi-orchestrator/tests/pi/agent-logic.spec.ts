@@ -756,6 +756,79 @@ describe('Agent', () => {
     });
   });
 
+  describe('summarization_retry event handling', () => {
+    test('summarization_retry_scheduled logs an info line with attempt/maxAttempts/delay/error', async () => {
+      const { core: testCore, messages: infoMessages } = createCoreWithInfoCapture();
+      const agent = new Agent(testCore as any, mockPlatformProvider, defaultAgentConfig);
+      await agent.ready();
+
+      injectMockSession(
+        agent,
+        buildRawEventSession([
+          {
+            type: 'summarization_retry_scheduled',
+            attempt: 1,
+            maxAttempts: 2,
+            delayMs: 800,
+            errorMessage: 'summary timeout',
+          },
+          { type: 'summarization_retry_finished' },
+          { type: 'agent_settled' },
+        ])
+      );
+
+      await agent.run('Hello');
+
+      const retryLine = infoMessages.find(m => m.startsWith('[summarization-retry] 🔄'));
+      expect(retryLine).toBeDefined();
+      expect(retryLine).toContain('attempt 1/2');
+      expect(retryLine).toContain('800ms');
+      expect(retryLine).toContain('summary timeout');
+    });
+
+    test('summarization_retry_attempt_start logs a debug line naming the source', async () => {
+      const debug = vi.fn();
+      const testCore = { ...mockCoreAdapter, debug };
+      const agent = new Agent(testCore as any, mockPlatformProvider, defaultAgentConfig);
+      await agent.ready();
+
+      injectMockSession(
+        agent,
+        buildRawEventSession([
+          { type: 'summarization_retry_attempt_start', source: 'compaction', reason: 'overflow' },
+          { type: 'agent_settled' },
+        ])
+      );
+
+      await agent.run('Hello');
+
+      const debugLine = debug.mock.calls.find(
+        (c: unknown[]) =>
+          typeof c[0] === 'string' && (c[0] as string).startsWith('[summarization-retry] ▶️')
+      );
+      expect(debugLine).toBeDefined();
+      expect(debugLine![0]).toContain('compaction');
+      expect(debugLine![0]).toContain('overflow');
+    });
+
+    test('summarization_retry_finished logs an info line', async () => {
+      const { core: testCore, messages: infoMessages } = createCoreWithInfoCapture();
+      const agent = new Agent(testCore as any, mockPlatformProvider, defaultAgentConfig);
+      await agent.ready();
+
+      injectMockSession(
+        agent,
+        buildRawEventSession([{ type: 'summarization_retry_finished' }, { type: 'agent_settled' }])
+      );
+
+      await agent.run('Hello');
+
+      const finishedLine = infoMessages.find(m => m.startsWith('[summarization-retry] ✅'));
+      expect(finishedLine).toBeDefined();
+      expect(finishedLine).toContain('finished');
+    });
+  });
+
   describe('loadedTools validation', () => {
     test('throws error when loadedTools contains unknown tool names', async () => {
       const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {

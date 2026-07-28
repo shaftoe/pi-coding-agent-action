@@ -25,7 +25,7 @@ import {
   GET_PR_DIFF_PARAM_IGNORE_FILES_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_GET_PR_DIFF } from './constants';
-import { nullable, STRICT_JSON_SCHEMA } from './schema';
+import { nullable, PREFER_STRICT_JSON_SCHEMA } from './schema';
 import { withCancellation } from './tool-execution';
 import type { PlatformProvider } from '../../platform';
 import type { DiffConfig } from '../../types';
@@ -311,7 +311,7 @@ export function getPRDiffToolFactory(provider: PlatformProvider, config?: DiffCo
     promptSnippet: GET_PR_DIFF_PROMPT_SNIPPET,
     promptGuidelines: GET_PR_DIFF_PROMPT_GUIDELINES(provider.type),
     parameters: getPRDiffSchema,
-    constrainedSampling: STRICT_JSON_SCHEMA,
+    constrainedSampling: PREFER_STRICT_JSON_SCHEMA,
     execute: withCancellation<GetPRDiffToolParams, GetPRDiffDetails, GetPRDiffToolParams>({
       cancellationMessage: CANCELLATION_MESSAGE_GET_PR_DIFF,
       cancellationDetails: {

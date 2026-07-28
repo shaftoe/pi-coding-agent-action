@@ -19,7 +19,7 @@ import {
   GET_CI_STATUS_PARAM_CONCLUSION_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_GET_CI_STATUS } from './constants';
-import { nullable, STRICT_JSON_SCHEMA } from './schema';
+import { nullable, PREFER_STRICT_JSON_SCHEMA } from './schema';
 import { withCancellation, isPresent } from './tool-execution';
 import type { PlatformProvider, GetCIStatusParams, GetCIStatusDetails } from '../../platform';
 
@@ -78,7 +78,7 @@ export function getCIStatusToolFactory(provider: PlatformProvider) {
     promptSnippet: GET_CI_STATUS_PROMPT_SNIPPET,
     promptGuidelines: GET_CI_STATUS_PROMPT_GUIDELINES(provider.type),
     parameters: getCIStatusSchema,
-    constrainedSampling: STRICT_JSON_SCHEMA,
+    constrainedSampling: PREFER_STRICT_JSON_SCHEMA,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_GET_CI_STATUS,
       cancellationDetails: {

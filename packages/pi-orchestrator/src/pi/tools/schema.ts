@@ -2,7 +2,7 @@
  * @file TypeBox schema helpers for strict JSON-schema tool definitions.
  *
  * Our custom tools opt into provider-side strict JSON-schema sampling via
- * {@link STRICT_JSON_SCHEMA}. Both OpenAI and Anthropic strict mode require
+ * {@link PREFER_STRICT_JSON_SCHEMA}. Both OpenAI and Anthropic strict mode require
  * the tool parameter schema to:
  *
  * 1. Set `additionalProperties: false` on every object, and
@@ -46,17 +46,18 @@ export function nullable<T extends TSchema>(schema: T) {
 /**
  * Request provider-side strict JSON-schema enforcement for a tool.
  *
- * `strict: 'prefer'` (not `'require'`) so models/providers without strict-mode
- * support fall back to normal tool calling instead of failing the request. On
- * strict-capable models (OpenAI GPT-5 family, Anthropic Claude, Bedrock
- * Converse, Mistral, Gemini 3) the provider enforces the JSON schema
- * server-side, reducing malformed tool-call arguments.
+ * The constant name reflects the configured `strict: 'prefer'` (not
+ * `'require'`): models/providers without strict-mode support fall back to
+ * normal tool calling instead of failing the request. On strict-capable models
+ * (OpenAI GPT-5 family, Anthropic Claude, Bedrock Converse, Mistral, Gemini 3)
+ * the provider enforces the JSON schema server-side, reducing malformed
+ * tool-call arguments.
  *
  * Pair with `additionalProperties: false` and {@link nullable} optionals so the
  * schema is strict-compatible; otherwise strict-capable providers reject the
  * request.
  */
-export const STRICT_JSON_SCHEMA = {
+export const PREFER_STRICT_JSON_SCHEMA = {
   type: 'json_schema',
   strict: 'prefer',
 } as const;

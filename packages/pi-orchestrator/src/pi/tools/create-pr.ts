@@ -14,7 +14,7 @@ import {
   CREATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_CREATE_PR } from './constants';
-import { nullable, STRICT_JSON_SCHEMA } from './schema';
+import { nullable, PREFER_STRICT_JSON_SCHEMA } from './schema';
 import type {
   CreatePullRequestParams,
   CreatePullRequestDetails,
@@ -65,7 +65,7 @@ export function createPRToolFactory(provider: PlatformProvider) {
     promptSnippet: CREATE_PULL_REQUEST_PROMPT_SNIPPET,
     promptGuidelines: CREATE_PULL_REQUEST_PROMPT_GUIDELINES,
     parameters: createPullRequestSchema,
-    constrainedSampling: STRICT_JSON_SCHEMA,
+    constrainedSampling: PREFER_STRICT_JSON_SCHEMA,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_CREATE_PR,
       cancellationDetails: {

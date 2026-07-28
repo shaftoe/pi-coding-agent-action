@@ -15,7 +15,7 @@ import {
   UPDATE_PULL_REQUEST_PARAM_DRY_RUN_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_UPDATE_PR } from './constants';
-import { nullable, STRICT_JSON_SCHEMA } from './schema';
+import { nullable, PREFER_STRICT_JSON_SCHEMA } from './schema';
 import type {
   UpdatePullRequestParams,
   UpdatePullRequestDetails,
@@ -73,7 +73,7 @@ export function updatePullRequestToolFactory(provider: PlatformProvider) {
     promptSnippet: UPDATE_PULL_REQUEST_PROMPT_SNIPPET,
     promptGuidelines: UPDATE_PULL_REQUEST_PROMPT_GUIDELINES(provider.type),
     parameters: updatePullRequestSchema,
-    constrainedSampling: STRICT_JSON_SCHEMA,
+    constrainedSampling: PREFER_STRICT_JSON_SCHEMA,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_UPDATE_PR,
       cancellationDetails: {

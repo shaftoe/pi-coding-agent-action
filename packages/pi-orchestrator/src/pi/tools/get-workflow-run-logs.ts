@@ -17,7 +17,7 @@ import {
   GET_WORKFLOW_RUN_LOGS_PARAM_MAX_BYTES_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_GET_WORKFLOW_RUN_LOGS } from './constants';
-import { nullable, STRICT_JSON_SCHEMA } from './schema';
+import { nullable, PREFER_STRICT_JSON_SCHEMA } from './schema';
 import { withCancellation, isPresent } from './tool-execution';
 import type {
   PlatformProvider,
@@ -68,7 +68,7 @@ export function getWorkflowRunLogsToolFactory(provider: PlatformProvider) {
     promptSnippet: GET_WORKFLOW_RUN_LOGS_PROMPT_SNIPPET,
     promptGuidelines: GET_WORKFLOW_RUN_LOGS_PROMPT_GUIDELINES,
     parameters: getWorkflowRunLogsSchema,
-    constrainedSampling: STRICT_JSON_SCHEMA,
+    constrainedSampling: PREFER_STRICT_JSON_SCHEMA,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_GET_WORKFLOW_RUN_LOGS,
       cancellationDetails: {
