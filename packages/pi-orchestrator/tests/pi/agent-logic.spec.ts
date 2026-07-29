@@ -823,7 +823,7 @@ describe('Agent', () => {
 
       await agent.run('Hello');
 
-      const finishedLine = infoMessages.find(m => m.startsWith('[summarization-retry] ✅'));
+      const finishedLine = infoMessages.find(m => m.startsWith('[summarization-retry] •'));
       expect(finishedLine).toBeDefined();
       expect(finishedLine).toContain('finished');
     });

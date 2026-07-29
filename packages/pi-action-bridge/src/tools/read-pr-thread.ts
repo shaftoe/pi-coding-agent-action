@@ -24,6 +24,7 @@ import {
   nullable,
   PREFER_STRICT_JSON_SCHEMA,
 } from '@alexanderfortin/pi-orchestrator/pi/tools/schema';
+import { isPresent } from '@alexanderfortin/pi-orchestrator/pi/tools/tool-execution';
 
 /** Per-comment body cap in the text summary (full bodies stay in `details`). */
 const MAX_COMMENT_BODY_CHARS = 2000;
@@ -178,9 +179,7 @@ export const readPrThreadTool: ToolDefinition<typeof paramsSchema, ReadPrThreadD
         owner: params.owner,
         repo: params.repo,
         number: params.number,
-        ...(params.max_comments !== null && params.max_comments !== undefined
-          ? { maxComments: params.max_comments }
-          : {}),
+        ...(isPresent(params.max_comments) ? { maxComments: params.max_comments } : {}),
       },
       signal
     );
