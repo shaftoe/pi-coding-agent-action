@@ -128,6 +128,27 @@ export class ActionOrchestrator {
     } catch (e) {
       await this.handleUncaughtError(e, startTime, reaction, pi);
       throw e;
+    } finally {
+      this.disposeAgentBestEffort(pi);
+    }
+  }
+
+  /**
+   * Dispose the Pi session after all exports, usage collection, and finalization
+   * are complete. Disposal closes provider-owned resources such as the OpenAI
+   * Codex WebSocket cache, whose five-minute idle timer otherwise keeps a
+   * headless Node.js process alive after the review has finished.
+   */
+  private disposeAgentBestEffort(pi: PiAgent | undefined): void {
+    if (!pi) {
+      return;
+    }
+
+    try {
+      pi.dispose();
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      this.logger.notice(`failed to dispose Pi agent session: ${errorMessage}`);
     }
   }
 

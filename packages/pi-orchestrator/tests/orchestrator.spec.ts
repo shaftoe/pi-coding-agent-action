@@ -133,11 +133,13 @@ describe('ActionOrchestrator', () => {
     const exportSessionHtmlMock = vi.fn(async (outputPath: string) => outputPath);
     const exportSessionJsonlMock = vi.fn(async (outputPath: string) => outputPath);
     const getSessionStatsMock = vi.fn(() => undefined);
+    const disposeMock = vi.fn();
     mockPiAgent = {
       run: runMock as any,
       getSessionStats: getSessionStatsMock as any,
       exportSessionHtml: exportSessionHtmlMock as any,
       exportSessionJsonl: exportSessionJsonlMock as any,
+      dispose: disposeMock,
     };
 
     mockPiFactory = vi.fn(() => mockPiAgent);
@@ -273,6 +275,36 @@ describe('ActionOrchestrator', () => {
       await orchestrator.execute();
 
       expect(mockGit.deleteReaction).toHaveBeenCalledWith(mockReaction);
+    });
+
+    test('disposes the Pi session after successful finalization', async () => {
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      expect(mockPiAgent.dispose).toHaveBeenCalledTimes(1);
+      expect(mockGit.createFinalComment).toHaveBeenCalledBefore(mockPiAgent.dispose as any);
+    });
+
+    test('disposes the Pi session when the run throws', async () => {
+      setAgentRunError(mockPiAgent, new Error('API error'));
+
+      const orchestrator = createOrchestrator();
+      await expect(orchestrator.execute()).rejects.toThrow('API error');
+
+      expect(mockPiAgent.dispose).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not fail a successful run when session disposal throws', async () => {
+      (mockPiAgent.dispose as any).mockImplementation(() => {
+        throw new Error('close failed');
+      });
+
+      const orchestrator = createOrchestrator();
+      await expect(orchestrator.execute()).resolves.toBeUndefined();
+
+      expect(mockCore.notice).toHaveBeenCalledWith(
+        'failed to dispose Pi agent session: close failed'
+      );
     });
 
     test('logs agent session completed banner after successful run', async () => {

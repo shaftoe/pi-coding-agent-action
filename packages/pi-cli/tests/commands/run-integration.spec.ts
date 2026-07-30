@@ -84,6 +84,7 @@ vi.mock('../../src/adapters/pi-agent.js', () => ({
       getSessionStats: () => undefined,
       exportSessionHtml: () => Promise.resolve(''),
       exportSessionJsonl: () => Promise.resolve(''),
+      dispose: () => {},
     };
   },
 }));

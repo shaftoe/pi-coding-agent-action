@@ -112,6 +112,8 @@ export interface PiAgent {
   exportSessionHtml(outputPath: string): Promise<string>;
   /** Export the session as a JSONL file to the given path. */
   exportSessionJsonl(outputPath: string): Promise<string>;
+  /** Release the underlying session and any provider resources it owns. */
+  dispose(): void;
 }
 
 /**

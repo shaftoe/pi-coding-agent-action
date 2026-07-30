@@ -22,6 +22,7 @@ function createStubAgent(
     getSessionStats: Agent['getSessionStats'];
     exportSessionHtml: Agent['exportSessionHtml'];
     exportSessionJsonl: Agent['exportSessionJsonl'];
+    dispose: Agent['dispose'];
   }> = {}
 ): Agent {
   return {
@@ -32,6 +33,7 @@ function createStubAgent(
     getSessionStats: overrides.getSessionStats ?? vi.fn(() => undefined),
     exportSessionHtml: overrides.exportSessionHtml ?? vi.fn(async () => '/tmp/out.html'),
     exportSessionJsonl: overrides.exportSessionJsonl ?? vi.fn(async () => '/tmp/out.jsonl'),
+    dispose: overrides.dispose ?? vi.fn(),
   } as unknown as Agent;
 }
 
@@ -52,6 +54,7 @@ describe('wrapAgent', () => {
     }));
     const exportSessionHtml = vi.fn(async () => '/tmp/session.html');
     const exportSessionJsonl = vi.fn(async () => '/tmp/session.jsonl');
+    const dispose = vi.fn();
 
     const agent = createStubAgent({
       ready,
@@ -59,6 +62,7 @@ describe('wrapAgent', () => {
       getSessionStats,
       exportSessionHtml,
       exportSessionJsonl,
+      dispose,
     });
 
     const wrapped: PiAgent = wrapAgent(agent);
@@ -77,6 +81,7 @@ describe('wrapAgent', () => {
     });
     expect(await wrapped.exportSessionHtml('/x')).toBe('/tmp/session.html');
     expect(await wrapped.exportSessionJsonl('/y')).toBe('/tmp/session.jsonl');
+    wrapped.dispose();
 
     expect(ready).toHaveBeenCalledTimes(1);
     expect(run).toHaveBeenCalledTimes(1);
@@ -84,6 +89,7 @@ describe('wrapAgent', () => {
     expect(getSessionStats).toHaveBeenCalledTimes(1);
     expect(exportSessionHtml).toHaveBeenCalledWith('/x');
     expect(exportSessionJsonl).toHaveBeenCalledWith('/y');
+    expect(dispose).toHaveBeenCalledTimes(1);
   });
 
   test('run() always calls ready() before run()', async () => {

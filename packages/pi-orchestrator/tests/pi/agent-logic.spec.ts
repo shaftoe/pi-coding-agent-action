@@ -982,6 +982,24 @@ describe('Agent', () => {
     });
   });
 
+  describe('dispose', () => {
+    test('disposes the underlying SDK session', () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, defaultAgentConfig);
+      const dispose = vi.fn();
+      (agent as unknown as { session: { dispose: () => void } }).session = { dispose };
+
+      agent.dispose();
+
+      expect(dispose).toHaveBeenCalledTimes(1);
+    });
+
+    test('is safe before the SDK session is initialized', () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, defaultAgentConfig);
+
+      expect(() => agent.dispose()).not.toThrow();
+    });
+  });
+
   describe('exportSessionJsonl', () => {
     test('delegates to session.exportToJsonl', async () => {
       const agent = createRealAgent();

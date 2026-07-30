@@ -384,6 +384,17 @@ export class Agent {
   }
 
   /**
+   * Release the underlying SDK session and its provider resources.
+   *
+   * In particular, the OpenAI Codex transport caches a reusable WebSocket
+   * for five minutes. `AgentSession.dispose()` closes that socket and clears
+   * its expiry timer so headless callers can exit immediately.
+   */
+  dispose(): void {
+    this.session?.dispose();
+  }
+
+  /**
    * Handle `message_update` session events.
    *
    * Routes text deltas to the output buffer and thinking deltas/completion
@@ -615,6 +626,9 @@ export function wrapAgent(agent: Agent): PiAgent {
     },
     async exportSessionJsonl(outputPath: string) {
       return agent.exportSessionJsonl(outputPath);
+    },
+    dispose() {
+      agent.dispose();
     },
   };
 }
