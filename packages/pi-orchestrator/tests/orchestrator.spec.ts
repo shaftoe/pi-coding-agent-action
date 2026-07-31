@@ -307,6 +307,19 @@ describe('ActionOrchestrator', () => {
       );
     });
 
+    test('logs non-Error session disposal failures', async () => {
+      (mockPiAgent.dispose as any).mockImplementation(() => {
+        throw 'close failed';
+      });
+
+      const orchestrator = createOrchestrator();
+      await expect(orchestrator.execute()).resolves.toBeUndefined();
+
+      expect(mockCore.notice).toHaveBeenCalledWith(
+        'failed to dispose Pi agent session: close failed'
+      );
+    });
+
     test('logs agent session completed banner after successful run', async () => {
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
