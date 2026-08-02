@@ -20,7 +20,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "tsx scripts/bump-readme-version.ts ${nextRelease.version} && pnpm run sync-versions && pnpm run sync-lockfile && pnpm run update-readme && pnpm run package"
+        "prepareCmd": "pnpm exec tsx scripts/bump-readme-version.ts ${nextRelease.version} && pnpm run sync-versions && pnpm run sync-lockfile && pnpm run update-readme && pnpm run package"
       }
     ],
     [

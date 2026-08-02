@@ -4,8 +4,11 @@
  *
  * Called by the @semantic-release/exec plugin during the release process.
  * The next version is passed as the first CLI argument by the `prepareCmd`
- * (`tsx scripts/bump-readme-version.ts ${nextRelease.version}`), or read from
- * the `npm_package_version` env var set by semantic-release.
+ * (`pnpm exec tsx scripts/bump-readme-version.ts ${nextRelease.version}`),
+ * or read from the `npm_package_version` env var set by semantic-release.
+ * `pnpm exec` is required so the local `node_modules/.bin/tsx` binary is on
+ * PATH — the exec plugin runs prepareCmd via the system shell, which does not
+ * include `node_modules/.bin` (unlike `pnpm run <script>`).
  *
  * Note: package.json version bumping is handled by @semantic-release/npm
  * with npmPublish:false, so this script only needs to handle README.md.
