@@ -497,6 +497,32 @@ See the [Custom Provider documentation](https://github.com/badlogic/pi-mono/blob
 >
 > Refer to <https://pi.dev/docs/latest/custom-provider> for details.
 
+### AWS Bedrock
+
+The `amazon-bedrock` provider runs models hosted on [AWS Bedrock](https://aws.amazon.com/bedrock/) (Anthropic Claude, Amazon Nova, Meta Llama, Mistral, and many others) through the Converse Stream API. Model IDs use Bedrock's native format (e.g. `anthropic.claude-sonnet-4-5-20250929-v1:0`, `amazon.nova-pro-v1:0`); see the [Pi providers list](https://pi.dev/docs/latest) for the full catalogue.
+
+> [!IMPORTANT]
+> Bedrock authenticates through the **AWS SDK credential chain** — it does **not** use the action's `token` input. Configure AWS credentials the same way you would for any AWS SDK call: with the official [`configure-aws-credentials`](https://github.com/aws-actions/configure-aws-credentials) action, an OIDC role, an `AWS_PROFILE`, or by exporting `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` (a `AWS_BEARER_TOKEN_BEDROCK` bearer token is also supported). The configured identity must be allowed `bedrock:InvokeModelWithResponseStream` on the target model.
+
+```yaml
+- name: Configure AWS credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: arn:aws:iam::123456789012:role/pi-agent
+    aws-region: us-east-1
+
+- name: Run Pi agent on Bedrock
+  uses: shaftoe/pi-coding-agent-action@v2
+  with:
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    provider: amazon-bedrock
+    model: anthropic.claude-sonnet-4-5-20250929-v1:0
+    # No `token` — Bedrock uses the AWS credentials configured above
+```
+
+> [!NOTE]
+> The Bedrock implementation (and its `@aws-sdk/client-bedrock-runtime` dependency) is **bundled into `dist/index.js`** and statically registered at startup, so it works out of the box — no runtime `node_modules` required. This adds ~500 KB to the action bundle. (Scoped to the action only; the `pi-cli` package is unaffected.)
+
 ### Disabling Built-in Extensions
 
 By default the action loads all built-in GitHub tools (see [Custom Tools](#custom-tools) for the full list) to help Pi better interact with GitHub Actions environment without relying on external tools like `gh` or special skills setup. If you want Pi to use only your own custom extensions (or none at all), set `load_builtin_extensions` to `false`:
@@ -805,7 +831,7 @@ For complex, multi-step tasks that generate a lot of context (e.g. large code re
 | `platform` | Git hosting platform the action is running on: `github` (default), `codeberg`, `forgejo`, or `gitea` (alias for `forgejo`). Determines platform-specific behaviour such as the action-run URL format in the "View action run" footer. The platform is **no longer auto-detected** from the server URL — set it explicitly when running on Forgejo/Codeberg/Gitea (e.g. `platform: forgejo`) | No | `github` |
 | `pr_number` | Pull request number to target. Use with `workflow_dispatch` to run the agent on a specific PR without a triggering event. When set, the action fetches PR context from the API and targets all operations at the specified PR | No | - |
 | `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
-| `provider` | LLM provider (openai, google, anthropic, etc.) | Yes | - |
+| `provider` | LLM provider (openai, google, anthropic, amazon-bedrock, etc.) | Yes | - |
 | `share_session` | Share the session like pi's `/share` command: upload the exported HTML to a gist and surface a viewer link. Uses GitHub Gists by default (`share_gist_provider: github`) or a self-hosted Opengist instance. Auto-enables `export_session_html` | No | `false` |
 | `share_gist_provider` | Storage backend for `share_session`: `github` (GitHub Gists + pi.dev viewer) or `opengist` (self-hosted instance; requires `share_gist_api_url`) | No | `github` |
 | `share_gist_api_url` | API URL for the share gist provider. Required for `opengist` (e.g. `https://gist.l3x.in/api/gists`); optional override for `github` | No | - |
