@@ -9,6 +9,8 @@
 import * as path from 'node:path';
 import * as core from '@actions/core';
 import * as github from '@actions/github';
+import { bedrockProviderModule } from '@earendil-works/pi-ai/bedrock-provider';
+import { setBedrockProviderModule } from '@earendil-works/pi-ai/compat';
 import { ActionOrchestrator } from '@alexanderfortin/pi-orchestrator';
 import { RealCoreAdapter } from './adapters/core-adapter';
 import { RealGitAdapter } from './adapters/git-adapter';
@@ -41,6 +43,27 @@ function ensurePackageDirOverride(): void {
 }
 
 /**
+ * Statically register the bedrock provider so it works in the bundled action.
+ *
+ * The pi-ai SDK lazily loads provider implementations through a
+ * variable-specifier dynamic `import()` — deliberately hidden from bundlers
+ * so that heavy Node-only SDKs (e.g. AWS) aren't pulled into browser/binary
+ * builds. esbuild cannot follow a non-literal specifier, so the bedrock
+ * implementation is **not** inlined into `dist/index.js`. At runtime the
+ * lazy wrapper resolves `import("./bedrock-converse-stream.js")` relative
+ * to `dist/index.js`, but that file doesn't exist — causing
+ * `Cannot find module '.../dist/bedrock-converse-stream.js'`.
+ *
+ * `setBedrockProviderModule()` is the SDK's escape hatch for bundled
+ * environments: registering a statically imported module makes the lazy
+ * wrapper skip the dynamic import entirely. This mirrors the SDK's own Bun
+ * binary build (`bun/register-bedrock.js`).
+ */
+function ensureBedrockProviderRegistered(): void {
+  setBedrockProviderModule(bedrockProviderModule);
+}
+
+/**
  * Run the Pi coding agent end-to-end.
  *
  * Creates real adapters for Core, Git platform, and Pi agent, gathers
@@ -54,6 +77,10 @@ export async function run() {
   // Set PI_PACKAGE_DIR once at startup so the SDK's getPackageDir()
   // resolves to the bundled assets in dist/pi-sdk/.
   ensurePackageDirOverride();
+
+  // Register the bedrock provider statically so the SDK's lazy-loading
+  // mechanism doesn't try to dynamically import a non-existent file.
+  ensureBedrockProviderRegistered();
 
   const coreAdapter = new RealCoreAdapter();
   const config = gatherActionsConfig();
