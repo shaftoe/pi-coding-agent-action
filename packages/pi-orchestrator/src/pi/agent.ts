@@ -13,6 +13,7 @@
 import {
   createAgentSessionFromServices,
   createAgentSessionServices,
+  CredentialSynchronizationError,
   ModelRuntime,
   SessionManager,
   SettingsManager,
@@ -146,7 +147,7 @@ export class Agent {
 
     if (this.config.token) {
       this.logger.debug(`[auth] Setting api_key token for ${this.config.provider} provider`);
-      await this.modelRuntime.setRuntimeApiKey(this.config.provider, this.config.token);
+      await this.applyRuntimeApiKey(this.config.token);
     }
 
     if (this.config.baseUrl) {
@@ -308,6 +309,55 @@ export class Agent {
     this.session.subscribe(this.sessionEventHandler);
 
     return this;
+  }
+
+  /**
+   * Apply the configured runtime API key, recovering from a credential-sync
+   * failure with a clear, actionable message.
+   *
+   * `ModelRuntime.setRuntimeApiKey()` commits the credential to the store and
+   * then synchronises the in-memory model/auth snapshot (local composition +
+   * availability recompute). If the credential commits but that local sync
+   * fails, the SDK throws {@link CredentialSynchronizationError} rather than
+   * leaving the runtime half-synchronised — which would otherwise surface as
+   * a confusing downstream "Model not found".
+   *
+   * The key was already saved, so we attempt one explicit, forced catalog
+   * refresh to recover (the documented remedy when remote freshness is
+   * needed). If that also fails we rethrow a message that names the provider
+   * and points at the most likely-affected inputs.
+   *
+   * @param token - The API key to set. Caller guarantees it is non-empty.
+   * @private
+   */
+  private async applyRuntimeApiKey(token: string): Promise<void> {
+    try {
+      await this.modelRuntime.setRuntimeApiKey(this.config.provider, token);
+    } catch (error) {
+      if (!(error instanceof CredentialSynchronizationError)) {
+        throw error;
+      }
+      const providerId = error.providerId;
+      this.logger.warning(
+        `[auth] API key for "${providerId}" was saved, but the model state ` +
+          'could not be synchronized — attempting a catalog refresh to recover'
+      );
+      const { aborted, errors } = await this.modelRuntime.refresh({
+        providers: [providerId],
+        allowNetwork: true,
+        force: true,
+      });
+      const refreshError = errors.get(providerId);
+      if (aborted || refreshError) {
+        throw new Error(
+          `Could not synchronize model state for provider "${providerId}" after setting its API key. ` +
+            'The key was saved, but the model catalog could not be refreshed ' +
+            `(${refreshError ? refreshError.message : 'refresh aborted'}). ` +
+            'Check that the `provider`, `model`, and `base_url` inputs are valid for this provider.',
+          { cause: error }
+        );
+      }
+    }
   }
 
   /**

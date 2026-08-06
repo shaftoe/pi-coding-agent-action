@@ -4,8 +4,9 @@
  * Tests the Pi agent wrapper including session stats handling.
  */
 
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { resolve } from 'node:path';
+import { CredentialSynchronizationError, ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { buildMockSession, injectMockSession, userHelloMessage } from './helpers/agent-session';
 import type { MockSession, MockSessionEvent } from './helpers/agent-session';
 import { createMockProvider } from '../helpers/tool-mocks';
@@ -195,6 +196,91 @@ describe('Agent', () => {
       await agent.ready();
       // Can't directly verify subscribe was called, but ready() succeeds
       expect(agent).toBeDefined();
+    });
+  });
+
+  describe('CredentialSynchronizationError recovery', () => {
+    // setRuntimeApiKey() runs during ready() against the real ModelRuntime
+    // (its catalog is populated at create() time, so getModel() still
+    // resolves). Spies on the prototype methods let us drive the recovery
+    // branch without standing up a fake runtime. Restored after each test so
+    // the prototype mutations don't leak into the other (real-ready) tests.
+    const restore: (() => void)[] = [];
+    afterEach(() => {
+      while (restore.length) {
+        restore.pop()!();
+      }
+    });
+
+    /** Stub setRuntimeApiKey to reject with a CredentialSynchronizationError. */
+    function rejectWithSyncError(): void {
+      const spy = vi.spyOn(ModelRuntime.prototype, 'setRuntimeApiKey').mockRejectedValue(
+        new CredentialSynchronizationError('anthropic', 'setRuntimeApiKey', undefined, {
+          cause: new Error('local sync failed'),
+        })
+      );
+      restore.push(() => spy.mockRestore());
+    }
+
+    test('recovers and warns when the recovery catalog refresh succeeds', async () => {
+      rejectWithSyncError();
+      const refreshSpy = vi
+        .spyOn(ModelRuntime.prototype, 'refresh')
+        .mockResolvedValue({ aborted: false, errors: new Map() });
+      restore.push(() => refreshSpy.mockRestore());
+
+      const { core, messages } = createCoreWithWarningCapture();
+      const agent = new Agent(core as any, mockPlatformProvider, { ...defaultAgentConfig });
+
+      await expect(agent.ready()).resolves.toBe(agent);
+      // Recovery issues a forced, network-enabled refresh scoped to the provider.
+      expect(refreshSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providers: ['anthropic'],
+          allowNetwork: true,
+          force: true,
+        })
+      );
+      expect(messages.some(m => m.includes('could not be synchronized'))).toBe(true);
+    });
+
+    test('throws an actionable error naming the provider when recovery fails', async () => {
+      rejectWithSyncError();
+      const refreshSpy = vi.spyOn(ModelRuntime.prototype, 'refresh').mockResolvedValue({
+        aborted: false,
+        errors: new Map([['anthropic', new Error('upstream host unreachable')]]),
+      });
+      restore.push(() => refreshSpy.mockRestore());
+
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+      });
+
+      await expect(agent.ready()).rejects.toThrow(
+        /Could not synchronize model state for provider "anthropic"[\s\S]*upstream host unreachable/
+      );
+    });
+
+    test('rethrows non-CredentialSynchronizationError failures unchanged', async () => {
+      const boom = new Error('unrelated failure');
+      const setKeySpy = vi
+        .spyOn(ModelRuntime.prototype, 'setRuntimeApiKey')
+        .mockRejectedValue(boom);
+      restore.push(() => setKeySpy.mockRestore());
+      const refreshSpy = vi.spyOn(ModelRuntime.prototype, 'refresh');
+      restore.push(() => refreshSpy.mockRestore());
+
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+      });
+
+      await expect(agent.ready()).rejects.toBe(boom);
+      // create() legitimately calls refresh({ allowNetwork: false }) during
+      // ready(); the recovery branch never runs for a non-Credential error,
+      // so the forced provider-scoped refresh must never be invoked.
+      expect(refreshSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ providers: ['anthropic'], allowNetwork: true, force: true })
+      );
     });
   });
 
