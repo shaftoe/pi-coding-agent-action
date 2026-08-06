@@ -233,15 +233,53 @@ describe('Agent', () => {
       const agent = new Agent(core as any, mockPlatformProvider, { ...defaultAgentConfig });
 
       await expect(agent.ready()).resolves.toBe(agent);
-      // Recovery issues a forced, network-enabled refresh scoped to the provider.
+      // Recovery issues a forced, network-enabled refresh scoped to the provider,
+      // bounded by an AbortSignal timeout so a stalled endpoint can't hang.
       expect(refreshSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           providers: ['anthropic'],
           allowNetwork: true,
           force: true,
+          signal: expect.any(AbortSignal),
         })
       );
       expect(messages.some(m => m.includes('could not be synchronized'))).toBe(true);
+    });
+
+    test('omits the timeout signal when AbortSignal.timeout is unavailable', async () => {
+      rejectWithSyncError();
+      const refreshSpy = vi
+        .spyOn(ModelRuntime.prototype, 'refresh')
+        .mockResolvedValue({ aborted: false, errors: new Map() });
+      restore.push(() => refreshSpy.mockRestore());
+
+      // Simulate a runtime without AbortSignal.timeout (Node < 17.3) so the
+      // feature-detection guard takes the fallback and leaves the signal
+      // unset rather than throwing. Restored in afterEach.
+      const originalTimeout = AbortSignal.timeout;
+      Object.defineProperty(AbortSignal, 'timeout', { value: undefined, configurable: true });
+      restore.push(() =>
+        Object.defineProperty(AbortSignal, 'timeout', {
+          value: originalTimeout,
+          configurable: true,
+          writable: true,
+        })
+      );
+
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+      });
+
+      // Recovery still succeeds — the refresh simply runs without a bound timeout.
+      await expect(agent.ready()).resolves.toBe(agent);
+      // Find the provider-scoped recovery call (create() also calls refresh with
+      // allowNetwork:false) and confirm it carries no `signal` property — the
+      // guard omitted it entirely because AbortSignal.timeout was unavailable.
+      const recoveryCall = refreshSpy.mock.calls.find(
+        c => c[0]?.providers?.includes('anthropic') && c[0]?.allowNetwork === true
+      );
+      expect(recoveryCall).toBeDefined();
+      expect(recoveryCall![0]).not.toHaveProperty('signal');
     });
 
     test('throws an actionable error naming the provider when recovery fails', async () => {
@@ -258,6 +296,23 @@ describe('Agent', () => {
 
       await expect(agent.ready()).rejects.toThrow(
         /Could not synchronize model state for provider "anthropic"[\s\S]*upstream host unreachable/
+      );
+    });
+
+    test('throws an actionable error when the recovery refresh is aborted', async () => {
+      rejectWithSyncError();
+      const refreshSpy = vi.spyOn(ModelRuntime.prototype, 'refresh').mockResolvedValue({
+        aborted: true,
+        errors: new Map(),
+      });
+      restore.push(() => refreshSpy.mockRestore());
+
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+      });
+
+      await expect(agent.ready()).rejects.toThrow(
+        /Could not synchronize model state for provider "anthropic"[\s\S]*refresh aborted/
       );
     });
 

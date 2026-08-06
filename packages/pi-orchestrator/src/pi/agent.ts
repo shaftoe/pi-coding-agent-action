@@ -53,6 +53,16 @@ type SummarizationRetryAttemptStartEvent = Extract<
 >;
 
 /**
+ * Hard ceiling for the post-credential-synchronisation catalog refresh.
+ *
+ * The recovery refresh runs with `allowNetwork: true`, so a stalled or
+ * unreachable provider catalog endpoint could otherwise wedge the action
+ * until the overall job timeout. Bounding it fails fast and falls through to
+ * the actionable error message instead of hanging.
+ */
+const MODEL_REFRESH_TIMEOUT_MS = 15_000;
+
+/**
  * Pi coding agent for headless execution inside GitHub Actions.
  *
  * Wraps model resolution, authentication, agent session lifecycle, and prompt
@@ -324,8 +334,10 @@ export class Agent {
    *
    * The key was already saved, so we attempt one explicit, forced catalog
    * refresh to recover (the documented remedy when remote freshness is
-   * needed). If that also fails we rethrow a message that names the provider
-   * and points at the most likely-affected inputs.
+   * needed), bounded by {@link MODEL_REFRESH_TIMEOUT_MS} so a stalled catalog
+   * endpoint fails fast rather than hanging the action. If that also fails —
+   * or times out — we rethrow a message that names the provider and points at
+   * the most likely-affected inputs.
    *
    * @param token - The API key to set. Caller guarantees it is non-empty.
    * @private
@@ -342,10 +354,18 @@ export class Agent {
         `[auth] API key for "${providerId}" was saved, but the model state ` +
           'could not be synchronized — attempting a catalog refresh to recover'
       );
+      // Bound the recovery refresh so a stalled catalog endpoint fails fast
+      // instead of hanging the action until the job timeout. Guarded for
+      // environments where AbortSignal.timeout is unavailable.
+      const refreshSignal =
+        typeof AbortSignal.timeout === 'function'
+          ? AbortSignal.timeout(MODEL_REFRESH_TIMEOUT_MS)
+          : undefined;
       const { aborted, errors } = await this.modelRuntime.refresh({
         providers: [providerId],
         allowNetwork: true,
         force: true,
+        ...(refreshSignal ? { signal: refreshSignal } : undefined),
       });
       const refreshError = errors.get(providerId);
       if (aborted || refreshError) {
