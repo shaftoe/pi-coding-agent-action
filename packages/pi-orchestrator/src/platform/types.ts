@@ -206,7 +206,7 @@ export interface CreateReviewParams {
   body?: string;
   /** Review event: COMMENT (default), APPROVE, or REQUEST_CHANGES. */
   event?: 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES';
-  /** Inline comments anchored to specific diff lines. At least one is required. */
+  /** Inline comments anchored to specific diff lines. May be empty when body is non-empty. */
   comments: ReviewInlineComment[];
 }
 

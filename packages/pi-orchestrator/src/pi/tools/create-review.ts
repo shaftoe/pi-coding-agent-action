@@ -84,7 +84,7 @@ const createReviewSchema = Type.Object(
     ),
     comments: Type.Array(reviewCommentSchema, {
       description:
-        'Array of inline comments anchored to diff lines. Each requires path, line, and body.',
+        'Array of inline comments anchored to diff lines. May be empty when body is non-empty. Each comment requires path, line, and body.',
     }),
   },
   { additionalProperties: false }

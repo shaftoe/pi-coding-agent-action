@@ -58,8 +58,13 @@ export function validateReviewEvent(event: string | undefined): void {
  * @internal Exported for testing purposes.
  */
 export function validateCreateReviewParams(params: CreateReviewParams): void {
-  if (!params.comments || params.comments.length === 0) {
-    throw new Error('At least one inline comment is required to create a review');
+  const hasInlineComments = params.comments.length > 0;
+  const hasSummary = typeof params.body === 'string' && params.body.trim() !== '';
+
+  if (!hasInlineComments && !hasSummary) {
+    throw new Error(
+      'At least one inline comment or a non-empty review body is required to create a review'
+    );
   }
   params.comments.forEach((comment, i) => validateReviewComment(comment, i));
   validateReviewEvent(params.event);

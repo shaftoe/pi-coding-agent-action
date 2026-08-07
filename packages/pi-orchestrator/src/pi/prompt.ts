@@ -256,7 +256,7 @@ export const GET_PR_DIFF_PARAM_IGNORE_FILES_DESCRIPTION =
 // Create Pull Request Review
 //
 export const CREATE_REVIEW_PROMPT_SNIPPET =
-  'Create a pull request review with inline comments anchored to specific lines of the diff. This is the best way to provide line-by-line code review feedback.';
+  'Create a pull request review with an optional summary and inline comments anchored to specific lines of the diff.';
 
 export const CREATE_REVIEW_PROMPT_GUIDELINES = [
   'Use create_pull_request_review to post inline review comments anchored to specific diff lines. This is much more useful than top-level comments because reviewers can see findings directly in the diff context.',
@@ -265,7 +265,7 @@ export const CREATE_REVIEW_PROMPT_GUIDELINES = [
   'For multi-line comments, set `start_line` to the first line and `line` to the last line of the range.',
   'The `event` parameter controls the review type: COMMENT (default, neutral feedback), APPROVE (approve the PR), or REQUEST_CHANGES (request changes before merging).',
   'A `body` (summary comment) is optional but recommended — it provides context for the overall review.',
-  'At least one inline comment is required. To post only a summary review comment without inline comments, use a regular PR comment instead.',
+  'Provide at least one inline comment or a non-empty `body`. A summary-only review may use an empty `comments` array.',
   'Make sure line numbers reference the correct version of the file. Use the `get_pr_diff` tool first to understand the diff and verify line numbers.',
 ];
 
@@ -280,7 +280,7 @@ export const CREATE_REVIEW_PROMPT_GUIDELINES = [
  */
 export function CREATE_REVIEW_DESCRIPTION(platform: PlatformType = 'github'): string {
   const product = productNameOf(platform);
-  return `Create a pull request review with inline comments anchored to specific lines of the diff. Posts a ${product} Pull Request Review using the \`pulls.createReview\` API with comments positioned on specific lines. Each comment is anchored to a file path and line number in the diff.`;
+  return `Create a pull request review with an optional summary and optional inline comments anchored to specific lines of the diff. Posts a ${product} Pull Request Review using the \`pulls.createReview\` API. Provide at least one inline comment or a non-empty summary body.`;
 }
 
 export const CREATE_REVIEW_PARAM_PULL_NUMBER_DESCRIPTION =
@@ -293,7 +293,7 @@ export const CREATE_REVIEW_PARAM_EVENT_DESCRIPTION =
   'Review event type: COMMENT (default, neutral feedback), APPROVE (approve the PR), or REQUEST_CHANGES (request changes before merging).';
 
 export const CREATE_REVIEW_PARAM_COMMENTS_DESCRIPTION =
-  'Array of inline comments. Each comment requires: path (file path), line (line number in the diff), and body (Markdown comment). Optional: side (LEFT=old or RIGHT=new, default RIGHT), start_line (for multi-line comments).';
+  'Array of inline comments. May be empty when the review body is non-empty. Each comment requires: path (file path), line (line number in the diff), and body (Markdown comment). Optional: side (LEFT=old or RIGHT=new, default RIGHT), start_line (for multi-line comments).';
 
 export const CREATE_REVIEW_PARAM_COMMENT_PATH_DESCRIPTION =
   'Repository-relative file path (e.g., "src/main.ts").';

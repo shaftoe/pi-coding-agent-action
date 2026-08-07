@@ -10,11 +10,23 @@ import { validateCreateReviewParams, toGitHubComment } from '@alexanderfortin/pi
 import type { CreateReviewParams, ReviewInlineComment } from '@alexanderfortin/pi-platform-github';
 
 describe('validateCreateReviewParams', () => {
-  test('throws when comments array is empty', () => {
+  test('throws when comments and review body are empty', () => {
     const params: CreateReviewParams = { comments: [] };
     expect(() => validateCreateReviewParams(params)).toThrow(
-      /At least one inline comment is required/
+      /At least one inline comment or a non-empty review body is required/
     );
+  });
+
+  test('throws when comments are empty and review body is whitespace only', () => {
+    const params: CreateReviewParams = { body: '   ', comments: [] };
+    expect(() => validateCreateReviewParams(params)).toThrow(
+      /At least one inline comment or a non-empty review body is required/
+    );
+  });
+
+  test('passes for a summary-only review', () => {
+    const params: CreateReviewParams = { body: 'No issues found.', comments: [] };
+    expect(() => validateCreateReviewParams(params)).not.toThrow();
   });
 
   test('throws when comment path is empty', () => {
