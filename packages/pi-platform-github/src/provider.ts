@@ -23,6 +23,7 @@ import { fetchPRDiff } from './tools/pr-diff';
 import { createReview } from './tools/review';
 import { getCIStatus } from './tools/get-ci-status';
 import { getWorkflowRunLogs } from './tools/get-workflow-run-logs';
+import { resolvePlatformContext } from './context-utils';
 import type { Temporal } from '@js-temporal/polyfill';
 import type { Logger } from '@alexanderfortin/pi-orchestrator';
 import type {
@@ -212,10 +213,15 @@ export interface GitHubPlatformDeps {
 export function createGitHubPlatformProvider(deps: GitHubPlatformDeps): PlatformProvider {
   const type = deps.platformType;
 
-  // Use the provided deps directly — no fallbacks
-  const resolvedContext = deps.context;
+  const resolvedContext = resolvePlatformContext(deps.context);
   const logger = deps.logger;
   const octokit = deps.octokit;
+
+  if (resolvedContext !== deps.context) {
+    logger.debug(
+      `[createGitHubPlatformProvider] Recovered missing context from event payload: ${resolvedContext.repo.owner}/${resolvedContext.repo.repo}#${resolvedContext.issue.number}`
+    );
+  }
 
   // Resolve the trigger
   const trigger = deps?.trigger;

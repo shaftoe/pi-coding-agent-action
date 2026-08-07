@@ -145,6 +145,94 @@ describe('createGitHubPlatformProvider', () => {
     );
     expect(provider.type).toBe('github');
   });
+
+  test('recovers missing repository and PR context from the event payload', () => {
+    const provider = createGitHubPlatformProvider(
+      makeMockDeps({
+        context: {
+          ...makeMockDeps().context,
+          repo: { owner: '', repo: '' },
+          issue: { number: 0 },
+          eventName: 'pull_request',
+          payload: {
+            number: 123,
+            pull_request: { number: 123 },
+            repository: {
+              full_name: 'example-org/example-repo',
+              name: 'example-repo',
+              owner: { login: 'example-org' },
+            },
+          },
+        },
+      })
+    );
+
+    expect(provider.getContext().repo).toEqual({
+      owner: 'example-org',
+      repo: 'example-repo',
+    });
+    expect(provider.getContext().issue).toEqual({ number: 123 });
+  });
+
+  test('falls back to repository owner and name when full_name is unavailable', () => {
+    const provider = createGitHubPlatformProvider(
+      makeMockDeps({
+        context: {
+          ...makeMockDeps().context,
+          repo: { owner: '', repo: '' },
+          issue: { number: 0 },
+          payload: {
+            issue: { number: 42 },
+            repository: {
+              name: 'project',
+              owner: { login: 'organization' },
+            },
+          },
+        },
+      })
+    );
+
+    expect(provider.getContext().repo).toEqual({ owner: 'organization', repo: 'project' });
+    expect(provider.getContext().issue).toEqual({ number: 42 });
+  });
+
+  test('preserves valid explicit context when the event payload differs', () => {
+    const context = makeMockDeps().context;
+    const provider = createGitHubPlatformProvider(
+      makeMockDeps({
+        context: {
+          ...context,
+          payload: {
+            pull_request: { number: 999 },
+            repository: { full_name: 'payload-owner/payload-repo' },
+          },
+        },
+      })
+    );
+
+    expect(provider.getContext().repo).toEqual(context.repo);
+    expect(provider.getContext().issue).toEqual(context.issue);
+  });
+
+  test('leaves context unresolved when the event payload is malformed', () => {
+    const provider = createGitHubPlatformProvider(
+      makeMockDeps({
+        context: {
+          ...makeMockDeps().context,
+          repo: { owner: '', repo: '' },
+          issue: { number: 0 },
+          payload: {
+            number: 'not-a-number',
+            pull_request: { number: -1 },
+            repository: { full_name: 'not-a-valid-full-name' },
+          },
+        },
+      })
+    );
+
+    expect(provider.getContext().repo).toEqual({ owner: '', repo: '' });
+    expect(provider.getContext().issue).toEqual({ number: 0 });
+  });
 });
 
 describe('PlatformProvider interface compliance', () => {
