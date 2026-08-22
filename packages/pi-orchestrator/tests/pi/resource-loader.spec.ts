@@ -6,6 +6,8 @@
 
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import { resolveExtensions, getResourceLoader } from '@alexanderfortin/pi-orchestrator';
+import { buildResourceLoaderOptions, updateLoadedExtensions } from '../../src/pi/resource-loader';
+import type { Logger } from '../../src/types';
 import { DefaultPackageManager, DefaultResourceLoader } from '@earendil-works/pi-coding-agent';
 import { createMockProvider } from '../helpers/tool-mocks';
 
@@ -289,6 +291,106 @@ describe('getResourceLoader', () => {
       // Loader should include our custom tools extension factory
       expect(loader).toBeDefined();
       expect(loader).toBeInstanceOf(DefaultResourceLoader);
+    });
+
+    test('removes extensions that fail during import', () => {
+      const info = {
+        requested: ['npm:package-one', 'npm:package-two'],
+        loaded: ['/tmp/extensions/npm-package-one-0', '/tmp/extensions/npm-package-two-1'],
+        warnings: [],
+      };
+
+      updateLoadedExtensions(info, [{ path: '/tmp/extensions/npm-package-two-1' }]);
+
+      expect(info.loaded).toEqual(['/tmp/extensions/npm-package-two-1']);
+    });
+
+    test('keeps extensions that load with SDK conflict diagnostics', () => {
+      const info = {
+        requested: ['npm:conflicting-package'],
+        loaded: ['/tmp/extensions/conflicting-package-0'],
+        warnings: [],
+      };
+
+      // The SDK returns the extension in `extensions` even when `errors` also
+      // contains a tool or flag conflict for the same path.
+      updateLoadedExtensions(info, [{ path: '/tmp/extensions/conflicting-package-0' }]);
+
+      expect(info.loaded).toEqual(['/tmp/extensions/conflicting-package-0']);
+    });
+
+    test('deduplicates loaded paths', () => {
+      // `info.loaded` is collected before SDK path merging and may contain
+      // the same resolved extension more than once. The Loaded banner describes
+      // actual extensions, so one filesystem path should be shown once.
+      const info = {
+        requested: ['npm:package-one', 'npm:package-one'],
+        loaded: ['/tmp/extensions/npm-package-one-0', '/tmp/extensions/npm-package-one-0'],
+        warnings: [],
+      };
+
+      updateLoadedExtensions(info, [{ path: '/tmp/extensions/npm-package-one-0' }]);
+
+      expect(info.loaded).toEqual(['/tmp/extensions/npm-package-one-0']);
+    });
+
+    test('applies SDK failures and conflicts through extensionsOverride', async () => {
+      mockResolveExtensionSources = vi.fn(async () => ({
+        extensions: [
+          { source: 'npm:duplicate-one', path: '/tmp/extensions/duplicate', enabled: true },
+          { source: 'npm:duplicate-two', path: '/tmp/extensions/duplicate', enabled: true },
+          { source: 'npm:failed', path: '/tmp/extensions/failed', enabled: true },
+        ],
+      }));
+      DefaultPackageManager.prototype.resolveExtensionSources = mockResolveExtensionSources as any;
+
+      const logger = {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warning: vi.fn(),
+        notice: vi.fn(),
+        error: vi.fn(),
+        startGroup: vi.fn(),
+        endGroup: vi.fn(),
+      } satisfies Logger;
+      const options = await buildResourceLoaderOptions(logger, mockPlatformProvider, {
+        extensions: ['npm:duplicate-one', 'npm:duplicate-two', 'npm:failed'],
+        loadBuiltinExtensions: false,
+      });
+      const handlers = new Map<string, (...args: never[]) => Promise<void>>();
+      const loggingFactory = options.extensionFactories[0];
+      if (!loggingFactory) {
+        throw new Error('logging extension factory was not created');
+      }
+      const pi = {
+        on: (event: string, handler: (...args: never[]) => Promise<void>) => {
+          handlers.set(event, handler);
+        },
+        getThinkingLevel: () => 0,
+        getAllTools: () => [],
+      } as unknown as Parameters<typeof loggingFactory>[0];
+      loggingFactory(pi);
+
+      const result = {
+        extensions: [{ path: '/tmp/extensions/duplicate' }, { path: '/tmp/extensions/duplicate' }],
+        errors: [
+          { path: '/tmp/extensions/duplicate', error: 'tool conflict' },
+          { path: '/tmp/extensions/failed', error: 'import failed' },
+        ],
+        runtime: {},
+      } as Parameters<typeof options.extensionsOverride>[0];
+      expect(options.extensionsOverride(result)).toBe(result);
+
+      const beforeAgentStart = handlers.get('before_agent_start');
+      expect(beforeAgentStart).toBeDefined();
+      await beforeAgentStart!(
+        { prompt: 'test prompt', images: [] } as never,
+        { model: null, getSystemPrompt: () => '' } as never
+      );
+      const infoLines = logger.info.mock.calls.map(([message]) => message);
+      expect(infoLines).toContain('  Loaded:           1 extension(s)');
+      expect(infoLines).not.toContain('    • /tmp/extensions/failed');
+      expect(infoLines.filter(line => line === '    • /tmp/extensions/duplicate')).toHaveLength(1);
     });
   });
 

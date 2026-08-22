@@ -15,6 +15,7 @@ import {
   getAgentDir,
   SettingsManager,
 } from '@earendil-works/pi-coding-agent';
+import type { LoadExtensionsResult } from '@earendil-works/pi-coding-agent';
 import { getSystemPrompt } from './prompt';
 import { createLoggingFactory } from './logging';
 import type { ExtensionLoadingInfo } from './logging';
@@ -30,6 +31,24 @@ interface ExtensionResolutionResult {
   paths: string[];
   /** Information about the extension loading process. */
   info: ExtensionLoadingInfo;
+}
+
+/**
+ * Reconcile the pre-load extension list with the SDK's final load result.
+ *
+ * Before the SDK reloads, `info.loaded` contains every enabled resolved source,
+ * so it can include paths whose imports later fail and duplicate paths when
+ * multiple sources resolve to the same extension. After reload, `extensions`
+ * is the source of truth: import failures are absent, while extensions with
+ * conflict diagnostics are still present. The banner reports loaded extensions,
+ * not requested sources, so each successfully loaded path is shown once.
+ */
+export function updateLoadedExtensions(
+  info: ExtensionLoadingInfo,
+  extensions: readonly { path: string }[]
+): void {
+  const loadedPaths = new Set(extensions.map(extension => extension.path));
+  info.loaded = [...new Set(info.loaded.filter(path => loadedPaths.has(path)))];
 }
 
 /**
@@ -118,6 +137,10 @@ export async function buildResourceLoaderOptions(
   return {
     extensionFactories,
     additionalExtensionPaths,
+    extensionsOverride: (result: LoadExtensionsResult): LoadExtensionsResult => {
+      updateLoadedExtensions(extensionInfo, result.extensions);
+      return result;
+    },
     systemPromptOverride: () => config?.systemPrompt ?? getSystemPrompt(provider.type),
     appendSystemPromptOverride: (agentsFiles: string[]) => {
       if (agentsFiles.length === 0) {

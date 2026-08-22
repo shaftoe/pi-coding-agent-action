@@ -1,25 +1,35 @@
 /**
  * Regression tests for the build-time SDK loader patch (patchSDKLoaderPlugin).
  *
- * The patch wraps `getAliases()` in a try-catch so that `require.resolve("typebox")`
- * failures don't prevent extension loading in the bundled GitHub Action.
+ * The deployed GitHub Action has no runtime `node_modules` — Pi and its runtime
+ * dependencies are bundled into `dist/index.js`. Npm extensions are installed
+ * in a temporary directory, so their Pi peer dependencies cannot be resolved
+ * from that directory. The patch makes jiti use the SDK's bundled VIRTUAL_MODULES
+ * map instead, preserving the host runtime's module identity.
  *
  * These tests verify that:
- * 1. The SDK's `getAliases()` function still matches the expected pattern
- * 2. The patch applies correctly and wraps the body in a try-catch
- * 3. The patched function returns empty aliases on failure
+ * 1. The SDK's bundled Node loader branch still matches the patch pattern
+ * 2. The patch replaces it with virtual-module resolution and fails closed when it changes
+ * 3. A temporary extension can import the Pi peer packages from the host runtime
  *
- * If these tests fail after an SDK upgrade, the patch regexes in
- * `scripts/package.ts` need to be updated to match the new pattern.
+ * If these tests fail after a Pi SDK upgrade, the loader patch or its test paths
+ * need to be updated to match the new SDK layout and loading behavior.
  */
 
 import { describe, expect, test } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
+import { patchSDKLoaderSource } from '../../../pi-action/scripts/package';
 
-/**
- * Path to the SDK's loader.js that contains getAliases().
- */
 function getLoaderPath(): string {
   return join(
     process.cwd(),
@@ -27,109 +37,127 @@ function getLoaderPath(): string {
   );
 }
 
-/**
- * The same regex patterns used by `patchSDKLoaderPlugin` in `scripts/package.ts`.
- *
- * Duplicated here (rather than imported) so the test acts as an independent
- * sentinel — if the SDK changes and the patterns stop matching, this test
- * fails regardless of whether the build script was updated.
- */
-const FUNCTION_START_PATTERN =
-  /function getAliases\(\) \{\s*\n(\s*if \(_aliases\)\s*\n\s*return _aliases;\s*\n)/;
+function getSdkPackagePath(): string {
+  const loaderPath = realpathSync(getLoaderPath());
+  return dirname(dirname(dirname(dirname(loaderPath))));
+}
 
-const FUNCTION_BODY_PATTERN = /(_aliases = \{[^}]+\};\s*\n)(\s*return _aliases;\s*\n)(\})/;
-
-describe('SDK getAliases() build-time patch', () => {
+describe('SDK bundled extension loader patch', () => {
   test('loader.js exists at expected path', () => {
     expect(existsSync(getLoaderPath())).toBe(true);
   });
 
-  test('getAliases function start pattern still matches', () => {
+  test('replaces the bundled Node branch with host virtual modules', () => {
     const source = readFileSync(getLoaderPath(), 'utf-8');
-    const match = source.match(FUNCTION_START_PATTERN);
-    expect(match).not.toBeNull();
+    const patched = patchSDKLoaderSource(source);
+
+    expect(patched).toContain('{ virtualModules: VIRTUAL_MODULES, tryNative: false })');
+    expect(patched).not.toContain(': { alias: getAliases() }),');
   });
 
-  test('getAliases aliases assignment pattern still matches', () => {
-    const source = readFileSync(getLoaderPath(), 'utf-8');
-    const match = source.match(FUNCTION_BODY_PATTERN);
-    expect(match).not.toBeNull();
+  test('fails when the SDK loader pattern changes', () => {
+    const source = readFileSync(getLoaderPath(), 'utf-8').replace(
+      'alias: getAliases()',
+      'alias: changed()'
+    );
+
+    expect(() => patchSDKLoaderSource(source)).toThrow('loader pattern not matched');
   });
 
-  test('patch transforms the function body correctly', () => {
-    const source = readFileSync(getLoaderPath(), 'utf-8');
+  test('loads peer imports from the host runtime through virtual modules', async () => {
+    const sdkPackagePath = getSdkPackagePath();
+    const hostDir = mkdtempSync(join(sdkPackagePath, '.pi-extension-host-'));
+    const hostPath = join(hostDir, 'index.mjs');
 
-    // Apply the same transformation as patchSDKLoaderPlugin
-    const patched = source
-      .replace(FUNCTION_START_PATTERN, 'function getAliases() {\n$1    try {\n')
-      .replace(
-        FUNCTION_BODY_PATTERN,
-        '$1    $2    } catch { _aliases = {}; return _aliases; }\n$3'
+    writeFileSync(
+      hostPath,
+      [
+        "import * as codingAgent from '@earendil-works/pi-coding-agent';",
+        "import * as agentCore from '@earendil-works/pi-agent-core';",
+        "import * as piAi from '@earendil-works/pi-ai/compat';",
+        "import * as piAiOauth from '@earendil-works/pi-ai/oauth';",
+        "import * as piAiProviders from '@earendil-works/pi-ai/providers/all';",
+        "import * as piTui from '@earendil-works/pi-tui';",
+        "import * as typebox from 'typebox';",
+        "import * as typeboxCompile from 'typebox/compile';",
+        "import * as typeboxValue from 'typebox/value';",
+        "import { createJiti } from 'jiti/static';",
+        'export { codingAgent, agentCore, piAi, piAiOauth, piAiProviders, piTui, typebox, typeboxCompile, typeboxValue, createJiti };',
+      ].join('\n')
+    );
+
+    try {
+      const {
+        createJiti,
+        codingAgent,
+        agentCore,
+        piAi,
+        piAiOauth,
+        piAiProviders,
+        piTui,
+        typebox,
+        typeboxCompile,
+        typeboxValue,
+      } = await import(`${pathToFileURL(hostPath).href}?test=${Date.now()}`);
+      const virtualModules = {
+        typebox,
+        'typebox/compile': typeboxCompile,
+        'typebox/value': typeboxValue,
+        '@earendil-works/pi-agent-core': agentCore,
+        '@earendil-works/pi-tui': piTui,
+        '@earendil-works/pi-ai': piAi,
+        '@earendil-works/pi-ai/compat': piAi,
+        '@earendil-works/pi-ai/oauth': piAiOauth,
+        '@earendil-works/pi-ai/providers/all': piAiProviders,
+        '@earendil-works/pi-coding-agent': codingAgent,
+      };
+      const extensionDir = mkdtempSync(join(tmpdir(), 'pi-extension-'));
+      const extensionPath = join(extensionDir, 'index.ts');
+
+      writeFileSync(
+        extensionPath,
+        [
+          "import { AgentSession } from '@earendil-works/pi-coding-agent';",
+          "import { Agent } from '@earendil-works/pi-agent-core';",
+          "import { EventStream } from '@earendil-works/pi-ai';",
+          "import { EventStream as CompatEventStream } from '@earendil-works/pi-ai/compat';",
+          "import * as oauth from '@earendil-works/pi-ai/oauth';",
+          "import { builtinProviders } from '@earendil-works/pi-ai/providers/all';",
+          "import { Box } from '@earendil-works/pi-tui';",
+          "import { Type } from 'typebox';",
+          "import { Compile } from 'typebox/compile';",
+          "import { Check } from 'typebox/value';",
+          'export default () => ({ AgentSession, Agent, EventStream, CompatEventStream, oauth, builtinProviders, Box, Type, Compile, Check });',
+        ].join('\n')
       );
 
-    // Patch must actually change something
-    expect(patched).not.toBe(source);
+      try {
+        const jiti = createJiti(import.meta.url, {
+          moduleCache: false,
+          virtualModules,
+          tryNative: false,
+        });
+        const factory = (await jiti.import(extensionPath, { default: true })) as () => Record<
+          string,
+          unknown
+        >;
+        const loaded = factory();
 
-    // The patched code must contain the try-catch
-    expect(patched).toContain('try {');
-    expect(patched).toContain('} catch { _aliases = {}; return _aliases; }');
-  });
-
-  test('try block wraps require.resolve("typebox")', () => {
-    const source = readFileSync(getLoaderPath(), 'utf-8');
-
-    const patched = source
-      .replace(FUNCTION_START_PATTERN, 'function getAliases() {\n$1    try {\n')
-      .replace(
-        FUNCTION_BODY_PATTERN,
-        '$1    $2    } catch { _aliases = {}; return _aliases; }\n$3'
-      );
-
-    // Extract the getAliases function body from the patched source
-    const fnStart = patched.indexOf('function getAliases()');
-    const catchClause = patched.indexOf('} catch { _aliases = {}; return _aliases; }', fnStart);
-    expect(fnStart).toBeGreaterThan(-1);
-    expect(catchClause).toBeGreaterThan(fnStart);
-
-    const fnBody = patched.substring(fnStart, catchClause);
-
-    // The try block must start before require.resolve("typebox")
-    expect(fnBody).toContain('try {');
-    expect(fnBody).toContain('require.resolve("typebox")');
-
-    // try { must appear before require.resolve
-    const tryPos = fnBody.indexOf('try {');
-    const resolvePos = fnBody.indexOf('require.resolve("typebox")');
-    expect(tryPos).toBeLessThan(resolvePos);
-  });
-
-  test('patch returns empty aliases object on catch', () => {
-    const source = readFileSync(getLoaderPath(), 'utf-8');
-
-    const patched = source
-      .replace(FUNCTION_START_PATTERN, 'function getAliases() {\n$1    try {\n')
-      .replace(
-        FUNCTION_BODY_PATTERN,
-        '$1    $2    } catch { _aliases = {}; return _aliases; }\n$3'
-      );
-
-    // The catch block sets _aliases to {} and returns it
-    expect(patched).toContain('catch { _aliases = {}; return _aliases; }');
-  });
-
-  test('function body pattern no longer matches after patching', () => {
-    const source = readFileSync(getLoaderPath(), 'utf-8');
-
-    const patched = source
-      .replace(FUNCTION_START_PATTERN, 'function getAliases() {\n$1    try {\n')
-      .replace(
-        FUNCTION_BODY_PATTERN,
-        '$1    $2    } catch { _aliases = {}; return _aliases; }\n$3'
-      );
-
-    // The body pattern (which matches `_aliases = {...}; \n return _aliases; \n }`)
-    // should NOT match again after patching because the closing brace `}`
-    // is now followed by the catch clause, not end-of-function.
-    expect(FUNCTION_BODY_PATTERN.test(patched)).toBe(false);
+        expect(loaded.AgentSession).toBe(codingAgent.AgentSession);
+        expect(loaded.Agent).toBe(agentCore.Agent);
+        expect(loaded.EventStream).toBe(piAi.EventStream);
+        expect(loaded.CompatEventStream).toBe(piAi.EventStream);
+        expect(loaded.builtinProviders).toBe(piAiProviders.builtinProviders);
+        expect(loaded.Box).toBe(piTui.Box);
+        expect(loaded.Type).toBe(typebox.Type);
+        expect(loaded.Compile).toBe(typeboxCompile.Compile);
+        expect(loaded.Check).toBe(typeboxValue.Check);
+        expect(loaded.oauth).toBeDefined();
+      } finally {
+        rmSync(extensionDir, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(hostDir, { recursive: true, force: true });
+    }
   });
 });

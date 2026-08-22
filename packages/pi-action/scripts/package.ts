@@ -1,5 +1,4 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { build, type Plugin } from 'esbuild';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,51 +30,45 @@ export {
 };
 
 /**
- * esbuild plugin that patches the SDK's `getAliases()` function to handle
- * the bundled action context.
+ * esbuild plugin that makes SDK extensions resolve the bundled host modules.
  *
- * In the deployed GitHub Action, `node_modules` doesn't exist — everything
- * is bundled into `dist/index.js`. The SDK's `getAliases()` calls
- * `require.resolve("typebox")` which throws `MODULE_NOT_FOUND` in this
- * context, causing jiti creation to fail and preventing extension loading.
+ * The deployed GitHub Action has no runtime `node_modules`: the SDK and its Pi
+ * dependencies are all inlined into `dist/index.js`. Npm extensions are loaded
+ * from a temporary installation directory, where their Pi peer dependencies
+ * cannot resolve back to the bundled host runtime.
  *
- * This plugin wraps the body of `getAliases()` in a try-catch so that if
- * `require.resolve` fails, the function returns an empty aliases object.
- * Extensions that only use `import type` (which are erased by jiti) will
- * still load correctly without any aliases.
+ * The SDK already exposes those inlined modules through `VIRTUAL_MODULES` for
+ * Bun. Use the same mechanism for bundled Node.js instead of asking jiti to
+ * resolve packages from the temporary npm directory. `tryNative: false` keeps
+ * jiti from bypassing the map and loading a second copy from the filesystem.
  *
- * This patch can be removed once the SDK handles the bundled context natively.
+ * This patch can be removed once the SDK uses virtual modules for bundled Node
+ * by default.
  */
+const SDK_LOADER_NODE_BRANCH = /: \{ alias: getAliases\(\) \}\),/;
+
+/** Apply the bundled Node extension-loader patch to SDK source. */
+export function patchSDKLoaderSource(source: string): string {
+  const patched = source.replace(
+    SDK_LOADER_NODE_BRANCH,
+    ': { virtualModules: VIRTUAL_MODULES, tryNative: false }),'
+  );
+  if (patched === source) {
+    throw new Error(
+      '[patch-sdk-loader] Bundled Node extension loader pattern not matched; the SDK may have changed.'
+    );
+  }
+  return patched;
+}
+
 function patchSDKLoaderPlugin(): Plugin {
   return {
     name: 'patch-sdk-loader',
     setup(build) {
-      build.onLoad({ filter: /extensions\/loader\.js$/ }, async args => {
-        const source = readFileSync(args.path, 'utf-8');
-
-        // Wrap getAliases() body in try-catch to handle missing node_modules
-        const patched = source
-          .replace(
-            // Match the start of getAliases() and inject a try { after the early return
-            /function getAliases\(\) \{\s*\n(\s*if \(_aliases\)\s*\n\s*return _aliases;\s*\n)/,
-            'function getAliases() {\n$1    try {\n'
-          )
-          .replace(
-            // Match _aliases assignment + return + function closing brace, insert catch block
-            /(_aliases = \{[^}]+\};\s*\n)(\s*return _aliases;\s*\n)(\})/,
-            '$1    $2    } catch { _aliases = {}; return _aliases; }\n$3'
-          );
-
-        if (patched === source) {
-          console.warn(
-            '[patch-sdk-loader] WARNING: getAliases() pattern not matched — patch not applied. ' +
-              'The SDK may have changed. Extension loading may fail in the bundled action.'
-          );
-          return { contents: source, loader: 'js' };
-        }
-
-        return { contents: patched, loader: 'js' };
-      });
+      build.onLoad({ filter: /extensions\/loader\.js$/ }, async args => ({
+        contents: patchSDKLoaderSource(readFileSync(args.path, 'utf-8')),
+        loader: 'js',
+      }));
     },
   };
 }
