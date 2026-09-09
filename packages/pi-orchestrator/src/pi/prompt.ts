@@ -88,7 +88,7 @@ export const CREATE_PULL_REQUEST_PROMPT_GUIDELINES = [
   'Always use the create_pull_request tool to create pull requests - do not use git commands or gh CLI directly.',
   'Make sure your changes are made (modified files exist) before calling this tool. The tool will detect changes, create branch, and create PR automatically. Do NOT use unless you have already applied changes and/or added new files.',
   'The tool will automatically generate a branch name in the format: pi/issue{number}-{timestamp}.',
-  'If the tool can''t push to the repository, it will open a PR from its own fork. The tool creates the fork automatically on first use and reuses it afterwards. When the token owner already owns the repository, the branch is pushed to the repository itself instead.',
+  'If the tool can''t push to the repository, open a PR from its own fork: create a fork (if it doesn''t exist); push the PR branch to fork; create a PR from the branch in the fork.',
   'Do NOT provide the "base" parameter unless the user explicitly requests a different target branch than the repository default. The tool will automatically detect the correct default branch.',
   'Use dryRun=true first to verify the PR configuration, then dryRun=false to create it.',
   'On some platforms (e.g. Forgejo) the PR object cannot always be opened automatically even though the branch is pushed. When this happens the tool returns a compare URL instead of an error — post that URL so the user can open the PR manually.',
