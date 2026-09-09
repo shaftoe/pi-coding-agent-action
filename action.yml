@@ -6,7 +6,7 @@ branding:
 
 inputs:
   github_token:
-    description: 'GitHub token for API access. The default `GITHUB_TOKEN` works for all standard operations. To use `share_session`, provide a classic PAT (`gist` scope), fine-grained PAT (Account → Gists: read/write), or GitHub App token instead — the default `GITHUB_TOKEN` cannot create gists.'
+    description: 'GitHub token for API access. The default `GITHUB_TOKEN` works for most operations, but pull requests are opened from the agent''s own fork of the repository, which requires a personal access token (classic PAT with `repo` scope, or a fine-grained PAT with repository read/write + fork permissions) — the default `GITHUB_TOKEN` authenticates as a bot user that cannot own forks. To use `share_session`, the token also needs gist access (classic PAT `gist` scope, fine-grained PAT Account → Gists: read/write, or a GitHub App token).'
     required: true
 
   provider:

@@ -82,15 +82,17 @@ function productNameOf(platform: PlatformType): string {
 // Create Pull Request
 //
 export const CREATE_PULL_REQUEST_PROMPT_SNIPPET =
-  'Create a pull request with title and description. The tool will automatically determine the default base branch, create a new branch, push changes, and create the PR.';
+  'Create a pull request with title and description. The tool automatically determines the default base branch, creates or reuses the agent\'s own fork of the repository, pushes the branch to that fork, and opens the PR from it.';
 
 export const CREATE_PULL_REQUEST_PROMPT_GUIDELINES = [
   'Always use the create_pull_request tool to create pull requests - do not use git commands or gh CLI directly.',
   'Make sure your changes are made (modified files exist) before calling this tool. The tool will detect changes, create branch, and create PR automatically. Do NOT use unless you have already applied changes and/or added new files.',
   'The tool will automatically generate a branch name in the format: pi/issue{number}-{timestamp}.',
+  'Pull requests are opened from the agent\'s own fork of the repository: the tool creates the fork automatically on first use and reuses it afterwards. When the token owner already owns the repository, the branch is pushed to the repository itself instead.',
   'Do NOT provide the "base" parameter unless the user explicitly requests a different target branch than the repository default. The tool will automatically detect the correct default branch.',
   'Use dryRun=true first to verify the PR configuration, then dryRun=false to create it.',
   'On some platforms (e.g. Forgejo) the PR object cannot always be opened automatically even though the branch is pushed. When this happens the tool returns a compare URL instead of an error — post that URL so the user can open the PR manually.',
+  'If the tool fails with an error about creating a fork, the configured token cannot own forks (e.g. the default GITHUB_TOKEN authenticates as a bot). Report that a personal access token with repository access is required for fork-based pull requests.',
 ];
 
 /**
@@ -100,7 +102,7 @@ export const CREATE_PULL_REQUEST_PROMPT_GUIDELINES = [
  */
 export function CREATE_PULL_REQUEST_DESCRIPTION(platform: PlatformType = 'github'): string {
   const product = productNameOf(platform);
-  return `Create a new pull request on ${product}. This tool handles everything: automatically determines the default base branch, creates a new branch, pushes changes, and creates the PR. The branch name is auto-generated following the pi/issue{number}-{timestamp} pattern.`;
+  return `Create a new pull request on ${product}. This tool handles everything: automatically determines the default base branch, creates or reuses the agent's own fork of the repository, pushes the branch to that fork, and opens the PR from it. The branch name is auto-generated following the pi/issue{number}-{timestamp} pattern.`;
 }
 
 export const CREATE_PULL_REQUEST_PARAM_TITLE_DESCRIPTION =
