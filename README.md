@@ -635,10 +635,10 @@ You can customize the auto-generated branch names used when Pi creates pull requ
 
 ### Pull Requests from a Fork
 
-Pull requests created by the `create_pull_request` tool are opened **from the agent's own fork** of the repository, not from a branch on the repository itself:
+If there are insufficient rights to push to the repository, agent will open a PR from its own fork. The agent creates the fork automatically on first use and reuses it afterwards.
 
 1. On first use the agent creates a fork of the repository under the account that owns `github_token`; subsequent runs reuse it.
-2. The generated branch is pushed to that fork (via a `pi-fork` remote whose URL is derived from the checkout's `origin`, so it inherits the same credentials).
+2. The generated branch is pushed to that fork.
 3. The pull request is opened on the repository with the cross-repository head `fork-owner:branch`. `update_pull_request` pushes follow-up commits to the fork as well.
 
 This mirrors how human contributors work and keeps agent branches out of the repository's branch list.
@@ -882,7 +882,7 @@ For complex, multi-step tasks that generate a lot of context (e.g. large code re
 | `export_session_html` | Export the session as a self-contained HTML file. Auto-enabled when `share_session` is true | No | `false` |
 | `export_session_jsonl` | Export the session as a JSONL file (one JSON object per line) for programmatic consumption | No | `false` |
 | `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
-| `github_token` | GitHub token for API access. Pull requests are opened from the agent's own fork, which requires a PAT (classic `repo` scope, or fine-grained with repository read/write + fork permissions) — the default `GITHUB_TOKEN` authenticates as a bot that cannot own forks. `share_session` additionally needs gist access (see [Sharing Sessions](#sharing-sessions)) | Yes | - |
+| `github_token` | GitHub token for API access. The default `GITHUB_TOKEN` works for all standard operations; to use `share_session`, provide a PAT/App token with gist scope instead | Yes | - |
 | `load_builtin_extensions` | Whether to load built-in GitHub tools (see [Custom Tools](#custom-tools) for the full list) | No | `true` |
 | `loaded_tools` | Controls which tools are available in the session. Defaults to `all`. Accepts a list of tool names (one per line) to load — unknown names cause the run to fail early | No | `all` |
 | `model` | Model to use (e.g., gpt-5.4, gpt-4o, gemini-2.5-pro) | Yes | - |
@@ -930,12 +930,12 @@ The action extends Pi with the following built-in GitHub tools:
 | Tool | Description |
 |------|-------------|
 | `create_pull_request_review` | Creates a pull request review with a summary body, inline comments anchored to specific diff lines, or both. Posts a GitHub Pull Request Review using the `pulls.createReview` API. Supports summary-only reviews, multi-line comments, diff side selection (LEFT/RIGHT), and review events (COMMENT, APPROVE, REQUEST_CHANGES). |
-| `create_pull_request` | Creates a new pull request by detecting file changes, creating or reusing the agent's own fork of the repository, pushing a branch to that fork via the `git` CLI, and opening the PR from it (cross-repository head `fork-owner:branch`). Requires a token that can create forks (a PAT) — see [Pull Requests from a Fork](#pull-requests-from-a-fork). Supports `dry_run` mode for testing without actual PR creation. |
+| `create_pull_request` | Creates a new pull request by detecting file changes, creating a branch, committing changes via GitHub API, and opening the PR. Supports `dry_run` mode for testing without actual PR creation. If there are insufficient rights to push to the repository, it will open a PR from its own fork. The tool creates the fork automatically on first use and reuses it afterwards. |
 | `get_ci_status` | Checks the CI/CD status for a pull request or commit ref. Returns both check runs and workflow runs with their statuses, conclusions, and URLs. Accepts optional `pull_number`, `ref`, `status`, and `conclusion` filters. For failed workflow runs, use the returned `run_id` with `get_workflow_run_logs` to fetch detailed job logs. |
 | `get_issue_or_pr_thread` | Retrieves the full thread of an issue or pull request including title, body, state, labels, branch info (for PRs), all comments, and review comments (inline comments on specific lines of the diff) for PRs. Useful for understanding the full context before making changes. |
 | `get_pr_diff` | Fetches the diff of a pull request on demand. Useful when the agent needs to understand what changed in a PR, e.g. for code reviews or addressing review feedback. Supports configurable `max_lines` truncation (default: 1000), max byte size cap (default: 100KB), and ignore patterns to filter out noisy paths. |
 | `get_workflow_run_logs` | Fetches job logs for a specific GitHub Actions workflow run to diagnose CI failures. Lists all jobs for a run and downloads their logs, truncated to 50KB by default (configurable via `max_bytes`). |
-| `update_pull_request` | Updates an existing pull request by pushing new commits to the PR branch and optionally updating the title and/or description. Supports `dry_run` mode for testing without actual modifications. |
+| `update_pull_request` | Updates an existing pull request by pushing new commits to the PR branch (in the fork for fork-based PRs, in the repository otherwise) and optionally updating the title and/or description. Supports `dry_run` mode for testing without actual modifications. |
 
 > [!TIP]
 > Set `load_builtin_extensions` input to `false` to disable custom tool auto loading.
