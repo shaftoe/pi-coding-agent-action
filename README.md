@@ -633,6 +633,21 @@ You can customize the auto-generated branch names used when Pi creates pull requ
 | `fix/{number}` | `fix/42` |
 | `{title}-{number}-{timestamp}` | `fix-auth-bug-42-1716543210000` |
 
+### Pull Requests from a Fork
+
+If there are insufficient rights to push to the repository, agent will open a PR from its own fork. The agent creates the fork automatically on first use and reuses it afterwards.
+
+1. On first use the agent creates a fork of the repository under the account that owns `github_token`; subsequent runs reuse it.
+2. The generated branch is pushed to that fork.
+3. The pull request is opened on the repository with the cross-repository head `fork-owner:branch`. `update_pull_request` pushes follow-up commits to the fork as well.
+
+This mirrors how human contributors work and keeps agent branches out of the repository's branch list.
+
+> [!IMPORTANT]
+> **A personal access token is required for PR creation.** The default `secrets.GITHUB_TOKEN` authenticates as the repository's `github-actions[bot]`, which cannot own forks — `create_pull_request` fails with an actionable error in that case. Provide a classic PAT (with the `repo` scope) or a fine-grained PAT (with repository read/write access) via the `github_token` input.
+>
+> When the token's owner already owns the repository (e.g. running the agent against your own repository with your PAT), a fork is impossible and unnecessary — the branch is pushed to the repository itself and a same-repository pull request is opened instead.
+
 ### Injecting Environment Variables
 
 Pi extensions often require environment variables for authentication or configuration. Use the native `env:` step key to pass variables from your workflow's secrets or configuration into the Pi session:
@@ -915,12 +930,12 @@ The action extends Pi with the following built-in GitHub tools:
 | Tool | Description |
 |------|-------------|
 | `create_pull_request_review` | Creates a pull request review with a summary body, inline comments anchored to specific diff lines, or both. Posts a GitHub Pull Request Review using the `pulls.createReview` API. Supports summary-only reviews, multi-line comments, diff side selection (LEFT/RIGHT), and review events (COMMENT, APPROVE, REQUEST_CHANGES). |
-| `create_pull_request` | Creates a new pull request by detecting file changes, creating a branch, committing changes via GitHub API, and opening the PR. Supports `dry_run` mode for testing without actual PR creation. |
+| `create_pull_request` | Creates a new pull request by detecting file changes, creating a branch, committing changes via GitHub API, and opening the PR. Supports `dry_run` mode for testing without actual PR creation. If there are insufficient rights to push to the repository, it will open a PR from its own fork. The tool creates the fork automatically on first use and reuses it afterwards. |
 | `get_ci_status` | Checks the CI/CD status for a pull request or commit ref. Returns both check runs and workflow runs with their statuses, conclusions, and URLs. Accepts optional `pull_number`, `ref`, `status`, and `conclusion` filters. For failed workflow runs, use the returned `run_id` with `get_workflow_run_logs` to fetch detailed job logs. |
 | `get_issue_or_pr_thread` | Retrieves the full thread of an issue or pull request including title, body, state, labels, branch info (for PRs), all comments, and review comments (inline comments on specific lines of the diff) for PRs. Useful for understanding the full context before making changes. |
 | `get_pr_diff` | Fetches the diff of a pull request on demand. Useful when the agent needs to understand what changed in a PR, e.g. for code reviews or addressing review feedback. Supports configurable `max_lines` truncation (default: 1000), max byte size cap (default: 100KB), and ignore patterns to filter out noisy paths. |
 | `get_workflow_run_logs` | Fetches job logs for a specific GitHub Actions workflow run to diagnose CI failures. Lists all jobs for a run and downloads their logs, truncated to 50KB by default (configurable via `max_bytes`). |
-| `update_pull_request` | Updates an existing pull request by pushing new commits to the PR branch and optionally updating the title and/or description. Supports `dry_run` mode for testing without actual modifications. |
+| `update_pull_request` | Updates an existing pull request by pushing new commits to the PR branch (in the fork for fork-based PRs, in the repository otherwise) and optionally updating the title and/or description. Supports `dry_run` mode for testing without actual modifications. |
 
 > [!TIP]
 > Set `load_builtin_extensions` input to `false` to disable custom tool auto loading.
