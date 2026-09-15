@@ -265,6 +265,43 @@ export async function getWorkspaceChangePaths(cwd: string): Promise<WorkspaceCha
 }
 
 /**
+ * Idempotently ensure a git remote exists and points at the given URL.
+ *
+ * Adds the remote when it is missing, or updates its URL when it already
+ * exists (e.g. from a previous run, or when the fork was recreated). No-op
+ * when the remote already points at the URL.
+ *
+ * @param git - A `simple-git` instance.
+ * @param name - The remote name (e.g. `pi-fork`).
+ * @param url - The remote URL to configure.
+ * @param log - Optional logger for debug output.
+ */
+export async function ensureRemote(
+  git: SimpleGit,
+  name: string,
+  url: string,
+  log?: { debug: (msg: string) => void }
+): Promise<void> {
+  let existing: string | undefined;
+  try {
+    existing = (await git.raw(['remote', 'get-url', name])).trim() || undefined;
+  } catch {
+    // `git remote get-url` exits non-zero when the remote doesn't exist.
+  }
+
+  if (existing === url) {
+    return;
+  }
+
+  if (existing !== undefined) {
+    await git.raw(['remote', 'set-url', name, url]);
+  } else {
+    await git.raw(['remote', 'add', name, url]);
+  }
+  log?.debug(`Configured git remote "${name}" → ${url}`);
+}
+
+/**
  * Checkout an existing remote branch locally, preserving working-tree changes.
  *
  * Used by `update_pull_request` when the workspace is checked out at a
@@ -272,12 +309,19 @@ export async function getWorkspaceChangePaths(cwd: string): Promise<WorkspaceCha
  * head branch. Working-tree changes are stashed before the checkout and
  * restored afterwards.
  *
+ * @param git - A `simple-git` instance.
+ * @param branchName - The branch to check out.
+ * @param log - Logger for debug/warning output.
+ * @param remoteName - The remote that owns the branch. Defaults to `origin`;
+ *        the fork-based PR flow passes the fork remote here because PR head
+ *        branches live in the fork, not in `origin`.
  * @throws when `git stash pop` fails (branch has diverged in the same files).
  */
 export async function checkoutExistingBranch(
   git: SimpleGit,
   branchName: string,
-  log: { debug: (msg: string) => void; warning: (msg: string) => void }
+  log: { debug: (msg: string) => void; warning: (msg: string) => void },
+  remoteName = 'origin'
 ): Promise<void> {
   const hasChanges = await hasLocalChanges(git);
 
@@ -286,19 +330,19 @@ export async function checkoutExistingBranch(
     await git.stash(['push', '--include-untracked', '-m', 'pi-agent-changes']);
   }
 
-  // Fetch the branch from origin so we have the latest tip
-  await git.fetch('origin', branchName);
+  // Fetch the branch from the remote so we have the latest tip
+  await git.fetch(remoteName, branchName);
 
   // Create or reset the local branch to match the remote
   try {
-    await git.checkoutBranch(branchName, `origin/${branchName}`);
+    await git.checkoutBranch(branchName, `${remoteName}/${branchName}`);
   } catch {
     // Branch already exists locally — reset to remote tip.
     // Destructive but safe: this is an ephemeral CI checkout, and we just
     // fetched the authoritative remote tip. Any local-only commits would
     // be from a previous, failed run and should be discarded.
     await git.checkout(branchName);
-    await git.raw(['reset', '--hard', `origin/${branchName}`]);
+    await git.raw(['reset', '--hard', `${remoteName}/${branchName}`]);
   }
 
   if (hasChanges) {
@@ -350,6 +394,13 @@ export interface CommitAndPushOptions {
   paths: string[];
   /** Logger for debug/warning output. */
   log: { debug: (msg: string) => void; warning: (msg: string) => void };
+  /**
+   * Optional remote to push to instead of `origin`. Used by the fork-based
+   * PR flow: PR head branches live in the agent's fork, so the branch is
+   * pushed to (and, for updates, fetched from) this remote. The remote is
+   * created or updated idempotently via {@link ensureRemote}.
+   */
+  remote?: { name: string; url: string };
 }
 
 /**
@@ -361,6 +412,11 @@ export interface CommitAndPushOptions {
  *
  * For **existing branches** (`isNewBranch: false`): checks out the remote
  * branch (preserving working-tree changes via stash), commits, and pushes.
+ *
+ * Pushes to `origin` unless `options.remote` is provided, in which case the
+ * remote is ensured to exist (idempotent) and both the checkout (for
+ * existing branches) and the push target it — the fork-based PR flow uses
+ * this to keep PR head branches in the agent's fork.
  *
  * @throws when `paths` is empty — callers must always pass filtered paths
  *   from {@link getWorkspaceChangePaths} to respect platform ignore patterns.
@@ -374,12 +430,19 @@ export async function commitAndPushBranch(options: CommitAndPushOptions): Promis
   // Ensure git identity is configured (Forgejo runners have none)
   await ensureGitIdentity(git, actor, log, options.gitIdentityOptions);
 
+  // Resolve the push/fetch remote: the agent's fork when provided, origin
+  // otherwise. Fork remotes are (re)configured idempotently.
+  const remoteName = options.remote?.name ?? 'origin';
+  if (options.remote) {
+    await ensureRemote(git, options.remote.name, options.remote.url, log);
+  }
+
   if (isNewBranch) {
     log.debug(`Creating new branch "${branchName}" from current HEAD…`);
     await git.checkoutLocalBranch(branchName);
   } else {
     log.debug(`Checking out existing branch "${branchName}"…`);
-    await checkoutExistingBranch(git, branchName, log);
+    await checkoutExistingBranch(git, branchName, log, remoteName);
   }
 
   // Stage only the specified paths. This enforces the invariant that
@@ -400,11 +463,17 @@ export async function commitAndPushBranch(options: CommitAndPushOptions): Promis
   await git.commit(message);
 
   // Push
-  log.debug(`Pushing to origin/${branchName}…`);
-  if (isNewBranch) {
-    await git.push('origin', branchName, { '--set-upstream': null });
-  } else {
-    await git.push('origin', branchName);
+  log.debug(`Pushing to ${remoteName}/${branchName}…`);
+  try {
+    const pushResult = await git.push(
+      remoteName,
+      branchName,
+      isNewBranch ? { '--set-upstream': null } : undefined
+    );
+    log.debug(`Push result: ${JSON.stringify(pushResult)}`);
+  } catch (error) {
+    log.debug(`Push failed with exception ${error}`);
+    throw error;
   }
 
   // Get the commit SHA

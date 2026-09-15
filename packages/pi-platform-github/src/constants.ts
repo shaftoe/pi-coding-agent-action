@@ -20,6 +20,15 @@ export const MAX_TITLE_LENGTH = 255;
 // Branch naming patterns
 export const BRANCH_PREFIX = 'pi/issue' as const;
 
+/**
+ * Name of the git remote that points at the agent's fork of the repository.
+ *
+ * Pull requests are opened from the agent's own fork: branches are pushed
+ * to this remote instead of `origin`. It is added to the workspace checkout
+ * on first use and reused (URL updated) on subsequent runs.
+ */
+export const FORK_REMOTE_NAME = 'pi-fork';
+
 // GitHub-specific ignore patterns (appended to the universal defaults)
 export const GITHUB_IGNORE_PATTERNS = [
   // Don't include the workflow that runs this action. Note: gitignore `*`

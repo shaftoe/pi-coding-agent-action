@@ -5,7 +5,7 @@
  * the `simple-git` based helpers behave correctly end-to-end.
  */
 
-import { describe, expect, test, beforeEach, afterEach } from 'vitest';
+import { describe, expect, test, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -19,11 +19,17 @@ import {
   getWorkspaceChangePaths,
   checkoutExistingBranch,
   commitAndPushBranch,
+  ensureRemote,
 } from '@alexanderfortin/pi-platform-github';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 import type { SimpleGit } from 'simple-git';
 import { simpleGit } from 'simple-git';
-import { setupGitRepo, cleanupGitRepo, isolateGitConfig } from '../helpers/git-repo';
+import {
+  setupGitRepo,
+  setupForkGitRepo,
+  cleanupGitRepo,
+  isolateGitConfig,
+} from '../helpers/git-repo';
 
 /** Create a logger that captures messages for assertions. */
 function captureLogger() {
@@ -793,5 +799,236 @@ describe('commitAndPushBranch', () => {
     });
     expect(treeOutput).toContain('included.ts');
     expect(treeOutput).not.toContain('excluded.ts');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ensureRemote
+// ---------------------------------------------------------------------------
+
+describe('ensureRemote', () => {
+  let repo: ReturnType<typeof setupGitRepo>;
+
+  beforeEach(() => {
+    repo = setupGitRepo();
+  });
+
+  afterEach(() => {
+    if (repo) {
+      cleanupGitRepo(repo.workspace);
+    }
+  });
+
+  test('adds a remote when it is missing', async () => {
+    if (!repo) {
+      return;
+    }
+    const git = simpleGit(repo.workspace);
+    const { log } = captureLogger();
+
+    await ensureRemote(git, 'pi-fork', '/some/fork.git', log);
+
+    const url = (await git.raw(['remote', 'get-url', 'pi-fork'])).trim();
+    expect(url).toBe('/some/fork.git');
+  });
+
+  test('updates the URL when the remote exists with a different URL', async () => {
+    if (!repo) {
+      return;
+    }
+    const git = simpleGit(repo.workspace);
+    const { log } = captureLogger();
+
+    await ensureRemote(git, 'pi-fork', '/old/fork.git', log);
+    await ensureRemote(git, 'pi-fork', '/new/fork.git', log);
+
+    const url = (await git.raw(['remote', 'get-url', 'pi-fork'])).trim();
+    expect(url).toBe('/new/fork.git');
+  });
+
+  test('is a no-op when the remote already points at the URL', async () => {
+    if (!repo) {
+      return;
+    }
+    const git = simpleGit(repo.workspace);
+    const { log, messages } = captureLogger();
+
+    await ensureRemote(git, 'origin', repo.remoteDir, log);
+
+    // No reconfiguration log line — the remote already matched.
+    expect(messages.some(m => m.includes('Configured git remote'))).toBe(false);
+    const url = (await git.raw(['remote', 'get-url', 'origin'])).trim();
+    expect(url).toBe(repo.remoteDir);
+  });
+
+  test('treats an empty remote URL as missing and adds the remote', async () => {
+    // `git remote get-url` returning an empty string must not be mistaken
+    // for a configured remote — the remote is (re)added instead.
+    const fakeGit = {
+      raw: vi.fn(async (args: string[]) => (args[1] === 'get-url' ? '   ' : '')),
+    } as unknown as SimpleGit;
+
+    await ensureRemote(fakeGit, 'pi-fork', '/some/fork.git');
+
+    expect(fakeGit.raw).toHaveBeenCalledWith(['remote', 'add', 'pi-fork', '/some/fork.git']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// commitAndPushBranch (remote option — fork-based PR flow)
+// ---------------------------------------------------------------------------
+
+describe('commitAndPushBranch — remote option', () => {
+  let repo: ReturnType<typeof setupForkGitRepo>;
+
+  beforeEach(() => {
+    repo = setupForkGitRepo({
+      upstreamOwner: 'test-owner',
+      upstreamRepo: 'test-repo',
+      forkOwner: 'pi-bot',
+      forkRepo: 'test-repo',
+    });
+  });
+
+  afterEach(() => {
+    if (repo) {
+      cleanupGitRepo(repo.workspace);
+    }
+  });
+
+  test('pushes a new branch to the fork remote instead of origin', async () => {
+    if (!repo) {
+      return;
+    }
+    const { workspace } = repo;
+
+    fs.writeFileSync(path.join(workspace, 'feature.txt'), 'new feature');
+
+    const { log } = captureLogger();
+    await commitAndPushBranch({
+      cwd: workspace,
+      branchName: 'feature-branch',
+      message: 'Add feature',
+      isNewBranch: true,
+      paths: ['feature.txt'],
+      log,
+      remote: { name: 'pi-fork', url: repo.forkDir },
+    });
+
+    // The branch exists on the fork remote, not on origin.
+    const forkBranches = execSync('git branch', { cwd: repo.forkDir, encoding: 'utf-8' });
+    expect(forkBranches).toContain('feature-branch');
+    const upstreamBranches = execSync('git branch', {
+      cwd: repo.upstreamDir,
+      encoding: 'utf-8',
+    });
+    expect(upstreamBranches).not.toContain('feature-branch');
+
+    // The pi-fork remote was configured in the workspace.
+    const remotes = execSync('git remote -v', { cwd: workspace, encoding: 'utf-8' });
+    expect(remotes).toContain('pi-fork');
+  });
+
+  test('checks out and pushes updates on an existing fork branch', async () => {
+    if (!repo) {
+      return;
+    }
+    const { workspace } = repo;
+
+    // Create the branch on the fork remote first.
+    fs.writeFileSync(path.join(workspace, 'v1.txt'), 'v1');
+    await commitAndPushBranch({
+      cwd: workspace,
+      branchName: 'update-branch',
+      message: 'Initial',
+      isNewBranch: true,
+      paths: ['v1.txt'],
+      log: captureLogger().log,
+      remote: { name: 'pi-fork', url: repo.forkDir },
+    });
+
+    // Back on main, make another change and push it to the fork branch.
+    const git = simpleGit(workspace);
+    await git.checkout('main');
+    fs.writeFileSync(path.join(workspace, 'v2.txt'), 'v2');
+
+    const { log } = captureLogger();
+    await commitAndPushBranch({
+      cwd: workspace,
+      branchName: 'update-branch',
+      message: 'Update',
+      isNewBranch: false,
+      paths: ['v2.txt'],
+      log,
+      remote: { name: 'pi-fork', url: repo.forkDir },
+    });
+
+    // The fork branch now has both commits; origin never saw them.
+    const forkLog = execSync('git log --oneline update-branch', {
+      cwd: repo.forkDir,
+      encoding: 'utf-8',
+    });
+    expect(forkLog.trim().split('\n').length).toBe(3);
+    const upstreamBranches = execSync('git branch', {
+      cwd: repo.upstreamDir,
+      encoding: 'utf-8',
+    });
+    expect(upstreamBranches).not.toContain('update-branch');
+  });
+
+  test('rethrows push failures after logging them', async () => {
+    if (!repo) {
+      return;
+    }
+    const { workspace } = repo;
+
+    // Point origin at a nonexistent repository so the push fails.
+    const git = simpleGit(workspace);
+    await git.raw(['remote', 'set-url', 'origin', '/nonexistent/repo.git']);
+
+    fs.writeFileSync(path.join(workspace, 'feature.txt'), 'new feature');
+    const { log, messages } = captureLogger();
+    await expect(
+      commitAndPushBranch({
+        cwd: workspace,
+        branchName: 'doomed-branch',
+        message: 'Add feature',
+        isNewBranch: true,
+        paths: ['feature.txt'],
+        log,
+      })
+    ).rejects.toThrow();
+
+    expect(messages.some(m => m.includes('Push failed with exception'))).toBe(true);
+  });
+
+  test('reuses an existing pi-fork remote with a changed URL', async () => {
+    if (!repo) {
+      return;
+    }
+    const { workspace } = repo;
+
+    // Pre-configure pi-fork pointing somewhere stale.
+    const git = simpleGit(workspace);
+    await git.raw(['remote', 'add', 'pi-fork', '/stale/fork.git']);
+
+    fs.writeFileSync(path.join(workspace, 'feature.txt'), 'new feature');
+    const { log, messages } = captureLogger();
+    await commitAndPushBranch({
+      cwd: workspace,
+      branchName: 'feature-branch',
+      message: 'Add feature',
+      isNewBranch: true,
+      paths: ['feature.txt'],
+      log,
+      remote: { name: 'pi-fork', url: repo.forkDir },
+    });
+
+    // The stale URL was replaced.
+    const url = (await git.raw(['remote', 'get-url', 'pi-fork'])).trim();
+    expect(url).toBe(repo.forkDir);
+    expect(messages.some(m => m.includes('Configured git remote'))).toBe(true);
+    const forkBranches = execSync('git branch', { cwd: repo.forkDir, encoding: 'utf-8' });
+    expect(forkBranches).toContain('feature-branch');
   });
 });

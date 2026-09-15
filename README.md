@@ -660,7 +660,7 @@ If there are insufficient rights to push to the repository, agent will open a PR
 This mirrors how human contributors work and keeps agent branches out of the repository's branch list.
 
 > [!IMPORTANT]
-> **A personal access token is required for PR creation.** The default `secrets.GITHUB_TOKEN` authenticates as the repository's `github-actions[bot]`, which cannot own forks — `create_pull_request` fails with an actionable error in that case. Provide a classic PAT (with the `repo` scope) or a fine-grained PAT (with repository read/write access) via the `github_token` input.
+> **Fork-based PRs need a token that can create forks.** When the token cannot push (e.g. a read-only PAT on someone else's repository, or a workflow whose `GITHUB_TOKEN` is restricted to `contents: read`), the default `secrets.GITHUB_TOKEN` authenticates as the repository's `github-actions[bot]`, which cannot own forks — `create_pull_request` fails with an actionable error in that case. Provide a classic PAT (with the `repo` scope) or a fine-grained PAT (with repository read/write + fork permissions) via the `github_token` input.
 >
 > When the token's owner already owns the repository (e.g. running the agent against your own repository with your PAT), a fork is impossible and unnecessary — the branch is pushed to the repository itself and a same-repository pull request is opened instead.
 

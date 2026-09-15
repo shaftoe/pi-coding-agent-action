@@ -3,19 +3,21 @@
  *
  * Implements the server-side logic for the `update_pull_request` custom tool:
  * detecting changed files in the working tree, creating a commit via the
- * `git` CLI, and pushing the new commit to an existing PR branch.
- * Supports updating the PR title and body as well. Supports dry-run mode for
- * testing without side effects.
+ * `git` CLI, and pushing the new commit to an existing PR branch — in the
+ * fork repository for fork-based PRs (whose head branch lives in the agent's
+ * fork), in `origin` for same-repository PRs. Supports updating the PR title
+ * and body as well. Supports dry-run mode for testing without side effects.
  */
 
 import type { GitHubModuleDeps, UpdatePullRequestParams, UpdatePullRequestDetails } from '../types';
 import type { Logger } from '@alexanderfortin/pi-orchestrator';
-import { MAX_TITLE_LENGTH } from '../constants';
+import { FORK_REMOTE_NAME, MAX_TITLE_LENGTH } from '../constants';
 import {
   createLogger,
   getWorkspaceChangePaths,
   commitAndPushBranch,
   appendCoAuthoredBy,
+  resolveForkRemoteUrl,
 } from '../git/index';
 
 export interface UpdatePullRequestResult {
@@ -126,11 +128,18 @@ interface PullRequestBranchInfo {
   baseBranch: string;
   headSha: string;
   prUrl: string;
+  /**
+   * The repository owning the head branch, when the API reports one.
+   * Present and different from the context repository for fork PRs (the
+   * agent opens PRs from its own fork); `undefined` for same-repository
+   * PRs or when the head repository was deleted.
+   */
+  headRepo?: { owner: string; repo: string };
 }
 
 /**
  * Fetch a pull request via the GitHub REST API and extract the fields needed
- * to update its branch (head/base ref, head SHA, HTML URL).
+ * to update its branch (head/base ref, head SHA, HTML URL, head repository).
  *
  * @param deps - Module dependencies.
  * @param pullNumber - PR number to fetch.
@@ -138,6 +147,7 @@ interface PullRequestBranchInfo {
  * @throws {Error} If the API call returns a non-200 status or no data.
  * @internal Exported for testing purposes.
  */
+// fallow-ignore-next-line complexity
 export async function fetchPullRequestData(
   deps: GitHubModuleDeps,
   pullNumber: number
@@ -160,11 +170,24 @@ export async function fetchPullRequestData(
     );
   }
 
+  // The head repository is only reported when it still exists — forks that
+  // were deleted after the PR was opened report `head.repo: null`.
+  const headRepoData = (
+    prData.data.head as {
+      repo?: { owner?: { login?: string }; name?: string } | null;
+    }
+  ).repo;
+  const headRepo: { owner: string; repo: string } | undefined =
+    headRepoData?.owner?.login && headRepoData?.name
+      ? { owner: headRepoData.owner.login, repo: headRepoData.name }
+      : undefined;
+
   return {
     headBranch: prData.data.head.ref,
     baseBranch: prData.data.base.ref,
     headSha: prData.data.head.sha,
     prUrl: prData.data.html_url,
+    ...(headRepo ? { headRepo } : {}),
   };
 }
 
@@ -355,6 +378,8 @@ export function buildSuccessDetails(input: {
  * Wrapper around {@link generateCommitMessage} + {@link commitAndPushBranch}.
  * Returns `undefined` when there are no file changes to apply.
  *
+ * @param args.remote - Optional remote to push to instead of `origin`. Used
+ *        for fork PRs, whose head branch lives in the fork repository.
  * @returns The new commit SHA, or `undefined` when no changes were applied.
  * @internal Exported for testing purposes.
  */
@@ -367,9 +392,10 @@ export async function applyCommit(
     message: string | undefined;
     pullNumber: number;
     log: Logger;
+    remote?: { name: string; url: string };
   }
 ): Promise<string | undefined> {
-  const { changedPaths, deletedPaths, headBranch, message, pullNumber, log } = args;
+  const { changedPaths, deletedPaths, headBranch, message, pullNumber, log, remote } = args;
 
   if (changedPaths.length === 0 && deletedPaths.length === 0) {
     log.info(`No code changes detected, only updating PR metadata if provided`);
@@ -393,6 +419,7 @@ export async function applyCommit(
       serverUrl: deps.context.serverUrl,
     },
     log,
+    ...(remote ? { remote } : {}),
   });
   log.info(`Created new commit ${commitSha} on branch ${headBranch}`);
   return commitSha;
@@ -497,7 +524,7 @@ export async function updatePullRequest(
 
   logUpdateDebugStart(log, params, resolvedPullNumber);
 
-  const { headBranch, baseBranch, headSha, prUrl } = await fetchPullRequestData(
+  const { headBranch, baseBranch, headSha, prUrl, headRepo } = await fetchPullRequestData(
     deps,
     resolvedPullNumber
   );
@@ -527,6 +554,26 @@ export async function updatePullRequest(
     return result;
   }
 
+  // Fork PRs keep their head branch in the fork repository, not in `origin`.
+  // Push updates there via the `pi-fork` remote (its URL is derived from the
+  // workspace's `origin` URL, inheriting the checkout's credentials).
+  // Same-repository PRs (and PRs whose head repository is gone) push to
+  // `origin` as before.
+  let pushRemote: { name: string; url: string } | undefined;
+  const headRepoDiffers =
+    headRepo !== undefined &&
+    (headRepo.owner !== deps.context.repo.owner || headRepo.repo !== deps.context.repo.repo);
+  if (headRepoDiffers && headRepo) {
+    pushRemote = {
+      name: FORK_REMOTE_NAME,
+      url: await resolveForkRemoteUrl(deps.context.workspace, headRepo, deps.context.serverUrl),
+    };
+    log.debug(
+      `PR #${resolvedPullNumber} head branch "${headBranch}" lives in fork ` +
+        `"${headRepo.owner}/${headRepo.repo}" — pushing updates to ${pushRemote.name}.`
+    );
+  }
+
   const commitSha = await applyCommit(deps, {
     changedPaths,
     deletedPaths,
@@ -534,6 +581,7 @@ export async function updatePullRequest(
     message,
     pullNumber: resolvedPullNumber,
     log,
+    ...(pushRemote ? { remote: pushRemote } : {}),
   });
 
   const { titleUpdated, bodyUpdated } = await applyMetadataUpdate(

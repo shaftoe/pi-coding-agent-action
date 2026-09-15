@@ -100,3 +100,73 @@ export function cleanupGitRepo(workspace: string): void {
   const tmpRoot = path.dirname(workspace);
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 }
+
+/**
+ * A git environment simulating fork-based PR flows.
+ *
+ * `upstreamDir` plays the target repository (`origin`), `forkDir` plays the
+ * agent's fork (`pi-fork`): both are bare repositories laid out under
+ * `<tmpRoot>/remotes/<owner>/<repo>.git` so that
+ * `buildForkRemoteUrl` — which rewrites the trailing `owner/repo` segments
+ * of the `origin` URL — derives exactly the fork path.
+ */
+export interface ForkGitRepo {
+  /** Cloned workspace whose `origin` points at the upstream bare repo. */
+  workspace: string;
+  /** Bare repo acting as the target repository (`origin`). */
+  upstreamDir: string;
+  /** Bare repo acting as the agent's fork (initially empty). */
+  forkDir: string;
+}
+
+/**
+ * Set up a workspace plus two bare remotes laid out as
+ * `remotes/{owner}/{repo}.git` — one for the target repository and one for
+ * the fork — so fork remote URLs can be derived from `origin` by swapping
+ * the owner/repo path segments (mirroring what `buildForkRemoteUrl` does).
+ *
+ * The workspace starts with a single initial commit on `main` pushed to the
+ * upstream remote; the fork remote is empty (forks start without the agent's
+ * branches).
+ */
+export function setupForkGitRepo(options: {
+  upstreamOwner: string;
+  upstreamRepo: string;
+  forkOwner: string;
+  forkRepo: string;
+}): ForkGitRepo | undefined {
+  const { upstreamOwner, upstreamRepo, forkOwner, forkRepo } = options;
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-test-fork-'));
+  const remotesRoot = path.join(tmpRoot, 'remotes');
+  const upstreamDir = path.join(remotesRoot, upstreamOwner, `${upstreamRepo}.git`);
+  const forkDir = path.join(remotesRoot, forkOwner, `${forkRepo}.git`);
+  const workspace = path.join(tmpRoot, 'workspace');
+
+  try {
+    fs.mkdirSync(upstreamDir, { recursive: true });
+    fs.mkdirSync(forkDir, { recursive: true });
+    fs.mkdirSync(workspace, { recursive: true });
+
+    // Bare remotes: upstream gets the initial commit, the fork starts empty
+    // (a freshly created fork has no agent branches yet — pushes to an
+    // empty bare repo work fine).
+    execSync('git init --bare --initial-branch=main', { cwd: upstreamDir, stdio: 'pipe' });
+    execSync('git init --bare --initial-branch=main', { cwd: forkDir, stdio: 'pipe' });
+
+    // Working clone pointed at the upstream remote
+    execSync('git init --initial-branch=main', { cwd: workspace, stdio: 'pipe' });
+    execSync(`git config user.name "${TEST_GIT_NAME}"`, { cwd: workspace, stdio: 'pipe' });
+    execSync(`git config user.email "${TEST_GIT_EMAIL}"`, { cwd: workspace, stdio: 'pipe' });
+    execSync(`git remote add origin ${upstreamDir}`, { cwd: workspace, stdio: 'pipe' });
+
+    fs.writeFileSync(path.join(workspace, 'README.md'), '# test');
+    execSync('git add -A', { cwd: workspace, stdio: 'pipe' });
+    execSync('git commit -m "init"', { cwd: workspace, stdio: 'pipe' });
+    execSync('git push -u origin main', { cwd: workspace, stdio: 'pipe' });
+
+    return { workspace, upstreamDir, forkDir };
+  } catch {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+    return undefined;
+  }
+}

@@ -128,10 +128,24 @@ export {
   ensureGitIdentity,
   getWorkspaceChangePaths,
   checkoutExistingBranch,
+  ensureRemote,
   createLogger,
+  // Fork management (fork-based pull requests)
+  buildForkRemoteUrl,
+  canPushToRepository,
+  ensureFork,
+  getAuthenticatedLogin,
+  resolveForkRemoteUrl,
+  waitForForkReady,
 } from './git';
 
-export type { CommitAndPushOptions, WorkspaceChangePaths, GitIdentityOptions } from './git';
+export type {
+  CommitAndPushOptions,
+  WorkspaceChangePaths,
+  GitIdentityOptions,
+  ForkInfo,
+  WaitForForkReadyOptions,
+} from './git';
 
 // GitHub API token resolution (used by pi-cli + pi-action-bridge)
 export { resolveGitHubToken } from './auth';

@@ -23,6 +23,11 @@ function createPRDeps(): GitHubModuleDeps {
   return {
     octokit: {
       rest: {
+        // The token authenticates as the repository owner — no fork is
+        // created in these legacy scenarios (same-repository PRs).
+        users: {
+          getAuthenticated: vi.fn(() => Promise.resolve({ data: { login: 'test-owner' } })),
+        },
         pulls: {
           create: vi.fn(() =>
             Promise.resolve({
@@ -220,6 +225,11 @@ describe('createPullRequest — fallback when pulls.create fails', () => {
     return {
       octokit: {
         rest: {
+          // Token authenticates as the repository owner (alex) — no fork,
+          // preserving the same-repository semantics these tests assert.
+          users: {
+            getAuthenticated: vi.fn(() => Promise.resolve({ data: { login: 'alex' } })),
+          },
           pulls: {
             create:
               pullsCreateImpl ??
@@ -330,6 +340,11 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
     return {
       octokit: {
         rest: {
+          // Token authenticates as the repository owner (alex) — no fork,
+          // preserving the same-repository semantics these tests assert.
+          users: {
+            getAuthenticated: vi.fn(() => Promise.resolve({ data: { login: 'alex' } })),
+          },
           pulls: { create: pullsCreateImpl },
         },
       } as any,
@@ -453,5 +468,198 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
     expect(result.details.prCreated).toBe(false);
     expect(result.details.compareUrl).toBeDefined();
     expect(result.content[0]!.text).toContain("Can't read pulls");
+  });
+});
+
+describe('createPullRequest — push-capable non-owner token needs no fork', () => {
+  // The token authenticates as a non-owner (sam) who CAN push (collaborator
+  // or app installation token with contents:write). resolveForkForPR must
+  // detect the push permission and skip forking entirely: the branch is
+  // pushed to `origin` and a same-repository PR is opened with a plain
+  // (non cross-repository) head.
+  function createPushCapableDeps(workspace: string) {
+    return {
+      octokit: {
+        rest: {
+          users: {
+            getAuthenticated: vi.fn(() => Promise.resolve({ data: { login: 'sam' } })),
+          },
+          pulls: {
+            create: vi.fn(() =>
+              Promise.resolve({
+                data: {
+                  number: 77,
+                  html_url: 'https://github.com/alex/ansible/pull/77',
+                  head: { ref: 'pi/issue18-1234567890' },
+                  base: { ref: 'master' },
+                },
+              })
+            ),
+          },
+          repos: {
+            // Permission lookup for the context repository: sam can push.
+            get: vi.fn(() =>
+              Promise.resolve({
+                data: {
+                  default_branch: 'master',
+                  permissions: {
+                    admin: false,
+                    maintain: false,
+                    push: true,
+                    pull: true,
+                    triage: false,
+                  },
+                },
+              })
+            ),
+            createFork: vi.fn(),
+          },
+        },
+      } as any,
+      context: {
+        repo: { owner: 'alex', repo: 'ansible' },
+        issue: { number: 18 },
+        eventName: 'issue_comment',
+        payload: { repository: { default_branch: 'master' } },
+        serverUrl: 'https://github.com',
+        runId: 1,
+        runNumber: 1,
+        workspace,
+      },
+      logger: {
+        debug: vi.fn(() => {}),
+        info: vi.fn(() => {}),
+        warning: vi.fn(() => {}),
+        notice: vi.fn(() => {}),
+        error: vi.fn(() => {}),
+      },
+    } as unknown as GitHubModuleDeps;
+  }
+
+  let repo: ReturnType<typeof setupGitRepo>;
+
+  beforeEach(() => {
+    repo = setupGitRepo();
+    if (repo) {
+      fs.writeFileSync(path.join(repo.workspace, 'new-file.txt'), 'hello world');
+    }
+  });
+
+  afterEach(() => {
+    if (repo) {
+      cleanupGitRepo(repo.workspace);
+    }
+  });
+
+  test('opens a same-repository PR without creating a fork', async () => {
+    if (!repo) {
+      return;
+    }
+    const deps = createPushCapableDeps(repo.workspace);
+    const result = await createPullRequest(deps, { title: 'Fix podman prune' });
+
+    // PR was created against the context repository
+    expect(result.details.prCreated).toBe(true);
+    expect(result.details.pullRequestNumber).toBe(77);
+    expect(result.details.pullRequestUrl).toContain('alex/ansible/pull/77');
+
+    // No fork involved: fork details stay unset
+    expect(result.details.forkOwner).toBeUndefined();
+    expect(result.details.forkRepo).toBeUndefined();
+    expect(deps.octokit.rest.repos.createFork).not.toHaveBeenCalled();
+
+    // Same-repository head: plain branch name, not "sam:branch"
+    expect(deps.octokit.rest.pulls.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        owner: 'alex',
+        repo: 'ansible',
+        head: expect.stringMatching(/^pi\/issue18-/),
+      })
+    );
+  });
+
+  test('pushes the branch to the repository itself (origin)', async () => {
+    if (!repo) {
+      return;
+    }
+    const deps = createPushCapableDeps(repo.workspace);
+    await createPullRequest(deps, { title: 'Fix bug' });
+
+    // The branch landed on the origin remote, not a fork remote
+    const { execSync } = await import('node:child_process');
+    const branches = execSync('git branch', { cwd: repo.remoteDir, encoding: 'utf-8' });
+    expect(branches).toContain('pi/issue18-');
+  });
+});
+
+describe('createPullRequest — token without push access falls back to fork', () => {
+  // The token authenticates as a non-owner (sam) who CANNOT push. The fork
+  // path is entered; when fork creation also fails (the bot/PAT cannot own
+  // forks) the actionable error surfaces. No git operations happen before
+  // the fork is resolved, so no git fixture is needed.
+  function createNoPushDeps() {
+    return {
+      octokit: {
+        rest: {
+          users: {
+            getAuthenticated: vi.fn(() => Promise.resolve({ data: { login: 'sam' } })),
+          },
+          repos: {
+            // Permission lookup for alex/ansible says "no push"; the fork
+            // existence check for sam/ansible 404s (no fork yet).
+            get: vi.fn(({ owner }: { owner: string }) =>
+              owner === 'sam'
+                ? Promise.reject(Object.assign(new Error('Not Found'), { status: 404 }))
+                : Promise.resolve({
+                    data: {
+                      default_branch: 'master',
+                      permissions: {
+                        admin: false,
+                        maintain: false,
+                        push: false,
+                        pull: true,
+                        triage: false,
+                      },
+                    },
+                  })
+            ),
+            createFork: vi.fn(() =>
+              Promise.reject(Object.assign(new Error('Forbidden'), { status: 403 }))
+            ),
+          },
+        },
+      } as any,
+      context: {
+        repo: { owner: 'alex', repo: 'ansible' },
+        issue: { number: 18 },
+        eventName: 'issue_comment',
+        payload: { repository: { default_branch: 'master' } },
+        serverUrl: 'https://github.com',
+        runId: 1,
+        runNumber: 1,
+        workspace: '/tmp',
+      },
+      logger: {
+        debug: vi.fn(() => {}),
+        info: vi.fn(() => {}),
+        warning: vi.fn(() => {}),
+        notice: vi.fn(() => {}),
+        error: vi.fn(() => {}),
+      },
+    } as unknown as GitHubModuleDeps;
+  }
+
+  test('attempts to create a fork and surfaces the actionable error', async () => {
+    const deps = createNoPushDeps();
+    // resolveForkForPR runs before the formatCreateError try/catch in
+    // createPullRequest, so the fork error propagates as-is (it is already
+    // self-descriptive and actionable).
+    await expect(createPullRequest(deps, { title: 'Fix bug' })).rejects.toThrow(
+      /Failed to create a fork of "alex\/ansible".*Fork-based pull requests require a token that can create forks/s
+    );
+    expect(deps.octokit.rest.repos.createFork).toHaveBeenCalledWith({
+      owner: 'alex',
+      repo: 'ansible',
+    });
   });
 });

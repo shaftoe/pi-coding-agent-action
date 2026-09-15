@@ -177,6 +177,17 @@ export interface CreatePullRequestDetails {
    * Present only when {@link prCreated} is `false`.
    */
   compareUrl?: string;
+  /**
+   * Owner of the fork the PR head branch was pushed to. Present only when
+   * the PR was opened from the agent's fork of the target repository.
+   */
+  forkOwner?: string;
+  /**
+   * Repository name of the fork the PR head branch was pushed to. Present
+   * only when the PR was opened from the agent's fork of the target
+   * repository.
+   */
+  forkRepo?: string;
 }
 
 export interface UpdatePullRequestParams {

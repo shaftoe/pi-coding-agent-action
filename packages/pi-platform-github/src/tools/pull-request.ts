@@ -10,14 +10,20 @@
  */
 
 import { Temporal } from '@js-temporal/polyfill';
-import { BRANCH_PREFIX, MAX_TITLE_LENGTH } from '../constants';
+import { BRANCH_PREFIX, FORK_REMOTE_NAME, MAX_TITLE_LENGTH } from '../constants';
 import { getContextType } from '../context-utils';
 import {
   createLogger,
   getWorkspaceChangePaths,
   commitAndPushBranch,
   appendCoAuthoredBy,
+  canPushToRepository,
+  ensureFork,
+  getAuthenticatedLogin,
+  resolveForkRemoteUrl,
+  waitForForkReady,
 } from '../git/index';
+import type { ForkInfo } from '../git/index';
 import type { GitHubModuleDeps, CreatePullRequestParams, CreatePullRequestDetails } from '../types';
 
 /**
@@ -360,8 +366,16 @@ export function buildCreateSuccessMessage(pr: GitHubPullRequestResult): string {
 /**
  * Build the structured result for a successful PR creation. Exported for
  * unit testing.
+ *
+ * @param pr - The created PR (number, URL, refs).
+ * @param fork - The fork the PR was opened from, when applicable. Recorded
+ *        in the details (`forkOwner`/`forkRepo`) so consumers can tell
+ *        fork-based PRs from same-repository ones.
  */
-export function buildCreateSuccessResult(pr: GitHubPullRequestResult): CreatePullRequestResult {
+export function buildCreateSuccessResult(
+  pr: GitHubPullRequestResult,
+  fork?: ForkInfo
+): CreatePullRequestResult {
   return {
     content: [{ type: 'text', text: buildCreateSuccessMessage(pr) }],
     details: {
@@ -371,6 +385,7 @@ export function buildCreateSuccessResult(pr: GitHubPullRequestResult): CreatePul
       baseBranch: pr.baseRef,
       dryRun: false,
       prCreated: true,
+      ...(fork ? { forkOwner: fork.owner, forkRepo: fork.repo } : {}),
     },
   };
 }
@@ -447,12 +462,15 @@ export function buildCreateFallbackMessage(
 /**
  * Build the structured result for a fallback (branch created, PR not opened).
  * Exported for unit testing.
+ *
+ * @param fork - The fork the branch was pushed to, when applicable.
  */
 export function buildCreateFallbackResult(
   message: string,
   headBranch: string,
   baseBranch: string,
-  compareUrl: string
+  compareUrl: string,
+  fork?: ForkInfo
 ): CreatePullRequestResult {
   return {
     content: [{ type: 'text', text: message }],
@@ -464,6 +482,7 @@ export function buildCreateFallbackResult(
       dryRun: false,
       prCreated: false,
       compareUrl,
+      ...(fork ? { forkOwner: fork.owner, forkRepo: fork.repo } : {}),
     },
   };
 }
@@ -475,12 +494,82 @@ export function buildCreateFallbackResult(
  * present the branch was created and pushed but the PR object could not be
  * opened (e.g. the token has push access but lacks `pull-requests: write`
  * on Forgejo). The caller should provide a compare-URL fallback in that case.
+ *
+ * `fork` echoes the fork the branch was pushed to (if any) so the caller can
+ * include it in the structured details.
  */
 interface PrepareBranchAndPRResult {
   /** The PR object when creation succeeded. */
   pr?: GitHubPullRequestResult;
   /** Error details when PR creation failed (branch was still created). */
   prError?: { status: number | undefined; message: string };
+  /** The fork the branch was pushed to, when the PR is fork-based. */
+  fork?: ForkInfo;
+}
+
+/**
+ * Resolve the fork to open the pull request from.
+ *
+ * Pull requests are opened from the agent's own fork of the repository: the
+ * branch is pushed to the fork and the PR head is `forkOwner:branch`. The
+ * fork is created on first use and reused on subsequent runs.
+ *
+ * Returns `undefined` when no fork is needed: either the token's owner
+ * already owns the repository (a user cannot fork their own repository) or
+ * the token can push to it directly — a collaborator, an org/team member,
+ * or an app installation token such as the default `GITHUB_TOKEN` with
+ * `contents: write`. In both cases the branch is pushed to `origin` and a
+ * same-repository PR is opened instead.
+ *
+ * @param deps - Module dependencies.
+ * @returns The fork to push to, or `undefined` when forking is not needed.
+ * @throws {Error} With an actionable message when the authenticated user
+ *         cannot be resolved or the fork cannot be created (e.g. the default
+ *         GITHUB_TOKEN authenticates as a bot that cannot own forks — a
+ *         personal access token is required for fork-based PRs).
+ */
+async function resolveForkForPR(deps: GitHubModuleDeps): Promise<ForkInfo | undefined> {
+  const log = createLogger(deps);
+  const { owner, repo } = deps.context.repo;
+
+  // Identify the account the token authenticates as — the prospective fork owner.
+  const login = await getAuthenticatedLogin(deps);
+
+  if (login === owner) {
+    log.debug(
+      `Authenticated user "${login}" owns "${owner}/${repo}" — a user cannot fork ` +
+        `their own repository, so the branch will be pushed to the repository itself.`
+    );
+    return undefined;
+  }
+
+  if (await canPushToRepository(deps)) {
+    log.debug(
+      `Authenticated user "${login}" can push to "${owner}/${repo}" — no fork ` +
+        `needed; the branch will be pushed to the repository itself.`
+    );
+    return undefined;
+  }
+
+  const fork = await ensureFork(deps, login);
+
+  if (fork.created) {
+    // GitHub creates forks asynchronously: the repository object (and the
+    // 202 response of `repos.createFork`) exists before its branches do, so
+    // an immediate push can race a half-created fork. Wait (bounded) for
+    // the default branch to become visible before pushing.
+    const defaultBranch = await determineBaseBranch(deps, undefined);
+    const ready = await waitForForkReady(deps, fork, defaultBranch);
+    if (!ready) {
+      log.warning(
+        `Fork "${fork.owner}/${fork.repo}" did not report a default branch in time — ` +
+          `attempting the push anyway.`
+      );
+    }
+  }
+
+  log.debug(`Opening the pull request from fork "${fork.owner}/${fork.repo}".`);
+  return fork;
 }
 
 /**
@@ -489,6 +578,12 @@ interface PrepareBranchAndPRResult {
  *
  * Wraps the sequence `hasLocalChanges → commitAndPushBranch (checkout -b, add,
  * commit, push) → createPullRequestOnGitHub` into a single step.
+ *
+ * When `fork` is provided the branch is pushed to the fork (via the
+ * `pi-fork` git remote, derived from the workspace's `origin` URL so it
+ * inherits the checkout's credentials) and the PR head is the
+ * cross-repository `forkOwner:branch` form. Otherwise the branch is pushed
+ * to `origin` with a plain branch head.
  *
  * The git CLI operations and the `pulls.create` call are intentionally
  * separated: git push can succeed with push-only tokens, while `pulls.create`
@@ -510,6 +605,7 @@ async function prepareBranchAndCreatePR(
   deps: GitHubModuleDeps,
   baseBranch: string,
   head: string,
+  fork: ForkInfo | undefined,
   title: string,
   bodyText: string,
   log: ReturnType<typeof createLogger>
@@ -540,8 +636,21 @@ async function prepareBranchAndCreatePR(
   // The commit message includes a Co-authored-by trailer when an actor is
   // available. The branch name includes a timestamp so collisions are
   // effectively impossible.
+  //
+  // When the PR is fork-based, the branch is pushed to the agent's fork via
+  // the `pi-fork` remote (its URL is derived from `origin`, so it inherits
+  // the credentials actions/checkout configured) instead of `origin`.
+  const pushRemote = fork
+    ? {
+        name: FORK_REMOTE_NAME,
+        url: await resolveForkRemoteUrl(workspace, fork, deps.context.serverUrl),
+      }
+    : undefined;
   const commitMessage = appendCoAuthoredBy(deps, title);
   log.debug(`Creating branch "${head}", committing, and pushing via git CLI...`);
+  if (pushRemote) {
+    log.debug(`Using remote ${pushRemote.name} pointing to ${pushRemote.url}`);
+  }
   await commitAndPushBranch({
     cwd: workspace,
     branchName: head,
@@ -554,8 +663,10 @@ async function prepareBranchAndCreatePR(
       serverUrl: deps.context.serverUrl,
     },
     log,
+    ...(pushRemote ? { remote: pushRemote } : {}),
   });
-  log.debug(`Branch "${head}" created and pushed successfully`);
+  const pushTarget = pushRemote ? `${pushRemote.name}/${head}` : `origin/${head}`;
+  log.debug(`Branch "${head}" created and pushed to ${pushTarget} successfully`);
 
   // Open the PR — this can fail independently of branch creation (e.g.
   // the token has push access but lacks pull-requests: write on Forgejo).
@@ -577,8 +688,8 @@ async function prepareBranchAndCreatePR(
   //   - 5xx / transient network errors → the agent should be able to
   //     retry or report the real failure.
   try {
-    const pr = await createPullRequestOnGitHub(deps, title, bodyText, baseBranch, head);
-    return { pr };
+    const pr = await createPullRequestOnGitHub(deps, title, bodyText, baseBranch, head, fork);
+    return { pr, ...(fork ? { fork } : {}) };
   } catch (error) {
     const status = getErrorStatus(error);
     const message = error instanceof Error ? error.message : String(error);
@@ -594,7 +705,7 @@ async function prepareBranchAndCreatePR(
         `(HTTP ${status}): ${message}. ` +
         `The branch is ready — a compare URL will be provided.`
     );
-    return { prError: { status, message } };
+    return { prError: { status, message }, ...(fork ? { fork } : {}) };
   }
 }
 
@@ -603,13 +714,18 @@ async function createPullRequestOnGitHub(
   title: string,
   body: string,
   baseBranch: string,
-  headBranch: string
+  headBranch: string,
+  fork: ForkInfo | undefined
 ): Promise<GitHubPullRequestResult> {
   const owner = deps.context.repo.owner;
   const repo = deps.context.repo.repo;
   const log = createLogger(deps);
 
-  log.debug(`Creating pull request...`);
+  // Cross-repository PR head: GitHub/Forgejo identify the fork with the
+  // "owner:branch" form. Same-repository PRs use the plain branch name.
+  const head = fork ? `${fork.owner}:${headBranch}` : headBranch;
+
+  log.debug(`Creating pull request (head: ${head})...`);
 
   const result = await deps.octokit.rest.pulls.create({
     owner,
@@ -617,7 +733,7 @@ async function createPullRequestOnGitHub(
     title,
     body,
     base: baseBranch,
-    head: headBranch,
+    head,
   });
 
   return {
@@ -631,15 +747,21 @@ async function createPullRequestOnGitHub(
 /**
  * Create a pull request end-to-end.
  *
- * Orchestrates the full flow: determines the base branch, checks for working-tree
- * changes, creates a branch + commit + push via the `git` CLI, and opens the PR.
- * When `dryRun` is `true` the operation is simulated and no resources are created.
+ * Orchestrates the full flow: determines the base branch, resolves (or
+ * creates) the agent's fork of the repository, checks for working-tree
+ * changes, creates a branch + commit and pushes it to the fork (or `origin`
+ * when the token's owner already owns the repository), and opens the PR
+ * with the cross-repository `forkOwner:branch` head. When `dryRun` is
+ * `true` the operation is simulated and no resources are created.
  *
  * @param deps - Module dependencies.
  * @param params - Parameters controlling title, body, base branch, and dry-run.
  * @returns The tool result containing a human-readable message and structured
  *          details about the created PR (or dry-run output).
- * @throws {Error} If no changed files are detected or the GitHub API call fails.
+ * @throws {Error} If no changed files are detected, the fork cannot be
+ *                 created (fork-based PRs need a PAT — the default
+ *                 GITHUB_TOKEN authenticates as a bot that cannot own
+ *                 forks), or the GitHub API call fails.
  */
 // fallow-ignore-next-line complexity
 export async function createPullRequest(
@@ -673,24 +795,38 @@ export async function createPullRequest(
     return buildCreateDryRunResult(message, head, baseBranch);
   }
 
+  // Resolve the agent's fork of the repository — created on first use,
+  // reused afterwards. Skipped (returns undefined) when no fork is needed.
+  const fork = await resolveForkForPR(deps);
+
   // Create and push the new branch via git CLI
   log.debug(`Preparing branch and changes via git CLI...`);
 
   try {
-    const result = await prepareBranchAndCreatePR(deps, baseBranch, head, title, bodyText, log);
+    const result = await prepareBranchAndCreatePR(
+      deps,
+      baseBranch,
+      head,
+      fork,
+      title,
+      bodyText,
+      log
+    );
 
     // PR was created successfully
     if (result.pr) {
       const successMessage = buildCreateSuccessMessage(result.pr);
       log.info(`SUCCESS: ${successMessage}`);
-      return buildCreateSuccessResult(result.pr);
+      return buildCreateSuccessResult(result.pr, fork);
     }
 
     // Branch was created and pushed but the PR object could not be opened
     // (e.g. token lacks pull-requests:write on Forgejo). Provide a compare
-    // URL so the user or agent can open the PR manually.
+    // URL so the user or agent can open the PR manually. Fork-based PRs use
+    // the cross-repository "forkOwner:branch" head form in the compare URL.
     if (result.prError) {
-      const compareUrl = buildCompareUrl(deps, baseBranch, head);
+      const compareHead = fork ? `${fork.owner}:${head}` : head;
+      const compareUrl = buildCompareUrl(deps, baseBranch, compareHead);
       const message = buildCreateFallbackMessage(
         baseBranch,
         head,
@@ -698,7 +834,7 @@ export async function createPullRequest(
         result.prError.message
       );
       log.info(`PARTIAL SUCCESS: ${message}`);
-      return buildCreateFallbackResult(message, head, baseBranch, compareUrl);
+      return buildCreateFallbackResult(message, head, baseBranch, compareUrl, fork);
     }
 
     // Defensive — should never reach here
