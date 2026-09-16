@@ -88,9 +88,11 @@ export const CREATE_PULL_REQUEST_PROMPT_GUIDELINES = [
   'Always use the create_pull_request tool to create pull requests - do not use git commands or gh CLI directly.',
   'Make sure your changes are made (modified files exist) before calling this tool. The tool will detect changes, create branch, and create PR automatically. Do NOT use unless you have already applied changes and/or added new files.',
   'The tool will automatically generate a branch name in the format: pi/issue{number}-{timestamp}.',
+  "If the tool fails to push to the repository because of insufficient permissions, open a PR from a fork: create a fork (if it doesn't exist); push the PR branch to fork; create a PR from the branch in the fork.",
   'Do NOT provide the "base" parameter unless the user explicitly requests a different target branch than the repository default. The tool will automatically detect the correct default branch.',
   'Use dryRun=true first to verify the PR configuration, then dryRun=false to create it.',
   'On some platforms (e.g. Forgejo) the PR object cannot always be opened automatically even though the branch is pushed. When this happens the tool returns a compare URL instead of an error — post that URL so the user can open the PR manually.',
+  'If the tool fails with an error about creating a fork, the configured token cannot own forks (e.g. the default GITHUB_TOKEN authenticates as a bot). Report that a personal access token with repository access is required for fork-based pull requests.',
 ];
 
 /**
