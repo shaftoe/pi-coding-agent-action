@@ -120,6 +120,9 @@ jobs:
     if: startsWith(github.event.comment.body, '/pi ')
     runs-on: ubuntu-latest
     steps:
+
+      - uses: actions/checkout@v6
+
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
