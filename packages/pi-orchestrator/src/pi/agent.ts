@@ -167,6 +167,18 @@ export class Agent {
       this.modelRuntime.registerProvider(this.config.provider, { baseUrl: this.config.baseUrl });
     }
 
+    // Fetch the latest model catalog from pi.dev so models newer than the bundled SDK resolve.
+    // Must run after the API key is set: the SDK only fetches catalogs for providers that have a credential.
+    // The SDK skips the network when PI_OFFLINE is set.
+    const { errors } = await this.modelRuntime.refresh({
+      providers: [this.config.provider],
+      signal: AbortSignal.timeout(MODEL_REFRESH_TIMEOUT_MS),
+    });
+    const refreshError = errors.get(this.config.provider);
+    if (refreshError) {
+      this.logger.warning(`[models] Could not refresh the model catalog: ${refreshError.message}`);
+    }
+
     // Phase 1: Create services (loads extensions, registers providers).
     const services = await createAgentSessionServices({
       cwd,
