@@ -109,9 +109,49 @@ describe('getCIStatus - platform implementation', () => {
       expect(result.details.ref).toBe('explicit-ref');
     });
 
-    test('falls back to context SHA when no ref or pull_number', async () => {
+    test('uses the current PR head SHA on a pull_request event', async () => {
       const fn = await getModule();
       const result = await fn(createTestDeps(mockOctokit), {});
+
+      expect(mockPullsGet).toHaveBeenCalledWith({
+        owner: 'test-owner',
+        repo: 'test-repo',
+        pull_number: 42,
+      });
+      expect(result.details.ref).toBe('pr-head-sha-abcdef');
+    });
+
+    test('uses the current PR head SHA on a comment on a PR', async () => {
+      const fn = await getModule();
+      const result = await fn(
+        createTestDeps(mockOctokit, {
+          eventName: 'issue_comment',
+          payload: { issue: { number: 42, pull_request: {} } },
+        }),
+        {}
+      );
+
+      expect(mockPullsGet).toHaveBeenCalledWith(expect.objectContaining({ pull_number: 42 }));
+      expect(result.details.ref).toBe('pr-head-sha-abcdef');
+    });
+
+    test('falls back to context SHA on a comment on an issue', async () => {
+      const fn = await getModule();
+      const result = await fn(
+        createTestDeps(mockOctokit, {
+          eventName: 'issue_comment',
+          payload: { issue: { number: 42 } },
+        }),
+        {}
+      );
+
+      expect(mockPullsGet).not.toHaveBeenCalled();
+      expect(result.details.ref).toBe('context-sha-12345678');
+    });
+
+    test('falls back to context SHA when the context is not a PR', async () => {
+      const fn = await getModule();
+      const result = await fn(createTestDeps(mockOctokit, { eventName: 'push' }), {});
 
       expect(mockPullsGet).not.toHaveBeenCalled();
       expect(result.details.ref).toBe('context-sha-12345678');
@@ -120,7 +160,10 @@ describe('getCIStatus - platform implementation', () => {
     test('returns error message when context SHA is empty', async () => {
       const fn = await getModule();
 
-      const result = await fn(createTestDeps(mockOctokit, { withSha: false }), {});
+      const result = await fn(
+        createTestDeps(mockOctokit, { eventName: 'push', withSha: false }),
+        {}
+      );
 
       expect(result.content[0].text).toContain('Could not resolve ref');
       expect(result.details.ref).toBe('');

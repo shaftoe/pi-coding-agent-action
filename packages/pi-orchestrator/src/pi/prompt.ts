@@ -328,7 +328,7 @@ export function GET_CI_STATUS_PROMPT_GUIDELINES(platform: PlatformType = 'github
   const product = productNameOf(platform);
   return [
     'Use get_ci_status to inspect the CI/CD status of a pull request or commit before or after making changes.',
-    `By default, the tool fetches status for the current PR from the ${product} context. Only provide owner/repo/pull_number when you need to check a different PR.`,
+    `By default, the tool fetches status for the head commit of the current PR from the ${product} context. Outside a PR, it uses the commit that triggered the run. Only provide owner/repo/pull_number when you need to check a different PR.`,
     'You can also provide a `ref` (commit SHA or branch name) directly instead of a pull_number.',
     'Filter by `status` (queued, in_progress, completed) or `conclusion` (success, failure, cancelled, timed_out) to narrow results.',
     'For failed workflow runs, use the returned run_id with the `get_workflow_run_logs` tool to fetch detailed job logs and diagnose failures.',

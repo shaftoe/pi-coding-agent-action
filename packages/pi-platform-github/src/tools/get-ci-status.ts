@@ -13,6 +13,7 @@ import type {
   WorkflowRunResult,
 } from '../types';
 import { getStatusIcon } from './ci-utils';
+import { isPR } from '../context-utils';
 
 /** Status types for check runs */
 type CheckRunStatus = 'queued' | 'in_progress' | 'completed';
@@ -46,7 +47,8 @@ const MAX_WORKFLOW_RUNS = 50;
  * Resolve the head SHA from the given parameters.
  *
  * If `ref` is provided, use it directly. If `pull_number` is provided,
- * fetch the PR to get its head SHA. Otherwise fall back to the context SHA.
+ * fetch the PR to get its head SHA. Otherwise use the head SHA of the
+ * current PR, or the context SHA when the context is not a PR.
  */
 async function resolveHeadSha(
   deps: GitHubModuleDeps,
@@ -59,17 +61,28 @@ async function resolveHeadSha(
     return params.ref;
   }
 
-  // Fetch PR head SHA if pull_number provided
-  if (params.pull_number) {
+  // A comment on a PR (issue_comment) sets payload.issue.pull_request, which isPR() misses
+  const issue = deps.context.payload.issue as { pull_request?: unknown } | undefined;
+  const isPRComment = issue?.pull_request !== undefined;
+
+  // Use the given PR, else the current PR.
+  // Not the context SHA: on PR events it is the temporary merge commit, which has no CI runs.
+  let pullNumber = params.pull_number;
+  if (!pullNumber && (isPR(deps) || isPRComment)) {
+    pullNumber = deps.context.issue.number;
+  }
+
+  // Fetch PR head SHA if a PR number is known
+  if (pullNumber) {
     const pr = await deps.octokit.rest.pulls.get({
       owner,
       repo,
-      pull_number: params.pull_number,
+      pull_number: pullNumber,
     });
     return pr.data.head.sha;
   }
 
-  // Fall back to context SHA
+  // Not a PR: use the commit that triggered the run
   return deps.context.sha ?? undefined;
 }
 
