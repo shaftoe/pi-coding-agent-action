@@ -170,13 +170,19 @@ export class Agent {
     // Fetch the latest model catalog from pi.dev so models newer than the bundled SDK resolve.
     // Must run after the API key is set: the SDK only fetches catalogs for providers that have a credential.
     // The SDK skips the network when PI_OFFLINE is set.
-    const { errors } = await this.modelRuntime.refresh({
-      providers: [this.config.provider],
-      signal: AbortSignal.timeout(MODEL_REFRESH_TIMEOUT_MS),
-    });
-    const refreshError = errors.get(this.config.provider);
-    if (refreshError) {
-      this.logger.warning(`[models] Could not refresh the model catalog: ${refreshError.message}`);
+    if (this.config.refreshModelCatalog === false) {
+      this.logger.debug('[models] Skipping model catalog refresh (refresh_model_catalog=false)');
+    } else {
+      const { errors } = await this.modelRuntime.refresh({
+        providers: [this.config.provider],
+        signal: AbortSignal.timeout(MODEL_REFRESH_TIMEOUT_MS),
+      });
+      const refreshError = errors.get(this.config.provider);
+      if (refreshError) {
+        this.logger.warning(
+          `[models] Could not refresh the model catalog: ${refreshError.message}`
+        );
+      }
     }
 
     // Phase 1: Create services (loads extensions, registers providers).

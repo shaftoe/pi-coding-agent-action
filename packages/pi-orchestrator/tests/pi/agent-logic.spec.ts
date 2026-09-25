@@ -189,6 +189,62 @@ describe('Agent', () => {
       expect(result).toBe(agent);
     });
 
+    test('refreshes the model catalog at startup by default', async () => {
+      const refreshSpy = vi
+        .spyOn(ModelRuntime.prototype, 'refresh')
+        .mockResolvedValue({ aborted: false, errors: new Map() });
+
+      const agent = createRealAgent();
+      await agent.ready();
+
+      expect(refreshSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ providers: ['anthropic'] })
+      );
+      refreshSpy.mockRestore();
+    });
+
+    test('warns and continues when the startup catalog refresh fails', async () => {
+      const refreshSpy = vi.spyOn(ModelRuntime.prototype, 'refresh').mockResolvedValue({
+        aborted: false,
+        errors: new Map([['anthropic', new Error('catalog endpoint unreachable')]]),
+      });
+
+      const { core, messages } = createCoreWithWarningCapture();
+      const agent = new Agent(core as any, mockPlatformProvider, { ...defaultAgentConfig });
+
+      // A failed startup refresh is non-fatal: fall back to the built-in model list.
+      await expect(agent.ready()).resolves.toBe(agent);
+      expect(refreshSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providers: ['anthropic'],
+          signal: expect.any(AbortSignal),
+        })
+      );
+      expect(messages.some(m => m.includes('Could not refresh the model catalog'))).toBe(true);
+      expect(messages.some(m => m.includes('catalog endpoint unreachable'))).toBe(true);
+      refreshSpy.mockRestore();
+    });
+
+    test('skips the startup catalog refresh when refreshModelCatalog is false', async () => {
+      const refreshSpy = vi
+        .spyOn(ModelRuntime.prototype, 'refresh')
+        .mockResolvedValue({ aborted: false, errors: new Map() });
+
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        refreshModelCatalog: false,
+      });
+      await expect(agent.ready()).resolves.toBe(agent);
+
+      // No provider-scoped startup refresh (the SDK's internal allowNetwork:false
+      // catalog load at create() time still happens, but no network refresh).
+      const startupRefresh = refreshSpy.mock.calls.find(
+        c => Array.isArray(c[0]?.providers) && c[0].providers.includes('anthropic')
+      );
+      expect(startupRefresh).toBeUndefined();
+      refreshSpy.mockRestore();
+    });
+
     test('subscribes to message_update events', async () => {
       const agent = createRealAgent();
 

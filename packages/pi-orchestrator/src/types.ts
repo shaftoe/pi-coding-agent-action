@@ -226,6 +226,13 @@ export interface PiConfig extends DiffConfig {
    */
   loadedTools?: string[];
   baseUrl?: string;
+  /**
+   * Whether to refresh the provider's model catalog from pi.dev at startup
+   * (after credential synchronisation) so models newer than the bundled SDK
+   * resolve. Defaults to `true`; set to `false` to skip the network round-trip
+   * and shorten boot time (the bundled model list is used instead).
+   */
+  refreshModelCatalog?: boolean;
   exportSessionHtml?: boolean;
   exportSessionJsonl?: boolean;
   autoCompaction?: boolean;
