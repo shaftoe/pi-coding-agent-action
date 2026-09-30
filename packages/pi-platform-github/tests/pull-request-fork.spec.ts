@@ -381,4 +381,83 @@ describe('updatePullRequest — fork-based PR', () => {
     // No title/body given — metadata untouched
     expect(pullsUpdate).not.toHaveBeenCalled();
   });
+
+  test('pushes to a same-owner fork whose repo name differs', async () => {
+    if (!repo) {
+      return;
+    }
+    // Edge case: the head repository belongs to the context owner but has a
+    // different name (e.g. a renamed fork). The branch still lives outside
+    // the context repository, so updates must go to the fork remote.
+    const forkRepo = setupForkGitRepo({
+      upstreamOwner: 'alex',
+      upstreamRepo: 'ansible',
+      forkOwner: 'alex',
+      forkRepo: 'ansible-fork',
+    });
+    if (!forkRepo) {
+      return;
+    }
+    try {
+      execSync(`git push ${forkRepo.forkDir} main:refs/heads/feature-branch`, {
+        cwd: forkRepo.workspace,
+        stdio: 'pipe',
+      });
+
+      const deps = {
+        octokit: {
+          rest: {
+            pulls: {
+              get: vi.fn(() =>
+                Promise.resolve({
+                  status: 200,
+                  data: {
+                    number: 78,
+                    html_url: 'https://github.com/alex/ansible/pull/78',
+                    head: {
+                      ref: 'feature-branch',
+                      sha: 'head-sha-456',
+                      repo: { owner: { login: 'alex' }, name: 'ansible-fork' },
+                    },
+                    base: { ref: 'master' },
+                  },
+                })
+              ),
+              update: vi.fn(),
+            },
+          },
+        } as any,
+        context: {
+          repo: { owner: 'alex', repo: 'ansible' },
+          issue: { number: 18 },
+          eventName: 'issue_comment',
+          payload: {},
+          serverUrl: 'https://github.com',
+          runId: 1,
+          runNumber: 1,
+          workspace: forkRepo.workspace,
+        },
+        logger: {
+          debug: noop,
+          info: noop,
+          warning: noop,
+          notice: noop,
+          error: noop,
+        },
+      } as unknown as GitHubModuleDeps;
+
+      fs.writeFileSync(path.join(forkRepo.workspace, 'follow-up.txt'), 'follow up');
+
+      const result = await updatePullRequest(deps, { pull_number: 78, message: 'Edge update' });
+
+      expect(result.details.commitSha).toMatch(/^[0-9a-f]{7,40}$/);
+      const forkLog = execSync('git log --oneline feature-branch', {
+        cwd: forkRepo.forkDir,
+        encoding: 'utf-8',
+      });
+      expect(forkLog).toContain('Edge update');
+    } finally {
+      cleanupGitRepo(forkRepo.workspace);
+    }
+  });
 });

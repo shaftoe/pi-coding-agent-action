@@ -56,6 +56,20 @@ function errorMessage(error: unknown): string {
 }
 
 /**
+ * Format the HTTP status of an Octokit-style error for error messages.
+ *
+ * Falls back to `"unknown"` when the error carries no numeric status
+ * (network failures, non-Error rejections, …).
+ */
+function statusLabel(error: unknown): string {
+  const status = errorStatus(error);
+  if (status === undefined) {
+    return 'unknown';
+  }
+  return String(status);
+}
+
+/**
  * Resolve the login of the user (or bot) the current token authenticates as.
  *
  * @param deps - Module dependencies.
@@ -76,7 +90,7 @@ export async function getAuthenticatedLogin(deps: GitHubModuleDeps): Promise<str
     return login;
   } catch (error) {
     throw new Error(
-      `Failed to resolve the authenticated user (HTTP ${errorStatus(error) ?? 'unknown'}): ` +
+      `Failed to resolve the authenticated user (HTTP ${statusLabel(error)}): ` +
         `${errorMessage(error)}. Fork-based pull requests require a token that can ` +
         `create forks (e.g. a personal access token) — the default GITHUB_TOKEN ` +
         `authenticates as a bot user that cannot own forks.`
@@ -160,7 +174,7 @@ export async function ensureFork(deps: GitHubModuleDeps, login: string): Promise
     if (status !== 404) {
       throw new Error(
         `Failed to check for an existing fork at "${login}/${repo}" ` +
-          `(HTTP ${status ?? 'unknown'}): ${errorMessage(error)}.`
+          `(HTTP ${statusLabel(error)}): ${errorMessage(error)}.`
       );
     }
     // 404 — no fork yet, create one below.
@@ -174,10 +188,9 @@ export async function ensureFork(deps: GitHubModuleDeps, login: string): Promise
     log.info(`Created fork "${login}/${forkRepo}" of "${target}"`);
     return { owner: login, repo: forkRepo, created: true };
   } catch (error) {
-    const status = errorStatus(error);
     throw new Error(
       `Failed to create a fork of "${target}" for "${login}" ` +
-        `(HTTP ${status ?? 'unknown'}): ${errorMessage(error)}. Fork-based pull ` +
+        `(HTTP ${statusLabel(error)}): ${errorMessage(error)}. Fork-based pull ` +
         `requests require a token that can create forks — e.g. a personal access ` +
         `token with repository access. The default GITHUB_TOKEN authenticates as ` +
         `a bot user that cannot own repositories.`
@@ -189,6 +202,11 @@ export async function ensureFork(deps: GitHubModuleDeps, login: string): Promise
 const DEFAULT_READINESS_ATTEMPTS = 10;
 /** Default delay between {@link waitForForkReady} polls, in milliseconds. */
 const DEFAULT_READINESS_DELAY_MS = 1000;
+
+/** Default sleep implementation for {@link waitForForkReady} (real timers). */
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise<void>(resolve => setTimeout(resolve, ms));
+}
 
 /**
  * Options for {@link waitForForkReady}. All fields are injectable so tests
@@ -231,7 +249,7 @@ export async function waitForForkReady(
   const log = createLogger(deps, '🍴');
   const attempts = options?.attempts ?? DEFAULT_READINESS_ATTEMPTS;
   const delayMs = options?.delayMs ?? DEFAULT_READINESS_DELAY_MS;
-  const sleep = options?.sleep ?? (ms => new Promise<void>(resolve => setTimeout(resolve, ms)));
+  const sleep = options?.sleep ?? defaultSleep;
 
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
@@ -251,7 +269,7 @@ export async function waitForForkReady(
         // also don't hard-fail: the subsequent push may still succeed.
         log.warning(
           `Readiness check for fork "${fork.owner}/${fork.repo}" failed with ` +
-            `HTTP ${status ?? 'unknown'}: ${errorMessage(error)} — proceeding.`
+            `HTTP ${statusLabel(error)}: ${errorMessage(error)} — proceeding.`
         );
         return false;
       }
@@ -338,8 +356,7 @@ export async function resolveForkRemoteUrl(
 ): Promise<string> {
   let originUrl: string | undefined;
   try {
-    originUrl =
-      (await simpleGit(workspace).raw(['remote', 'get-url', 'origin'])).trim() || undefined;
+    originUrl = (await simpleGit(workspace).raw(['remote', 'get-url', 'origin'])).trim();
   } catch {
     // No `origin` remote configured (or not a git worktree) — use the fallback.
   }

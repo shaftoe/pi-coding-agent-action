@@ -285,6 +285,17 @@ describe('ensureFork', () => {
     );
   });
 
+  test('reports an unknown HTTP status when the check fails without one', async () => {
+    // Network errors and non-Error rejections carry no numeric status —
+    // the message must stay actionable instead of printing "undefined".
+    const reposGet = vi.fn(() => Promise.reject(new Error('socket hang up')));
+    const deps = createDeps({ rest: { repos: { get: reposGet } } });
+
+    await expect(ensureFork(deps, 'pi-bot')).rejects.toThrow(
+      /Failed to check for an existing fork at "pi-bot\/test-repo".*HTTP unknown.*socket hang up/s
+    );
+  });
+
   test('wraps fork-creation failures with an actionable PAT hint', async () => {
     const reposGet = vi.fn(() => Promise.reject(httpError(404, 'Not Found')));
     const createFork = vi.fn(() =>
@@ -294,6 +305,16 @@ describe('ensureFork', () => {
 
     await expect(ensureFork(deps, 'pi-bot')).rejects.toThrow(
       /Failed to create a fork of "test-owner\/test-repo" for "pi-bot".*personal access token.*GITHUB_TOKEN/s
+    );
+  });
+
+  test('reports an unknown HTTP status when fork creation fails without one', async () => {
+    const reposGet = vi.fn(() => Promise.reject(httpError(404, 'Not Found')));
+    const createFork = vi.fn(() => Promise.reject('createFork exploded'));
+    const deps = createDeps({ rest: { repos: { get: reposGet, createFork } } });
+
+    await expect(ensureFork(deps, 'pi-bot')).rejects.toThrow(
+      /Failed to create a fork of "test-owner\/test-repo" for "pi-bot".*HTTP unknown/s
     );
   });
 });
@@ -392,6 +413,20 @@ describe('waitForForkReady', () => {
     expect(getBranch).toHaveBeenCalledTimes(1);
   });
 
+  test('awaits the real default sleep when retrying without injected sleep', async () => {
+    // Exercises the default (real-timer) sleep implementation itself —
+    // one 404 followed by success means exactly one default-sleep await.
+    const getBranch = vi
+      .fn()
+      .mockRejectedValueOnce(httpError(404, 'Not Found'))
+      .mockResolvedValueOnce({ data: { name: 'main' } });
+
+    const ready = await waitForForkReady(depsWith(getBranch), fork, 'main');
+
+    expect(ready).toBe(true);
+    expect(getBranch).toHaveBeenCalledTimes(2);
+  });
+
   test('stops retrying on non-404 errors and returns false', async () => {
     const getBranch = vi.fn(() => Promise.reject(httpError(403, 'Forbidden')));
     const sleep = vi.fn(() => Promise.resolve());
@@ -405,6 +440,20 @@ describe('waitForForkReady', () => {
     expect(ready).toBe(false);
     expect(getBranch).toHaveBeenCalledTimes(1);
     expect(sleep).not.toHaveBeenCalled();
+  });
+
+  test('reports an unknown HTTP status when the readiness check fails without one', async () => {
+    const getBranch = vi.fn(() => Promise.reject(new Error('socket hang up')));
+    const sleep = vi.fn(() => Promise.resolve());
+
+    const ready = await waitForForkReady(depsWith(getBranch), fork, 'main', {
+      sleep,
+      attempts: 5,
+      delayMs: 1,
+    });
+
+    expect(ready).toBe(false);
+    expect(getBranch).toHaveBeenCalledTimes(1);
   });
 });
 
