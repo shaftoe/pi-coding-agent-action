@@ -15,10 +15,13 @@ import {
   composeActionVersion,
   composeDistCommitMessage,
   copyAllSdkAssets,
+  copyCodemodeAssets,
   copySdkAssetDir,
+  getCodemodeWorkerEntry,
   readJsonVersion,
   RELEASE_BRANCH_RE,
 } from '../../scripts/package';
+import { resolvePiSdkPackagePath } from '../../scripts/pi-sdk';
 
 // ---------------------------------------------------------------------------
 // RELEASE_BRANCH_RE
@@ -411,6 +414,43 @@ describe('copyAllSdkAssets', () => {
       const piSdkDest = join(tmpDir, 'pi-sdk');
       copyAllSdkAssets(join(tmpDir, 'no-such-dir'), piSdkDest);
       expect(existsSync(piSdkDest)).toBe(false);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getCodemodeWorkerEntry
+// ---------------------------------------------------------------------------
+
+describe('getCodemodeWorkerEntry', () => {
+  test('resolves the codemode worker entry inside the SDK dist', () => {
+    expect(getCodemodeWorkerEntry('/sdk/dist')).toBe('/sdk/dist/extensions/codemode/worker.js');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// copyCodemodeAssets
+// ---------------------------------------------------------------------------
+
+describe('copyCodemodeAssets', () => {
+  test('copies the QuickJS wasm and writes a resolvable package.json', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'pi-codemode-asset-test-'));
+    try {
+      const copied = copyCodemodeAssets(tmpDir, resolvePiSdkPackagePath());
+      expect(copied).toBe(true);
+
+      const wasmPath = join(tmpDir, 'dist/node_modules/quickjs-wasi/quickjs.wasm');
+      expect(existsSync(wasmPath)).toBe(true);
+      expect(readFileSync(wasmPath).length).toBeGreaterThan(0);
+
+      const pkg = JSON.parse(
+        readFileSync(join(tmpDir, 'dist/node_modules/quickjs-wasi/package.json'), 'utf-8')
+      ) as { name: string; version: string; exports: Record<string, string> };
+      expect(pkg.name).toBe('quickjs-wasi');
+      expect(pkg.version).toMatch(/^\d+\.\d+\.\d+/);
+      expect(pkg.exports['./quickjs.wasm']).toBe('./quickjs.wasm');
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }

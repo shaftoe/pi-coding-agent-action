@@ -6,7 +6,7 @@
  */
 
 import type { Temporal } from '@js-temporal/polyfill';
-import type { CacheWarmingMode } from '@earendil-works/pi-coding-agent';
+import type { CacheWarmingMode, McpServerConfig } from '@earendil-works/pi-coding-agent';
 import type { CreateReactionType, PlatformProvider } from './platform';
 import type { OpengistExpiration } from './share/opengist';
 
@@ -206,6 +206,31 @@ export interface ResourceLoaderConfig extends DiffConfig {
   systemPrompt?: string;
   /** Working directory. Defaults to `process.cwd()`. */
   cwd?: string;
+  /**
+   * Enable the built-in `codemode` tool: models run JavaScript that orchestrates
+   * tools (including MCP tools) in parallel and can reduce large results before
+   * they reach the model. Registered inactive unless enabled here or via MCP
+   * auto-enable. Defaults to `false`.
+   */
+  enableCodemode?: boolean;
+  /**
+   * Enable the built-in `tool_search` tool, which loads tools with `deferred`
+   * exposure (typically MCP servers) into the model's declarations on demand.
+   * Defaults to `false`.
+   */
+  enableToolSearch?: boolean;
+  /**
+   * MCP servers to register for the session, keyed by server name. Supplied via
+   * the extension API so it works without a trusted `mcp.json` on disk (the
+   * GitHub Action's usual case). Loading any servers also loads the codemode,
+   * tool search, and MCP extensions.
+   */
+  mcpServers?: Record<string, McpServerConfig>;
+  /**
+   * Whether connecting a `codemode`-exposure MCP server activates the codemode
+   * tool. Defaults to the SDK default (`true`).
+   */
+  mcpAutoEnableCodemode?: boolean;
 }
 
 /**
@@ -226,6 +251,14 @@ export interface PiConfig extends DiffConfig {
    */
   loadedTools?: string[];
   baseUrl?: string;
+  /** Enable the built-in `codemode` tool (parallel JS tool orchestration). */
+  enableCodemode?: boolean;
+  /** Enable the built-in `tool_search` tool (load `deferred`-exposure tools on demand). */
+  enableToolSearch?: boolean;
+  /** MCP servers to register for the session, keyed by server name. */
+  mcpServers?: Record<string, McpServerConfig>;
+  /** Whether `codemode`-exposure MCP servers auto-activate codemode. */
+  mcpAutoEnableCodemode?: boolean;
   /**
    * Whether to refresh the provider's model catalog from pi.dev at startup
    * (after credential synchronisation) so models newer than the bundled SDK

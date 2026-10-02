@@ -14,6 +14,7 @@ import {
   MISSING_PROVIDER_MESSAGE,
   parseBooleanInput,
   parseLoadedTools,
+  parseMcpServers,
   parsePositiveIntInput,
   parseStringListInput,
   validateRequiredInputs,
@@ -138,6 +139,60 @@ describe('parseLoadedTools', () => {
 
   test('returns undefined when only empty items remain after parsing', () => {
     expect(parseLoadedTools('\n\n')).toBeUndefined();
+  });
+});
+
+describe('parseMcpServers', () => {
+  test('returns undefined for empty/whitespace input', () => {
+    expect(parseMcpServers('')).toBeUndefined();
+    expect(parseMcpServers('   ')).toBeUndefined();
+  });
+
+  test('parses a bare servers map (stdio + http)', () => {
+    const raw = JSON.stringify({
+      filesystem: { command: 'npx', args: ['-y', 'server-filesystem'] },
+      docs: { url: 'https://example.com/mcp', headers: { Authorization: 'Bearer ${DOCS}' } },
+    });
+    const parsed = parseMcpServers(raw);
+    expect(parsed?.servers).toHaveProperty('filesystem');
+    expect(parsed?.servers).toHaveProperty('docs');
+    expect(parsed?.autoEnableCodemode).toBeUndefined();
+  });
+
+  test('parses the full mcp.json shape with autoEnableCodemode', () => {
+    const raw = JSON.stringify({
+      mcpServers: { docs: { url: 'https://example.com/mcp' } },
+      autoEnableCodemode: false,
+    });
+    const parsed = parseMcpServers(raw);
+    expect(Object.keys(parsed?.servers ?? {})).toEqual(['docs']);
+    expect(parsed?.autoEnableCodemode).toBe(false);
+  });
+
+  test('throws on malformed JSON', () => {
+    expect(() => parseMcpServers('{not json')).toThrow(/Invalid `mcp_servers` JSON/);
+  });
+
+  test('rejects non-object roots and mcpServers values', () => {
+    expect(() => parseMcpServers('[]')).toThrow(/expected a JSON object/);
+    expect(() => parseMcpServers('"nope"')).toThrow(/expected a JSON object/);
+    expect(() => parseMcpServers(JSON.stringify({ mcpServers: [] }))).toThrow(
+      /`mcpServers` must be a JSON object/
+    );
+  });
+
+  test('rejects a server without command or url', () => {
+    expect(() => parseMcpServers(JSON.stringify({ broken: { type: 'stdio' } }))).toThrow(
+      /Invalid MCP server "broken"/
+    );
+  });
+
+  test('rejects a non-boolean autoEnableCodemode', () => {
+    expect(() =>
+      parseMcpServers(
+        JSON.stringify({ mcpServers: { docs: { url: 'https://x' } }, autoEnableCodemode: 'yes' })
+      )
+    ).toThrow(/autoEnableCodemode` must be a boolean/);
   });
 });
 

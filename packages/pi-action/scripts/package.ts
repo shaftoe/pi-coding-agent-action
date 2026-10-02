@@ -1,5 +1,6 @@
-import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { build } from 'esbuild';
+import { createRequire } from 'node:module';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolvePiSdkPackagePath } from './pi-sdk';
@@ -94,6 +95,60 @@ export function copyAllSdkAssets(sdkDistDir: string, piSdkDest: string): void {
   }
 }
 
+/**
+ * Path to the SDK's codemode worker entry inside an installed SDK `dist/`.
+ *
+ * The bundled action builds this as a separate entrypoint: the SDK's
+ * `getCodemodeWorkerSpecifier()` resolves `./codemode-worker.js` relative to
+ * the bundle, so it must sit next to `dist/index.js`.
+ */
+export function getCodemodeWorkerEntry(sdkDistDir: string): string {
+  return join(sdkDistDir, 'extensions', 'codemode', 'worker.js');
+}
+
+/**
+ * Copy the QuickJS wasm the codemode sandbox loads at runtime.
+ *
+ * The bundled SDK resolves it with
+ * `createRequire(dist/index.js).resolve("quickjs-wasi/quickjs.wasm")`. A normal
+ * install satisfies that through `node_modules`; the action has no runtime
+ * `node_modules`, so we recreate the minimal package layout under `dist/`.
+ *
+ * @param cwd - Repository root (the `dist/` parent).
+ * @param sdkPackageJsonPath - Absolute path to the SDK's `package.json`. The
+ *   require is created from there because `quickjs-wasi` is a dependency of the
+ *   SDK package, not hoisted to the workspace root under pnpm.
+ * @returns `true` when the wasm was found and copied, `false` when
+ *   `quickjs-wasi` is not installed (older SDKs without codemode).
+ */
+export function copyCodemodeAssets(cwd: string, sdkPackageJsonPath: string): boolean {
+  const require = createRequire(sdkPackageJsonPath);
+  let wasmPath: string;
+  let pkgPath: string;
+  try {
+    wasmPath = require.resolve('quickjs-wasi/quickjs.wasm');
+    pkgPath = require.resolve('quickjs-wasi/package.json');
+  } catch {
+    return false;
+  }
+
+  const destDir = join(cwd, 'dist/node_modules/quickjs-wasi');
+  mkdirSync(destDir, { recursive: true });
+  copyFileSync(wasmPath, join(destDir, 'quickjs.wasm'));
+
+  // The resolved package is `type: module` with an `exports` map; expose only
+  // the wasm subpath so `createRequire(...).resolve()` accepts it.
+  const { name, version } = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
+    name: string;
+    version: string;
+  };
+  writeFileSync(
+    join(destDir, 'package.json'),
+    `${JSON.stringify({ name, version, exports: { './quickjs.wasm': './quickjs.wasm' } }, null, 2)}\n`
+  );
+  return true;
+}
+
 export async function buildDist(cwd: string = process.cwd()): Promise<void> {
   const baseVersion = readJsonVersion(join(cwd, 'package.json'));
   const version = composeActionVersion(baseVersion);
@@ -108,6 +163,13 @@ export async function buildDist(cwd: string = process.cwd()): Promise<void> {
     `[package] Building action v${version} (base: ${baseVersion}, branch: ${branch}, sha: ${sha})`
   );
 
+  const buildDefines = {
+    'import.meta.url': 'importMetaUrl',
+    __PI_CODING_AGENT_VERSION__: JSON.stringify(piVersion),
+    __VERSION__: JSON.stringify(version),
+    PI_BUNDLED_NODE: 'true',
+  };
+
   await build({
     entryPoints: [join(cwd, 'packages/pi-action/src/run.ts')],
     bundle: true,
@@ -117,20 +179,36 @@ export async function buildDist(cwd: string = process.cwd()): Promise<void> {
     format: 'cjs',
     minify: true,
     plugins: [],
-    define: {
-      'import.meta.url': 'importMetaUrl',
-      __PI_CODING_AGENT_VERSION__: JSON.stringify(piVersion),
-      __VERSION__: JSON.stringify(version),
-      PI_BUNDLED_NODE: 'true',
-    },
+    define: buildDefines,
     inject: [join(cwd, 'packages/pi-action/src/import-meta-url.js')],
   });
 
-  // Clean previous SDK assets before copying the minimal set
+  // Build the codemode sandbox worker beside the main bundle. The SDK resolves
+  // `./codemode-worker.js` relative to `dist/index.js` in bundled Node builds.
+  const sdkDistDir = join(dirname(piPkgPath), 'dist');
+  const codemodeWorkerEntry = getCodemodeWorkerEntry(sdkDistDir);
+  if (existsSync(codemodeWorkerEntry)) {
+    await build({
+      entryPoints: [codemodeWorkerEntry],
+      bundle: true,
+      platform: 'node',
+      target: 'node24',
+      outfile: join(cwd, 'dist/codemode-worker.js'),
+      format: 'cjs',
+      minify: true,
+      define: buildDefines,
+      inject: [join(cwd, 'packages/pi-action/src/import-meta-url.js')],
+    });
+  }
+
+  // Clean previous SDK assets before copying the minimal set.
   const piSdkDir = join(cwd, 'dist/pi-sdk');
   if (existsSync(piSdkDir)) {
     rmSync(piSdkDir, { recursive: true, force: true });
   }
+
+  // Copy the QuickJS wasm the codemode sandbox loads at runtime.
+  copyCodemodeAssets(cwd, piPkgPath);
 
   // Copy only the Pi SDK assets that are read at runtime via getPackageDir().
   // The JS code is already fully inlined by esbuild — only non-code assets

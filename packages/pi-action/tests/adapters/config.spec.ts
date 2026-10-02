@@ -145,6 +145,71 @@ describe('gatherActionsConfig', () => {
     });
   });
 
+  describe('orchestration tools and MCP inputs', () => {
+    test('enable_codemode defaults to false and omits the key', () => {
+      expect(gatherActionsConfig().enableCodemode).toBeUndefined();
+    });
+
+    test('parses enable_codemode true', () => {
+      mockCore({ enable_codemode: 'true' });
+      expect(gatherActionsConfig().enableCodemode).toBe(true);
+    });
+
+    test('parses enable_tool_search true', () => {
+      mockCore({ enable_tool_search: 'true' });
+      expect(gatherActionsConfig().enableToolSearch).toBe(true);
+    });
+
+    test('omits MCP fields when mcp_servers is empty', () => {
+      mockCore({ mcp_servers: '' });
+      const config = gatherActionsConfig();
+      expect(config.mcpServers).toBeUndefined();
+      expect(config.mcpAutoEnableCodemode).toBeUndefined();
+    });
+
+    test('parses mcp_servers into a server map', () => {
+      mockCore({
+        mcp_servers: JSON.stringify({ docs: { url: 'https://example.com/mcp' } }),
+      });
+      expect(gatherActionsConfig().mcpServers).toEqual({
+        docs: { url: 'https://example.com/mcp' },
+      });
+    });
+
+    test('parses the mcp.json shape and forwards autoEnableCodemode', () => {
+      mockCore({
+        mcp_servers: JSON.stringify({
+          mcpServers: { docs: { url: 'https://example.com/mcp' } },
+          autoEnableCodemode: false,
+        }),
+      });
+      const config = gatherActionsConfig();
+      expect(config.mcpServers).toEqual({ docs: { url: 'https://example.com/mcp' } });
+      expect(config.mcpAutoEnableCodemode).toBe(false);
+    });
+
+    test('throws on malformed mcp_servers JSON', () => {
+      mockCore({ mcp_servers: '{not json' });
+      expect(() => gatherActionsConfig()).toThrow(/Invalid `mcp_servers` JSON/);
+    });
+
+    test('masks literal MCP header values and OAuth client secrets', () => {
+      mockCore({
+        mcp_servers: JSON.stringify({
+          docs: {
+            url: 'https://example.com/mcp',
+            headers: { Authorization: 'Bearer abc123', 'X-Env': '${DOCS_TOKEN}' },
+          },
+          legacy: { command: 'server', oauth: { clientSecret: 'shh-secret' } },
+        }),
+      });
+      gatherActionsConfig();
+      expect(coreMock.setSecret).toHaveBeenCalledWith('Bearer abc123');
+      expect(coreMock.setSecret).toHaveBeenCalledWith('shh-secret');
+      expect(coreMock.setSecret).not.toHaveBeenCalledWith('${DOCS_TOKEN}');
+    });
+  });
+
   describe('extensions parsing', () => {
     test('parses newline-separated extensions', () => {
       mockCore({ extensions: 'npm:package-one\ngit:github.com/user/repo\n./local-path.ts' });

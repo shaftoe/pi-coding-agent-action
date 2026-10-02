@@ -6,7 +6,11 @@
 
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import { resolveExtensions, getResourceLoader } from '@alexanderfortin/pi-orchestrator';
-import { buildResourceLoaderOptions, updateLoadedExtensions } from '../../src/pi/resource-loader';
+import {
+  buildBuiltinAgentExtensions,
+  buildResourceLoaderOptions,
+  updateLoadedExtensions,
+} from '../../src/pi/resource-loader';
 import type { Logger } from '../../src/types';
 import { DefaultPackageManager, DefaultResourceLoader } from '@earendil-works/pi-coding-agent';
 import { createMockProvider } from '../helpers/tool-mocks';
@@ -236,6 +240,39 @@ describe('resolveExtensions', () => {
       expect(result.paths.length).toBe(10);
       expect(result.info.loaded.length).toBe(10);
     });
+  });
+});
+
+describe('buildBuiltinAgentExtensions', () => {
+  test('adds nothing when no orchestration tools or MCP servers are configured', () => {
+    expect(buildBuiltinAgentExtensions(undefined)).toEqual([]);
+    expect(buildBuiltinAgentExtensions({})).toEqual([]);
+  });
+
+  test('adds the codemode extension when enabled', () => {
+    const factories = buildBuiltinAgentExtensions({ enableCodemode: true });
+    expect(factories).toHaveLength(1);
+  });
+
+  test('adds the tool search extension when enabled', () => {
+    const factories = buildBuiltinAgentExtensions({ enableToolSearch: true });
+    expect(factories).toHaveLength(1);
+  });
+
+  test('adds codemode, tool search, and MCP when servers are configured', () => {
+    const factories = buildBuiltinAgentExtensions({
+      mcpServers: { docs: { url: 'https://example.com/mcp' } },
+    });
+    expect(factories).toHaveLength(3);
+  });
+
+  test('does not duplicate factories when explicit toggles overlap with MCP', () => {
+    const factories = buildBuiltinAgentExtensions({
+      enableCodemode: true,
+      enableToolSearch: true,
+      mcpServers: { docs: { url: 'https://example.com/mcp' } },
+    });
+    expect(factories).toHaveLength(3);
   });
 });
 

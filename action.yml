@@ -50,6 +50,21 @@ inputs:
     required: false
     default: 'all'
 
+  enable_codemode:
+    description: 'Enable the built-in `codemode` tool: the agent writes JavaScript that orchestrates tools (including MCP tools) in parallel and can reduce large results before they reach the model, cutting prompt tokens on tool-heavy tasks. `codemode` is also activated automatically when an MCP server with `codemode` exposure connects. Note: an explicit `loaded_tools` allowlist must include `codemode` for it to be active.'
+    required: false
+    default: 'false'
+
+  enable_tool_search:
+    description: 'Enable the built-in `tool_search` tool, which loads tools with `deferred` exposure (typically MCP servers) into the model''s tool set on demand. Also activated automatically when an MCP server with `deferred` exposure connects. Note: an explicit `loaded_tools` allowlist must include `tool_search` for it to be active.'
+    required: false
+    default: 'false'
+
+  mcp_servers:
+    description: 'MCP servers to connect, as a JSON object. Either `{"<name>": {"command": "...", "args": [...]}}` for stdio or `{"<name>": {"url": "https://..."}}` for streamable HTTP. The `mcp.json` shape `{"mcpServers": {...}, "autoEnableCodemode": true}` is also accepted. String values (headers, env) may reference environment variables as `${NAME}`. Configuring any server also loads the codemode, tool_search, and MCP extensions; codemode/tool_search are activated per each server''s exposure.'
+    required: false
+    default: ''
+
   diff_max_lines:
     description: 'Maximum number of diff lines returned by the get_pr_diff tool. Defaults to 1000.'
     required: false

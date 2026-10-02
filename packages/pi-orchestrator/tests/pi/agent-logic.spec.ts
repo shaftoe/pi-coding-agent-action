@@ -1052,6 +1052,42 @@ describe('Agent', () => {
     });
   });
 
+  describe('orchestration tools (codemode / tool_search)', () => {
+    test('codemode and tool_search are inactive by default', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      const active: string[] = (agent as any).session.getActiveToolNames();
+      expect(active).not.toContain('codemode');
+      expect(active).not.toContain('tool_search');
+    });
+
+    test('activates codemode and tool_search when enabled', async () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        enableCodemode: true,
+        enableToolSearch: true,
+      });
+      await agent.ready();
+
+      const active: string[] = (agent as any).session.getActiveToolNames();
+      expect(active).toContain('codemode');
+      expect(active).toContain('tool_search');
+    });
+
+    test('activates codemode alone when only it is enabled', async () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        enableCodemode: true,
+      });
+      await agent.ready();
+
+      const active: string[] = (agent as any).session.getActiveToolNames();
+      expect(active).toContain('codemode');
+      expect(active).not.toContain('tool_search');
+    });
+  });
+
   describe('thinking level clamping', () => {
     // claude-sonnet-4-5 supports off–high but NOT xhigh.
     test('clamps unsupported xhigh to high and warns', async () => {

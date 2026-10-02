@@ -622,6 +622,47 @@ The default value is `all`. Tool names must match exactly — the run fails earl
 > [!WARNING]
 > `loaded_tools` can only reference tools that are actually available in the session. If `load_builtin_extensions` is set to `false`, built-in GitHub tool names won't be available to list — use `load_builtin_extensions: true` (the default) and then restrict with `loaded_tools` instead.
 
+### Tool Orchestration (codemode & tool_search)
+
+Pi ships two built-in tools that let the model orchestrate other tools rather than calling them one at a time. SDK sessions (which this action uses) do **not** load them by default, so the action exposes them as opt-in inputs:
+
+- `enable_codemode` — adds the `codemode` tool. The model writes JavaScript that calls tools (including MCP tools) in parallel, filters large results before they reach the model, and can run classifier/image models. This often cuts prompt tokens substantially on tool-heavy tasks, and is particularly useful for large CI logs and PR diffs.
+- `enable_tool_search` — adds the `tool_search` tool, which loads tools with `deferred` exposure into the model's tool set on demand.
+
+```yaml
+- uses: shaftoe/pi-coding-agent-action@v2
+  with:
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    provider: openai
+    model: gpt-5.4
+    token: ${{ secrets.OPENAI_API_KEY }}
+    enable_codemode: true
+    enable_tool_search: true
+```
+
+> [!NOTE]
+> When you also set `loaded_tools`, the allowlist stays authoritative: include `codemode` and/or `tool_search` in the list for them to be active.
+
+### MCP Servers
+
+Connect [MCP](https://modelcontextprotocol.io/) servers to give the agent access to external tools (issue trackers, docs, databases, observability, …). Pass the server definitions as JSON in the `mcp_servers` input — either a bare map or the `mcp.json` shape:
+
+```yaml
+- uses: shaftoe/pi-coding-agent-action@v2
+  with:
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    provider: openai
+    model: gpt-5.4
+    token: ${{ secrets.OPENAI_API_KEY }}
+    mcp_servers: |
+      {
+        "docs": { "url": "https://example.com/mcp" },
+        "filesystem": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "."] }
+      }
+```
+
+Values under `headers`/`env` may reference environment variables with `${NAME}` (e.g. `"Authorization": "Bearer ${DOCS_TOKEN}"`), so tokens can stay in the workflow `env:` rather than the input. Configuring any server also loads the codemode, tool_search, and MCP extensions; `codemode`/`tool_search` are activated automatically based on each server's `exposure` (`codemode` is the default). Set `"autoEnableCodemode": false` (in the `mcp.json` shape) to disable that.
+
 ### Custom Branch Names
 
 You can customize the auto-generated branch names used when Pi creates pull requests. By default, branches follow the `pi/issue{number}-{timestamp}` pattern. Use the `branch_name_template` input to override this:
@@ -916,12 +957,15 @@ Set `cache_warming: off` to disable warming entirely. Warming requires a known c
 | `diff_ignore_patterns` | Space-separated list of file patterns to exclude from PR diffs by default (e.g. `dist/ package-lock.json`). The agent can still provide additional patterns at call time | No | - |
 | `diff_max_bytes` | Maximum diff size in bytes returned by the `get_pr_diff` tool | No | `102400` |
 | `diff_max_lines` | Maximum number of diff lines returned by the `get_pr_diff` tool | No | `1000` |
+| `enable_codemode` | Enable the built-in `codemode` tool: the model runs JavaScript that orchestrates tools in parallel and can reduce large results before they reach the model. Also auto-activated by `codemode`-exposure MCP servers | No | `false` |
+| `enable_tool_search` | Enable the built-in `tool_search` tool, which loads `deferred`-exposure tools (typically MCP servers) on demand. Also auto-activated by `deferred`-exposure MCP servers | No | `false` |
 | `export_session_html` | Export the session as a self-contained HTML file. Auto-enabled when `share_session` is true | No | `false` |
 | `export_session_jsonl` | Export the session as a JSONL file (one JSON object per line) for programmatic consumption | No | `false` |
 | `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
 | `github_token` | GitHub token for API access. The default `GITHUB_TOKEN` works for all standard operations; to use `share_session`, provide a PAT/App token with gist scope instead | Yes | - |
 | `load_builtin_extensions` | Whether to load built-in GitHub tools (see [Custom Tools](#custom-tools) for the full list) | No | `true` |
 | `loaded_tools` | Controls which tools are available in the session. Defaults to `all`. Accepts a list of tool names (one per line) to load — unknown names cause the run to fail early | No | `all` |
+| `mcp_servers` | MCP servers to connect, as JSON. Either a bare map (`{"name": {"command": ...}}` / `{"name": {"url": ...}}`) or the `mcp.json` shape (`{"mcpServers": {...}, "autoEnableCodemode": true}`). `headers`/`env` values may use `${NAME}` env references | No | - |
 | `model` | Model to use (e.g., gpt-5.4, gpt-4o, gemini-2.5-pro) | Yes | - |
 | `platform` | Git hosting platform the action is running on: `github` (default), `codeberg`, `forgejo`, or `gitea` (alias for `forgejo`). Determines platform-specific behaviour such as the action-run URL format in the "View action run" footer. The platform is **no longer auto-detected** from the server URL — set it explicitly when running on Forgejo/Codeberg/Gitea (e.g. `platform: forgejo`) | No | `github` |
 | `pr_number` | Pull request number to target. Use with `workflow_dispatch` to run the agent on a specific PR without a triggering event. When set, the action fetches PR context from the API and targets all operations at the specified PR | No | - |

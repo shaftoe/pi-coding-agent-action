@@ -346,6 +346,32 @@ export class Agent {
     };
     this.session.subscribe(this.sessionEventHandler);
 
+    // Bind extensions to the session. `createAgentSessionFromServices` binds
+    // the core handlers but never emits `session_start`; extensions — most
+    // notably MCP, which connects its servers there — rely on it. Headless
+    // frontends bind with `mode: "print"` (there is no UI context).
+    await this.session.bindExtensions({
+      mode: 'print',
+      onError: error => this.logger.error(`[extension] ${error.extensionPath}: ${error.error}`),
+    });
+
+    // Activate the built-in orchestration tools when explicitly enabled. The
+    // SDK registers `codemode` and `tool_search` inactive; MCP servers may also
+    // activate them from `session_start` based on their exposure. Naming them
+    // still respects the `loaded_tools` allowlist (the SDK ignores tools outside
+    // it), so an explicit allowlist stays authoritative.
+    const orchestrationTools = [
+      ...(this.config.enableCodemode ? ['codemode'] : []),
+      ...(this.config.enableToolSearch ? ['tool_search'] : []),
+    ];
+    if (orchestrationTools.length > 0) {
+      this.session.setActiveToolsByName([
+        ...this.session.getActiveToolNames(),
+        ...orchestrationTools,
+      ]);
+      this.logger.info(`[tools] Activated: ${orchestrationTools.join(', ')}`);
+    }
+
     return this;
   }
 
