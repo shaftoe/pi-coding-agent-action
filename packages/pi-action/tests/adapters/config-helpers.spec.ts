@@ -187,6 +187,18 @@ describe('parseMcpServers', () => {
     );
   });
 
+  test('rejects a server that sets both command and url', () => {
+    expect(() =>
+      parseMcpServers(JSON.stringify({ broken: { command: 'x', url: 'https://x' } }))
+    ).toThrow(/Invalid MCP server "broken": both "command" and "url" set/);
+  });
+
+  test('rejects a server entry that is not an object', () => {
+    expect(() => parseMcpServers(JSON.stringify({ broken: 'not-an-object' }))).toThrow(
+      /Invalid MCP server "broken": expected a JSON object/
+    );
+  });
+
   test('rejects a non-boolean autoEnableCodemode', () => {
     expect(() =>
       parseMcpServers(

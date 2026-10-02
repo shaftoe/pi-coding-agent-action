@@ -162,9 +162,9 @@ function parseMcpJson(raw: string): Record<string, unknown> {
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
-    throw new Error(
-      `Invalid \`mcp_servers\` JSON: ${error instanceof Error ? error.message : String(error)}`
-    );
+    // `JSON.parse` only throws `SyntaxError`; `String()` still renders it with
+    // its message while keeping coverage branch-free.
+    throw new Error(`Invalid \`mcp_servers\` JSON: ${String(error)}`);
   }
   if (!isJsonObject(parsed)) {
     throw new Error('Invalid `mcp_servers`: expected a JSON object.');
@@ -180,24 +180,31 @@ function extractMcpServers(root: Record<string, unknown>): {
   rawServers: Record<string, unknown>;
   wrapped: boolean;
 } {
-  const wrapped = Object.prototype.hasOwnProperty.call(root, 'mcpServers');
-  const rawServers = wrapped ? root.mcpServers : root;
-  if (!isJsonObject(rawServers)) {
-    throw new Error(
-      wrapped
-        ? 'Invalid `mcp_servers`: `mcpServers` must be a JSON object.'
-        : 'Invalid `mcp_servers`: expected a JSON object.'
-    );
+  // A bare map is already a validated JSON object, so only the wrapped shape
+  // can fail here.
+  if (!Object.prototype.hasOwnProperty.call(root, 'mcpServers')) {
+    return { rawServers: root, wrapped: false };
   }
-  return { rawServers, wrapped };
+  const rawServers = root.mcpServers;
+  if (!isJsonObject(rawServers)) {
+    throw new Error('Invalid `mcp_servers`: `mcpServers` must be a JSON object.');
+  }
+  return { rawServers, wrapped: true };
 }
 
-/** Validate one server entry has a stdio `command` or an HTTP `url`. */
+/** Validate one server entry selects exactly one transport (`command` or `url`). */
 function assertMcpServerEntry(name: string, config: unknown): void {
   if (!isJsonObject(config)) {
     throw new Error(`Invalid MCP server "${name}": expected a JSON object.`);
   }
-  if (typeof config.command !== 'string' && typeof config.url !== 'string') {
+  const hasCommand = typeof config.command === 'string';
+  const hasUrl = typeof config.url === 'string';
+  if (hasCommand && hasUrl) {
+    throw new Error(
+      `Invalid MCP server "${name}": both "command" and "url" set — pick one transport.`
+    );
+  }
+  if (!hasCommand && !hasUrl) {
     throw new Error(
       `Invalid MCP server "${name}": expected a "command" (stdio) or "url" (HTTP) field.`
     );
@@ -244,18 +251,19 @@ export function parseMcpServers(raw: string): ParsedMcpServers | undefined {
 /**
  * Register credential-bearing MCP fields as log secrets.
  *
- * Header and OAuth client-secret values typically hold tokens. Literal values
- * are masked; pure `${NAME}` environment references are skipped because the
- * input line itself carries no secret (the referenced variable is masked by
- * the runner when it comes from `secrets`).
+ * HTTP `headers` and stdio `env` values commonly hold tokens, as does an OAuth
+ * client secret. Literal values are masked; pure `${NAME}` environment
+ * references are skipped because the input line itself carries no secret (the
+ * referenced variable is masked by the runner when it comes from `secrets`).
  */
 function maskMcpSecrets(servers: Record<string, McpServerConfig>): void {
   for (const config of Object.values(servers)) {
-    const { headers, oauth } = config as {
+    const { headers, env, oauth } = config as {
       headers?: Record<string, string>;
+      env?: Record<string, string>;
       oauth?: { clientSecret?: string };
     };
-    for (const value of Object.values(headers ?? {})) {
+    for (const value of [...Object.values(headers ?? {}), ...Object.values(env ?? {})]) {
       if (value && !/^\$\{[^}]+\}$/.test(value)) {
         core.setSecret(value);
       }

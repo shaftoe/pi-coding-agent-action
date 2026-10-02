@@ -129,6 +129,9 @@ export function copyCodemodeAssets(cwd: string, sdkPackageJsonPath: string): boo
     wasmPath = require.resolve('quickjs-wasi/quickjs.wasm');
     pkgPath = require.resolve('quickjs-wasi/package.json');
   } catch {
+    console.warn(
+      '[package] quickjs-wasi/quickjs.wasm not found; the codemode tool will be unavailable in this bundle'
+    );
     return false;
   }
 
@@ -199,6 +202,10 @@ export async function buildDist(cwd: string = process.cwd()): Promise<void> {
       define: buildDefines,
       inject: [join(cwd, 'packages/pi-action/src/import-meta-url.js')],
     });
+  } else {
+    console.warn(
+      `[package] codemode worker entry not found at ${codemodeWorkerEntry}; the codemode tool will be unavailable in this bundle`
+    );
   }
 
   // Clean previous SDK assets before copying the minimal set.

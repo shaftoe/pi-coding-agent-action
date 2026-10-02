@@ -315,6 +315,13 @@ export const loggingFactory = (
   pi.on('agent_settled', async () => {
     logger.debug('✅ Agent session settled (no further automatic actions)');
   });
+
+  // Fired when the host binds extensions (`session.bindExtensions()`). MCP
+  // servers connect on this event, so the log line confirms the binding
+  // actually happened in headless runs.
+  pi.on('session_start', async event => {
+    logger.debug(`[session] Extensions bound; session started (${event.reason})`);
+  });
 };
 
 /**

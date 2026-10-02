@@ -1086,6 +1086,77 @@ describe('Agent', () => {
       expect(active).toContain('codemode');
       expect(active).not.toContain('tool_search');
     });
+
+    test('keeps the loaded_tools allowlist authoritative over enableCodemode', async () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        // The codemode extension is loaded (factory registered), but the
+        // allowlist must prevent naming it into the active set.
+        loadedTools: ['get_ci_status'],
+        enableCodemode: true,
+      });
+      await agent.ready();
+
+      const active: string[] = (agent as any).session.getActiveToolNames();
+      expect(active).toContain('get_ci_status');
+      expect(active).not.toContain('codemode');
+    });
+  });
+
+  describe('extension binding', () => {
+    test('binds MCP servers from config without blocking on an unreachable server', async () => {
+      // A codemode-exposure server connects in the background, so `ready()`
+      // must resolve even though the endpoint is dead. This exercises the
+      // MCP extension's session_start → loadConfig path.
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        mcpServers: { docs: { url: 'http://127.0.0.1:1/mcp' } },
+      });
+
+      await expect(agent.ready()).resolves.toBe(agent);
+    });
+
+    test('reports extension handler errors through the bindExtensions onError hook', async () => {
+      const errorMessages: string[] = [];
+      const core = {
+        ...mockCoreAdapter,
+        // Throw only on the logging extension's session_start line so earlier
+        // ready() debug calls are unaffected.
+        debug: vi.fn((message: string) => {
+          if (message.includes('[session]')) {
+            throw new Error('logger exploded');
+          }
+        }),
+        error: vi.fn((message: string) => {
+          errorMessages.push(message);
+        }),
+      };
+
+      const agent = new Agent(core as any, mockPlatformProvider, { ...defaultAgentConfig });
+      await agent.ready();
+
+      expect(
+        errorMessages.some(m => m.includes('[extension]') && m.includes('logger exploded'))
+      ).toBe(true);
+    });
+
+    test('bindExtensions fires session_start for loaded extensions', async () => {
+      // The logging extension logs on `session_start`; without
+      // `session.bindExtensions()` that event never fires. This pins the
+      // behavior change so a regression (dropping the bind call) is caught.
+      const debugMessages: string[] = [];
+      const core = {
+        ...mockCoreAdapter,
+        debug: vi.fn((message: string) => {
+          debugMessages.push(message);
+        }),
+      };
+
+      const agent = new Agent(core as any, mockPlatformProvider, { ...defaultAgentConfig });
+      await agent.ready();
+
+      expect(debugMessages.some(message => message.includes('session started'))).toBe(true);
+    });
   });
 
   describe('thinking level clamping', () => {

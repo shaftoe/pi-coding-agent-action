@@ -193,20 +193,31 @@ describe('gatherActionsConfig', () => {
       expect(() => gatherActionsConfig()).toThrow(/Invalid `mcp_servers` JSON/);
     });
 
-    test('masks literal MCP header values and OAuth client secrets', () => {
+    test('masks literal MCP header values, stdio env values, and OAuth client secrets', () => {
       mockCore({
         mcp_servers: JSON.stringify({
           docs: {
             url: 'https://example.com/mcp',
             headers: { Authorization: 'Bearer abc123', 'X-Env': '${DOCS_TOKEN}' },
           },
+          brave: {
+            command: 'npx',
+            env: { BRAVE_API_KEY: 'env-secret', REF_PATH: '${REF_PATH}' },
+          },
           legacy: { command: 'server', oauth: { clientSecret: 'shh-secret' } },
         }),
       });
       gatherActionsConfig();
       expect(coreMock.setSecret).toHaveBeenCalledWith('Bearer abc123');
+      expect(coreMock.setSecret).toHaveBeenCalledWith('env-secret');
       expect(coreMock.setSecret).toHaveBeenCalledWith('shh-secret');
       expect(coreMock.setSecret).not.toHaveBeenCalledWith('${DOCS_TOKEN}');
+      expect(coreMock.setSecret).not.toHaveBeenCalledWith('${REF_PATH}');
+    });
+
+    test('rejects a server that sets both command and url', () => {
+      mockCore({ mcp_servers: JSON.stringify({ broken: { command: 'x', url: 'https://x' } }) });
+      expect(() => gatherActionsConfig()).toThrow(/both "command" and "url" set/);
     });
   });
 

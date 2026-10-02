@@ -21,6 +21,7 @@ import {
 import type {
   ExtensionFactory,
   LoadExtensionsResult,
+  LoadedMcpConfig,
   McpServerEntry,
 } from '@earendil-works/pi-coding-agent';
 import { getSystemPrompt } from './prompt';
@@ -125,9 +126,33 @@ export async function resolveExtensions(
  * @param config - Resource loader config carrying the tool/MCP toggles.
  * @returns The extension factories to append, in load order.
  */
+/**
+ * Build the MCP extension's `loadConfig` result from the action configuration.
+ *
+ * Servers are supplied programmatically rather than read from a trusted
+ * `mcp.json`, which is what lets the GitHub Action register them from an input
+ * without project trust. Exported for testing.
+ */
+export function buildMcpLoadConfig(config?: ResourceLoaderConfig): LoadedMcpConfig {
+  const servers: McpServerEntry[] = config?.mcpServers
+    ? Object.entries(config.mcpServers).map(([name, serverConfig]) => ({
+        name,
+        config: serverConfig,
+        source: 'action input',
+        scope: 'extension' as const,
+      }))
+    : [];
+  return {
+    servers,
+    ...(config?.mcpAutoEnableCodemode === undefined
+      ? {}
+      : { autoEnableCodemode: config.mcpAutoEnableCodemode }),
+    errors: [],
+  };
+}
+
 export function buildBuiltinAgentExtensions(config?: ResourceLoaderConfig): ExtensionFactory[] {
-  const serverEntries = config?.mcpServers ? Object.entries(config.mcpServers) : [];
-  const hasMcpServers = serverEntries.length > 0;
+  const hasMcpServers = config?.mcpServers ? Object.keys(config.mcpServers).length > 0 : false;
   const factories: ExtensionFactory[] = [];
 
   if (config?.enableCodemode || hasMcpServers) {
@@ -137,23 +162,8 @@ export function buildBuiltinAgentExtensions(config?: ResourceLoaderConfig): Exte
     factories.push(createToolSearchExtension());
   }
   if (hasMcpServers) {
-    const servers: McpServerEntry[] = serverEntries.map(([name, serverConfig]) => ({
-      name,
-      config: serverConfig,
-      source: 'action input',
-      scope: 'extension',
-    }));
-    factories.push(
-      createMcpExtension({
-        loadConfig: () => ({
-          servers,
-          ...(config?.mcpAutoEnableCodemode === undefined
-            ? {}
-            : { autoEnableCodemode: config.mcpAutoEnableCodemode }),
-          errors: [],
-        }),
-      })
-    );
+    // Bind rather than wrap so the (tested) builder is the callback body.
+    factories.push(createMcpExtension({ loadConfig: buildMcpLoadConfig.bind(undefined, config) }));
   }
 
   return factories;

@@ -8,11 +8,13 @@ import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import { resolveExtensions, getResourceLoader } from '@alexanderfortin/pi-orchestrator';
 import {
   buildBuiltinAgentExtensions,
+  buildMcpLoadConfig,
   buildResourceLoaderOptions,
   updateLoadedExtensions,
 } from '../../src/pi/resource-loader';
 import type { Logger } from '../../src/types';
 import { DefaultPackageManager, DefaultResourceLoader } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { createMockProvider } from '../helpers/tool-mocks';
 
 // Mock CoreAdapter for testing
@@ -243,6 +245,47 @@ describe('resolveExtensions', () => {
   });
 });
 
+/**
+ * Minimal `ExtensionAPI` that records tool/event registrations so tests can
+ * confirm which built-in factory ran and in what order. Every other member is a
+ * no-op that returns `undefined`.
+ */
+function createRecordingPi(): {
+  pi: ExtensionAPI;
+  registeredTools: string[];
+  registeredEvents: string[];
+} {
+  const registeredTools: string[] = [];
+  const registeredEvents: string[] = [];
+  const pi = new Proxy(
+    {},
+    {
+      get: (_target, prop) => {
+        if (prop === 'registerTool') {
+          return (definition: { name: string }) => registeredTools.push(definition.name);
+        }
+        if (prop === 'on') {
+          return (event: string) => {
+            registeredEvents.push(event);
+            return () => {};
+          };
+        }
+        if (prop === 'getSettings') {
+          return () => ({});
+        }
+        if (prop === 'getAllTools') {
+          return () => [];
+        }
+        if (prop === 'getMcpServers') {
+          return () => [];
+        }
+        return () => undefined;
+      },
+    }
+  ) as unknown as ExtensionAPI;
+  return { pi, registeredTools, registeredEvents };
+}
+
 describe('buildBuiltinAgentExtensions', () => {
   test('adds nothing when no orchestration tools or MCP servers are configured', () => {
     expect(buildBuiltinAgentExtensions(undefined)).toEqual([]);
@@ -273,6 +316,92 @@ describe('buildBuiltinAgentExtensions', () => {
       mcpServers: { docs: { url: 'https://example.com/mcp' } },
     });
     expect(factories).toHaveLength(3);
+  });
+
+  test('loads factories in codemode → tool_search → MCP order', () => {
+    const factories = buildBuiltinAgentExtensions({
+      enableCodemode: true,
+      enableToolSearch: true,
+      mcpServers: { docs: { url: 'https://example.com/mcp' } },
+    });
+    const { pi, registeredTools, registeredEvents } = createRecordingPi();
+    for (const factory of factories) {
+      factory(pi);
+    }
+
+    // codemode and tool_search register their (inactive) tools at load; MCP
+    // only registers event handlers, including the session_start one that
+    // connects its servers.
+    expect(registeredTools).toEqual(['codemode', 'tool_search']);
+    expect(registeredEvents).toContain('session_start');
+  });
+});
+
+describe('buildMcpLoadConfig', () => {
+  test('maps configured servers to extension-scoped entries', () => {
+    const loaded = buildMcpLoadConfig({
+      mcpServers: {
+        docs: { url: 'https://example.com/mcp' },
+        fs: { command: 'npx', args: ['-y', 'server'] },
+      },
+    });
+
+    expect(loaded.servers).toEqual([
+      {
+        name: 'docs',
+        config: { url: 'https://example.com/mcp' },
+        source: 'action input',
+        scope: 'extension',
+      },
+      {
+        name: 'fs',
+        config: { command: 'npx', args: ['-y', 'server'] },
+        source: 'action input',
+        scope: 'extension',
+      },
+    ]);
+    expect(loaded.errors).toEqual([]);
+    expect(loaded.autoEnableCodemode).toBeUndefined();
+  });
+
+  test('returns no servers when none are configured', () => {
+    expect(buildMcpLoadConfig({}).servers).toEqual([]);
+    expect(buildMcpLoadConfig(undefined).servers).toEqual([]);
+  });
+
+  test('forwards autoEnableCodemode when explicitly set', () => {
+    expect(buildMcpLoadConfig({ mcpAutoEnableCodemode: false }).autoEnableCodemode).toBe(false);
+    expect(buildMcpLoadConfig({ mcpAutoEnableCodemode: true }).autoEnableCodemode).toBe(true);
+  });
+});
+
+// The remaining loader-options test lives below the buildMcpLoadConfig block.
+describe('buildResourceLoaderOptions composition', () => {
+  test('is appended after the logging factory in loader options', async () => {
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warning: vi.fn(),
+      notice: vi.fn(),
+      error: vi.fn(),
+      startGroup: vi.fn(),
+      endGroup: vi.fn(),
+    } satisfies Logger;
+
+    const options = await buildResourceLoaderOptions(logger, mockPlatformProvider, {
+      loadBuiltinExtensions: false,
+      enableCodemode: true,
+    });
+
+    // [logging, codemode]
+    expect(options.extensionFactories).toHaveLength(2);
+    const codemodeFactory = options.extensionFactories[1];
+    if (!codemodeFactory) {
+      throw new Error('expected the codemode factory at index 1');
+    }
+    const { pi, registeredTools } = createRecordingPi();
+    codemodeFactory(pi);
+    expect(registeredTools).toEqual(['codemode']);
   });
 });
 
