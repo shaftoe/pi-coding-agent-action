@@ -110,23 +110,6 @@ export async function resolveExtensions(
 }
 
 /**
- * Build the built-in Pi agent-tool extensions (codemode, tool search, MCP).
- *
- * SDK sessions do **not** load these the way the Pi CLI does; host code must add
- * them explicitly. They are added when the matching config is present:
- *
- * - `codemode` / `tool_search` are registered inactive by the SDK. They are
- *   loaded here when explicitly enabled (activation happens in the agent), and
- *   also whenever MCP servers are configured so the MCP extension can activate
- *   them based on each server's exposure.
- * - MCP servers are supplied through `loadConfig` rather than a trusted
- *   `mcp.json` on disk, which is what lets a GitHub Action register servers
- *   from an input without project trust.
- *
- * @param config - Resource loader config carrying the tool/MCP toggles.
- * @returns The extension factories to append, in load order.
- */
-/**
  * Build the MCP extension's `loadConfig` result from the action configuration.
  *
  * Servers are supplied programmatically rather than read from a trusted
@@ -151,6 +134,23 @@ export function buildMcpLoadConfig(config?: ResourceLoaderConfig): LoadedMcpConf
   };
 }
 
+/**
+ * Build the built-in Pi agent-tool extensions (codemode, tool search, MCP).
+ *
+ * SDK sessions do **not** load these the way the Pi CLI does; host code must add
+ * them explicitly. They are added when the matching config is present:
+ *
+ * - `codemode` / `tool_search` are registered inactive by the SDK. They are
+ *   loaded here when explicitly enabled (activation happens in the agent), and
+ *   also whenever MCP servers are configured so the MCP extension can activate
+ *   them based on each server's exposure.
+ * - MCP servers are supplied through `loadConfig` rather than a trusted
+ *   `mcp.json` on disk, which is what lets a GitHub Action register servers
+ *   from an input without project trust.
+ *
+ * @param config - Resource loader config carrying the tool/MCP toggles.
+ * @returns The extension factories to append, in load order.
+ */
 export function buildBuiltinAgentExtensions(config?: ResourceLoaderConfig): ExtensionFactory[] {
   const hasMcpServers = config?.mcpServers ? Object.keys(config.mcpServers).length > 0 : false;
   const factories: ExtensionFactory[] = [];
@@ -158,6 +158,10 @@ export function buildBuiltinAgentExtensions(config?: ResourceLoaderConfig): Exte
   if (config?.enableCodemode || hasMcpServers) {
     factories.push(createCodemodeExtension({ mode: 'on' }));
   }
+  // Loaded alongside codemode whenever MCP servers are configured because the
+  // SDK activates whichever tool a server's `exposure` needs (`codemode` for
+  // `codemode`, `tool_search` for `deferred`). Gating on the configured
+  // exposure would mean duplicating the SDK's per-tool override logic.
   if (config?.enableToolSearch || hasMcpServers) {
     factories.push(createToolSearchExtension());
   }

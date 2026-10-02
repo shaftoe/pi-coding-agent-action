@@ -661,7 +661,11 @@ Connect [MCP](https://modelcontextprotocol.io/) servers to give the agent access
       }
 ```
 
-Values under `headers`/`env` may reference environment variables with `${NAME}` (e.g. `"Authorization": "Bearer ${DOCS_TOKEN}"`), so tokens can stay in the workflow `env:` rather than the input. Configuring any server also loads the codemode, tool_search, and MCP extensions; `codemode`/`tool_search` are activated automatically based on each server's `exposure` (`codemode` is the default). Set `"autoEnableCodemode": false` (in the `mcp.json` shape) to disable that.
+Values under `headers`/`env` may reference environment variables with `${NAME}` (or `$NAME`), e.g. `"Authorization": "Bearer ${DOCS_TOKEN}"`. References resolve from the action's process environment — that is, the workflow step's `env:` — so keep tokens there rather than in the input. A reference to an unset variable makes that server fail to connect (it is not passed through literally). `!command` runs a shell command to produce a value, and `$$` escapes a literal `$`.
+
+Prefer `headers`/`env` for credentials: literal values there are registered as log secrets and masked, whereas secrets embedded in `args` (e.g. `["--api-key=abc123"]`) are not.
+
+Configuring any server also loads the codemode, tool_search, and MCP extensions; `codemode`/`tool_search` are activated automatically based on each server's `exposure` (`codemode` is the default). Set `"autoEnableCodemode": false` (in the `mcp.json` shape) to disable that.
 
 ### Custom Branch Names
 

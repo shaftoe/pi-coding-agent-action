@@ -61,7 +61,7 @@ inputs:
     default: 'false'
 
   mcp_servers:
-    description: 'MCP servers to connect, as a JSON object. Either `{"<name>": {"command": "...", "args": [...]}}` for stdio or `{"<name>": {"url": "https://..."}}` for streamable HTTP. The `mcp.json` shape `{"mcpServers": {...}, "autoEnableCodemode": true}` is also accepted. String values (headers, env) may reference environment variables as `${NAME}`. Configuring any server also loads the codemode, tool_search, and MCP extensions; codemode/tool_search are activated per each server''s exposure.'
+    description: 'MCP servers to connect, as a JSON object. Either `{"<name>": {"command": "...", "args": [...]}}` for stdio or `{"<name>": {"url": "https://..."}}` for streamable HTTP. The `mcp.json` shape `{"mcpServers": {...}, "autoEnableCodemode": true}` is also accepted. String values (headers, env) may reference environment variables as `${NAME}` (resolved from the step''s `env:`; a reference to an unset variable fails the run). Prefer headers/env for credentials — args values are not masked. Configuring any server also loads the codemode, tool_search, and MCP extensions; codemode/tool_search are activated per each server''s exposure.'
     required: false
     default: ''
 
