@@ -151,6 +151,59 @@ export interface ParsedMcpServers {
   autoEnableCodemode?: boolean;
 }
 
+/** True when `value` is a non-null, non-array JSON object. */
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Parse the raw input as a JSON object or throw a descriptive error. */
+function parseMcpJson(raw: string): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(
+      `Invalid \`mcp_servers\` JSON: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+  if (!isJsonObject(parsed)) {
+    throw new Error('Invalid `mcp_servers`: expected a JSON object.');
+  }
+  return parsed;
+}
+
+/**
+ * Resolve the servers map from either the bare map or the `mcp.json` shape,
+ * reporting which shape was used (to read `autoEnableCodemode` only when wrapped).
+ */
+function extractMcpServers(root: Record<string, unknown>): {
+  rawServers: Record<string, unknown>;
+  wrapped: boolean;
+} {
+  const wrapped = Object.prototype.hasOwnProperty.call(root, 'mcpServers');
+  const rawServers = wrapped ? root.mcpServers : root;
+  if (!isJsonObject(rawServers)) {
+    throw new Error(
+      wrapped
+        ? 'Invalid `mcp_servers`: `mcpServers` must be a JSON object.'
+        : 'Invalid `mcp_servers`: expected a JSON object.'
+    );
+  }
+  return { rawServers, wrapped };
+}
+
+/** Validate one server entry has a stdio `command` or an HTTP `url`. */
+function assertMcpServerEntry(name: string, config: unknown): void {
+  if (!isJsonObject(config)) {
+    throw new Error(`Invalid MCP server "${name}": expected a JSON object.`);
+  }
+  if (typeof config.command !== 'string' && typeof config.url !== 'string') {
+    throw new Error(
+      `Invalid MCP server "${name}": expected a "command" (stdio) or "url" (HTTP) field.`
+    );
+  }
+}
+
 /**
  * Parse the `mcp_servers` input.
  *
@@ -170,36 +223,11 @@ export function parseMcpServers(raw: string): ParsedMcpServers | undefined {
     return undefined;
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(trimmed);
-  } catch (error) {
-    throw new Error(
-      `Invalid \`mcp_servers\` JSON: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
+  const root = parseMcpJson(trimmed);
+  const { rawServers, wrapped } = extractMcpServers(root);
 
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Invalid `mcp_servers`: expected a JSON object.');
-  }
-
-  const root = parsed as Record<string, unknown>;
-  const wrapped = Object.prototype.hasOwnProperty.call(root, 'mcpServers');
-  const rawServers = wrapped ? root.mcpServers : root;
-  if (rawServers === null || typeof rawServers !== 'object' || Array.isArray(rawServers)) {
-    throw new Error('Invalid `mcp_servers`: `mcpServers` must be a JSON object.');
-  }
-
-  for (const [name, config] of Object.entries(rawServers as Record<string, unknown>)) {
-    if (config === null || typeof config !== 'object' || Array.isArray(config)) {
-      throw new Error(`Invalid MCP server "${name}": expected a JSON object.`);
-    }
-    const { command, url } = config as Record<string, unknown>;
-    if (typeof command !== 'string' && typeof url !== 'string') {
-      throw new Error(
-        `Invalid MCP server "${name}": expected a "command" (stdio) or "url" (HTTP) field.`
-      );
-    }
+  for (const [name, config] of Object.entries(rawServers)) {
+    assertMcpServerEntry(name, config);
   }
 
   const autoEnableCodemode = wrapped ? root.autoEnableCodemode : undefined;
