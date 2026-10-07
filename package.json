@@ -30,7 +30,7 @@
     "fallow:fix:dry": "fallow fix --dry-run",
     "fallow:fix": "fallow fix --yes"
   },
-  "packageManager": "pnpm@11.15.0",
+  "packageManager": "pnpm@12.9.1",
   "keywords": [
     "github-action",
     "pi",
