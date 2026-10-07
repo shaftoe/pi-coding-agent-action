@@ -10,7 +10,12 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
-    include: ['packages/*/tests/**/*.spec.ts', 'tests/*.spec.ts', 'tests/e2e/**/*.spec.ts'],
+    include: [
+      'packages/*/tests/**/*.spec.ts',
+      'tests/*.spec.ts',
+      'tests/e2e/**/*.spec.ts',
+      'scripts/tests/**/*.spec.ts',
+    ],
     exclude: ['node_modules/**', 'dist/**'],
     // Tests that exercise the real Pi agent (`agent-logic.spec.ts`) call
     // `Agent.ready()`, which dynamically imports and initialises the full Pi

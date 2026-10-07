@@ -1,158 +1,73 @@
 /**
- * Updates the dependency versions table in README.md between
+ * Updates the dependency versions section in README.md between
  * <!-- DEPS_TABLE_START --> and <!-- DEPS_TABLE_END --> markers.
  *
  * Collects only the dependencies that end up in dist/ by starting from the
  * pi-action package (the esbuild entry point) and recursively resolving
- * workspace: dependencies. Non-workspace deps from the resolved tree are
- * exactly what esbuild bundles into dist/index.js.
+ * workspace: dependencies. Versions are resolved from the *installed* tree
+ * (lockfile truth) — the exact versions esbuild bundles into dist/index.js
+ * and `getPiVersion()` stamps onto issue-comment footers — falling back to
+ * the cleaned declared spec when a package isn't resolvable.
  *
- * Wired into .github/workflows/package.yml so the table is refreshed whenever
- * dist/ is rebuilt on develop.
+ * Pure logic lives in `readme-deps.ts` (unit-tested in
+ * `scripts/tests/update-readme-deps.spec.ts`).
+ *
+ * Wired into the `update-readme` job in .github/workflows/develop.yml so the
+ * section is refreshed whenever dist/ is rebuilt on develop.
+ *
+ * Usage: pnpm run update-readme
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import prettier from 'prettier';
+import {
+  buildDepInfos,
+  buildReadmeSection,
+  buildSdkBadge,
+  resolvePiSdkVersion,
+  spliceReadmeSection,
+  spliceSdkBadge,
+} from './readme-deps';
 
-const scriptDir = __dirname;
+// CJS-safe script-dir resolution (tsx compiles root scripts as CJS, where
+// `import.meta` is unavailable — see bump-readme-version.ts for precedent).
+const scriptDir = dirname(resolve(process.argv[1] ?? '.'));
 const REPO_ROOT = join(scriptDir, '..');
 const README_PATH = join(REPO_ROOT, 'README.md');
 const PACKAGES_DIR = join(REPO_ROOT, 'packages');
 
-const MARKER_START = '<!-- DEPS_TABLE_START -->';
-const MARKER_END = '<!-- DEPS_TABLE_END -->';
-
-interface DepInfo {
-  name: string;
-  version: string;
-  description: string;
-}
-
-/** Friendly descriptions for known dependencies */
-const DEP_DESCRIPTIONS: Record<string, string> = {
-  '@actions/core': 'GitHub Actions core I/O (inputs, outputs, logging)',
-  '@actions/github': 'GitHub API client (Octokit wrapper)',
-  '@earendil-works/pi-agent-core': 'Pi Agent Core — agent orchestration primitives',
-  '@earendil-works/pi-ai': 'Pi AI — AI model abstractions and providers',
-  '@earendil-works/pi-coding-agent': 'Pi SDK — AI coding agent runtime',
-  '@js-temporal/polyfill': 'Temporal API polyfill',
-  '@octokit/core': 'Octokit REST API client core',
-  '@octokit/plugin-rest-endpoint-methods': 'Octokit REST API endpoint methods',
-  ignore: '`.gitignore`-style pattern matching',
-  typebox: 'JSON Schema Type Builder',
-};
-
-function isWorkspaceSpec(spec: string): boolean {
-  return /^workspace:/.test(spec);
-}
-
-/** Strip npm range prefixes (^, ~, =, >=, >, <=, <) and tag suffixes. */
-function cleanVersion(spec: string): string {
-  return spec
-    .replace(/^[=~^<>]?=?\s*/, '')
-    .replace(/-.*$/, '')
-    .trim();
-}
-
-function readJson(path: string): unknown {
-  return JSON.parse(readFileSync(path, 'utf-8'));
-}
-
-interface PkgJson {
-  name: string;
-  dependencies?: Record<string, string>;
-  peerDependencies?: Record<string, string>;
-}
-
-const ENTRY_POINT_PKG = 'pi-action';
-
-/**
- * Starting from the entry-point package (pi-action), recursively resolve
- * `workspace:` dependencies and collect all non-workspace deps that end up
- * in the esbuild bundle.
- */
-function collectBundledDeps(): Map<string, string> {
-  const entryPkgPath = join(PACKAGES_DIR, ENTRY_POINT_PKG, 'package.json');
-  if (!existsSync(entryPkgPath)) {
-    console.error(`Entry-point package not found at ${entryPkgPath}`);
-    process.exit(1);
-  }
-
-  const merged = new Map<string, string>();
-  const visited = new Set<string>();
-
-  function resolvePackage(pkgDirName: string): void {
-    const pkgJsonPath = join(PACKAGES_DIR, pkgDirName, 'package.json');
-    if (!existsSync(pkgJsonPath) || visited.has(pkgDirName)) return;
-    visited.add(pkgDirName);
-
-    const pkg = readJson(pkgJsonPath) as PkgJson;
-
-    const allDeps: Record<string, string> = {
-      ...(pkg.peerDependencies ?? {}),
-      ...(pkg.dependencies ?? {}),
-    };
-
-    for (const [name, spec] of Object.entries(allDeps)) {
-      if (isWorkspaceSpec(spec)) {
-        // Resolve workspace link → recurse into the target package
-        const targetDir = name.startsWith('@') ? name.split('/').pop()! : name;
-        resolvePackage(targetDir);
-      } else if (!merged.has(name)) {
-        merged.set(name, spec);
-      }
-    }
-  }
-
-  resolvePackage(ENTRY_POINT_PKG);
-  return merged;
-}
-
-function generateTable(deps: DepInfo[]): string {
-  const header = `| Dependency | Version | Description |`;
-  const separator = `|---|---|---|`;
-  const rows = deps.map(d => `| \`${d.name}\` | \`${d.version}\` | ${d.description} |`);
-  return [header, separator, ...rows].join('\n');
-}
-
-function main(): void {
+async function main(): Promise<void> {
   if (!existsSync(README_PATH)) {
     console.error(`README not found at ${README_PATH}`);
     process.exit(1);
   }
 
-  const allDeps = collectBundledDeps();
-
-  const deps: DepInfo[] = Array.from(allDeps.entries())
-    .filter(([, spec]) => !isWorkspaceSpec(spec))
-    .map(([name, spec]) => ({
-      name,
-      version: cleanVersion(spec),
-      description: DEP_DESCRIPTIONS[name] ?? '',
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  const table = generateTable(deps);
+  const deps = buildDepInfos(PACKAGES_DIR);
+  const piSdkVersion = resolvePiSdkVersion(PACKAGES_DIR);
+  const section = buildReadmeSection(deps, piSdkVersion);
 
   const readme = readFileSync(README_PATH, 'utf-8');
-  const startIdx = readme.indexOf(MARKER_START);
-  const endIdx = readme.indexOf(MARKER_END);
+  const updated = spliceSdkBadge(
+    spliceReadmeSection(readme, section),
+    buildSdkBadge(piSdkVersion ?? 'unknown')
+  );
 
-  if (startIdx === -1 || endIdx === -1) {
-    console.error(`README.md is missing ${MARKER_START} and/or ${MARKER_END} markers`);
-    process.exit(1);
-  }
+  // Format with the repo's Prettier config so generated sections land in
+  // the same (table-column-padded) style as the hand-maintained parts —
+  // keeps diffs minimal and the file stable across runs.
+  const formatted = await prettier.format(updated, {
+    ...(await prettier.resolveConfig(README_PATH)),
+    filepath: README_PATH,
+  });
+  writeFileSync(README_PATH, formatted);
 
-  const updated =
-    readme.slice(0, startIdx + MARKER_START.length) +
-    '\n\n' +
-    table +
-    '\n\n' +
-    readme.slice(endIdx);
-
-  writeFileSync(README_PATH, updated);
-  console.info('README dependency table updated successfully.');
-  console.info(table);
+  console.info('README dependency section updated successfully.');
+  console.info(`Pi SDK v${piSdkVersion ?? 'unknown'}`);
+  console.info(deps.map(d => `  ${d.name}@${d.version}`).join('\n'));
 }
 
-main();
+main().catch(err => {
+  console.error(err);
+  process.exit(1);
+});
