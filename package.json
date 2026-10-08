@@ -48,7 +48,7 @@
   },
   "devDependencies": {
     "@actions/github": "^9.1.1",
-    "@alexanderfortin/semantic-release-keep-a-changelog": "^0.4.14",
+    "@alexanderfortin/semantic-release-keep-a-changelog": "^0.5.0",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^11.0.1",
