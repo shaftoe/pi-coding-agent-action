@@ -58,14 +58,14 @@
     "@types/node": "^26.6.4",
     "@typescript-eslint/eslint-plugin": "^8.71.0",
     "@typescript-eslint/parser": "^8.71.0",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^5.0.0",
     "eslint": "^10.12.0",
     "fallow": "^3.31.0",
     "prettier": "^3.9.9",
     "semantic-release": "^25.0.9",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",
-    "vitest": "^4.1.11",
+    "vitest": "^5.0.3",
     "yaml": "^2.9.1"
   }
 }
