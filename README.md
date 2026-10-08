@@ -87,7 +87,7 @@ This build bundles the [Pi SDK](https://www.npmjs.com/package/@earendil-works/pi
 | `@octokit/core`                         | `7.0.8`  | Octokit REST API client core                       |
 | `@octokit/plugin-rest-endpoint-methods` | `17.0.0` | Octokit REST API endpoint methods                  |
 | `ignore`                                | `7.0.12` | `.gitignore`-style pattern matching                |
-| `simple-git`                            | `3.36.0` |                                                    |
+| `simple-git`                            | `4.0.2`  |                                                    |
 | `typebox`                               | `1.3.35` | JSON Schema Type Builder                           |
 
 <!-- DEPS_TABLE_END -->
