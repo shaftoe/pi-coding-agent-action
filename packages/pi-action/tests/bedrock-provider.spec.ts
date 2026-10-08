@@ -119,6 +119,10 @@ const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => unde
 
 describe('bedrock provider runtime registration (#398)', () => {
   let savedPkgDir: string | undefined;
+  // Vitest 5 clears mocks before each test, which would wipe the call recorded
+  // while `run.ts` is imported in `beforeAll`. Snapshot the calls before any
+  // per-test clearing happens.
+  let registrationCalls: unknown[][];
 
   beforeAll(async () => {
     savedPkgDir = process.env.PI_PACKAGE_DIR;
@@ -126,6 +130,7 @@ describe('bedrock provider runtime registration (#398)', () => {
     // covers) ensurePackageDirOverride() + ensureBedrockProviderRegistered()
     // before throwing at gatherActionsConfig().
     await import('../src/run');
+    registrationCalls = setBedrockProviderModule.mock.calls.map(call => [...call]);
   });
 
   afterAll(() => {
@@ -140,6 +145,6 @@ describe('bedrock provider runtime registration (#398)', () => {
   test('ensureBedrockProviderRegistered() registers the bedrock provider module', () => {
     // The lazy wrapper checks the override first (`override ?? dynamicImport`),
     // so registering here means the broken dynamic import is never reached.
-    expect(setBedrockProviderModule).toHaveBeenCalledWith(bedrockProviderModule);
+    expect(registrationCalls).toEqual([[bedrockProviderModule]]);
   });
 });
