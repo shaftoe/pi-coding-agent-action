@@ -11,7 +11,7 @@
     "@alexanderfortin/pi-platform-github": "workspace:*",
     "@octokit/core": "^7.0.6",
     "@octokit/plugin-rest-endpoint-methods": "^17.0.0",
-    "simple-git": "^3.36.0"
+    "simple-git": "^4.0.0"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^1.0.4",

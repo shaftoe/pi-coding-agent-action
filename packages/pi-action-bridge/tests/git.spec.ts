@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { shouldIsolateGitConfig, pickRemote } from '../src/git.js';
+import { createGitInspector, shouldIsolateGitConfig, pickRemote } from '../src/git.js';
 import type { RemoteWithRefs } from 'simple-git';
 
 /** A probe that always reports the file as readable (no throw). */
@@ -80,6 +80,48 @@ describe('shouldIsolateGitConfig', () => {
     it('returns false when ~/.gitconfig is absent', () => {
       expect(shouldIsolateGitConfig(process.env)).toBe(false);
     });
+  });
+});
+
+describe('createGitInspector (simple-git v4 double opt-in)', () => {
+  let cwd: string;
+  const saved: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    cwd = mkdtempSync(join(tmpdir(), 'bridge-inspector-'));
+    for (const key of ['GIT_SSH_COMMAND', 'GIT_CONFIG_GLOBAL', 'HOME']) {
+      saved[key] = process.env[key];
+    }
+  });
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
+  it('does not throw when ambient GIT_* vars are present (non-isolating path)', async () => {
+    process.env.GIT_SSH_COMMAND = 'ssh -v';
+    const inspector = createGitInspector(cwd);
+    await expect(inspector.isRepo()).resolves.toBeTypeOf('boolean');
+  });
+
+  it('does not throw when isolating with ambient GIT_* vars in the env', async () => {
+    process.env.GIT_SSH_COMMAND = 'ssh -v';
+    process.env.HOME = '/nonexistent-bridge-test';
+    const inspector = createGitInspector(
+      cwd,
+      { HOME: '/nonexistent-bridge-test', GIT_SSH_COMMAND: 'ssh -v' },
+      throws('EACCES')
+    );
+    // Would throw a GitPluginError under v4 without the allowEnvironment
+    // opt-in, because GIT_SSH_COMMAND would reach `git.env()` explicitly.
+    await expect(inspector.isRepo()).resolves.toBeTypeOf('boolean');
   });
 });
 

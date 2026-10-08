@@ -27,15 +27,25 @@ const defaultAccess = (path: string): void => {
  * Environment injected into `simple-git` subprocesses **only when** git's
  * global config can't be read (see {@link shouldIsolateGitConfig}).
  *
- * `simple-git`'s `blockUnsafeOperationsPlugin` flags `GIT_CONFIG_*` env vars
- * (category `allowUnsafeConfigPaths`) by default, so the constructor opts in
- * via `{ unsafe: { allowUnsafeConfigPaths: true } }`. This only permits the
+ * `simple-git` v4 requires a double opt-in for these: `unsafe: {
+ * allowUnsafeConfigPaths: true }` permits the category, and `allowEnvironment`
+ * allow-lists the exact env var names passed to `git.env()` (any explicitly
+ * supplied var outside the allow-list throws). Only the sandbox vars are ever
+ * set explicitly — the ambient environment is never spread into `git.env()`,
+ * so no other `GIT_*` value can trip the guard. This only permits the
  * config-path env vars themselves — detection commands are read-only.
  */
 const SANDBOX_GIT_ENV = {
   GIT_CONFIG_NOSYSTEM: '1',
   GIT_CONFIG_GLOBAL: '/dev/null',
 } as const;
+
+/** Env var names explicitly injected via `git.env()` when isolating.
+ *
+ * `simple-git` v4 filters ambient environment variables and throws for any
+ * *explicitly* supplied var that is not allow-listed here (double opt-in with
+ * `unsafe.allowUnsafeConfigPaths`). */
+const SANDBOX_GIT_ENV_KEYS = Object.keys(SANDBOX_GIT_ENV);
 
 /**
  * Determine whether git's global/system config should be isolated.
@@ -88,18 +98,32 @@ export function shouldIsolateGitConfig(
  * {@link shouldIsolateGitConfig}: the sandbox env is injected only when the
  * user's global gitconfig is unreadable. In a normal local TUI the inspector
  * inherits the full process environment untouched.
+ *
+ * @param cwd    - working directory the inspector is bound to.
+ * @param env    - environment to inspect (defaults to `process.env`).
+ * @param access - config-probe forwarded to {@link shouldIsolateGitConfig}
+ *                 (injectable for tests, same rationale as there).
  */
 export function createGitInspector(
   cwd: string,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  access: (path: string) => void = defaultAccess
 ): GitInspector {
-  const isolate = shouldIsolateGitConfig(env);
+  const isolate = shouldIsolateGitConfig(env, access);
   const git = simpleGit(cwd, {
-    ...(isolate ? { unsafe: { allowUnsafeConfigPaths: true } } : {}),
+    ...(isolate
+      ? {
+          unsafe: { allowUnsafeConfigPaths: true },
+          allowEnvironment: [...SANDBOX_GIT_ENV_KEYS],
+        }
+      : {}),
   });
   if (isolate) {
-    // Merge so the rest of the process env is preserved alongside the override.
-    git.env({ ...env, ...SANDBOX_GIT_ENV });
+    // Only the sandbox overrides are set explicitly. In v4 the git subprocess
+    // sees the ambient environment (with `GIT_*` vars filtered by default)
+    // merged with these values — spreading the full `process.env` here would
+    // make any user-set `GIT_*` var an explicit, un-allowed write and throw.
+    git.env({ ...SANDBOX_GIT_ENV });
   }
   return {
     isRepo: () => git.checkIsRepo(),
