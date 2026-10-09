@@ -109,7 +109,7 @@ async function fetchCheckRuns(
   let checkRuns = response.data.check_runs.map(
     // fallow-ignore-next-line complexity
     (cr): CheckRunResult => ({
-      id: cr.id,
+      id: Number(cr.id),
       name: cr.name,
       status: cr.status,
       conclusion: cr.conclusion ?? null,

@@ -165,7 +165,7 @@ export async function postIssueComment(
   });
 
   return {
-    id: data.id,
+    id: Number(data.id),
     owner: params.owner,
     repo: params.repo,
     number: params.number,
@@ -181,13 +181,13 @@ export async function postIssueComment(
  * `'unknown'`, null body → `''`) without a network round-trip.
  */
 export function normalizeComment(comment: {
-  id: number;
+  id: number | bigint;
   user?: { login?: string | null; type?: string | null } | null;
   created_at: string;
   body?: string | null;
 }): NormalizedComment {
   return {
-    id: comment.id,
+    id: Number(comment.id),
     author: comment.user?.login ?? 'unknown',
     author_type: comment.user?.type === 'Bot' ? 'bot' : 'user',
     created_at: comment.created_at,

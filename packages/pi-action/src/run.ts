@@ -21,6 +21,7 @@ import {
   createGitHubPlatformProvider,
   parsePlatformType,
   apiBaseUrlFromServerUrl,
+  createOctokit,
 } from '@alexanderfortin/pi-platform-github';
 import { resolveServerUrl } from './server-url';
 
@@ -113,10 +114,13 @@ export async function run() {
     platformType === 'forgejo' || platformType === 'codeberg'
       ? apiBaseUrlFromServerUrl(runnerServerUrl, platformType)
       : undefined;
-  const octokit = github.getOctokit(
-    coreAdapter.getInput('github_token'),
-    apiBaseUrl ? { baseUrl: apiBaseUrl } : {}
-  );
+  // Construct Octokit directly from pi-platform-github's shared factory so
+  // the REST endpoint typings match the workspace's
+  // `@octokit/plugin-rest-endpoint-methods` version exactly. Using
+  // `@actions/github.getOctokit()` here would tie the instance to the older
+  // typings bundled with `@actions/github`, which no longer unify with the
+  // provider's `OctokitInstance` after the v18 major bump.
+  const octokit = createOctokit(coreAdapter.getInput('github_token'), apiBaseUrl);
 
   // Build PlatformContext from the @actions/github singleton
   const githubCtx = github.context as { actor?: string; sha?: string };

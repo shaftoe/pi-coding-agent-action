@@ -13,7 +13,8 @@
     "./comments": "./src/comments.ts",
     "./constants": "./src/constants.ts",
     "./context-utils": "./src/context-utils.ts",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./octokit": "./src/octokit.ts"
   },
   "dependencies": {
     "@alexanderfortin/pi-orchestrator": "workspace:*",

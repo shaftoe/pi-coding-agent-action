@@ -141,7 +141,7 @@ export async function createReview(
     comments: reviewComments,
   });
 
-  const reviewId = response.data.id;
+  const reviewId = Number(response.data.id);
   const reviewUrl = response.data.html_url;
   const commentCount = params.comments.length;
 

@@ -150,6 +150,9 @@ export type {
 // GitHub API token resolution (used by pi-cli + pi-action-bridge)
 export { resolveGitHubToken } from './auth';
 
+// Octokit construction (used by pi-action, pi-cli + pi-action-bridge)
+export { createOctokit, OctokitWithRest } from './octokit';
+
 // Platform provider (used by platform/index.ts)
 export {
   parsePlatformType,

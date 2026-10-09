@@ -32,23 +32,9 @@ export type {
   GetWorkflowRunLogsDetails,
 } from '@alexanderfortin/pi-orchestrator';
 
-import { Octokit } from '@octokit/core';
-import { restEndpointMethods } from '@octokit/plugin-rest-endpoint-methods';
+import type { OctokitInstance } from './octokit';
 
-/**
- * The minimal Octokit shape this library requires: `@octokit/core` with the
- * REST endpoint methods plugin applied. This is structurally compatible with
- * (and a strict subset of) the instance returned by `@actions/github`'s
- * `getOctokit()`, which adds `paginateRest` and proxy defaults on top.
- *
- * Widening from the previous `ReturnType<typeof import('@actions/github').getOctokit>`
- * removes the last `@actions/github` import (even type-only) from this
- * library, so alternative frontends (CLI, GitHub App, web UI) can construct
- * an Octokit directly without pulling in the GitHub-Actions-only package.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- const is used to derive the InstanceType below; not referenced at runtime in this type-only module.
-const OctokitWithRest = Octokit.plugin(restEndpointMethods);
-type OctokitInstance = InstanceType<typeof OctokitWithRest>;
+export type { OctokitInstance };
 
 /**
  * Explicit dependency bag for GitHub module functions.
@@ -89,9 +75,3 @@ export interface GitHubModuleDeps {
    */
   readonly updateComment?: boolean;
 }
-
-/**
- * Extract the Octokit type from the deps so consumers don't need to
- * import `@actions/github` just for the type.
- */
-export type { OctokitInstance };
