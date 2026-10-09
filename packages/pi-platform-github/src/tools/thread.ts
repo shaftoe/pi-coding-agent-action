@@ -85,7 +85,7 @@ async function fetchPRData(
 function transformComment(
   deps: GitHubModuleDeps,
   comment: {
-    id: number;
+    id: number | bigint;
     user?: { login?: string | null; type?: string | null } | null;
     created_at: string;
     updated_at: string | null;
@@ -97,7 +97,7 @@ function transformComment(
     (deps.context.payload.review as { id?: number } | undefined)?.id;
 
   const baseComment: ThreadComment = {
-    id: comment.id,
+    id: Number(comment.id),
     author: comment.user?.login ?? 'unknown',
     author_type: comment.user?.type === 'Bot' ? 'bot' : 'user',
     created_at: comment.created_at,
@@ -179,7 +179,7 @@ export function mapReviewComment(
   comment: RestEndpointMethodTypes['pulls']['listReviewComments']['response']['data'][number]
 ): ReviewComment {
   return {
-    id: comment.id,
+    id: Number(comment.id),
     path: comment.path,
     line: comment.line ?? comment.original_line ?? null,
     side: (comment.side as 'LEFT' | 'RIGHT') ?? 'RIGHT',
@@ -187,7 +187,10 @@ export function mapReviewComment(
     author_type: comment.user?.type === 'Bot' ? 'bot' : 'user',
     created_at: comment.created_at,
     body: sanitizeContent(comment.body ?? ''),
-    ...(comment.in_reply_to_id ? { in_reply_to_id: comment.in_reply_to_id } : {}),
+    // Coerce to plain `number` like `id`: `bigint` can only come from the
+    // v18 typings (REST responses always return real numbers), and this
+    // field is compared against coerced ids elsewhere (see comments.ts).
+    ...(comment.in_reply_to_id ? { in_reply_to_id: Number(comment.in_reply_to_id) } : {}),
   };
 }
 

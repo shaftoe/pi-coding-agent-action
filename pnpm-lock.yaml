@@ -286,8 +286,8 @@ importers:
         specifier: ^7.0.6
         version: 7.0.8
       '@octokit/plugin-rest-endpoint-methods':
-        specifier: ^17.0.0
-        version: 17.0.0(@octokit/core@7.0.8)
+        specifier: ^18.0.0
+        version: 18.0.0(@octokit/core@7.0.8)
       simple-git:
         specifier: ^4.0.0
         version: 4.0.2(supports-color@7.2.0)
@@ -323,8 +323,8 @@ importers:
         specifier: ^7.0.6
         version: 7.0.8
       '@octokit/plugin-rest-endpoint-methods':
-        specifier: ^17.0.0
-        version: 17.0.0(@octokit/core@7.0.8)
+        specifier: ^18.0.0
+        version: 18.0.0(@octokit/core@7.0.8)
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -366,8 +366,8 @@ importers:
         specifier: ^7.0.6
         version: 7.0.8
       '@octokit/plugin-rest-endpoint-methods':
-        specifier: ^17.0.0
-        version: 17.0.0(@octokit/core@7.0.8)
+        specifier: ^18.0.0
+        version: 18.0.0(@octokit/core@7.0.8)
       ignore:
         specifier: ^7.0.6
         version: 7.0.12
@@ -894,6 +894,12 @@ packages:
 
   '@octokit/plugin-rest-endpoint-methods@17.0.0':
     resolution: {integrity: sha512-B5yCyIlOJFPqUUeiD0cnBJwWJO8lkJs5d8+ze9QDP6SvfiXSz1BF+91+0MeI1d2yxgOhU/O+CvtiZ9jSkHhFAw==}
+    engines: {node: '>= 20'}
+    peerDependencies:
+      '@octokit/core': '>=6'
+
+  '@octokit/plugin-rest-endpoint-methods@18.0.0':
+    resolution: {integrity: sha512-1wM02pQTHEarWYij0Bb4gu8X8fBy2FJdI4HMTSFDxtYLbOkJErGVx5ywmM6jeS8tOmC0iCiRLrn6YsSIecUeOQ==}
     engines: {node: '>= 20'}
     peerDependencies:
       '@octokit/core': '>=6'
@@ -3802,6 +3808,11 @@ snapshots:
     dependencies:
       '@octokit/core': 7.0.8
       '@octokit/types': 16.0.0
+
+  '@octokit/plugin-rest-endpoint-methods@18.0.0(@octokit/core@7.0.8)':
+    dependencies:
+      '@octokit/core': 7.0.8
+      '@octokit/types': 17.0.0
 
   '@octokit/plugin-retry@8.1.1(@octokit/core@7.0.8)':
     dependencies:

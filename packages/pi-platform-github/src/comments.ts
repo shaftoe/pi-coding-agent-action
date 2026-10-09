@@ -332,7 +332,7 @@ export interface CommentRef {
 }
 
 interface CommentWithUser {
-  id: number;
+  id: number | bigint;
   body?: string | null;
   user?: {
     type?: string | null;
@@ -480,7 +480,7 @@ export async function findPreviousBotComment(
   }
   // matches is guaranteed non-empty here.
   const found = matches.reduce((max, c) => (c.id > max.id ? c : max), matches[0]!);
-  return { id: found.id, body: found.body ?? '' };
+  return { id: Number(found.id), body: found.body ?? '' };
 }
 
 /**
@@ -545,11 +545,14 @@ export async function findPreviousBotReviewComment(
   const allReviewComments = await listAllReviewComments(deps, owner, repo, issueNumber);
 
   // Newest-first: the first match is the most recent prior reply in this thread.
+  // `in_reply_to_id` needs no Number() coercion here: `bigint` can only come
+  // from the v18 typings, never from runtime REST responses — both sides of
+  // this comparison are plain numbers at runtime.
   const found = allReviewComments.find(c => c.in_reply_to_id === commentId && isBotAuthored(c));
   if (!found) {
     return undefined;
   }
-  return { id: found.id, body: found.body ?? '' };
+  return { id: Number(found.id), body: found.body ?? '' };
 }
 
 /**

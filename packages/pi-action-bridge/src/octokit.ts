@@ -11,10 +11,12 @@
  * `pi-platform-github` (`GITHUB_TOKEN` → `GH_TOKEN`). There is no `gh` CLI
  * fallback for these tools — they go straight to the REST API.
  */
-import { Octokit } from '@octokit/core';
-import { restEndpointMethods } from '@octokit/plugin-rest-endpoint-methods';
-import { apiBaseUrlFromServerUrl, resolveGitHubToken } from '@alexanderfortin/pi-platform-github';
-import type { OctokitInstance } from '@alexanderfortin/pi-platform-github/types';
+import {
+  apiBaseUrlFromServerUrl,
+  createOctokit as createSharedOctokit,
+  resolveGitHubToken,
+} from '@alexanderfortin/pi-platform-github';
+import type { OctokitInstance } from '@alexanderfortin/pi-platform-github';
 import type {
   FindPrFn,
   FindPrParams,
@@ -25,13 +27,6 @@ import type {
   PostPrCommentDetails,
   ReadThreadFn,
 } from './types';
-
-/**
- * Octokit class with the REST endpoint methods plugin applied. Not exported by
- * `pi-platform-github` (only the derived `OctokitInstance` type is), so we
- * construct it locally; the types align structurally.
- */
-export const OctokitWithRest = Octokit.plugin(restEndpointMethods);
 
 /**
  * Spread an abort `signal` into an Octokit request's `request` option.
@@ -52,12 +47,9 @@ function requestOpts(
  * @param token - GitHub API token (PAT or `GITHUB_TOKEN`).
  * @param serverUrl - Web URL of the forge (e.g. `https://github.com`).
  */
-export function createOctokit(token: string, serverUrl: string): OctokitInstance {
+export function createOctokitForForge(token: string, serverUrl: string): OctokitInstance {
   const baseUrl = apiBaseUrlFromServerUrl(serverUrl);
-  return new OctokitWithRest({
-    auth: token,
-    ...(baseUrl !== undefined ? { baseUrl } : {}),
-  });
+  return createSharedOctokit(token, baseUrl);
 }
 
 /**
@@ -116,7 +108,7 @@ export function createOctokitFindPr(env: NodeJS.ProcessEnv = process.env): FindP
     signal?: AbortSignal
   ): Promise<NormalizedPR | null> => {
     const token = resolveGitHubToken(env);
-    const octokit = createOctokit(token, serverUrl);
+    const octokit = createOctokitForForge(token, serverUrl);
     return findPullRequestForBranch(octokit, { owner, repo, branch }, signal);
   };
 }
@@ -140,7 +132,7 @@ export function createOctokitFromEnv(
   serverUrl: string
 ): OctokitInstance {
   const token = resolveGitHubToken(env);
-  return createOctokit(token, serverUrl);
+  return createOctokitForForge(token, serverUrl);
 }
 
 /**
@@ -165,7 +157,7 @@ export async function postIssueComment(
   });
 
   return {
-    id: data.id,
+    id: Number(data.id),
     owner: params.owner,
     repo: params.repo,
     number: params.number,
@@ -181,13 +173,13 @@ export async function postIssueComment(
  * `'unknown'`, null body → `''`) without a network round-trip.
  */
 export function normalizeComment(comment: {
-  id: number;
+  id: number | bigint;
   user?: { login?: string | null; type?: string | null } | null;
   created_at: string;
   body?: string | null;
 }): NormalizedComment {
   return {
-    id: comment.id,
+    id: Number(comment.id),
     author: comment.user?.login ?? 'unknown',
     author_type: comment.user?.type === 'Bot' ? 'bot' : 'user',
     created_at: comment.created_at,

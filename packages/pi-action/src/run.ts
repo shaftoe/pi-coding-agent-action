@@ -21,6 +21,7 @@ import {
   createGitHubPlatformProvider,
   parsePlatformType,
   apiBaseUrlFromServerUrl,
+  createOctokit,
 } from '@alexanderfortin/pi-platform-github';
 import { resolveServerUrl } from './server-url';
 
@@ -99,24 +100,31 @@ export async function run() {
   //
   // For Forgejo/Codeberg we explicitly derive the API base URL from the
   // runner-advertised server URL (ensuring the /api/v1 prefix is present).
-  // @actions/github's getOctokit() falls back to GITHUB_API_URL, which is
-  // reliable on GitHub but may be missing or misconfigured (no /api/v1) on
-  // some Forgejo runner versions — leading to 404s on every REST call.
+  // Falling back to GITHUB_API_URL there would be unreliable: it may be
+  // missing or misconfigured (no /api/v1) on some Forgejo runner versions —
+  // leading to 404s on every REST call.
   //
   // We use the runner-advertised server URL (github.context.serverUrl), not
   // the server_url *override*, because the API must be reachable from inside
   // the runner — the override is for externally-visible permalinks only.
   //
-  // For GitHub (including GHES) we let getOctokit use GITHUB_API_URL as-is.
+  // For GitHub (including GHES), preserve @actions/github's previous
+  // behavior of honoring GITHUB_API_URL (GHES runners / API proxies) —
+  // when unset, createOctokit defaults to api.github.com.
   const runnerServerUrl = resolveServerUrl(undefined, github.context.serverUrl);
   const apiBaseUrl =
     platformType === 'forgejo' || platformType === 'codeberg'
       ? apiBaseUrlFromServerUrl(runnerServerUrl, platformType)
-      : undefined;
-  const octokit = github.getOctokit(
-    coreAdapter.getInput('github_token'),
-    apiBaseUrl ? { baseUrl: apiBaseUrl } : {}
-  );
+      : platformType === 'github'
+        ? (process.env.GITHUB_API_URL ?? undefined)
+        : undefined;
+  // Construct Octokit directly from pi-platform-github's shared factory so
+  // the REST endpoint typings match the workspace's
+  // `@octokit/plugin-rest-endpoint-methods` version exactly. Using
+  // `@actions/github.getOctokit()` here would tie the instance to the older
+  // typings bundled with `@actions/github`, which no longer unify with the
+  // provider's `OctokitInstance` after the v18 major bump.
+  const octokit = createOctokit(coreAdapter.getInput('github_token'), apiBaseUrl);
 
   // Build PlatformContext from the @actions/github singleton
   const githubCtx = github.context as { actor?: string; sha?: string };
