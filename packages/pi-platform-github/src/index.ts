@@ -150,8 +150,12 @@ export type {
 // GitHub API token resolution (used by pi-cli + pi-action-bridge)
 export { resolveGitHubToken } from './auth';
 
-// Octokit construction (used by pi-action, pi-cli + pi-action-bridge)
+// Octokit construction (used by pi-action, pi-cli + pi-action-bridge).
+// `OctokitInstance` is re-exported here so consumers have a single canonical
+// import path (the `./types` and `./octokit` subpaths remain for
+// backwards compatibility).
 export { createOctokit, OctokitWithRest } from './octokit';
+export type { OctokitInstance } from './types';
 
 // Platform provider (used by platform/index.ts)
 export {

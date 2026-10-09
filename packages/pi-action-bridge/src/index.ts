@@ -22,7 +22,7 @@ export {
   postIssueComment,
   readIssueThread,
   normalizeComment,
-  createOctokit,
+  createOctokitForForge,
   createOctokitFromEnv,
   createOctokitFindPr,
   createOctokitPostComment,

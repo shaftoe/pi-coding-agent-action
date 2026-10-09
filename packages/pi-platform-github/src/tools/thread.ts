@@ -187,7 +187,10 @@ export function mapReviewComment(
     author_type: comment.user?.type === 'Bot' ? 'bot' : 'user',
     created_at: comment.created_at,
     body: sanitizeContent(comment.body ?? ''),
-    ...(comment.in_reply_to_id ? { in_reply_to_id: comment.in_reply_to_id } : {}),
+    // Coerce to plain `number` like `id`: `bigint` can only come from the
+    // v18 typings (REST responses always return real numbers), and this
+    // field is compared against coerced ids elsewhere (see comments.ts).
+    ...(comment.in_reply_to_id ? { in_reply_to_id: Number(comment.in_reply_to_id) } : {}),
   };
 }
 

@@ -2,7 +2,7 @@
  * @file Tests for {@link packages/pi-action-bridge/src/octokit.ts}.
  *
  * Covers the I/O layer the orchestration tests stub out via a fake `FindPrFn`:
- *   - `createOctokit` — conditional `baseUrl` wiring per forge + auth wiring.
+ *   - `createOctokitForForge` — conditional `baseUrl` wiring per forge + auth wiring.
  *   - `findPullRequestForBranch` — raw Octokit → `NormalizedPR` projection,
  *     the `head`/`state`/`per_page` request shape, abort-signal threading,
  *     and the empty-list → `null` path.
@@ -15,7 +15,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  createOctokit,
+  createOctokitForForge,
   findPullRequestForBranch,
   createOctokitFindPr,
   postIssueComment,
@@ -28,36 +28,36 @@ import {
 import type { OctokitInstance } from '@alexanderfortin/pi-platform-github/types';
 
 // ---------------------------------------------------------------------------
-// createOctokit — baseUrl + auth wiring
+// createOctokitForForge — baseUrl + auth wiring
 // ---------------------------------------------------------------------------
 
-describe('createOctokit', () => {
+describe('createOctokitForForge', () => {
   it('uses Octokit default baseUrl for github.com (no baseUrl option set)', () => {
-    const octokit = createOctokit('fake-token', 'https://github.com');
+    const octokit = createOctokitForForge('fake-token', 'https://github.com');
     // apiBaseUrlFromServerUrl returns undefined for github.com, so baseUrl is
     // not passed and Octokit falls back to its built-in api.github.com default.
     expect(octokit.request.endpoint.DEFAULTS.baseUrl).toBe('https://api.github.com');
   });
 
   it('sets baseUrl to /api/v1 for codeberg', () => {
-    const octokit = createOctokit('fake-token', 'https://codeberg.org');
+    const octokit = createOctokitForForge('fake-token', 'https://codeberg.org');
     expect(octokit.request.endpoint.DEFAULTS.baseUrl).toBe('https://codeberg.org/api/v1');
   });
 
   it('sets baseUrl to /api/v1 for forgejo', () => {
-    const octokit = createOctokit('fake-token', 'https://git.forgejo.example');
+    const octokit = createOctokitForForge('fake-token', 'https://git.forgejo.example');
     expect(octokit.request.endpoint.DEFAULTS.baseUrl).toBe('https://git.forgejo.example/api/v1');
   });
 
   it('sets baseUrl to /api/v3 for self-hosted GHE', () => {
-    const octokit = createOctokit('fake-token', 'https://github.company.internal');
+    const octokit = createOctokitForForge('fake-token', 'https://github.company.internal');
     expect(octokit.request.endpoint.DEFAULTS.baseUrl).toBe(
       'https://github.company.internal/api/v3'
     );
   });
 
   it('passes the token as auth', () => {
-    const octokit = createOctokit('my-token', 'https://github.com');
+    const octokit = createOctokitForForge('my-token', 'https://github.com');
     expect(octokit.auth).toBeTypeOf('function');
   });
 });
