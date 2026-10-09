@@ -25,7 +25,7 @@
     "@earendil-works/pi-coding-agent": "^1.0.4",
     "@js-temporal/polyfill": "^0.5.1",
     "@octokit/core": "^7.0.6",
-    "@octokit/plugin-rest-endpoint-methods": "^17.0.0",
+    "@octokit/plugin-rest-endpoint-methods": "^18.0.0",
     "commander": "^15.0.0"
   }
 }

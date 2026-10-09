@@ -10,7 +10,7 @@
     "@alexanderfortin/pi-orchestrator": "workspace:*",
     "@alexanderfortin/pi-platform-github": "workspace:*",
     "@octokit/core": "^7.0.6",
-    "@octokit/plugin-rest-endpoint-methods": "^17.0.0",
+    "@octokit/plugin-rest-endpoint-methods": "^18.0.0",
     "simple-git": "^4.0.0"
   },
   "devDependencies": {
