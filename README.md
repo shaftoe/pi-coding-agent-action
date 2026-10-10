@@ -160,7 +160,7 @@ jobs:
     if: startsWith(github.event.comment.body, '/pi ')
     runs-on: ubuntu-latest
     steps:
-      - name: Clone repository to work on
+      - name: Clone the repository to work on
         uses: actions/checkout@v7
         with:
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
