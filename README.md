@@ -44,6 +44,13 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 ## Securing your workflows
 
 > [!WARNING]
+> **GitHub `GITHUB_TOKEN` cannot push changes to files under `.github/workflows/`.** This is a [GitHub security restriction](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication) — even when the workflow has `contents: write` permission, the automatic `GITHUB_TOKEN` is **never** allowed to create or modify workflow files. If you need Pi to create PRs that touch `.github/workflows/*.yml`, you must provide a PAT with the `workflow` scope (see [Authentication & Token Scopes](#authentication--token-scopes)).
+
+> [!CAUTION]
+> **Project trust is automatically enabled.** The Pi SDK (v0.79.0+) uses a [project trust system](https://pi.dev/docs/latest/security#project-trust) to decide whether to load project-level resources such as `AGENTS.md`, `.pi` settings, project extensions, and skills. In a CI environment there is no interactive user to approve trust, so this action **always marks the workspace as trusted** (`projectTrusted: true`) when creating the agent session. This means any `AGENTS.md`, `.pi/` configuration, or project extensions present in the repository checkout will be loaded and followed by the agent. Keep this in mind when deciding what to commit to your repository — anyone with push access can influence agent behavior through these files.
+> See [the official Pi documentation](https://pi.dev/docs/latest/security#project-trust) for more information on project trust.
+
+> [!WARNING]
 > We recommend to be as conservative as possible with how the action can be triggered.
 > Depending on the permissions assigned to your workflow you should consider restricting who's allowed to trigger it e.g. filtering for GitHub user name or role (`if github.actor == '<my-user>'`).
 > You should also consider disabling automated PRs reviews for forks (`if: github.event.pull_request.head.repo.fork == false`), see [Review PR](.github/workflows/pr.yml) workflow for an actual example.
@@ -61,13 +68,6 @@ The action uses the `github_token` input to authenticate with GitHub's API. By d
 | Fork-based PRs (push to agent-owned fork)                               | `repo`                    | Classic PAT with `repo` scope **or** fine-grained PAT with repository read/write + **Fork** permissions |
 | Session sharing via GitHub Gists ([see below](#sharing-the-same-token)) | `gist`                    | Classic PAT with `gist` scope **or** fine-grained PAT (Account → **Gists: read/write** )               |
 
-> [!TIP]
-> **Fine-grained PATs are preferred over classic PATs** when possible — they allow scoping to specific repositories, specific organisations, and fine-grained permissions rather than broad `repo` access. See [Creating a fine-grained PAT](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token).
-
-### Sharing the same token
-
-You provide a single `github_token` input — the action uses it for **all** GitHub API operations. If you need capabilities beyond what `GITHUB_TOKEN` offers (e.g. gist creation), your PAT replaces the default token entirely; it must have sufficient permissions for the full scope of the job.
-
 > [!IMPORTANT]
 > **Don't forget the checkout step.** If Pi needs to push changes and you are using a PAT, you must also pass that same token to the `actions/checkout` step. Otherwise, the local git configuration will use the restricted `GITHUB_TOKEN`, and git operations performed by the agent's tools (like `create_pull_request`) might fail despite providing a PAT to the Pi action itself:
 >
@@ -77,18 +77,18 @@ You provide a single `github_token` input — the action uses it for **all** Git
 >     token: ${{ secrets.GH_PAT }}
 > ```
 
+### Sharing the same token
+
+You provide a single `github_token` input — the action uses it for **all** GitHub API operations. If you need capabilities beyond what `GITHUB_TOKEN` offers (e.g. gist creation), your PAT replaces the default token entirely; it must have sufficient permissions for the full scope of the job.
+
 ### Best practices
+
+> [!TIP]
+> **Fine-grained PATs are preferred over classic PATs** when possible — they allow scoping to specific repositories, specific organisations, and fine-grained permissions rather than broad `repo` access. See [Creating a fine-grained PAT](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token).
 
 - **Least privilege**: Only grant the scopes your workflow actually needs. If you're only reviewing PRs and never pushing changes, a token with `pull-requests: read` is sufficient — you don't need `contents: write`.
 - **Dedicated bot account**: For session sharing or fork-based PRs, use a token from a dedicated bot account. This keeps gists and forks separate from personal accounts and makes cleanup easier.
 - **Store as a secret**: Always store PATs in [GitHub Actions secrets](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions), never hardcode them in workflow files.
-
-> [!WARNING]
-> **GitHub `GITHUB_TOKEN` cannot push changes to files under `.github/workflows/`.** This is a [GitHub security restriction](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication) — even when the workflow has `contents: write` permission, the automatic `GITHUB_TOKEN` is **never** allowed to create or modify workflow files. If you need Pi to create PRs that touch `.github/workflows/*.yml`, you must provide a PAT with the `workflow` scope (see [Authentication & Token Scopes](#authentication--token-scopes)).
-
-> [!CAUTION]
-> **Project trust is automatically enabled.** The Pi SDK (v0.79.0+) uses a [project trust system](https://pi.dev/docs/latest/security#project-trust) to decide whether to load project-level resources such as `AGENTS.md`, `.pi` settings, project extensions, and skills. In a CI environment there is no interactive user to approve trust, so this action **always marks the workspace as trusted** (`projectTrusted: true`) when creating the agent session. This means any `AGENTS.md`, `.pi/` configuration, or project extensions present in the repository checkout will be loaded and followed by the agent. Keep this in mind when deciding what to commit to your repository — anyone with push access can influence agent behavior through these files.
-> See [the official Pi documentation](https://pi.dev/docs/latest/security#project-trust) for more information on project trust.
 
 ## Versions and Bundled Dependencies
 
