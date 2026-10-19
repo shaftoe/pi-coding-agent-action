@@ -4,7 +4,7 @@
   <a href="https://github.com/shaftoe/pi-coding-agent-action/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/shaftoe/pi-coding-agent-action?logo=github"></a>
   <a href="https://github.com/marketplace/actions/pi-github-action"><img alt="Marketplace" src="https://img.shields.io/badge/Marketplace-2C8EBB?logo=githubactions&logoColor=white"></a>
   <!-- PI_SDK_BADGE_START -->
-  <a href="https://www.npmjs.com/package/@earendil-works/pi-coding-agent"><img alt="Pi SDK v1.2.0" src="https://img.shields.io/badge/Pi%20SDK-v1.2.0-2C8EBB?logo=pi"></a>
+  <a href="https://www.npmjs.com/package/@earendil-works/pi-coding-agent"><img alt="Pi SDK v1.3.0" src="https://img.shields.io/badge/Pi%20SDK-v1.3.0-2C8EBB?logo=pi"></a>
   <!-- PI_SDK_BADGE_END -->
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white"></a>
   <a href="https://github.com/shaftoe/pi-coding-agent-action/actions/workflows/build.yml"><img alt="Build" src="https://github.com/shaftoe/pi-coding-agent-action/actions/workflows/build.yml/badge.svg?branch=v2"></a>
@@ -74,15 +74,15 @@ If you need to pin to a specific Pi SDK version check out previous release tags 
 
 <!-- DEPS_TABLE_START -->
 
-This build bundles the [Pi SDK](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) (`@earendil-works/pi-coding-agent`) **v1.2.0** — the same version stamped on the action's issue-comment reports.
+This build bundles the [Pi SDK](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) (`@earendil-works/pi-coding-agent`) **v1.3.0** — the same version stamped on the action's issue-comment reports.
 
 | Dependency                              | Version  | Description                                        |
 | --------------------------------------- | -------- | -------------------------------------------------- |
 | `@actions/core`                         | `3.0.1`  | GitHub Actions core I/O (inputs, outputs, logging) |
 | `@actions/github`                       | `9.1.1`  | GitHub API client (Octokit wrapper)                |
-| `@earendil-works/pi-agent-core`         | `1.2.0`  | Pi Agent Core — agent orchestration primitives     |
-| `@earendil-works/pi-ai`                 | `1.2.0`  | Pi AI — AI model abstractions and providers        |
-| `@earendil-works/pi-coding-agent`       | `1.2.0`  | Pi SDK — AI coding agent runtime                   |
+| `@earendil-works/pi-agent-core`         | `1.3.0`  | Pi Agent Core — agent orchestration primitives     |
+| `@earendil-works/pi-ai`                 | `1.3.0`  | Pi AI — AI model abstractions and providers        |
+| `@earendil-works/pi-coding-agent`       | `1.3.0`  | Pi SDK — AI coding agent runtime                   |
 | `@js-temporal/polyfill`                 | `0.5.1`  | Temporal API polyfill                              |
 | `@octokit/core`                         | `7.0.8`  | Octokit REST API client core                       |
 | `@octokit/plugin-rest-endpoint-methods` | `17.0.0` | Octokit REST API endpoint methods                  |
