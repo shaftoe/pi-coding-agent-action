@@ -16,11 +16,17 @@
  *    peer-dependency mismatches in the lockfile.
  *
  * Run via: pnpm run sync-versions
- * Called by semantic-release post-version hook to keep all packages aligned.
+ * Check-only via: pnpm run sync-versions -- --check
+ * Called by semantic-release post-version hook to keep all packages aligned;
+ * `--check` (exit 1 on drift, no writes) is part of `pnpm run validate` so
+ * drift is caught on every commit/PR instead of being silently overwritten
+ * at the next release.
  */
 
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+const checkOnly = process.argv.includes('--check');
 
 /** Dependency scope whose versions are synced from the root. */
 const SYNCED_SCOPE = '@earendil-works';
@@ -51,16 +57,25 @@ const packages = readdirSync('packages', { withFileTypes: true })
   .filter(d => d.isDirectory())
   .map(d => d.name);
 
+let drifted = false;
+
 for (const pkg of packages) {
   const path = join('packages', pkg, 'package.json');
   const pkgJson = JSON.parse(readFileSync(path, 'utf-8'));
   let changed = false;
 
+  const report = (message: string): void => {
+    if (checkOnly) drifted = true;
+    console.info(message);
+  };
+
   // 1. Sync the package version field.
   if (pkgJson.version !== version) {
-    pkgJson.version = version;
-    changed = true;
-    console.info(`↑ ${pkg} version → v${version}`);
+    report(`↑ ${pkg} version → v${version}`);
+    if (!checkOnly) {
+      pkgJson.version = version;
+      changed = true;
+    }
   } else {
     console.info(`✓ ${pkg} version already at v${version}`);
   }
@@ -77,13 +92,21 @@ for (const pkg of packages) {
         console.info(`✓ ${pkg} ${field}.${name} already at ${target}`);
         continue;
       }
+      report(`↑ ${pkg} ${field}.${name} ${current} → ${target}`);
+      if (checkOnly) continue;
       deps[name] = target;
       changed = true;
-      console.info(`↑ ${pkg} ${field}.${name} ${current} → ${target}`);
     }
   }
 
-  if (changed) {
+  if (changed && !checkOnly) {
     writeFileSync(path, JSON.stringify(pkgJson, null, 2) + '\n');
   }
+}
+
+if (checkOnly && drifted) {
+  console.error(
+    '\n✗ Dependency/version drift detected. Run `pnpm run sync-versions` and commit the result.'
+  );
+  process.exit(1);
 }

@@ -18,7 +18,7 @@
     "type-check": "tsc --noEmit",
     "format": "prettier --check 'packages/*/src/**/*.ts' 'packages/*/tests/**/*.ts' 'tests/**/*.ts'",
     "format:fix": "prettier --write 'packages/*/src/**/*.ts' 'packages/*/tests/**/*.ts' 'tests/**/*.ts'",
-    "validate": "pnpm run lint && pnpm run type-check && pnpm run format",
+    "validate": "pnpm run sync-versions -- --check && pnpm run lint && pnpm run type-check && pnpm run format",
     "changelog": "tsx scripts/changelog.ts",
     "semantic-release": "semantic-release",
     "update-readme": "tsx scripts/update-readme-deps.ts",
