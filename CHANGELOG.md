@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.30.1] - 2026-10-21
+
+### Changed
+
+- **deps**: bump Pi to v1.2.0, other deps
+- **deps**: bump Pi to v1.3.0
+- **deps**: lock file maintenance (#430)
+- **deps-dev**: update dependency @vitest/coverage-v8 to v5 (#426)
+- **deps**: update dependency simple-git to v4 [security] (#419)
+- **deps**: update dependency typebox to v1.3.36 (#422)
+- **deps-dev**: update devdependencies (#423)
+- **deps**: update pnpm to v12 (#429)
+
+### Fixed
+
+- **docs**: add Pi SDK version as readme badge
+- **ci**: enforce version sync
+
 ## [2.30.0] - 2026-10-06
 
 ### Added
@@ -717,7 +735,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.30.0...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.30.1...HEAD
+[2.30.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.30.0...v2.30.1
 [2.30.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.29.1...v2.30.0
 [2.29.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.29.0...v2.29.1
 [2.29.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.28.1...v2.29.0

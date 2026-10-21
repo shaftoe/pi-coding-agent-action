@@ -1,6 +1,6 @@
 {
   "name": "@alexanderfortin/pi-cli",
-  "version": "2.30.0",
+  "version": "2.30.1",
   "private": true,
   "description": "Terminal frontend for the Pi orchestrator — runs the same agent + tools as the GitHub Action, from a local shell.",
   "type": "module",
