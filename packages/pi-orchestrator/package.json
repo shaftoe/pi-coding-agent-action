@@ -10,9 +10,9 @@
     "./pi/tools/*": "./src/pi/tools/*.ts"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "^1.3.0",
-    "@earendil-works/pi-ai": "^1.3.0",
-    "@earendil-works/pi-agent-core": "^1.3.0"
+    "@earendil-works/pi-coding-agent": "^1.4.0",
+    "@earendil-works/pi-ai": "^1.4.0",
+    "@earendil-works/pi-agent-core": "^1.4.0"
   },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
