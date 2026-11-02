@@ -42,9 +42,9 @@
   "dependencies": {
     "@alexanderfortin/pi-orchestrator": "workspace:*",
     "@alexanderfortin/pi-platform-github": "workspace:*",
-    "@earendil-works/pi-agent-core": "^1.4.0",
-    "@earendil-works/pi-ai": "^1.4.0",
-    "@earendil-works/pi-coding-agent": "^1.4.0"
+    "@earendil-works/pi-agent-core": "^1.5.0",
+    "@earendil-works/pi-ai": "^1.5.0",
+    "@earendil-works/pi-coding-agent": "^1.5.0"
   },
   "devDependencies": {
     "@actions/github": "^9.1.1",
@@ -55,12 +55,12 @@
     "@semantic-release/github": "^12.0.10",
     "@semantic-release/npm": "^13.2.0",
     "@semantic-release/release-notes-generator": "^14.1.1",
-    "@types/node": "^26.6.5",
-    "@typescript-eslint/eslint-plugin": "^8.72.0",
-    "@typescript-eslint/parser": "^8.72.0",
+    "@types/node": "^26.6.6",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
     "@vitest/coverage-v8": "^5.0.5",
-    "eslint": "^10.13.0",
-    "fallow": "^3.34.1",
+    "eslint": "^10.14.0",
+    "fallow": "^3.38.1",
     "prettier": "^3.9.10",
     "semantic-release": "^25.0.9",
     "tsx": "^4.23.15",

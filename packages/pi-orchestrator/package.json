@@ -10,14 +10,14 @@
     "./pi/tools/*": "./src/pi/tools/*.ts"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "^1.4.0",
-    "@earendil-works/pi-ai": "^1.4.0",
-    "@earendil-works/pi-agent-core": "^1.4.0"
+    "@earendil-works/pi-coding-agent": "^1.5.0",
+    "@earendil-works/pi-ai": "^1.5.0",
+    "@earendil-works/pi-agent-core": "^1.5.0"
   },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
     "ignore": "^7.0.6",
-    "typebox": "^1.3.6"
+    "typebox": "^1.3.27"
   },
   "devDependencies": {
     "@actions/core": "^3.0.1"
