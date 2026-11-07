@@ -500,3 +500,30 @@ export async function commitAndPushBranch(options: CommitAndPushOptions): Promis
 
   return sha;
 }
+
+/**
+ * Push a committed local branch to a remote and set it as upstream.
+ *
+ * The remote is created or updated idempotently via {@link ensureRemote}.
+ */
+export async function pushBranch(
+  cwd: string,
+  branchName: string,
+  remote: { name: string; url: string },
+  log?: { debug: (msg: string) => void }
+): Promise<void> {
+  const git = createGit(cwd);
+  await ensureRemote(git, remote.name, remote.url, log);
+  log?.debug(`Pushing to ${remote.name}/${branchName}…`);
+  await git.push(remote.name, branchName, { '--set-upstream': null });
+}
+
+/**
+ * Check whether a `git push` error means the remote refused the push for
+ * lack of permission. Matches GitHub (`Permission to OWNER/REPO.git denied
+ * to USER.`) and the HTTP 403 that GitHub, Forgejo, and Gitea report.
+ */
+export function isPushPermissionDenied(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /returned error: 403|permission to .+ denied/i.test(message);
+}

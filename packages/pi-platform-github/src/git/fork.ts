@@ -1,9 +1,10 @@
 /**
  * @file Fork management for fork-based pull requests.
  *
- * Pull requests created by the agent are opened **from a fork** of the target
- * repository: the branch is pushed to the token owner's fork and the PR head
- * is `forkOwner:branch`. This module implements the fork half of that flow:
+ * When the token cannot push to the target repository, the agent opens the
+ * pull request **from a fork**: the branch is pushed to the token owner's
+ * fork and the PR head is `forkOwner:branch`. This module implements the
+ * fork half of that flow:
  *
  *  - resolving the token's authenticated user,
  *  - get-or-create of that user's fork of the target repository,
@@ -95,37 +96,6 @@ export async function getAuthenticatedLogin(deps: GitHubModuleDeps): Promise<str
         `create forks (e.g. a personal access token) — the default GITHUB_TOKEN ` +
         `authenticates as a bot user that cannot own forks.`
     );
-  }
-}
-
-/**
- * Check whether the current token can push to the target repository.
- *
- * Deliberately conservative: when the API call fails (older Forgejo/Gitea
- * instances, network errors, scope gaps) or the `permissions` field is
- * absent, returns `false` so callers fall back to the fork flow.
- *
- * @param deps - Module dependencies.
- * @returns `true` when the token can push to the repository.
- */
-export async function canPushToRepository(deps: GitHubModuleDeps): Promise<boolean> {
-  const log = createLogger(deps, '🍴');
-  const { owner, repo } = deps.context.repo;
-  try {
-    const response = await deps.octokit.rest.repos.get({ owner, repo });
-    const canPush = response.data.permissions?.push === true;
-    log.debug(
-      canPush
-        ? `The token can push to "${owner}/${repo}" — no fork is needed.`
-        : `The token cannot push to "${owner}/${repo}" — a fork is needed to open a pull request.`
-    );
-    return canPush;
-  } catch (error) {
-    log.debug(
-      `Could not determine push permission for "${owner}/${repo}" ` +
-        `(${errorMessage(error)}) — assuming push is not possible; a fork will be used.`
-    );
-    return false;
   }
 }
 

@@ -21,13 +21,14 @@ export {
   checkoutExistingBranch,
   ensureRemote,
   commitAndPushBranch,
+  pushBranch,
+  isPushPermissionDenied,
 } from './git-cli';
 
 // Fork management (fork-based pull requests)
 export type { ForkInfo, WaitForForkReadyOptions } from './fork';
 export {
   buildForkRemoteUrl,
-  canPushToRepository,
   ensureFork,
   getAuthenticatedLogin,
   resolveForkRemoteUrl,

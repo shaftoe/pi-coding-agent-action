@@ -133,7 +133,6 @@ export {
   createLogger,
   // Fork management (fork-based pull requests)
   buildForkRemoteUrl,
-  canPushToRepository,
   ensureFork,
   getAuthenticatedLogin,
   resolveForkRemoteUrl,
