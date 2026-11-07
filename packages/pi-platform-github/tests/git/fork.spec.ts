@@ -16,7 +16,6 @@ import * as path from 'node:path';
 import { execSync } from 'node:child_process';
 import {
   buildForkRemoteUrl,
-  canPushToRepository,
   ensureFork,
   getAuthenticatedLogin,
   resolveForkRemoteUrl,
@@ -316,21 +315,6 @@ describe('ensureFork', () => {
     await expect(ensureFork(deps, 'pi-bot')).rejects.toThrow(
       /Failed to create a fork of "test-owner\/test-repo" for "pi-bot".*HTTP unknown/s
     );
-  });
-});
-
-// ---------------------------------------------------------------------------
-// canPushToRepository
-// ---------------------------------------------------------------------------
-
-describe('canPushToRepository', () => {
-  test('returns false when the permission lookup fails', async () => {
-    // Older Forgejo/Gitea instances, scope gaps, network errors — the
-    // conservative answer is "assume no push access; use the fork flow".
-    const reposGet = vi.fn(() => Promise.reject(httpError(403, 'Forbidden')));
-    const deps = createDeps({ rest: { repos: { get: reposGet } } });
-
-    await expect(canPushToRepository(deps)).resolves.toBe(false);
   });
 });
 

@@ -696,18 +696,16 @@ You can customize the auto-generated branch names used when Pi creates pull requ
 
 ### Pull Requests from a Fork
 
-If there are insufficient rights to push to the repository, agent will open a PR from its own fork. The agent creates the fork automatically on first use and reuses it afterwards.
+The agent pushes the generated branch to the repository first. Only when the repository refuses that push for lack of permission does the agent open the PR from its own fork:
 
 1. On first use the agent creates a fork of the repository under the account that owns `github_token`; subsequent runs reuse it.
 2. The generated branch is pushed to that fork.
 3. The pull request is opened on the repository with the cross-repository head `fork-owner:branch`. `update_pull_request` pushes follow-up commits to the fork as well.
 
-This mirrors how human contributors work and keeps agent branches out of the repository's branch list.
+This mirrors how human contributors work and, in the fork case, keeps agent branches out of the repository's branch list.
 
 > [!IMPORTANT]
 > **Fork-based PRs need a token that can create forks.** When the token cannot push (e.g. a read-only PAT on someone else's repository, or a workflow whose `GITHUB_TOKEN` is restricted to `contents: read`), the default `secrets.GITHUB_TOKEN` authenticates as the repository's `github-actions[bot]`, which cannot own forks — `create_pull_request` fails with an actionable error in that case. Provide a classic PAT (with the `repo` scope) or a fine-grained PAT (with repository read/write + fork permissions) via the `github_token` input.
->
-> When the token's owner already owns the repository (e.g. running the agent against your own repository with your PAT), a fork is impossible and unnecessary — the branch is pushed to the repository itself and a same-repository pull request is opened instead.
 
 ### Injecting Environment Variables
 
