@@ -524,6 +524,10 @@ export async function pushBranch(
  * to USER.`) and the HTTP 403 that GitHub, Forgejo, and Gitea report.
  */
 export function isPushPermissionDenied(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /returned error: 403|permission to .+ denied/i.test(message);
+  return /returned error: 403|permission to .+ denied/i.test(errorMessage(error));
+}
+
+/** Extract an Error message from an unknown throwable. */
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

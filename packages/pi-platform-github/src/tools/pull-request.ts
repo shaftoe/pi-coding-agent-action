@@ -18,6 +18,7 @@ import {
   commitAndPushBranch,
   appendCoAuthoredBy,
   isPushPermissionDenied,
+  errorMessage,
   pushBranch,
   ensureFork,
   getAuthenticatedLogin,
@@ -596,11 +597,9 @@ async function commitAndPushToOriginOrFork(
     log.debug(`Branch "${head}" pushed to ${FORK_REMOTE_NAME}/${head} successfully`);
     return fork;
   } catch (forkError) {
-    const pushMessage = pushError instanceof Error ? pushError.message : String(pushError);
-    const forkMessage = forkError instanceof Error ? forkError.message : String(forkError);
     throw new Error(
-      `origin refused the push (${pushMessage}); opening the pull request from a fork failed: ` +
-        `${forkMessage}\nThe changes are committed on local branch "${head}".`
+      `origin refused the push (${errorMessage(pushError)}); opening the pull request from a fork failed: ` +
+        `${errorMessage(forkError)}\nThe changes are committed on local branch "${head}".`
     );
   }
 }

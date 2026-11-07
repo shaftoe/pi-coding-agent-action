@@ -23,6 +23,7 @@ export {
   commitAndPushBranch,
   pushBranch,
   isPushPermissionDenied,
+  errorMessage,
 } from './git-cli';
 
 // Fork management (fork-based pull requests)

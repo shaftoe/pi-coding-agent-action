@@ -15,7 +15,7 @@
  *    `http.<url>.*` config set up by `actions/checkout`.
  */
 
-import { createGit } from './git-cli';
+import { createGit, errorMessage } from './git-cli';
 import type { GitHubModuleDeps } from '../types';
 import { createLogger } from './types';
 
@@ -49,11 +49,6 @@ function errorStatus(error: unknown): number | undefined {
     }
   }
   return undefined;
-}
-
-/** Extract an Error message from an unknown throwable. */
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /**
