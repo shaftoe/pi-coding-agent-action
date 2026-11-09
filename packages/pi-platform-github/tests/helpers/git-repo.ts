@@ -170,3 +170,14 @@ export function setupForkGitRepo(options: {
     return undefined;
   }
 }
+
+/**
+ * Make a bare repository refuse every push with a `pre-receive` hook that
+ * prints `stderrLine` (git shows it to the pusher prefixed with `remote:`).
+ */
+export function rejectPushes(bareDir: string, stderrLine: string): void {
+  const hook = path.join(bareDir, 'hooks', 'pre-receive');
+  fs.writeFileSync(hook, `#!/bin/sh\necho ${JSON.stringify(stderrLine)} >&2\nexit 1\n`, {
+    mode: 0o755,
+  });
+}

@@ -17,7 +17,9 @@ import {
   getWorkspaceChangePaths,
   commitAndPushBranch,
   appendCoAuthoredBy,
-  canPushToRepository,
+  isPushPermissionDenied,
+  errorMessage,
+  pushBranch,
   ensureFork,
   getAuthenticatedLogin,
   resolveForkRemoteUrl,
@@ -510,47 +512,19 @@ interface PrepareBranchAndPRResult {
 /**
  * Resolve the fork to open the pull request from.
  *
- * Pull requests are opened from the agent's own fork of the repository: the
- * branch is pushed to the fork and the PR head is `forkOwner:branch`. The
- * fork is created on first use and reused on subsequent runs.
- *
- * Returns `undefined` when no fork is needed: either the token's owner
- * already owns the repository (a user cannot fork their own repository) or
- * the token can push to it directly — a collaborator, an org/team member,
- * or an app installation token such as the default `GITHUB_TOKEN` with
- * `contents: write`. In both cases the branch is pushed to `origin` and a
- * same-repository PR is opened instead.
+ * Gets or creates the token owner's fork of the repository. A new fork is
+ * given a bounded wait to become ready before the caller pushes to it.
  *
  * @param deps - Module dependencies.
- * @returns The fork to push to, or `undefined` when forking is not needed.
+ * @returns The fork to push to.
  * @throws {Error} With an actionable message when the authenticated user
  *         cannot be resolved or the fork cannot be created (e.g. the default
  *         GITHUB_TOKEN authenticates as a bot that cannot own forks — a
  *         personal access token is required for fork-based PRs).
  */
-async function resolveForkForPR(deps: GitHubModuleDeps): Promise<ForkInfo | undefined> {
+async function resolveForkForPR(deps: GitHubModuleDeps): Promise<ForkInfo> {
   const log = createLogger(deps);
-  const { owner, repo } = deps.context.repo;
-
-  // Identify the account the token authenticates as — the prospective fork owner.
   const login = await getAuthenticatedLogin(deps);
-
-  if (login === owner) {
-    log.debug(
-      `Authenticated user "${login}" owns "${owner}/${repo}" — a user cannot fork ` +
-        `their own repository, so the branch will be pushed to the repository itself.`
-    );
-    return undefined;
-  }
-
-  if (await canPushToRepository(deps)) {
-    log.debug(
-      `Authenticated user "${login}" can push to "${owner}/${repo}" — no fork ` +
-        `needed; the branch will be pushed to the repository itself.`
-    );
-    return undefined;
-  }
-
   const fork = await ensureFork(deps, login);
 
   if (fork.created) {
@@ -573,17 +547,71 @@ async function resolveForkForPR(deps: GitHubModuleDeps): Promise<ForkInfo | unde
 }
 
 /**
+ * Create the branch, commit the given paths, and push the branch to `origin`.
+ *
+ * When `origin` refuses the push for lack of permission, pushes the same
+ * branch to the token owner's fork (via the `pi-fork` remote, derived from
+ * the `origin` URL so it inherits the checkout's credentials) and returns
+ * that fork. Any other push error is re-thrown unchanged.
+ *
+ * @returns The fork the branch was pushed to, or `undefined` for `origin`.
+ */
+async function commitAndPushToOriginOrFork(
+  deps: GitHubModuleDeps,
+  head: string,
+  title: string,
+  paths: string[],
+  log: ReturnType<typeof createLogger>
+): Promise<ForkInfo | undefined> {
+  const workspace = deps.context.workspace;
+  log.debug(`Creating branch "${head}", committing, and pushing via git CLI...`);
+  let pushError: unknown;
+  try {
+    await commitAndPushBranch({
+      cwd: workspace,
+      branchName: head,
+      message: appendCoAuthoredBy(deps, title),
+      isNewBranch: true,
+      paths,
+      actor: deps.context.actor,
+      gitIdentityOptions: {
+        platformType: deps.platformType,
+        serverUrl: deps.context.serverUrl,
+      },
+      log,
+    });
+    log.debug(`Branch "${head}" created and pushed to origin/${head} successfully`);
+    return undefined;
+  } catch (error) {
+    if (!isPushPermissionDenied(error)) {
+      throw error;
+    }
+    pushError = error;
+  }
+
+  log.debug(`Push to origin was refused for lack of permission — pushing to a fork instead.`);
+  try {
+    const fork = await resolveForkForPR(deps);
+    const url = await resolveForkRemoteUrl(workspace, fork, deps.context.serverUrl);
+    await pushBranch(workspace, head, { name: FORK_REMOTE_NAME, url }, log);
+    log.debug(`Branch "${head}" pushed to ${FORK_REMOTE_NAME}/${head} successfully`);
+    return fork;
+  } catch (forkError) {
+    throw new Error(
+      `origin refused the push (${errorMessage(pushError)}); opening the pull request from a fork failed: ` +
+        `${errorMessage(forkError)}\nThe changes are committed on local branch "${head}".`
+    );
+  }
+}
+
+/**
  * Prepare the branch and commit via the `git` CLI, then attempt to open
  * a pull request.
  *
- * Wraps the sequence `hasLocalChanges → commitAndPushBranch (checkout -b, add,
- * commit, push) → createPullRequestOnGitHub` into a single step.
- *
- * When `fork` is provided the branch is pushed to the fork (via the
- * `pi-fork` git remote, derived from the workspace's `origin` URL so it
- * inherits the checkout's credentials) and the PR head is the
- * cross-repository `forkOwner:branch` form. Otherwise the branch is pushed
- * to `origin` with a plain branch head.
+ * Wraps the sequence `getWorkspaceChangePaths → commitAndPushToOriginOrFork
+ * → createPullRequestOnGitHub` into a single step. When the branch went to
+ * a fork, the PR head is the cross-repository `forkOwner:branch` form;
+ * otherwise it is the plain branch name.
  *
  * The git CLI operations and the `pulls.create` call are intentionally
  * separated: git push can succeed with push-only tokens, while `pulls.create`
@@ -605,7 +633,6 @@ async function prepareBranchAndCreatePR(
   deps: GitHubModuleDeps,
   baseBranch: string,
   head: string,
-  fork: ForkInfo | undefined,
   title: string,
   bodyText: string,
   log: ReturnType<typeof createLogger>
@@ -631,42 +658,7 @@ async function prepareBranchAndCreatePR(
     );
   }
 
-  // Create a new branch from the current HEAD, commit all changes, and push.
-  //
-  // The commit message includes a Co-authored-by trailer when an actor is
-  // available. The branch name includes a timestamp so collisions are
-  // effectively impossible.
-  //
-  // When the PR is fork-based, the branch is pushed to the agent's fork via
-  // the `pi-fork` remote (its URL is derived from `origin`, so it inherits
-  // the credentials actions/checkout configured) instead of `origin`.
-  const pushRemote = fork
-    ? {
-        name: FORK_REMOTE_NAME,
-        url: await resolveForkRemoteUrl(workspace, fork, deps.context.serverUrl),
-      }
-    : undefined;
-  const commitMessage = appendCoAuthoredBy(deps, title);
-  log.debug(`Creating branch "${head}", committing, and pushing via git CLI...`);
-  if (pushRemote) {
-    log.debug(`Using remote ${pushRemote.name} pointing to ${pushRemote.url}`);
-  }
-  await commitAndPushBranch({
-    cwd: workspace,
-    branchName: head,
-    message: commitMessage,
-    isNewBranch: true,
-    paths: [...changed, ...deleted],
-    actor: deps.context.actor,
-    gitIdentityOptions: {
-      platformType: deps.platformType,
-      serverUrl: deps.context.serverUrl,
-    },
-    log,
-    ...(pushRemote ? { remote: pushRemote } : {}),
-  });
-  const pushTarget = pushRemote ? `${pushRemote.name}/${head}` : `origin/${head}`;
-  log.debug(`Branch "${head}" created and pushed to ${pushTarget} successfully`);
+  const fork = await commitAndPushToOriginOrFork(deps, head, title, [...changed, ...deleted], log);
 
   // Open the PR — this can fail independently of branch creation (e.g.
   // the token has push access but lacks pull-requests: write on Forgejo).
@@ -747,21 +739,21 @@ async function createPullRequestOnGitHub(
 /**
  * Create a pull request end-to-end.
  *
- * Orchestrates the full flow: determines the base branch, resolves (or
- * creates) the agent's fork of the repository, checks for working-tree
- * changes, creates a branch + commit and pushes it to the fork (or `origin`
- * when the token's owner already owns the repository), and opens the PR
- * with the cross-repository `forkOwner:branch` head. When `dryRun` is
+ * Orchestrates the full flow: determines the base branch, checks for
+ * working-tree changes, creates a branch + commit and pushes it to `origin`,
+ * and opens the PR. When `origin` refuses the push for lack of permission,
+ * the branch is pushed to the agent's fork (created on first use) and the
+ * PR head is the cross-repository `forkOwner:branch` form. When `dryRun` is
  * `true` the operation is simulated and no resources are created.
  *
  * @param deps - Module dependencies.
  * @param params - Parameters controlling title, body, base branch, and dry-run.
  * @returns The tool result containing a human-readable message and structured
  *          details about the created PR (or dry-run output).
- * @throws {Error} If no changed files are detected, the fork cannot be
- *                 created (fork-based PRs need a PAT — the default
- *                 GITHUB_TOKEN authenticates as a bot that cannot own
- *                 forks), or the GitHub API call fails.
+ * @throws {Error} If no changed files are detected, the push fails, the
+ *                 fork cannot be created (fork-based PRs need a PAT — the
+ *                 default GITHUB_TOKEN authenticates as a bot that cannot
+ *                 own forks), or the GitHub API call fails.
  */
 // fallow-ignore-next-line complexity
 export async function createPullRequest(
@@ -795,23 +787,11 @@ export async function createPullRequest(
     return buildCreateDryRunResult(message, head, baseBranch);
   }
 
-  // Resolve the agent's fork of the repository — created on first use,
-  // reused afterwards. Skipped (returns undefined) when no fork is needed.
-  const fork = await resolveForkForPR(deps);
-
-  // Create and push the new branch via git CLI
   log.debug(`Preparing branch and changes via git CLI...`);
 
   try {
-    const result = await prepareBranchAndCreatePR(
-      deps,
-      baseBranch,
-      head,
-      fork,
-      title,
-      bodyText,
-      log
-    );
+    const result = await prepareBranchAndCreatePR(deps, baseBranch, head, title, bodyText, log);
+    const { fork } = result;
 
     // PR was created successfully
     if (result.pr) {

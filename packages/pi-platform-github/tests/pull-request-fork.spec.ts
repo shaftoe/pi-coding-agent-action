@@ -1,11 +1,11 @@
 /**
  * @file Integration tests for fork-based pull request flows.
  *
- * Covers the `create_pull_request` / `update_pull_request` paths where the
- * token cannot push to the target repository and the agent's own fork is
- * used instead: fork get-or-create, the readiness wait for freshly created
- * forks, pushing the branch to the fork remote (`pi-fork`), cross-repository
- * PR heads (`forkOwner:branch`), and the compare-URL fallback.
+ * Covers the `create_pull_request` / `update_pull_request` paths where
+ * `origin` refuses the push and the agent's own fork is used instead: fork
+ * get-or-create, the readiness wait for freshly created forks, pushing the
+ * branch to the fork remote (`pi-fork`), cross-repository PR heads
+ * (`forkOwner:branch`), and the compare-URL fallback.
  *
  * Fork-helper unit tests live in `tests/git/fork.spec.ts`; the git plumbing
  * (remote option, push failure) in `tests/git/git-cli.spec.ts`.
@@ -17,7 +17,12 @@ import * as path from 'node:path';
 import { execSync } from 'node:child_process';
 import { createPullRequest, updatePullRequest } from '@alexanderfortin/pi-platform-github';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
-import { setupForkGitRepo, cleanupGitRepo, isolateGitConfig } from './helpers/git-repo';
+import {
+  setupForkGitRepo,
+  cleanupGitRepo,
+  isolateGitConfig,
+  rejectPushes,
+} from './helpers/git-repo';
 
 // Isolate git ops from the host's global/system config (see isolateGitConfig).
 isolateGitConfig();
@@ -29,7 +34,7 @@ function httpError(status: number, message: string): Error {
 
 const noop = (): void => {};
 
-/** Mock responses for the fork flow: sam cannot push to alex/ansible. */
+/** Mock responses for the fork flow: sam has no fork of alex/ansible yet. */
 interface ForkFlowMocks {
   getAuthenticated: ReturnType<typeof vi.fn>;
   reposGet: ReturnType<typeof vi.fn>;
@@ -40,25 +45,8 @@ interface ForkFlowMocks {
 
 function forkFlowMocks(): ForkFlowMocks {
   const mocks: ForkFlowMocks = {
-    // Permission lookup for the target repository (alex): no push access.
-    // The fork-existence check (sam) is configured per-test.
     getAuthenticated: vi.fn(() => Promise.resolve({ data: { login: 'sam' } })),
-    reposGet: vi.fn(({ owner }: { owner: string }) =>
-      owner === 'sam'
-        ? Promise.reject(httpError(404, 'Not Found'))
-        : Promise.resolve({
-            data: {
-              default_branch: 'master',
-              permissions: {
-                admin: false,
-                maintain: false,
-                push: false,
-                pull: true,
-                triage: false,
-              },
-            },
-          })
-    ),
+    reposGet: vi.fn(() => Promise.reject(httpError(404, 'Not Found'))),
     createFork: vi.fn(() => Promise.resolve({ status: 202, data: { name: 'ansible' } })),
     getBranch: vi.fn(() => Promise.resolve({ data: { commit: { sha: 'fork-sha' } } })),
     pullsCreate: vi.fn(() =>
@@ -120,6 +108,7 @@ describe('createPullRequest — fork-based flow', () => {
       forkRepo: 'ansible',
     });
     if (repo) {
+      rejectPushes(repo.upstreamDir, 'Permission to alex/ansible.git denied to sam.');
       fs.writeFileSync(path.join(repo.workspace, 'new-file.txt'), 'hello world');
     }
     mocks = forkFlowMocks();
@@ -131,14 +120,14 @@ describe('createPullRequest — fork-based flow', () => {
     }
   });
 
-  test('creates the fork, pushes the branch to it, and opens a fork-based PR', async () => {
+  test('creates the fork when origin refuses the push, pushes to it, and opens a fork-based PR', async () => {
     if (!repo) {
       return;
     }
     const deps = createForkDeps(repo.workspace, mocks);
     const result = await createPullRequest(deps, { title: 'Fix bug' });
 
-    // The fork was created via the API
+    // The fork was created via the API for the authenticated user
     expect(mocks.createFork).toHaveBeenCalledWith({ owner: 'alex', repo: 'ansible' });
 
     // Readiness wait ran for the freshly created fork
@@ -163,17 +152,12 @@ describe('createPullRequest — fork-based flow', () => {
     expect(result.details.forkOwner).toBe('sam');
     expect(result.details.forkRepo).toBe('ansible');
 
-    // The branch landed on the fork remote, not on origin
+    // The branch landed on the fork remote
     const forkBranches = execSync('git branch', {
       cwd: repo.forkDir,
       encoding: 'utf-8',
     });
     expect(forkBranches).toContain('pi/issue18-');
-    const upstreamBranches = execSync('git branch', {
-      cwd: repo.upstreamDir,
-      encoding: 'utf-8',
-    });
-    expect(upstreamBranches).not.toContain('pi/issue18-');
   });
 
   test('reuses an existing fork and skips the readiness wait', async () => {
@@ -181,18 +165,9 @@ describe('createPullRequest — fork-based flow', () => {
       return;
     }
     // sam/ansible already exists and is a fork of the target repository.
-    mocks.reposGet.mockImplementation(({ owner }: { owner: string }) =>
-      owner === 'sam'
-        ? Promise.resolve({
-            data: { name: 'ansible', fork: true, parent: { full_name: 'alex/ansible' } },
-          })
-        : Promise.resolve({
-            data: {
-              default_branch: 'master',
-              permissions: { push: false, pull: true },
-            },
-          })
-    );
+    mocks.reposGet.mockResolvedValue({
+      data: { name: 'ansible', fork: true, parent: { full_name: 'alex/ansible' } },
+    });
 
     const deps = createForkDeps(repo.workspace, mocks);
     const result = await createPullRequest(deps, { title: 'Fix bug' });
@@ -241,18 +216,9 @@ describe('createPullRequest — fork-based flow', () => {
       return;
     }
     // Reuse an existing fork so only the PR-creation step fails.
-    mocks.reposGet.mockImplementation(({ owner }: { owner: string }) =>
-      owner === 'sam'
-        ? Promise.resolve({
-            data: { name: 'ansible', fork: true, parent: { full_name: 'alex/ansible' } },
-          })
-        : Promise.resolve({
-            data: {
-              default_branch: 'master',
-              permissions: { push: false, pull: true },
-            },
-          })
-    );
+    mocks.reposGet.mockResolvedValue({
+      data: { name: 'ansible', fork: true, parent: { full_name: 'alex/ansible' } },
+    });
     mocks.pullsCreate.mockRejectedValue(httpError(403, 'Resource not accessible by integration'));
 
     const deps = createForkDeps(repo.workspace, mocks);
