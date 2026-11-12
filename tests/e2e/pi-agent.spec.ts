@@ -99,7 +99,9 @@ if (!E2E_ENABLED) {
           const { result, sessionStats } = await agent.run('Say "hello world"');
 
           expect(result).toBeTruthy();
-          expect(result).toMatch(/hello world/i);
+          // Case-insensitive; tolerate punctuation/whitespace separators
+          // ("Hello, world! 👋", "Hello World", "hello-world")
+          expect(result).toMatch(/hello[\s,.!:;-]*world/i);
           expect(sessionStats).toBeDefined();
           expect(sessionStats?.totalTokens).toBeGreaterThan(0);
         },
