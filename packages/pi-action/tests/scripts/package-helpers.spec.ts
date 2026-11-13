@@ -10,8 +10,9 @@
 import { describe, expect, test } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
+  assertVendorAllowlistCoversSdk,
   composeActionVersion,
   composeDistCommitMessage,
   copyAllSdkAssets,
@@ -361,6 +362,7 @@ describe('copyAllSdkAssets', () => {
           'core/export-html/vendor',
           [
             ['marked.min.js', '//marked'],
+            ['marked-cjk-friendly.min.js', '//cjk'],
             ['highlight.min.js', '//hljs'],
           ],
         ],
@@ -395,6 +397,9 @@ describe('copyAllSdkAssets', () => {
         '//marked'
       );
       expect(
+        readFileSync(join(piSdkDest, 'core/export-html/vendor/marked-cjk-friendly.min.js'), 'utf-8')
+      ).toBe('//cjk');
+      expect(
         readFileSync(join(piSdkDest, 'core/export-html/vendor/highlight.min.js'), 'utf-8')
       ).toBe('//hljs');
       expect(readFileSync(join(piSdkDest, 'modes/interactive/theme/dark.json'), 'utf-8')).toBe(
@@ -414,6 +419,63 @@ describe('copyAllSdkAssets', () => {
       const piSdkDest = join(tmpDir, 'pi-sdk');
       copyAllSdkAssets(join(tmpDir, 'no-such-dir'), piSdkDest);
       expect(existsSync(piSdkDest)).toBe(false);
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// assertVendorAllowlistCoversSdk
+// ---------------------------------------------------------------------------
+
+describe('assertVendorAllowlistCoversSdk', () => {
+  test('passes against the actually installed SDK (regression guard)', () => {
+    // Regression test for the pi 1.4.0 `marked-cjk-friendly.min.js` ENOENT
+    // incident: any vendor file the SDK ships must be in the allowlist, or
+    // HTML session export fails at runtime with a missing-file error.
+    const sdkPkgPath = resolvePiSdkPackagePath();
+    const sdkDistDir = join(dirname(sdkPkgPath), 'dist');
+    expect(() => assertVendorAllowlistCoversSdk(sdkDistDir)).not.toThrow();
+  });
+
+  test('throws listing allowlist-missing vendor files', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'pi-vendor-assert-'));
+    try {
+      const sdkDist = join(tmpDir, 'sdk-dist');
+      const vendorDir = join(sdkDist, 'core/export-html/vendor');
+      mkdirSync(vendorDir, { recursive: true });
+      writeFileSync(join(vendorDir, 'marked.min.js'), '//marked');
+      writeFileSync(join(vendorDir, 'new-1.5.0-lib.min.js'), '//new');
+
+      expect(() => assertVendorAllowlistCoversSdk(sdkDist)).toThrow(
+        /files missing from the .*allowlist.*new-1\.5\.0-lib\.min\.js/s
+      );
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('passes when every vendor file is allowlisted', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'pi-vendor-assert-'));
+    try {
+      const sdkDist = join(tmpDir, 'sdk-dist');
+      const vendorDir = join(sdkDist, 'core/export-html/vendor');
+      mkdirSync(vendorDir, { recursive: true });
+      writeFileSync(join(vendorDir, 'marked.min.js'), '//marked');
+      writeFileSync(join(vendorDir, 'marked-cjk-friendly.min.js'), '//cjk');
+      writeFileSync(join(vendorDir, 'highlight.min.js'), '//hljs');
+
+      expect(() => assertVendorAllowlistCoversSdk(sdkDist)).not.toThrow();
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('is a no-op when the SDK has no vendor dir', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'pi-vendor-assert-'));
+    try {
+      expect(() => assertVendorAllowlistCoversSdk(join(tmpDir, 'sdk-dist'))).not.toThrow();
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }

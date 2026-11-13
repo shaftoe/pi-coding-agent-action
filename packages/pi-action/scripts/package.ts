@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
 import { join, dirname } from 'node:path';
@@ -64,8 +64,11 @@ export {
 const SDK_ASSETS: ReadonlyArray<readonly [string, readonly string[]]> = [
   // HTML session export templates (read by export-html/index.js)
   ['core/export-html', ['template.html', 'template.css', 'template.js']],
-  // Vendor libs for HTML export (read by export-html/index.js)
-  ['core/export-html/vendor', ['marked.min.js', 'highlight.min.js']],
+  // Vendor libs for HTML export (read by export-html/index.js). NOTE: pi 1.4.0
+  // added `marked-cjk-friendly.min.js` and reads it unconditionally — keep this
+  // allowlist in sync with the SDK's vendor dir (asserted at build time by
+  // `assertVendorAllowlistCoversSdk`).
+  ['core/export-html/vendor', ['marked.min.js', 'marked-cjk-friendly.min.js', 'highlight.min.js']],
   // Built-in theme definitions (read by theme/theme.js via getThemesDir())
   ['modes/interactive/theme', ['dark.json', 'light.json']],
 ];
@@ -82,6 +85,33 @@ export function copySdkAssetDir(srcDir: string, destDir: string, files: readonly
     if (existsSync(src)) {
       copyFileSync(src, join(destDir, file));
     }
+  }
+}
+
+/**
+ * The vendor allowlist is per-file on purpose to keep the bundle minimal — but
+ * that means a new vendor file added by an SDK upgrade (e.g. pi 1.4.0 adding
+ * `marked-cjk-friendly.min.js`, read unconditionally by the HTML exporter) is
+ * silently skipped at build time and only fails at runtime with an ENOENT
+ * notice. This assertion turns that gap into a build-time error.
+ *
+ * @throws listing any files present in the SDK's `core/export-html/vendor/`
+ *   directory that are missing from the allowlist.
+ */
+export function assertVendorAllowlistCoversSdk(sdkDistDir: string): void {
+  const vendorDir = join(sdkDistDir, 'core/export-html/vendor');
+  if (!existsSync(vendorDir)) return;
+  const allowlisted = new Set(
+    SDK_ASSETS.filter(([dir]) => dir === 'core/export-html/vendor').flatMap(([, files]) => files)
+  );
+  const missing = readdirSync(vendorDir).filter((f) => !allowlisted.has(f));
+  if (missing.length > 0) {
+    throw new Error(
+      `[package] SDK vendor dir ${vendorDir} contains files missing from the ` +
+        `SDK_ASSETS allowlist in package.ts: ${missing.join(', ')}. Add them to the ` +
+        `'core/export-html/vendor' entry — the SDK may read them unconditionally ` +
+        `at runtime (see the pi 1.4.0 marked-cjk-friendly.min.js ENOENT regression).`
+    );
   }
 }
 
@@ -216,6 +246,10 @@ export async function buildDist(cwd: string = process.cwd()): Promise<void> {
 
   // Copy the QuickJS wasm the codemode sandbox loads at runtime.
   copyCodemodeAssets(cwd, piPkgPath);
+
+  // Fail the build if the SDK ships vendor files the allowlist doesn't know
+  // about (guards against SDK upgrades adding files read unconditionally).
+  assertVendorAllowlistCoversSdk(sdkDistDir);
 
   // Copy only the Pi SDK assets that are read at runtime via getPackageDir().
   // The JS code is already fully inlined by esbuild — only non-code assets
