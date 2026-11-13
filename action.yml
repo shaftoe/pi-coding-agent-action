@@ -150,6 +150,11 @@ inputs:
     required: false
     default: 'false'
 
+  collapse_intermediate_output:
+    description: 'Fold intermediate assistant messages (all but the last) in the posted comment under a collapsible <details> block, so only the final output renders expanded. The response output carries the same body.'
+    required: false
+    default: 'false'
+
   platform:
     description: 'Git hosting platform the action is running on. One of github (default), codeberg, forgejo, or gitea (alias for forgejo). Determines platform-specific behaviour such as the action-run URL format used in the "View action run" footer. The platform is no longer auto-detected from the server URL, so set this explicitly when running on Forgejo/Codeberg/Gitea (e.g. platform: forgejo).'
     required: false

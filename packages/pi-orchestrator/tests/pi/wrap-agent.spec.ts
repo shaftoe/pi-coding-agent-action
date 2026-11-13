@@ -31,6 +31,7 @@ function createStubAgent(
       overrides.run ??
       vi.fn(async () => ({
         result: 'ok',
+        messages: [],
         sessionStats: undefined,
         error: undefined,
         aborted: false,
@@ -47,6 +48,7 @@ describe('wrapAgent', () => {
     const ready = vi.fn(async () => undefined as unknown as Agent);
     const run = vi.fn(async () => ({
       result: 'hello back',
+      messages: ['hello back'],
       sessionStats: undefined,
       error: undefined,
       aborted: false,
@@ -75,6 +77,7 @@ describe('wrapAgent', () => {
 
     expect(await wrapped.run('hi')).toEqual({
       result: 'hello back',
+      messages: ['hello back'],
       sessionStats: undefined,
       error: undefined,
       aborted: false,
@@ -108,7 +111,13 @@ describe('wrapAgent', () => {
       }),
       run: vi.fn(async () => {
         callOrder.push('run');
-        return { result: 'ok', sessionStats: undefined, error: undefined, aborted: false };
+        return {
+          result: 'ok',
+          messages: [],
+          sessionStats: undefined,
+          error: undefined,
+          aborted: false,
+        };
       }),
     });
 

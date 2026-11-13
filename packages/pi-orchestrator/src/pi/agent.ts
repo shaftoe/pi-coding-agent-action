@@ -74,6 +74,7 @@ export class Agent {
   private session!: AgentSession;
   private thinkingLevel: ThinkingLevel;
   private outputChunks: string[] = [];
+  private outputMessages: string[] = [];
   private logger: Logger;
   private platformProvider: PlatformProvider;
   private config: PiConfig;
@@ -336,6 +337,9 @@ export class Agent {
         case 'message_update':
           this.handleMessageUpdate(event.assistantMessageEvent);
           break;
+        case 'message_end':
+          this.handleMessageEnd(event.message);
+          break;
         case 'agent_end':
           this.handleAgentEnd(event.messages);
           break;
@@ -445,8 +449,9 @@ export class Agent {
    * Run the agent with the given prompt and return the accumulated text response with session statistics.
    *
    * @param text - The prompt text to send. Must be non-empty.
-   * @returns The full assistant text response, session statistics, and any
-   *          session-level error that ended the run early.
+   * @returns The full assistant text response with per-message boundaries,
+   *          session statistics, and any session-level error that ended the
+   *          run early.
    * @throws {Error} If `text` is falsy.
    */
   async run(text: string | undefined): Promise<PromptResult> {
@@ -466,11 +471,12 @@ export class Agent {
     // handler, so it fires when the session has truly settled.
 
     const result = this.outputChunks.join('');
+    const messages = [...this.outputMessages];
     const sessionStats = this.collectSessionStats();
     const error = this.lastAgentError;
     const aborted = this.lastRunAborted;
 
-    return { result, sessionStats, error, aborted };
+    return { result, messages, sessionStats, error, aborted };
   }
 
   /**
@@ -556,6 +562,31 @@ export class Agent {
         break;
       default:
         break;
+    }
+  }
+
+  /**
+   * Handle `message_end` session events.
+   *
+   * Collects each finished assistant message's text into {@link outputMessages}
+   * (blank messages dropped), preserving the SDK's message boundaries. The
+   * last collected entry is the run's final output; earlier entries are
+   * intermediate narration emitted between tool calls.
+   *
+   * @param message - The message whose stream just ended.
+   * @private
+   */
+  private handleMessageEnd(message: AgentMessage): void {
+    if ((message as { role?: string }).role !== 'assistant') {
+      return;
+    }
+    const assistant = message as { content: { type: string; text?: string }[] };
+    const text = assistant.content
+      .filter(block => block.type === 'text')
+      .map(block => block.text ?? '')
+      .join('');
+    if (text.trim().length > 0) {
+      this.outputMessages.push(text);
     }
   }
 

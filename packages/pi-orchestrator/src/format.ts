@@ -25,3 +25,35 @@ export function formatCost(cost: number, precision: number): string | undefined 
   const formatted = Math.abs(cost).toFixed(precision);
   return Number(formatted) > 0 ? formatted : undefined;
 }
+
+/**
+ * Compose a comment body from the run's assistant text messages, folding
+ * everything except the last message under a collapsible `<details>` block.
+ *
+ * - 0 messages → empty string (caller applies its own fallback)
+ * - 1 message → that message verbatim, no `<details>` wrapper
+ * - 2+ messages → intermediate messages inside `<details>`, final message
+ *   after it
+ *
+ * @param messages - Assistant text messages in order, blank ones filtered
+ *   out. The last entry is treated as the final output.
+ * @returns The composed Markdown body.
+ */
+export function buildCollapsedBody(messages: string[]): string {
+  if (messages.length === 0) {
+    return '';
+  }
+  if (messages.length === 1) {
+    return messages[0] ?? '';
+  }
+  const intermediate = messages.slice(0, -1);
+  const final = messages[messages.length - 1] ?? '';
+  // The blank line after </summary> is required for the intermediate
+  // messages to render as Markdown inside the collapsed block.
+  return (
+    '<details>\n<summary>Intermediate output</summary>\n\n' +
+    intermediate.join('\n\n') +
+    '\n\n</details>\n\n' +
+    final
+  );
+}

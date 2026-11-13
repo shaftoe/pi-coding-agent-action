@@ -9,7 +9,11 @@
  */
 
 import { describe, expect, test } from 'vitest';
-import { buildSessionErrorBody, buildSessionSuccessBody } from '@alexanderfortin/pi-orchestrator';
+import {
+  buildCollapsedBody,
+  buildSessionErrorBody,
+  buildSessionSuccessBody,
+} from '@alexanderfortin/pi-orchestrator';
 
 // ---------------------------------------------------------------------------
 // buildSessionSuccessBody
@@ -81,5 +85,46 @@ describe('buildSessionErrorBody', () => {
   test('does not collapse multiple blank lines in the result', () => {
     const body = buildSessionErrorBody('line1\n\n\nline3', 'err');
     expect(body).toContain('line1\n\n\nline3');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildCollapsedBody
+// ---------------------------------------------------------------------------
+
+describe('buildCollapsedBody', () => {
+  test('returns an empty string for no messages', () => {
+    expect(buildCollapsedBody([])).toBe('');
+  });
+
+  test('returns a single message verbatim without a details block', () => {
+    expect(buildCollapsedBody(['final answer'])).toBe('final answer');
+  });
+
+  test('folds intermediate messages and leaves only the last one outside', () => {
+    const body = buildCollapsedBody(['checking the diff', 'running the tests', '## All green']);
+    expect(body).toBe(
+      '<details>\n<summary>Intermediate output</summary>\n\n' +
+        'checking the diff\n\nrunning the tests\n\n</details>\n\n## All green'
+    );
+  });
+
+  test('keeps paragraphs intact inside the collapsed block', () => {
+    const intermediate = 'first paragraph\n\nsecond paragraph';
+    const body = buildCollapsedBody([intermediate, 'done']);
+    expect(body).toContain('<summary>Intermediate output</summary>\n\nfirst paragraph');
+    expect(body).toContain('second paragraph\n\n</details>');
+  });
+
+  test('keeps fenced code blocks renderable inside the collapsed block', () => {
+    const body = buildCollapsedBody(['```diff\n-old\n+new\n```', 'applied']);
+    expect(body).toContain('<summary>Intermediate output</summary>\n\n```diff');
+    expect(body).toContain('```\n\n</details>\n\napplied');
+  });
+
+  test('treats the last message as the final output even when it is long markdown', () => {
+    const final = '## Report\n\n- item 1\n- item 2\n\n```js\nconsole.log(1);\n```';
+    const body = buildCollapsedBody(['checking', final]);
+    expect(body.endsWith(final)).toBe(true);
   });
 });

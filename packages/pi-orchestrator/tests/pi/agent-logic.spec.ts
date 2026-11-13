@@ -519,6 +519,7 @@ describe('Agent', () => {
       const result = await agent.run('Hello');
       expect(result).toEqual({
         result: '',
+        messages: [],
         sessionStats: {
           inputTokens: 100,
           outputTokens: 50,
@@ -547,6 +548,7 @@ describe('Agent', () => {
       const result = await agent.run('Hello');
       expect(result).toEqual({
         result: '',
+        messages: [],
         sessionStats: undefined,
         error: undefined,
         aborted: false,
@@ -568,6 +570,7 @@ describe('Agent', () => {
       const result = await agent.run('Hello');
       expect(result).toEqual({
         result: '',
+        messages: [],
         sessionStats: {
           inputTokens: 0,
           outputTokens: 0,
@@ -595,6 +598,7 @@ describe('Agent', () => {
       const result = await agent.run('Hello');
       expect(result).toEqual({
         result: '',
+        messages: [],
         sessionStats: {
           inputTokens: 100000,
           outputTokens: 50000,
@@ -605,6 +609,128 @@ describe('Agent', () => {
         error: undefined,
         aborted: false,
       });
+    });
+
+    test('collects assistant text messages from message_end events', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      const assistantMessage = (text: string) => ({
+        role: 'assistant',
+        content: [{ type: 'text', text }],
+        stopReason: 'stop',
+        timestamp: 1,
+      });
+      const textDelta = (text: string) => ({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', delta: text },
+      });
+      injectMockSession(
+        agent,
+        buildMockSession({
+          messages: [],
+          preEndEvents: [
+            textDelta('checking the diff'),
+            { type: 'message_end', message: assistantMessage('checking the diff') },
+            textDelta('running tests'),
+            { type: 'message_end', message: assistantMessage('running tests') },
+            textDelta('## All green'),
+            { type: 'message_end', message: assistantMessage('## All green') },
+          ],
+        })
+      );
+
+      const result = await agent.run('Hello');
+      expect(result.messages).toEqual(['checking the diff', 'running tests', '## All green']);
+      // result remains the raw concatenation of all text deltas.
+      expect(result.result).toBe('checking the diffrunning tests## All green');
+    });
+
+    test('drops blank and thinking-only assistant messages from messages', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      injectMockSession(
+        agent,
+        buildMockSession({
+          messages: [],
+          preEndEvents: [
+            {
+              type: 'message_end',
+              message: {
+                role: 'assistant',
+                content: [{ type: 'thinking', text: 'hmm' }],
+                stopReason: 'stop',
+                timestamp: 1,
+              },
+            },
+            {
+              type: 'message_end',
+              message: {
+                role: 'assistant',
+                content: [{ type: 'text', text: '   \n  ' }],
+                stopReason: 'stop',
+                timestamp: 2,
+              },
+            },
+            {
+              type: 'message_end',
+              message: {
+                role: 'assistant',
+                content: [
+                  { type: 'thinking', text: 'hmm' },
+                  { type: 'text', text: 'final' },
+                ],
+                stopReason: 'stop',
+                timestamp: 3,
+              },
+            },
+          ],
+        })
+      );
+
+      const result = await agent.run('Hello');
+      expect(result.messages).toEqual(['final']);
+    });
+
+    test('ignores non-assistant message_end events', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      injectMockSession(
+        agent,
+        buildMockSession({
+          messages: [],
+          preEndEvents: [
+            {
+              type: 'message_end',
+              message: { role: 'user', content: 'Hello', timestamp: 0 },
+            },
+            {
+              type: 'message_end',
+              message: {
+                role: 'assistant',
+                content: [{ type: 'text', text: 'final' }],
+                stopReason: 'stop',
+                timestamp: 1,
+              },
+            },
+          ],
+        })
+      );
+
+      const result = await agent.run('Hello');
+      expect(result.messages).toEqual(['final']);
+    });
+
+    test('returns an empty messages array when no message_end events fire', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      injectMockSession(agent, buildMockSession({ messages: [] }));
+
+      const result = await agent.run('Hello');
+      expect(result.messages).toEqual([]);
     });
 
     test('exposes session stats via getSessionStats()', async () => {

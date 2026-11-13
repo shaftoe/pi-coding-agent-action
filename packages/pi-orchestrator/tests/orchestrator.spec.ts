@@ -365,6 +365,73 @@ describe('ActionOrchestrator', () => {
       expect(text).toBe('✅ Agent session completed');
     });
 
+    test('posts the raw concatenation when collapse_intermediate_output is off', async () => {
+      setAgentRunResult(mockPiAgent, {
+        result: 'checking the diffchecking again## All green',
+        messages: ['checking the diff', 'checking again', '## All green'],
+      });
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const [text] = getFinalCommentCall(mockGit);
+      expect(text).toBe('checking the diffchecking again## All green');
+    });
+
+    test('folds intermediate messages when collapse_intermediate_output is on', async () => {
+      setAgentRunResult(mockPiAgent, {
+        result: 'checking the diffchecking again## All green',
+        messages: ['checking the diff', 'checking again', '## All green'],
+      });
+
+      const orchestrator = createOrchestrator({ collapseIntermediateOutput: true });
+      await orchestrator.execute();
+
+      const [text] = getFinalCommentCall(mockGit);
+      expect(text).toBe(
+        '<details>\n<summary>Intermediate output</summary>\n\n' +
+          'checking the diff\n\nchecking again\n\n</details>\n\n## All green'
+      );
+    });
+
+    test('posts a single message without a details block when collapsing', async () => {
+      setAgentRunResult(mockPiAgent, { result: '## All green', messages: ['## All green'] });
+
+      const orchestrator = createOrchestrator({ collapseIntermediateOutput: true });
+      await orchestrator.execute();
+
+      const [text] = getFinalCommentCall(mockGit);
+      expect(text).toBe('## All green');
+    });
+
+    test('falls back to the raw result when collapsing yields no messages', async () => {
+      setAgentRunResult(mockPiAgent, { result: '## All green', messages: [] });
+
+      const orchestrator = createOrchestrator({ collapseIntermediateOutput: true });
+      await orchestrator.execute();
+
+      const [text] = getFinalCommentCall(mockGit);
+      expect(text).toBe('## All green');
+    });
+
+    test('folds the partial result in the error comment when collapsing', async () => {
+      setAgentRunResult(mockPiAgent, {
+        result: 'checking the diff## Partial findings',
+        messages: ['checking the diff', '## Partial findings'],
+        error: '429 Usage limit reached',
+      });
+
+      const orchestrator = createOrchestrator({ collapseIntermediateOutput: true });
+      await orchestrator.execute();
+
+      const [text] = getFinalCommentCall(mockGit);
+      expect(text).toBe(
+        '<details>\n<summary>Intermediate output</summary>\n\n' +
+          'checking the diff\n\n</details>\n\n## Partial findings\n\n---\n\n' +
+          '❌ Agent session ended with error: 429 Usage limit reached'
+      );
+    });
+
     test('logs session html export path in summary block after banner', async () => {
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
