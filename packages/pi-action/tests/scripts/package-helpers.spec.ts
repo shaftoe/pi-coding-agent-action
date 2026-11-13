@@ -7,12 +7,12 @@
  * filesystem-bound with simple contracts.
  */
 
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
-  assertVendorAllowlistCoversSdk,
+  assertAssetAllowlistCoversSdk,
   composeActionVersion,
   composeDistCommitMessage,
   copyAllSdkAssets,
@@ -250,6 +250,11 @@ describe('composeDistCommitMessage', () => {
 
 describe('copySdkAssetDir', () => {
   let tmpDir: string;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  afterEach(() => {
+    warnSpy?.mockRestore();
+  });
 
   function setup() {
     tmpDir = mkdtempSync(join(tmpdir(), 'pi-asset-test-'));
@@ -285,10 +290,14 @@ describe('copySdkAssetDir', () => {
       mkdirSync(srcDir, { recursive: true });
       writeFileSync(join(srcDir, 'present.txt'), 'HERE');
 
+      warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       copySdkAssetDir(srcDir, destDir, ['present.txt', 'missing.txt']);
 
       expect(readFileSync(join(destDir, 'present.txt'), 'utf-8')).toBe('HERE');
       expect(existsSync(join(destDir, 'missing.txt'))).toBe(false);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('missing.txt'));
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('SDK_ASSETS'));
+      warnSpy.mockRestore();
     } finally {
       teardown();
     }
@@ -426,20 +435,30 @@ describe('copyAllSdkAssets', () => {
 });
 
 // ---------------------------------------------------------------------------
-// assertVendorAllowlistCoversSdk
+// assertAssetAllowlistCoversSdk
 // ---------------------------------------------------------------------------
 
-describe('assertVendorAllowlistCoversSdk', () => {
+describe('assertAssetAllowlistCoversSdk', () => {
   test('passes against the actually installed SDK (regression guard)', () => {
     // Regression test for the pi 1.4.0 `marked-cjk-friendly.min.js` ENOENT
-    // incident: any vendor file the SDK ships must be in the allowlist, or
-    // HTML session export fails at runtime with a missing-file error.
+    // incident: any file the SDK ships in an allowlisted asset dir must be in
+    // the allowlist, or runtime file reads fail with a missing-file error.
     const sdkPkgPath = resolvePiSdkPackagePath();
     const sdkDistDir = join(dirname(sdkPkgPath), 'dist');
-    expect(() => assertVendorAllowlistCoversSdk(sdkDistDir)).not.toThrow();
+    // Guard against a vacuous pass: the SDK dist and each asset dir must
+    // actually exist, otherwise the assertion would skip them silently.
+    expect(existsSync(sdkDistDir)).toBe(true);
+    for (const relDir of [
+      'core/export-html',
+      'core/export-html/vendor',
+      'modes/interactive/theme',
+    ]) {
+      expect(existsSync(join(sdkDistDir, relDir)), relDir).toBe(true);
+    }
+    expect(() => assertAssetAllowlistCoversSdk(sdkDistDir)).not.toThrow();
   });
 
-  test('throws listing allowlist-missing vendor files', () => {
+  test('throws listing allowlist-missing files per directory', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'pi-vendor-assert-'));
     try {
       const sdkDist = join(tmpDir, 'sdk-dist');
@@ -448,34 +467,73 @@ describe('assertVendorAllowlistCoversSdk', () => {
       writeFileSync(join(vendorDir, 'marked.min.js'), '//marked');
       writeFileSync(join(vendorDir, 'new-1.5.0-lib.min.js'), '//new');
 
-      expect(() => assertVendorAllowlistCoversSdk(sdkDist)).toThrow(
-        /files missing from the .*allowlist.*new-1\.5\.0-lib\.min\.js/s
+      expect(() => assertAssetAllowlistCoversSdk(sdkDist)).toThrow(
+        /missing from the SDK_ASSETS allowlist.*vendor: .*new-1\.5\.0-lib\.min\.js/s
       );
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
-  test('passes when every vendor file is allowlisted', () => {
+  test('throws listing files missing from non-vendor asset dirs too', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'pi-vendor-assert-'));
     try {
       const sdkDist = join(tmpDir, 'sdk-dist');
+      const exportDir = join(sdkDist, 'core/export-html');
+      const themeDir = join(sdkDist, 'modes/interactive/theme');
       const vendorDir = join(sdkDist, 'core/export-html/vendor');
+      mkdirSync(exportDir, { recursive: true });
+      mkdirSync(themeDir, { recursive: true });
       mkdirSync(vendorDir, { recursive: true });
-      writeFileSync(join(vendorDir, 'marked.min.js'), '//marked');
-      writeFileSync(join(vendorDir, 'marked-cjk-friendly.min.js'), '//cjk');
-      writeFileSync(join(vendorDir, 'highlight.min.js'), '//hljs');
+      for (const name of ['template.html', 'template.css', 'template.js']) {
+        writeFileSync(join(exportDir, name), 'x');
+      }
+      writeFileSync(join(exportDir, 'template.new.css'), 'x');
+      writeFileSync(join(vendorDir, 'marked.min.js'), 'x');
+      writeFileSync(join(vendorDir, 'marked-cjk-friendly.min.js'), 'x');
+      writeFileSync(join(vendorDir, 'highlight.min.js'), 'x');
+      writeFileSync(join(themeDir, 'dark.json'), 'x');
+      writeFileSync(join(themeDir, 'light.json'), 'x');
 
-      expect(() => assertVendorAllowlistCoversSdk(sdkDist)).not.toThrow();
+      expect(() => assertAssetAllowlistCoversSdk(sdkDist)).toThrow(
+        /core\/export-html: .*template\.new\.css/s
+      );
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
-  test('is a no-op when the SDK has no vendor dir', () => {
+  test('passes when every file is allowlisted', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'pi-vendor-assert-'));
     try {
-      expect(() => assertVendorAllowlistCoversSdk(join(tmpDir, 'sdk-dist'))).not.toThrow();
+      const sdkDist = join(tmpDir, 'sdk-dist');
+      const exportDir = join(sdkDist, 'core/export-html');
+      const vendorDir = join(sdkDist, 'core/export-html/vendor');
+      const themeDir = join(sdkDist, 'modes/interactive/theme');
+      mkdirSync(exportDir, { recursive: true });
+      mkdirSync(vendorDir, { recursive: true });
+      mkdirSync(themeDir, { recursive: true });
+      for (const name of ['template.html', 'template.css', 'template.js']) {
+        writeFileSync(join(exportDir, name), 'x');
+      }
+      writeFileSync(join(vendorDir, 'marked.min.js'), 'x');
+      writeFileSync(join(vendorDir, 'marked-cjk-friendly.min.js'), 'x');
+      writeFileSync(join(vendorDir, 'highlight.min.js'), 'x');
+      writeFileSync(join(themeDir, 'dark.json'), 'x');
+      writeFileSync(join(themeDir, 'light.json'), 'x');
+
+      expect(() => assertAssetAllowlistCoversSdk(sdkDist)).not.toThrow();
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('throws when an allowlisted directory is missing entirely', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'pi-vendor-assert-'));
+    try {
+      expect(() => assertAssetAllowlistCoversSdk(join(tmpDir, 'sdk-dist'))).toThrow(
+        /core\/export-html: directory missing from SDK/s
+      );
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
