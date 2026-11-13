@@ -693,6 +693,42 @@ describe('Agent', () => {
       expect(result.messages).toEqual(['final']);
     });
 
+    test('drops failed auto-retry attempts (stopReason error) from messages', async () => {
+      const agent = createRealAgent();
+      await agent.ready();
+
+      injectMockSession(
+        agent,
+        buildMockSession({
+          messages: [],
+          preEndEvents: [
+            {
+              type: 'message_end',
+              message: {
+                role: 'assistant',
+                content: [{ type: 'text', text: 'let me check the' }],
+                stopReason: 'error',
+                errorMessage: 'rate limited',
+                timestamp: 1,
+              },
+            },
+            {
+              type: 'message_end',
+              message: {
+                role: 'assistant',
+                content: [{ type: 'text', text: 'final answer' }],
+                stopReason: 'stop',
+                timestamp: 2,
+              },
+            },
+          ],
+        })
+      );
+
+      const result = await agent.run('Hello');
+      expect(result.messages).toEqual(['final answer']);
+    });
+
     test('ignores non-assistant message_end events', async () => {
       const agent = createRealAgent();
       await agent.ready();

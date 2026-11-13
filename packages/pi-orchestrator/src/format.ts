@@ -49,9 +49,10 @@ export function buildCollapsedBody(messages: string[]): string {
   const intermediate = messages.slice(0, -1);
   const final = messages[messages.length - 1] ?? '';
   // The blank line after </summary> is required for the intermediate
-  // messages to render as Markdown inside the collapsed block.
+  // messages to render as Markdown inside the collapsed block. The <em>
+  // tags set the summary apart from the (heavier) expanded content below.
   return (
-    '<details>\n<summary>Intermediate output</summary>\n\n' +
+    '<details>\n<summary><em>Intermediate output</em></summary>\n\n' +
     intermediate.join('\n\n') +
     '\n\n</details>\n\n' +
     final

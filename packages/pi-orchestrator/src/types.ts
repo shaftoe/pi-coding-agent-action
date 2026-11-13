@@ -137,7 +137,9 @@ export interface PromptResult {
   /** The text response from the agent */
   result: string;
   /**
-   * Assistant text messages in order, with blank messages filtered out.
+   * Assistant text messages in order, with blank messages and failed
+   * auto-retry attempts (messages whose `stopReason` is `'error'`) filtered
+   * out.
    *
    * The last entry is the final output; preceding entries are intermediate
    * narration the model emitted between tool calls. {@link result} holds

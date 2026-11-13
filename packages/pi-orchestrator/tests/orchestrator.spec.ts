@@ -389,7 +389,7 @@ describe('ActionOrchestrator', () => {
 
       const [text] = getFinalCommentCall(mockGit);
       expect(text).toBe(
-        '<details>\n<summary>Intermediate output</summary>\n\n' +
+        '<details>\n<summary><em>Intermediate output</em></summary>\n\n' +
           'checking the diff\n\nchecking again\n\n</details>\n\n## All green'
       );
     });
@@ -426,9 +426,27 @@ describe('ActionOrchestrator', () => {
 
       const [text] = getFinalCommentCall(mockGit);
       expect(text).toBe(
-        '<details>\n<summary>Intermediate output</summary>\n\n' +
+        '<details>\n<summary><em>Intermediate output</em></summary>\n\n' +
           'checking the diff\n\n</details>\n\n## Partial findings\n\n---\n\n' +
           '❌ Agent session ended with error: 429 Usage limit reached'
+      );
+    });
+
+    test('folds the partial result in the aborted comment when collapsing', async () => {
+      setAgentRunResult(mockPiAgent, {
+        result: 'checking the diff## Partial findings',
+        messages: ['checking the diff', '## Partial findings'],
+        aborted: true,
+      });
+
+      const orchestrator = createOrchestrator({ collapseIntermediateOutput: true });
+      await orchestrator.execute();
+
+      const [text] = getFinalCommentCall(mockGit);
+      expect(text).toBe(
+        '<details>\n<summary><em>Intermediate output</em></summary>\n\n' +
+          'checking the diff\n\n</details>\n\n## Partial findings\n\n---\n\n' +
+          '❌ Agent session ended with error: Agent session was aborted before completing'
       );
     });
 

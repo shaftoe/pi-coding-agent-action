@@ -569,9 +569,10 @@ export class Agent {
    * Handle `message_end` session events.
    *
    * Collects each finished assistant message's text into {@link outputMessages}
-   * (blank messages dropped), preserving the SDK's message boundaries. The
-   * last collected entry is the run's final output; earlier entries are
-   * intermediate narration emitted between tool calls.
+   * (blank messages and failed auto-retry attempts dropped), preserving the
+   * SDK's message boundaries. The last collected entry is the run's final
+   * output; earlier entries are intermediate narration emitted between tool
+   * calls.
    *
    * @param message - The message whose stream just ended.
    * @private
@@ -580,7 +581,17 @@ export class Agent {
     if ((message as { role?: string }).role !== 'assistant') {
       return;
     }
-    const assistant = message as { content: { type: string; text?: string }[] };
+    const assistant = message as {
+      content: { type: string; text?: string }[];
+      stopReason?: string;
+    };
+    // The SDK keeps a failed auto-retry attempt's message in the transcript
+    // and emits its message_end before retrying. Without this skip, the
+    // abandoned partial narration becomes the expanded final output whenever
+    // the retry itself ends with an error.
+    if (assistant.stopReason === 'error') {
+      return;
+    }
     const text = assistant.content
       .filter(block => block.type === 'text')
       .map(block => block.text ?? '')

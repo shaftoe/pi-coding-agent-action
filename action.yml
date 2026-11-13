@@ -151,7 +151,7 @@ inputs:
     default: 'false'
 
   collapse_intermediate_output:
-    description: 'Fold intermediate assistant messages (all but the last) in the posted comment under a collapsible <details> block, so only the final output renders expanded. The response output carries the same body.'
+    description: 'Fold intermediate assistant messages (all but the last) in the posted comment under a collapsible section, so only the final output renders expanded. The response output carries the same body.'
     required: false
     default: 'false'
 

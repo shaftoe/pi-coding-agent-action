@@ -104,7 +104,7 @@ describe('buildCollapsedBody', () => {
   test('folds intermediate messages and leaves only the last one outside', () => {
     const body = buildCollapsedBody(['checking the diff', 'running the tests', '## All green']);
     expect(body).toBe(
-      '<details>\n<summary>Intermediate output</summary>\n\n' +
+      '<details>\n<summary><em>Intermediate output</em></summary>\n\n' +
         'checking the diff\n\nrunning the tests\n\n</details>\n\n## All green'
     );
   });
@@ -112,13 +112,13 @@ describe('buildCollapsedBody', () => {
   test('keeps paragraphs intact inside the collapsed block', () => {
     const intermediate = 'first paragraph\n\nsecond paragraph';
     const body = buildCollapsedBody([intermediate, 'done']);
-    expect(body).toContain('<summary>Intermediate output</summary>\n\nfirst paragraph');
+    expect(body).toContain('<summary><em>Intermediate output</em></summary>\n\nfirst paragraph');
     expect(body).toContain('second paragraph\n\n</details>');
   });
 
   test('keeps fenced code blocks renderable inside the collapsed block', () => {
     const body = buildCollapsedBody(['```diff\n-old\n+new\n```', 'applied']);
-    expect(body).toContain('<summary>Intermediate output</summary>\n\n```diff');
+    expect(body).toContain('<summary><em>Intermediate output</em></summary>\n\n```diff');
     expect(body).toContain('```\n\n</details>\n\napplied');
   });
 
