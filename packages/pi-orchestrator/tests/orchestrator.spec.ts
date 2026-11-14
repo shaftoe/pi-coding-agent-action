@@ -389,7 +389,7 @@ describe('ActionOrchestrator', () => {
 
       const [text] = getFinalCommentCall(mockGit);
       expect(text).toBe(
-        '<details>\n<summary><em>Intermediate output</em></summary>\n\n' +
+        '<details>\n<summary><em>Agent progress</em></summary>\n\n' +
           'checking the diff\n\nchecking again\n\n</details>\n\n## All green'
       );
     });
@@ -426,7 +426,7 @@ describe('ActionOrchestrator', () => {
 
       const [text] = getFinalCommentCall(mockGit);
       expect(text).toBe(
-        '<details>\n<summary><em>Intermediate output</em></summary>\n\n' +
+        '<details>\n<summary><em>Agent progress</em></summary>\n\n' +
           'checking the diff\n\n</details>\n\n## Partial findings\n\n---\n\n' +
           '❌ Agent session ended with error: 429 Usage limit reached'
       );
@@ -444,7 +444,7 @@ describe('ActionOrchestrator', () => {
 
       const [text] = getFinalCommentCall(mockGit);
       expect(text).toBe(
-        '<details>\n<summary><em>Intermediate output</em></summary>\n\n' +
+        '<details>\n<summary><em>Agent progress</em></summary>\n\n' +
           'checking the diff\n\n</details>\n\n## Partial findings\n\n---\n\n' +
           '❌ Agent session ended with error: Agent session was aborted before completing'
       );

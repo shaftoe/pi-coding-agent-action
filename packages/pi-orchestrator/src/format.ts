@@ -52,7 +52,7 @@ export function buildCollapsedBody(messages: string[]): string {
   // messages to render as Markdown inside the collapsed block. The <em>
   // tags set the summary apart from the (heavier) expanded content below.
   return (
-    '<details>\n<summary><em>Intermediate output</em></summary>\n\n' +
+    '<details>\n<summary><em>Agent progress</em></summary>\n\n' +
     intermediate.join('\n\n') +
     '\n\n</details>\n\n' +
     final
