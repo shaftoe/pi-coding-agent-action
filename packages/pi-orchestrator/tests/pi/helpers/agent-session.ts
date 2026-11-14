@@ -39,6 +39,11 @@ export interface MockSessionOptions {
   /** Messages array for `state.messages` and the `agent_end` event payload. */
   messages: MockSession['state']['messages'];
   /**
+   * Extra events dispatched before `agent_end` when `prompt()` is called,
+   * e.g. `message_end` events to drive the assistant-message collector.
+   */
+  preEndEvents?: MockSessionEvent[];
+  /**
    * When true, `prompt()` does NOT dispatch `agent_end` / `agent_settled`
    * events. Use this for sessions whose `prompt` throws or is overridden
    * after construction.
@@ -68,6 +73,9 @@ export function buildMockSession(options: MockSessionOptions): MockSession {
     }),
     prompt: async () => {
       if (!options.suppressEvents && listener) {
+        for (const event of options.preEndEvents ?? []) {
+          listener(event);
+        }
         listener({
           type: 'agent_end',
           messages: options.messages,

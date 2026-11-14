@@ -8,7 +8,7 @@
 export { ActionOrchestrator, buildSessionSuccessBody, buildSessionErrorBody } from './orchestrator';
 
 // Formatting helpers
-export { formatCost } from './format';
+export { formatCost, buildCollapsedBody } from './format';
 
 // Agent
 export { Agent, wrapAgent } from './pi';

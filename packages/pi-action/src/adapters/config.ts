@@ -343,6 +343,10 @@ export function gatherActionsConfig(): PiConfig {
   const autoCompaction = parseBooleanInput(core.getInput('auto_compaction'), false);
   const shareSession = parseBooleanInput(core.getInput('share_session'), false);
   const refreshModelCatalog = parseBooleanInput(core.getInput('refresh_model_catalog'), true);
+  const collapseIntermediateOutput = parseBooleanInput(
+    core.getInput('collapse_intermediate_output'),
+    false
+  );
 
   // --- Prompt cache warming -----------------------------------------------
   const cacheWarmingRaw = core.getInput('cache_warming');
@@ -424,6 +428,7 @@ export function gatherActionsConfig(): PiConfig {
     exportSessionHtml,
     exportSessionJsonl,
     autoCompaction,
+    ...(collapseIntermediateOutput ? { collapseIntermediateOutput } : {}),
     ...(cacheWarming ? { cacheWarming } : {}),
     refreshModelCatalog,
     shareSession,

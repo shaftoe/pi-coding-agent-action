@@ -23,7 +23,7 @@ import {
   type PiConfig,
   type SessionStats,
 } from './types';
-import { formatCost } from './format';
+import { buildCollapsedBody, formatCost } from './format';
 import type { CreateReactionType, PlatformProvider } from './platform';
 import { getActionVersion, formatActionVersion } from './version';
 import { MAX_GIST_CONTENT_BYTES, type CreatedGist, type GistProvider } from './share/gist';
@@ -112,23 +112,24 @@ export class ActionOrchestrator {
       reaction = await this.addReactionBestEffort();
 
       pi = this.piAgentFactory(this.config, this.logger, this.platformProvider);
-      const { result, sessionStats, error, aborted } = await pi.run(prompt);
+      const { result, messages, sessionStats, error, aborted } = await pi.run(prompt);
+      const resultBody = this.buildResultBody(result, messages);
 
       await this.runSessionExports(pi);
       await this.runSessionShare();
 
       if (error) {
-        await this.handleSessionError(error, result, startTime, reaction, sessionStats);
+        await this.handleSessionError(error, resultBody, startTime, reaction, sessionStats);
         return;
       }
 
       if (aborted) {
-        await this.handleAbortedRun(result, startTime, reaction, sessionStats);
+        await this.handleAbortedRun(resultBody, startTime, reaction, sessionStats);
         return;
       }
 
       this.logSessionBanner('✅ Agent session completed');
-      const finalBody = buildSessionSuccessBody(result);
+      const finalBody = buildSessionSuccessBody(resultBody);
       await this.finalize(finalBody, this.config, startTime, reaction, sessionStats, true);
     } catch (e) {
       await this.handleUncaughtError(e, startTime, reaction, pi);
@@ -193,6 +194,23 @@ export class ActionOrchestrator {
       this.logger.debug('[session-jsonl] export disabled by configuration');
     }
     await Promise.all(exportPromises);
+  }
+
+  /**
+   * Compose the result text that feeds the success/error comment bodies.
+   *
+   * Without `collapseIntermediateOutput` this is the raw concatenation
+   * (`result`). When enabled, intermediate messages fold under a
+   * `<details>` block via {@link buildCollapsedBody}. The fallback to
+   * `result` keeps the final output in the body for a run whose
+   * `message_end` events were missed — without it, such a run would post
+   * an empty completion comment.
+   */
+  private buildResultBody(result: string, messages: string[]): string {
+    if (!this.config.collapseIntermediateOutput) {
+      return result;
+    }
+    return buildCollapsedBody(messages) || result;
   }
 
   /**
