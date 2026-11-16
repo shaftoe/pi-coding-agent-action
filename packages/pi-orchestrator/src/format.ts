@@ -44,10 +44,10 @@ export function buildCollapsedBody(messages: string[]): string {
     return '';
   }
   if (messages.length === 1) {
-    return messages[0] ?? '';
+    return messages[0]!;
   }
   const intermediate = messages.slice(0, -1);
-  const final = messages[messages.length - 1] ?? '';
+  const final = messages[messages.length - 1]!;
   // The blank line after </summary> is required for the intermediate
   // messages to render as Markdown inside the collapsed block. The <em>
   // tags set the summary apart from the (heavier) expanded content below.

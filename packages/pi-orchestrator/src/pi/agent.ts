@@ -582,7 +582,7 @@ export class Agent {
       return;
     }
     const assistant = message as {
-      content: { type: string; text?: string }[];
+      content: { type: string; text: string }[];
       stopReason?: string;
     };
     // The SDK keeps a failed auto-retry attempt's message in the transcript
@@ -594,7 +594,7 @@ export class Agent {
     }
     const text = assistant.content
       .filter(block => block.type === 'text')
-      .map(block => block.text ?? '')
+      .map(block => block.text)
       .join('');
     if (text.trim().length > 0) {
       this.outputMessages.push(text);
