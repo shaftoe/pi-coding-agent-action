@@ -15,6 +15,7 @@ import type { CreateReactionType, GitAdapter, PiAgent } from '@alexanderfortin/p
 
 export interface AgentRunOverrides {
   result?: string;
+  messages?: string[];
   sessionStats?: Record<string, unknown> | undefined;
   error?: string | undefined;
   aborted?: boolean;
@@ -24,6 +25,7 @@ export interface AgentRunOverrides {
 export function setAgentRunResult(agent: PiAgent, overrides: AgentRunOverrides = {}) {
   const fn = vi.fn(async () => ({
     result: overrides.result ?? '',
+    messages: overrides.messages ?? [],
     sessionStats: overrides.sessionStats ?? undefined,
     error: overrides.error ?? undefined,
     aborted: overrides.aborted ?? false,

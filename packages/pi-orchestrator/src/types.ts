@@ -136,6 +136,17 @@ export interface SessionStats {
 export interface PromptResult {
   /** The text response from the agent */
   result: string;
+  /**
+   * Assistant text messages in order, with blank messages and failed
+   * auto-retry attempts (messages whose `stopReason` is `'error'`) filtered
+   * out.
+   *
+   * The last entry is the final output; preceding entries are intermediate
+   * narration the model emitted between tool calls. {@link result} holds
+   * all of them concatenated without separators, so this array is the only
+   * structured view of the message boundaries.
+   */
+  messages: string[];
   /** Session statistics including token usage, if available */
   sessionStats: SessionStats | undefined;
   /**
@@ -346,6 +357,13 @@ export interface PiConfig extends DiffConfig {
    * tools (diff, thread, review, etc.) use this number.
    */
   prNumber?: number;
+  /**
+   * Fold intermediate assistant messages (all but the last) in the posted
+   * comment body under a collapsible `<details>` block, so only the final
+   * output renders expanded. Also applies to the `response` output, which
+   * carries the same body. Defaults to `false`.
+   */
+  collapseIntermediateOutput?: boolean;
 }
 
 /**

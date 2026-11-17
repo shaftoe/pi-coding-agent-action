@@ -349,6 +349,15 @@ describe('gatherActionsConfig', () => {
       expect(coreMock.setSecret).toHaveBeenCalledWith('ghp_secret');
     });
 
+    test('collapse_intermediate_output defaults to false (omitted from config)', () => {
+      expect(gatherActionsConfig().collapseIntermediateOutput).toBeUndefined();
+    });
+
+    test('parses collapse_intermediate_output true', () => {
+      mockCore({ collapse_intermediate_output: 'true' });
+      expect(gatherActionsConfig().collapseIntermediateOutput).toBe(true);
+    });
+
     test('does not call setSecret when github_token is empty', () => {
       mockCore({ github_token: '' });
       gatherActionsConfig();
