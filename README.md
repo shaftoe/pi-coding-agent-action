@@ -262,7 +262,7 @@ You can also call a `workflow_dispatch` from another workflow step, e.g. to auto
 ```yaml
 - name: Trigger PR review
   env:
-    GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   run: |
     gh workflow run on-demand-review.yml \
       --field pr_number=${{ github.event.pull_request.number }} \
@@ -716,13 +716,15 @@ This mirrors how human contributors work and, in the fork case, keeps agent bran
 > **Fork-based PRs need a token that can create forks.** When the token cannot push (e.g. a read-only PAT on someone else's repository, or a workflow whose `GITHUB_TOKEN` is restricted to `contents: read`), the default `secrets.GITHUB_TOKEN` authenticates as the repository's `github-actions[bot]`, which cannot own forks — `create_pull_request` fails with an actionable error in that case. Provide a classic PAT (with the `repo` scope) or a fine-grained PAT (with repository read/write + fork permissions) via the `github_token` input.
 
 > [!WARNING]
-> **Don't forget the checkout step.** If Pi needs to push changes and you are using a PAT, you must also pass that same token to the `actions/checkout` step. Otherwise, the local git configuration will use the restricted `GITHUB_TOKEN`, and git operations performed by the agent's tools (like `create_pull_request`) might fail despite providing a PAT to the Pi action itself:
+> **Don't forget the checkout step.** If Pi needs to push changes and you are using a PAT, you must also pass **that same token** (same account) to the `actions/checkout` step. Otherwise, the local git configuration left behind by checkout will use the restricted `GITHUB_TOKEN`, and the branch **push** performed by `create_pull_request` fails — falling back to a fork owned by the `github_token` account, which the checkout credentials cannot push to — despite providing a PAT to the Pi action itself:
 >
 > ```yaml
 > - uses: actions/checkout@v7
 >   with:
->     token: ${{ secrets.GH_PAT }}
+>     token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 > ```
+>
+> `actions/checkout` persists these credentials into the local git config by default (`persist-credentials: true`). If the agent does not need to push, set `persist-credentials: false` to avoid leaving a long-lived PAT on disk, and prefer the narrowest fine-grained token that still allows pushes.
 
 ### Injecting Environment Variables
 
@@ -792,7 +794,7 @@ jobs:
 
       - name: Create GitHub release
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo '${{ needs.pi-agent.outputs.response }}' > release-notes.md
           gh release create v1.0.0 --notes-file release-notes.md
@@ -985,7 +987,7 @@ Set `cache_warming: off` to disable warming entirely. Warming requires a known c
 | `export_session_html`     | Export the session as a self-contained HTML file. Auto-enabled when `share_session` is true                                                                                                                                                                                                                                                                                                                 | No       | `false`                   |
 | `export_session_jsonl`    | Export the session as a JSONL file (one JSON object per line) for programmatic consumption                                                                                                                                                                                                                                                                                                                  | No       | `false`                   |
 | `extensions`              | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths                                                                                                                                                                                                                                                            | No       | -                         |
-| `github_token`            | GitHub token for API access. The default `GITHUB_TOKEN` works for all standard operations; to use `share_session`, provide a PAT/App token with gist scope instead                                                                                                                                                                                                                                          | Yes      | -                         |
+| `github_token`            | GitHub token for API access. The default `GITHUB_TOKEN` works for all standard operations; to use `share_session`, provide a PAT/App token with gist scope instead. When the agent must push changes (see [Pull Requests from a Fork](#pull-requests-from-a-fork)), pass the same token to the `actions/checkout` step as well                                                                              | Yes      | -                         |
 | `load_builtin_extensions` | Whether to load built-in GitHub tools (see [Custom Tools](#custom-tools) for the full list)                                                                                                                                                                                                                                                                                                                 | No       | `true`                    |
 | `loaded_tools`            | Controls which tools are available in the session. Defaults to `all`. Accepts a list of tool names (one per line) to load — unknown names cause the run to fail early                                                                                                                                                                                                                                       | No       | `all`                     |
 | `mcp_servers`             | MCP servers to connect, as JSON. Either a bare map (`{"name": {"command": ...}}` / `{"name": {"url": ...}}`) or the `mcp.json` shape (`{"mcpServers": {...}, "autoEnableCodemode": true}`). `headers`/`env` values may use `${NAME}` env references                                                                                                                                                         | No       | -                         |
