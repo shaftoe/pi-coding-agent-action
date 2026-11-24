@@ -14,6 +14,7 @@ import {
   GET_WORKFLOW_RUN_LOGS_PROMPT_GUIDELINES,
   GET_WORKFLOW_RUN_LOGS_DESCRIPTION,
   GET_WORKFLOW_RUN_LOGS_PARAM_RUN_ID_DESCRIPTION,
+  GET_WORKFLOW_RUN_LOGS_PARAM_JOB_ID_DESCRIPTION,
   GET_WORKFLOW_RUN_LOGS_PARAM_MAX_BYTES_DESCRIPTION,
 } from '../prompt';
 import { CANCELLATION_MESSAGE_GET_WORKFLOW_RUN_LOGS } from './constants';
@@ -49,6 +50,12 @@ const getWorkflowRunLogsSchema = Type.Object(
     run_id: Type.Integer({
       description: GET_WORKFLOW_RUN_LOGS_PARAM_RUN_ID_DESCRIPTION,
     }),
+    job_id: nullable(
+      Type.Integer({
+        minimum: 1,
+        description: GET_WORKFLOW_RUN_LOGS_PARAM_JOB_ID_DESCRIPTION,
+      })
+    ),
     max_bytes: nullable(
       Type.Integer({
         description: GET_WORKFLOW_RUN_LOGS_PARAM_MAX_BYTES_DESCRIPTION,
@@ -91,6 +98,7 @@ export function getWorkflowRunLogsToolFactory(provider: PlatformProvider) {
         ...(isPresent(params.owner) ? { owner: params.owner } : {}),
         ...(isPresent(params.repo) ? { repo: params.repo } : {}),
         run_id: params.run_id,
+        ...(isPresent(params.job_id) ? { job_id: params.job_id } : {}),
         ...(isPresent(params.max_bytes) ? { max_bytes: params.max_bytes } : {}),
       }),
       execute: async (params: GetWorkflowRunLogsParams) =>

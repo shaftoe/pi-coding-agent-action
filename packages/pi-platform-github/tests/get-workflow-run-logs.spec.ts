@@ -23,11 +23,13 @@ const mockListJobsForWorkflowRun = vi.fn(() =>
 );
 
 const mockDownloadJobLogs = vi.fn(() => Promise.resolve({ data: '' as any }));
+const mockGetJobForWorkflowRun = vi.fn();
 
 const mockOctokit = {
   rest: {
     actions: {
       listJobsForWorkflowRun: mockListJobsForWorkflowRun,
+      getJobForWorkflowRun: mockGetJobForWorkflowRun,
       downloadJobLogsForWorkflowRun: mockDownloadJobLogs,
     },
   },
@@ -61,6 +63,7 @@ describe('getWorkflowRunLogs - platform implementation', () => {
   beforeEach(() => {
     mockListJobsForWorkflowRun.mockClear();
     mockDownloadJobLogs.mockClear();
+    mockGetJobForWorkflowRun.mockReset();
     mockDebug.mockClear();
   });
 
@@ -196,6 +199,112 @@ describe('getWorkflowRunLogs - platform implementation', () => {
         run_id: 100,
         per_page: 100,
       });
+    });
+  });
+
+  describe('single-job logs', () => {
+    beforeEach(() => {
+      mockGetJobForWorkflowRun.mockResolvedValue({
+        data: {
+          id: 138465401032,
+          run_id: 45398608466,
+          name: 'test',
+          status: 'completed',
+          conclusion: 'failure',
+          started_at: null,
+          completed_at: null,
+        },
+      });
+      mockDownloadJobLogs.mockResolvedValue({ data: 'selected job output\n' });
+    });
+
+    test('fetches only the requested job without listing jobs', async () => {
+      const fn = await getModule();
+      const result = await fn(makeDeps(), {
+        run_id: 45398608466,
+        job_id: 138465401032,
+      });
+
+      expect(mockGetJobForWorkflowRun).toHaveBeenCalledWith({
+        owner: 'test-owner',
+        repo: 'test-repo',
+        job_id: 138465401032,
+      });
+      expect(mockListJobsForWorkflowRun).not.toHaveBeenCalled();
+      expect(mockDownloadJobLogs).toHaveBeenCalledExactlyOnceWith({
+        owner: 'test-owner',
+        repo: 'test-repo',
+        job_id: 138465401032,
+      });
+      expect(result.details.run_id).toBe(45398608466);
+      expect(result.details.jobs).toEqual([
+        expect.objectContaining({ id: 138465401032, name: 'test', log: 'selected job output\n' }),
+      ]);
+      expect(result.content[0].text).toContain('selected job output');
+    });
+
+    test('uses repository overrides for job lookup and download', async () => {
+      const fn = await getModule();
+      await fn(makeDeps(), {
+        run_id: 45398608466,
+        job_id: 138465401032,
+        owner: 'foo',
+        repo: 'bar',
+      });
+
+      const expected = { owner: 'foo', repo: 'bar', job_id: 138465401032 };
+      expect(mockGetJobForWorkflowRun).toHaveBeenCalledWith(expected);
+      expect(mockDownloadJobLogs).toHaveBeenCalledWith(expected);
+    });
+
+    test('dedicates the full byte budget to the selected job', async () => {
+      const fn = await getModule();
+      mockDownloadJobLogs.mockResolvedValue({ data: 'x'.repeat(200) });
+
+      const result = await fn(makeDeps(), {
+        run_id: 45398608466,
+        job_id: 138465401032,
+        max_bytes: 100,
+      });
+
+      expect(result.details.jobs).toHaveLength(1);
+      expect(result.details.total_bytes).toBe(100);
+      expect(result.details.jobs[0].log).toBe('... (truncated)\n' + 'x'.repeat(84));
+      expect(result.details.truncated).toBe(true);
+    });
+
+    test('rejects a job belonging to a different run before downloading logs', async () => {
+      const fn = await getModule();
+
+      await expect(fn(makeDeps(), { run_id: 999, job_id: 138465401032 })).rejects.toThrow(
+        'Job 138465401032 does not belong to workflow run 999.'
+      );
+      expect(mockListJobsForWorkflowRun).not.toHaveBeenCalled();
+      expect(mockDownloadJobLogs).not.toHaveBeenCalled();
+    });
+
+    test('propagates job lookup errors without falling back to all jobs', async () => {
+      const fn = await getModule();
+      mockGetJobForWorkflowRun.mockRejectedValue(new Error('Not Found'));
+
+      await expect(fn(makeDeps(), { run_id: 45398608466, job_id: 138465401032 })).rejects.toThrow(
+        'Not Found'
+      );
+      expect(mockListJobsForWorkflowRun).not.toHaveBeenCalled();
+      expect(mockDownloadJobLogs).not.toHaveBeenCalled();
+    });
+
+    test('reports unavailable logs for the selected job', async () => {
+      const fn = await getModule();
+      mockDownloadJobLogs.mockRejectedValue(new Error('Logs expired'));
+
+      const result = await fn(makeDeps(), {
+        run_id: 45398608466,
+        job_id: 138465401032,
+      });
+
+      expect(result.details.jobs).toHaveLength(1);
+      expect(result.details.jobs[0].log).toContain('log unavailable: Logs expired');
     });
   });
 

@@ -362,13 +362,14 @@ export const GET_CI_STATUS_PARAM_CONCLUSION_DESCRIPTION =
 // Get Workflow Run Logs
 //
 export const GET_WORKFLOW_RUN_LOGS_PROMPT_SNIPPET =
-  'Fetch the job logs for a specific workflow run. Use this to diagnose CI failures by inspecting the actual log output.';
+  'Fetch logs for all jobs in a workflow run, or one specific job via job_id. Use this to diagnose CI failures by inspecting the actual log output.';
 
 export const GET_WORKFLOW_RUN_LOGS_PROMPT_GUIDELINES = [
   'Use get_workflow_run_logs when you need to inspect the actual log output of a workflow run to diagnose failures.',
   'First use `get_ci_status` to find the run_id of a failed workflow run, then use this tool to fetch its logs.',
   'Logs are truncated to 50KB by default. Truncation keeps the end of the log (where errors typically appear). Use `max_bytes` to increase or decrease the limit (capped at 1MB).',
-  'The tool returns logs for all jobs in the run, with each job clearly labeled. Logs are truncated from the head, preserving the tail where error messages typically appear.',
+  'By default, returns logs for all jobs in the run, with each job clearly labeled. Set `job_id` to fetch only one job and dedicate the full byte budget to it.',
+  'For an Actions URL ending in /actions/runs/<run_id>/job/<job_id>, use those IDs directly. The job must belong to the specified run.',
 ];
 
 /**
@@ -382,11 +383,14 @@ export const GET_WORKFLOW_RUN_LOGS_PROMPT_GUIDELINES = [
  */
 export function GET_WORKFLOW_RUN_LOGS_DESCRIPTION(platform: PlatformType = 'github'): string {
   const product = productNameOf(platform);
-  return `Fetch the job logs for a specific ${product} Actions workflow run. Returns the log output for each job, truncated if too large. Use this to diagnose CI failures by inspecting the actual error messages and stack traces.`;
+  return `Fetch the job logs for a specific ${product} Actions workflow run. Returns the log output for each job, or only the specified job_id, truncated if too large. Use this to diagnose CI failures by inspecting the actual error messages and stack traces.`;
 }
 
 export const GET_WORKFLOW_RUN_LOGS_PARAM_RUN_ID_DESCRIPTION =
   'The workflow run ID to fetch logs for. Get this from the get_ci_status tool output.';
+
+export const GET_WORKFLOW_RUN_LOGS_PARAM_JOB_ID_DESCRIPTION =
+  'Fetch only this job’s logs. Use the job ID from /actions/runs/<run_id>/job/<job_id> or a previous logs result. Must belong to run_id. Set to null to fetch all jobs.';
 
 export const GET_WORKFLOW_RUN_LOGS_PARAM_MAX_BYTES_DESCRIPTION =
   'Maximum total log bytes to return. Defaults to 51200 (50KB). Capped at 1048576 (1MB). Use for limiting very large log outputs.';

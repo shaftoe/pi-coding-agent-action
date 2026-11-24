@@ -301,6 +301,8 @@ export interface GetWorkflowRunLogsParams {
   repo?: string;
   /** The workflow run ID to fetch logs for. */
   run_id: number;
+  /** Fetch only this job's logs. The job must belong to the specified run. */
+  job_id?: number;
   /** Maximum total log bytes to return. Defaults to 51200 (50KB). */
   max_bytes?: number;
 }

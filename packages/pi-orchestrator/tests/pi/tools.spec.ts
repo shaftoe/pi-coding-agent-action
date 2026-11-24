@@ -551,9 +551,10 @@ describe('extFactory', () => {
       expect(params.required).toContain('run_id');
     });
 
-    test('parameters - owner, repo, max_bytes are required-but-nullable', () => {
+    test('parameters - owner, repo, job_id, max_bytes are required-but-nullable', () => {
       expectRequiredNullable(getWorkflowRunLogsTool, 'owner');
       expectRequiredNullable(getWorkflowRunLogsTool, 'repo');
+      expectRequiredNullable(getWorkflowRunLogsTool, 'job_id');
       expectRequiredNullable(getWorkflowRunLogsTool, 'max_bytes');
     });
 
