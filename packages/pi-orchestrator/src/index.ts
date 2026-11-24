@@ -49,6 +49,8 @@ export { getCIStatusToolFactory } from './pi/tools/get-ci-status';
 export { getPRDiffToolFactory, executeGetPRDiff } from './pi/tools/get-pr-diff';
 export { getIssueOrPRThreadToolFactory } from './pi/tools/get-thread';
 export { getWorkflowRunLogsToolFactory } from './pi/tools/get-workflow-run-logs';
+export { parseActionsUrl, parseActionsUrlToolFactory } from './pi/tools/parse-actions-url';
+export type { ParseActionsUrlDetails } from './pi/tools/parse-actions-url';
 export { updatePullRequestToolFactory } from './pi/tools/update-pr';
 export { createSummarizeToolFactory } from './pi/tools/summarize';
 export type { SummarizeTextDetails } from './pi/tools/summarize';

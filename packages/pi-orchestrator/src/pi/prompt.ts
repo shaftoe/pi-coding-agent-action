@@ -359,6 +359,25 @@ export const GET_CI_STATUS_PARAM_CONCLUSION_DESCRIPTION =
   'Filter by conclusion: success, failure, cancelled, timed_out, action_required, etc.';
 
 //
+// Parse Actions URL
+//
+export const PARSE_ACTIONS_URL_DESCRIPTION =
+  'Parse a GitHub Actions workflow run or job URL into owner, repo, run_id, and job_id (null for a run-only URL). Accepts only the configured GitHub server, including Enterprise. No network requests; does not verify existence or access. Forgejo/Codeberg URLs are not supported because their run numbers may differ from API run IDs.';
+
+export const PARSE_ACTIONS_URL_PROMPT_SNIPPET =
+  'Extract workflow log parameters from a GitHub Actions URL without fetching logs.';
+
+export const PARSE_ACTIONS_URL_PROMPT_GUIDELINES = [
+  'Use parse_actions_url when the user provides a GitHub Actions run or job link instead of copying IDs manually.',
+  'Pass the returned owner, repo, run_id, and job_id to get_workflow_run_logs. Set its max_bytes to null for the default log budget.',
+  'Only URLs on the configured GitHub server are accepted. This tool does not switch API hosts or resolve Forgejo/Codeberg run numbers.',
+  'Queries and fragments are ignored; parsing does not prove that the run or job exists or that access is authorized.',
+];
+
+export const PARSE_ACTIONS_URL_PARAM_URL_DESCRIPTION =
+  'Absolute GitHub Actions URL: https://<configured-server>/<owner>/<repo>/actions/runs/<run_id>, optionally followed by /job/<job_id>.';
+
+//
 // Get Workflow Run Logs
 //
 export const GET_WORKFLOW_RUN_LOGS_PROMPT_SNIPPET =
@@ -369,7 +388,7 @@ export const GET_WORKFLOW_RUN_LOGS_PROMPT_GUIDELINES = [
   'First use `get_ci_status` to find the run_id of a failed workflow run, then use this tool to fetch its logs.',
   'Logs are truncated to 50KB by default. Truncation keeps the end of the log (where errors typically appear). Use `max_bytes` to increase or decrease the limit (capped at 1MB).',
   'By default, returns logs for all jobs in the run, with each job clearly labeled. Set `job_id` to fetch only one job and dedicate the full byte budget to it.',
-  'For an Actions URL ending in /actions/runs/<run_id>/job/<job_id>, use those IDs directly. The job must belong to the specified run.',
+  'When given a GitHub Actions URL, use `parse_actions_url` to extract owner, repo, run_id, and job_id, then pass those values to this tool. The job must belong to the specified run.',
 ];
 
 /**

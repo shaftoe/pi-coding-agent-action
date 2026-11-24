@@ -29,7 +29,7 @@ export const PI_ACTION_NAMESPACE: ToolNamespace = {
   instructions: [
     'Tools in this namespace operate on the repository and issue/PR context of the current run.',
     'owner/repo/pull_number parameters are optional: they default to the repository and issue or PR from the platform context.',
-    'Read-only tools (get_ci_status, get_pr_diff, get_issue_or_pr_thread, get_workflow_run_logs, summarize_text) never modify remote state.',
+    'Read-only tools (get_ci_status, get_pr_diff, get_issue_or_pr_thread, get_workflow_run_logs, parse_actions_url, summarize_text) never modify remote state.',
     'Mutating tools (create_pull_request, update_pull_request, create_pull_request_review) push commits or post content to the platform.',
   ].join(' '),
 };
@@ -119,6 +119,18 @@ export const workflowRunLogsOutputSchema = Type.Object(
     jobs: Type.Array(jobLogSchema),
     total_bytes: Type.Number(),
     truncated: Type.Boolean(),
+    cancelled: Type.Optional(Type.Boolean()),
+  },
+  { additionalProperties: false }
+);
+
+/** `outputSchema` for the local-only parse_actions_url tool. */
+export const parseActionsUrlOutputSchema = Type.Object(
+  {
+    owner: Type.String(),
+    repo: Type.String(),
+    run_id: Type.Number(),
+    job_id: nullable(Type.Number()),
     cancelled: Type.Optional(Type.Boolean()),
   },
   { additionalProperties: false }

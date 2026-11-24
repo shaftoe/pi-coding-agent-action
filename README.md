@@ -1023,8 +1023,34 @@ The action extends Pi with the following built-in GitHub tools:
 | `get_issue_or_pr_thread`     | Retrieves the full thread of an issue or pull request including title, body, state, labels, branch info (for PRs), all comments, and review comments (inline comments on specific lines of the diff) for PRs. Useful for understanding the full context before making changes.                                                                                                  |
 | `get_pr_diff`                | Fetches the diff of a pull request on demand. Useful when the agent needs to understand what changed in a PR, e.g. for code reviews or addressing review feedback. Supports configurable `max_lines` truncation (default: 1000), max byte size cap (default: 100KB), and ignore patterns to filter out noisy paths.                                                             |
 | `get_workflow_run_logs`      | Fetches job logs for a specific GitHub Actions workflow run to diagnose CI failures. Downloads logs for all jobs, or a single job via optional `job_id` (the ID after `/job/` in the Actions URL). The job must belong to `run_id`. Logs are truncated to 50KB by default (configurable via `max_bytes`); a selected job gets the full budget.                                  |
+| `parse_actions_url`          | Parses a GitHub Actions run or job URL into `owner`, `repo`, `run_id`, and nullable `job_id` for `get_workflow_run_logs`. Local-only: makes no network requests and does not verify existence or access. Accepts the configured GitHub server (including Enterprise); rejects other hosts and Forgejo/Codeberg URLs, whose run numbers may not be API IDs.                     |
 | `summarize_text`             | Summarizes very long text (CI logs, large threads, file dumps) with a separate one-shot LLM call using the current session model, returning only the summary — keeping the raw text out of the conversation context. Accepts `text`, an optional `focus` instruction, and `max_words`.                                                                                          |
 | `update_pull_request`        | Updates an existing pull request by pushing new commits to the PR branch (in the fork for fork-based PRs, in the repository otherwise) and optionally updating the title and/or description. Supports `dry_run` mode for testing without actual modifications.                                                                                                                  |
+
+For example, call `parse_actions_url` with:
+
+```json
+{
+  "url": "https://github.com/foo/bar/actions/runs/45398608466/job/138465401032"
+}
+```
+
+Its structured result is:
+
+```json
+{
+  "owner": "foo",
+  "repo": "bar",
+  "run_id": 45398608466,
+  "job_id": 138465401032
+}
+```
+
+Pass these fields to `get_workflow_run_logs`, adding `"max_bytes": null` for
+its default budget. A run-only URL returns `"job_id": null`, so the logs tool
+fetches all jobs. Query strings, fragments, and a trailing slash are ignored;
+IDs must be positive safe integers. Embedded URL credentials are rejected.
+The parser does not change the configured API host.
 
 > [!TIP]
 > Set `load_builtin_extensions` input to `false` to disable custom tool auto loading.
