@@ -8,8 +8,9 @@
  *   - Pure helpers (`mapJobsResponse`, `computeJobBudgets`, `truncateLogTail`,
  *     `renderJobLogsOutput`) — exported so they can be unit-tested directly.
  *   - `downloadJobLog` — wraps the per-job API call.
- *   - `getWorkflowRunLogs` — the entry point. Orchestrates: list jobs →
- *     download each log (respecting the byte budget) → render the output.
+ *   - `getWorkflowRunLogs` — the entry point. Orchestrates: list jobs or fetch
+ *     a specific job (verifying its run ID) → download the selected logs
+ *     (respecting the byte budget) → render the output.
  */
 
 import type {
