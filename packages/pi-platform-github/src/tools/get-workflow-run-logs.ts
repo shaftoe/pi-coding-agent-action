@@ -8,8 +8,9 @@
  *   - Pure helpers (`mapJobsResponse`, `computeJobBudgets`, `truncateLogTail`,
  *     `renderJobLogsOutput`) — exported so they can be unit-tested directly.
  *   - `downloadJobLog` — wraps the per-job API call.
- *   - `getWorkflowRunLogs` — the entry point. Orchestrates: list jobs →
- *     download each log (respecting the byte budget) → render the output.
+ *   - `getWorkflowRunLogs` — the entry point. Orchestrates: list jobs or fetch
+ *     a specific job (verifying its run ID) → download the selected logs
+ *     (respecting the byte budget) → render the output.
  */
 
 import type {
@@ -202,11 +203,12 @@ export async function downloadJobLog(
 /**
  * Get logs for a specific workflow run.
  *
- * Lists all jobs for the run and downloads their logs. Logs are
- * concatenated and truncated if they exceed `max_bytes`.
+ * Lists all jobs for the run, or fetches a specific job when `job_id` is set,
+ * and downloads their logs. A requested job must belong to the given run.
+ * Logs are concatenated and truncated if they exceed `max_bytes`.
  *
  * @param deps - Module dependencies.
- * @param params - Parameters including the run ID and optional byte limit.
+ * @param params - Parameters including the run ID, optional job ID and byte limit.
  * @returns Structured details about the workflow run logs.
  */
 // fallow-ignore-next-line complexity
@@ -223,14 +225,29 @@ export async function getWorkflowRunLogs(
 
   deps.logger.debug(`[getWorkflowRunLogs] Fetching logs for run ${params.run_id}`);
 
-  // 1. List jobs for the workflow run
-  const response = await deps.octokit.rest.actions.listJobsForWorkflowRun({
-    owner,
-    repo,
-    run_id: params.run_id,
-    per_page: 100,
-  });
-  const jobs = mapJobsResponse(response.data.jobs);
+  // 1. Fetch a specific job directly, or list jobs for the workflow run.
+  // Direct lookup also supports jobs outside the first page or from older attempts.
+  let rawJobs: RawJob[];
+  if (params.job_id !== undefined) {
+    const response = await deps.octokit.rest.actions.getJobForWorkflowRun({
+      owner,
+      repo,
+      job_id: params.job_id,
+    });
+    if (response.data.run_id !== params.run_id) {
+      throw new Error(`Job ${params.job_id} does not belong to workflow run ${params.run_id}.`);
+    }
+    rawJobs = [response.data];
+  } else {
+    const response = await deps.octokit.rest.actions.listJobsForWorkflowRun({
+      owner,
+      repo,
+      run_id: params.run_id,
+      per_page: 100,
+    });
+    rawJobs = response.data.jobs;
+  }
+  const jobs = mapJobsResponse(rawJobs);
 
   if (jobs.length === 0) {
     return {

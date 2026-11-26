@@ -72,6 +72,48 @@ describe('get_workflow_run_logs tool - execution', () => {
     expect((getWorkflowRunLogs as any).mock.calls[0][0].run_id).toBe(999);
   });
 
+  test('execute forwards job_id and repository overrides to provider', async () => {
+    const getWorkflowRunLogs = vi.fn(async () => ({
+      content: [{ type: 'text' as const, text: 'Job logs fetched' }],
+      details: SAMPLE_WORKFLOW_LOGS,
+    }));
+    const tool = getWorkflowRunLogsToolFactory(createMockProvider({ getWorkflowRunLogs }));
+
+    await tool.execute(
+      'call-job',
+      { run_id: 100, job_id: 200, owner: 'foo', repo: 'bar', max_bytes: 10240 },
+      undefined,
+      undefined,
+      mockCtx
+    );
+
+    expect(getWorkflowRunLogs).toHaveBeenCalledWith({
+      run_id: 100,
+      job_id: 200,
+      owner: 'foo',
+      repo: 'bar',
+      max_bytes: 10240,
+    });
+  });
+
+  test.each([null, undefined])('execute omits absent job_id (%s)', async jobId => {
+    const getWorkflowRunLogs = vi.fn(async () => ({
+      content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
+      details: SAMPLE_WORKFLOW_LOGS,
+    }));
+    const tool = getWorkflowRunLogsToolFactory(createMockProvider({ getWorkflowRunLogs }));
+
+    await tool.execute(
+      'call-all-jobs',
+      { run_id: 100, job_id: jobId },
+      undefined,
+      undefined,
+      mockCtx
+    );
+
+    expect(getWorkflowRunLogs).toHaveBeenCalledWith({ run_id: 100 });
+  });
+
   test('execute forwards max_bytes to provider', async () => {
     const getWorkflowRunLogs = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
