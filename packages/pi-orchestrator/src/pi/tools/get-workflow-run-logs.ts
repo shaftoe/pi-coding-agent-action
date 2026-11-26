@@ -48,6 +48,7 @@ const getWorkflowRunLogsSchema = Type.Object(
       })
     ),
     run_id: Type.Integer({
+      minimum: 1,
       description: GET_WORKFLOW_RUN_LOGS_PARAM_RUN_ID_DESCRIPTION,
     }),
     job_id: nullable(

@@ -551,6 +551,14 @@ describe('extFactory', () => {
       expect(params.required).toContain('run_id');
     });
 
+    test('parameters - run_id and job_id require positive integers', () => {
+      const params = getWorkflowRunLogsTool.parameters;
+      expect(params.properties.run_id).toMatchObject({ type: 'integer', minimum: 1 });
+      expect(params.properties.job_id).toMatchObject({
+        anyOf: [{ type: 'integer', minimum: 1 }, { type: 'null' }],
+      });
+    });
+
     test('parameters - owner, repo, job_id, max_bytes are required-but-nullable', () => {
       expectRequiredNullable(getWorkflowRunLogsTool, 'owner');
       expectRequiredNullable(getWorkflowRunLogsTool, 'repo');
