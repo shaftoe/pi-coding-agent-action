@@ -125,8 +125,20 @@ describe('extFactory', () => {
     summarizeTextTool = getToolByName(tools, 'summarize_text')!;
   });
 
-  test('registers nine tools', () => {
-    expect(tools.length).toBe(9);
+  test('registers ten tools', () => {
+    expect(tools.length).toBe(10);
+  });
+
+  test('registers parse_actions_url with a URL-only strict schema and guidance', () => {
+    const tool = getToolByName(tools, 'parse_actions_url')!;
+    expect(tool).toBeDefined();
+    expect(tool.label).toBe('Parse Actions URL');
+    expect(Object.keys(tool.parameters.properties)).toEqual(['url']);
+    expect(tool.parameters.properties.url?.type).toBe('string');
+    expectStrictTool(tool);
+    expect(tool.description).toContain('No network requests');
+    expect(tool.promptSnippet.length).toBeGreaterThan(0);
+    expect(tool.promptGuidelines.join(' ')).toContain('get_workflow_run_logs');
   });
 
   test('registers a tool named diagnose_ci_failure', () => {

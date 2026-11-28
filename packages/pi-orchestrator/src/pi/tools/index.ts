@@ -16,6 +16,8 @@
  *   runs for a pull request or commit ref.
  * - **`get_workflow_run_logs`** – fetches job logs for a specific workflow run
  *   to diagnose CI failures.
+ * - **`parse_actions_url`** – extracts repository, run, and optional job IDs
+ *   from a GitHub Actions URL without making network requests.
  * - **`summarize_text`** – summarizes very long text with a separate one-shot
  *   LLM call (via `ctx.modelRegistry`), keeping the raw text out of the
  *   agent's own context.
@@ -31,6 +33,7 @@ import { updatePullRequestToolFactory } from './update-pr';
 import { createReviewToolFactory } from './create-review';
 import { getCIStatusToolFactory } from './get-ci-status';
 import { getWorkflowRunLogsToolFactory } from './get-workflow-run-logs';
+import { parseActionsUrlToolFactory } from './parse-actions-url';
 import { createSummarizeToolFactory } from './summarize';
 import { diagnoseCIFailureToolFactory } from './diagnose-ci-failure';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
@@ -51,8 +54,9 @@ export {
  *
  * Called by the Pi SDK resource loader during session initialisation. Registers
  * the `create_pull_request`, `update_pull_request`, `get_issue_or_pr_thread`,
- * `get_pr_diff`, `create_pull_request_review`, `get_ci_status`, and
- * `get_workflow_run_logs` tools.
+ * `get_pr_diff`, `create_pull_request_review`, `get_ci_status`,
+ * `get_workflow_run_logs`, `parse_actions_url`, `summarize_text`, and
+ * `diagnose_ci_failure` tools.
  *
  * @param provider - The platform provider for tool operations.
  * @returns An extension factory function compatible with the Pi SDK.
@@ -70,6 +74,7 @@ export function createToolsFactory(
       createReviewToolFactory(provider),
       getCIStatusToolFactory(provider),
       getWorkflowRunLogsToolFactory(provider),
+      parseActionsUrlToolFactory(provider),
       // Platform-agnostic: uses the SDK's extension model-call API
       // (ctx.modelRegistry) rather than the platform provider.
       createSummarizeToolFactory(),
