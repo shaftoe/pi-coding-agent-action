@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.31.0] - 2026-11-28
+
+### Added
+
+- add opt-in folding for intermediate assistant messages (#437)
+- support job-specific workflow log retrieval (#438)
+
+### Changed
+
+- **deps**: bump all deps, Pi to v1.6.0
+- **deps**: bump deps, Pi to v1.7.0
+- **deps**: bump Pi to v1.6.1
+
+### Fixed
+
+- **package**: add marked-cjk-friendly.min.js to SDK vendor allowlist + build-time coverage assertion (#435)
+
 ## [2.30.2] - 2026-11-12
 
 ### Changed
@@ -747,7 +764,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.30.2...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.31.0...HEAD
+[2.31.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.30.2...v2.31.0
 [2.30.2]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.30.1...v2.30.2
 [2.30.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.30.0...v2.30.1
 [2.30.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.29.1...v2.30.0
