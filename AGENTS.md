@@ -63,3 +63,6 @@ Monorepo managed with pnpm workspaces (`packages/*`):
    - Config is in `.fallowrc.json`
    - CI runs on every PR via `.github/workflows/fallow.yml` (SARIF + PR comments, non-blocking)
    - Lefthook runs `fallow dead-code --changed-since origin/develop` on pre-push
+
+10. **Pi Prompt Templates**: `.pi/prompts/` holds project-level Pi prompt templates (slash commands, loaded after project trust). Current templates:
+    - `/pi-sdk-bump-review [from..to]` — after a Pi SDK (`@earendil-works/*`) version bump, audits the release notes for breaking changes affecting this repo and proposes cleanups/improvements. Run it from the branch containing the bump commit.
